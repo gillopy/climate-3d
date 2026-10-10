@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+venv/
+
+# Climate data (large binary downloads)
+*.nc
+*.grib
+*.grib2
+
+# Generated animations (heavy; regenerate with the scripts)
+*.gif
+
+# Logs
+*.log
+
+# OS
+Thumbs.db
+desktop.ini
