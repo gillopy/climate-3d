@@ -65,6 +65,12 @@ WM_COLOR = "#46536b"                  # marca de agua, discreta sobre el mapa
 # Datos y salidas viven fuera del repositorio (los .nc y los GIF pesan varios GB).
 DATOS_D = Path(r"D:\Users\guill\dataset era5")
 SALIDAS = DATOS_D / "salidas"
+# El NetCDF de ERA5 puede haberse movido fuera de DATOS_D: se buscan también estas
+# ubicaciones (no recursivas) para no caer en datos sintéticos sin darse cuenta.
+ERA5_EXTRA_DIRS = (
+    Path(r"D:\Users\guill\Desktop"),
+    Path(__file__).resolve().parent.parent,
+)
 
 # Paleta muestreada píxel a píxel de la barra de color de la referencia
 ANOM_COLORS = [
@@ -125,14 +131,20 @@ def synthetic_field(nlat=181, nlon=360, seed=0):
 
 
 def find_data_file(data_dir: Path, explicit: str | None) -> Path | None:
-    """Archivo de entrada: el indicado, o el .nc/.grib más grande de la carpeta."""
+    """Archivo de entrada: el indicado, o el .nc/.grib más grande que se encuentre.
+
+    Busca en `data_dir` en profundidad (por si el .nc vive en una subcarpeta) y
+    además en las ubicaciones alternativas de `ERA5_EXTRA_DIRS`.
+    """
     if explicit:
         p = Path(explicit)
         if not p.exists():
             raise SystemExit(f"No existe el archivo indicado: {p}")
         return p
-    found = (list(data_dir.glob("*.nc")) + list(data_dir.glob("*.grib"))
-             + list(data_dir.glob("*.grib2")))
+    exts = ("*.nc", "*.grib", "*.grib2")
+    found = [f for pat in exts for f in data_dir.rglob(pat)]
+    for extra in ERA5_EXTRA_DIRS:
+        found += [f for pat in exts for f in extra.glob(pat)]
     # Los OR_ABI-* son GOES (otra proyección y otras variables): no son ERA5.
     found = [f for f in found if f.is_file() and not f.name.startswith("OR_ABI")]
     return max(found, key=lambda p: p.stat().st_size) if found else None
@@ -162,15 +174,18 @@ def load_field(data_dir: Path, explicit: str | None):
                 if tdim not in da.dims:                 # archivo 2D -> eje de tiempo trivial
                     da = da.expand_dims({tdim: [np.datetime64("NaT")]})
                 size_gb = f.stat().st_size / 1e9
-                print(f"Archivo: {f.name} ({size_gb:.2f} GB) | variable '{name}' | "
+                print(f"Archivo: {f} ({size_gb:.2f} GB) | variable '{name}' | "
                       f"{da.sizes[tdim]} pasos | grilla "
                       f"{da.sizes['latitude']}x{da.sizes['longitude']}")
                 # Se deja en Kelvin: restar 273.15 aquí leería el archivo completo
                 # (sin dask la aritmética lazy sobre todo el array no está soportada).
                 return da, da[tdim].values, False
             print(f"{f.name} no contiene ninguna de {VAR_CANDIDATES}")
-    print("AVISO: no hay archivo ERA5 en la carpeta -> datos SINTÉTICOS.\n"
-          "       Descargalo con: .venv\\Scripts\\python.exe descargar_era5.py")
+    buscadas = ", ".join(str(d) for d in (data_dir, *ERA5_EXTRA_DIRS))
+    print(f"AVISO: no se encontró ningún ERA5 (se buscó en {buscadas}) "
+          "-> datos SINTÉTICOS.\n"
+          "       Descargalo con: .venv\\Scripts\\python.exe scripts\\descargar_era5.py\n"
+          "       o pasá uno con --nc.")
     da = synthetic_field()
     return da, da["valid_time"].values, True
 
