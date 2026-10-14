@@ -109,11 +109,11 @@ def cargar(nc, tope_px=None, caja=None, escena="FULL DISK"):
             satellite_height=h, sweep_axis=str(gp.get("sweep_angle_axis", "x")))
         if caja is not None:
             i0, i1, j0, j1 = box_indices(proj, x, y, caja)
-            crudo = np.asarray(cmi.values[j0:j1, i0:i1], dtype=np.float64)
+            crudo = np.asarray(cmi[j0:j1, i0:i1].values, dtype=np.float64)
             campo, unidad, tipo = to_display(crudo, cmi)
             rotulos = caption_lines(ds, cmi, tipo, escena)
             return campo, x[i0:i1], y[j0:j1], proj, unidad, rotulos
-        crudo = np.asarray(cmi.values[::paso, ::paso], dtype=np.float64)
+        crudo = np.asarray(cmi[::paso, ::paso].values, dtype=np.float64)
         campo, unidad, tipo = to_display(crudo, cmi)
         rotulos = caption_lines(ds, cmi, tipo, escena)
         return campo, x, y, proj, unidad, rotulos
