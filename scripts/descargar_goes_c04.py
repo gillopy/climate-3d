@@ -1,95 +1,82 @@
-"""Descarga GOES-18 C04 (cirrus) para Oct 2-5 2026 UTC desde NOAA S3.
+"""Descarga GOES-18 C04 (cirrus) para un rango UTC desde NOAA S3.
 
-Usa el mismo bucket y formato que animacion_cirrus_g18.ipynb.
-Salta archivos que ya existen localmente (>1 MB).
+Reutiliza la lógica de `lib/goes_fetch.py` (la misma que usan los notebooks).
+Salta los archivos que ya existen localmente (> 1 MB).
+
+Uso (desde la raíz del proyecto):
+
+    .venv\\Scripts\\python.exe scripts\\descargar_goes_c04.py
+    .venv\\Scripts\\python.exe scripts\\descargar_goes_c04.py --desde 2026-10-02 --hasta 2026-10-05
+    .venv\\Scripts\\python.exe scripts\\descargar_goes_c04.py --help   # no toca la red
 """
-import re, sys, urllib.request, time
+from __future__ import annotations
+
+import argparse
+import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from collections import defaultdict
+
+RAIZ = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(RAIZ / "lib"))
+from goes_fetch import clave_de, descargar, ruta_local  # noqa: E402
 
 SAT, BANDA = "G18", "C04"
 DATOS = Path(r"D:\Users\guill\dataset era5\goes_c04_g18")
-DATOS.mkdir(parents=True, exist_ok=True)
 
 T0 = datetime(2026, 10, 2, 0, 0)   # UTC
 T1 = datetime(2026, 10, 5, 0, 0)   # UTC
 PASO_MIN = 10
 
-POR_HORA = defaultdict(list)
-PATRON = re.compile(r"OR_ABI-L2-CMIPF-M6(?P<banda>C\d+)_(?P<sat>G\d+)_s(?P<s>\d{14})_")
 
-def claves_de_la_hora(hora):
-    if hora not in POR_HORA:
-        pref = (f"ABI-L2-CMIPF/{hora.year}/{int(hora.strftime('%j')):03d}/"
-                f"{hora.hour:02d}/")
-        url = f"https://noaa-goes{SAT[1:]}.s3.amazonaws.com/?list-type=2&prefix={pref}"
-        xml = urllib.request.urlopen(url, timeout=120).read().decode()
-        POR_HORA[hora] = re.findall(r"<Key>([^<]+)</Key>", xml)
-    return POR_HORA[hora]
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Descarga GOES-18 C04 (cirrus) para un rango UTC desde NOAA S3.")
+    ap.add_argument("--desde", default=T0.isoformat(),
+                    help=f"inicio UTC, AAAA-MM-DD[THH:MM] (por defecto {T0:%Y-%m-%d})")
+    ap.add_argument("--hasta", default=T1.isoformat(),
+                    help=f"fin UTC (por defecto {T1:%Y-%m-%d})")
+    ap.add_argument("--paso", type=int, default=PASO_MIN,
+                    help=f"minutos entre slots (por defecto {PASO_MIN})")
+    args = ap.parse_args(argv)
 
-def clave_de(t):
-    for clave in claves_de_la_hora(t):
-        m = PATRON.search(clave)
-        if not m or m["banda"] != BANDA or m["sat"] != SAT:
-            continue
-        inicio = datetime.strptime(m["s"][:13], "%Y%j%H%M%S")
-        if (inicio.hour, inicio.minute) == (t.hour, t.minute):
-            return clave
-    raise LookupError(f"Sin archivo {SAT} {BANDA} para {t:%Y-%m-%d %H:%M} UTC")
+    t0, t1 = datetime.fromisoformat(args.desde), datetime.fromisoformat(args.hasta)
+    DATOS.mkdir(parents=True, exist_ok=True)
+    slots = []
+    t = t0
+    while t < t1:
+        slots.append(t)
+        t += timedelta(minutes=args.paso)
 
-def ruta_local(clave):
-    nombre = clave.rsplit("/", 1)[-1]
-    for candidato in (Path(nombre), DATOS / nombre):
-        if candidato.exists():
-            return candidato
-    return DATOS / nombre
+    print(f"Total slots: {len(slots)} ({t0} -> {t1} UTC)")
+    print(f"Destino: {DATOS}")
 
-def descargar(clave):
-    destino = ruta_local(clave)
-    if destino.exists() and destino.stat().st_size > 1_000_000:
-        return destino, True  # ya existia
-    url = f"https://noaa-goes{SAT[1:]}.s3.amazonaws.com/{clave}"
-    with urllib.request.urlopen(url, timeout=300) as respuesta:
-        with open(destino, "wb") as salida:
-            while True:
-                trozo = respuesta.read(1 << 20)
-                if not trozo:
-                    break
-                salida.write(trozo)
-    return destino, False
+    descargados = existentes = errores = 0
+    inicio = time.time()
+    for i, t in enumerate(slots, 1):
+        try:
+            clave = clave_de(SAT, BANDA, t)
+            destino = ruta_local(DATOS, clave)
+            ya_existia = destino.exists() and destino.stat().st_size > 1_000_000
+            descargar(DATOS, SAT, clave)
+            if ya_existia:
+                existentes += 1
+            else:
+                descargados += 1
+            if i % 10 == 0 or i == len(slots):
+                elapsed = time.time() - inicio
+                print(f"[{i}/{len(slots)}] {t:%Y-%m-%d %H:%M} UTC  "
+                      f"descargados={descargados} existentes={existentes} "
+                      f"errores={errores}  tiempo={elapsed:.0f}s", flush=True)
+        except Exception as e:                                 # hueco o fallo de red
+            errores += 1
+            print(f"[{i}/{len(slots)}] {t:%Y-%m-%d %H:%M} UTC  ERROR: {e}", flush=True)
 
-# Generar slots
-slots = []
-t = T0
-while t < T1:
-    slots.append(t)
-    t += timedelta(minutes=PASO_MIN)
+    elapsed = time.time() - inicio
+    print(f"\nFinalizado en {elapsed:.0f}s: descargados={descargados}, "
+          f"existentes={existentes}, errores={errores}")
+    return 1 if errores else 0
 
-print(f"Total slots: {len(slots)} ({T0} -> {T1} UTC)")
-print(f"Destino: {DATOS}")
 
-descargados = 0
-existentes = 0
-errores = 0
-inicio = time.time()
-
-for i, t in enumerate(slots, 1):
-    try:
-        clave = clave_de(t)
-        ruta, ya_existia = descargar(clave)
-        if ya_existia:
-            existentes += 1
-        else:
-            descargados += 1
-        if i % 10 == 0 or i == len(slots):
-            elapsed = time.time() - inicio
-            print(f"[{i}/{len(slots)}] {t:%Y-%m-%d %H:%M} UTC  "
-                  f"descargados={descargados} existentes={existentes} errores={errores}  "
-                  f"tiempo={elapsed:.0f}s", flush=True)
-    except Exception as e:
-        errores += 1
-        print(f"[{i}/{len(slots)}] {t:%Y-%m-%d %H:%M} UTC  ERROR: {e}", flush=True)
-
-elapsed = time.time() - inicio
-print(f"\nFinalizado en {elapsed:.0f}s: descargados={descargados}, existentes={existentes}, errores={errores}")
+if __name__ == "__main__":
+    sys.exit(main())
