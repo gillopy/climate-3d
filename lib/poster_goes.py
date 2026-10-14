@@ -405,7 +405,8 @@ def main(argv=None):
                                   src_line=src_line, data_line=data_line,
                                   credit=args.credito, cmap=PALETTES[paleta],
                                   vmin=vmin, vmax=vmax, borders=not args.sin_costas,
-                                  xlim=xlim, ylim=ylim, globe_center=centro_globo)
+                                  xlim=xlim, ylim=ylim, globe_center=centro_globo,
+                                  size=args.size, dpi=args.dpi)
     bid = int(np.ravel(ds["band_id"].values)[0])
     tag = "" if paleta == default_palette(unit_label) else f"_{paleta}"
     tag += "_globo" if args.globo else ""
