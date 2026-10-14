@@ -18,8 +18,9 @@ Comparten la misma estructura de 7 celdas de código:
 
 1. **configuración** — `T0` (primer cuadro), `N_FRAMES`, `PASO_MIN`, satélite/banda,
    paleta, crédito, escala.
-2. **datos y utilidades** — arma la clave S3 sola a partir del slot de 10 min, busca
-   primero en local y descarga solo lo que falta.
+2. **datos y utilidades** — importa de `lib/goes_fetch.py` la clave S3 (a partir del
+   slot de 10 min), la descarga (busca en local primero) y el fundido del GIF; define
+   `cargar_cuadro(nc)` según la vista (disco o zona).
 3. **descarga** — con barra de progreso `rich`; tolera huecos del archivo NOAA.
 4. **control** — imprime y valida los rótulos con `assert` (título, subtítulo,
    fuente, datos).

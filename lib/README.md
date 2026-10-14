@@ -1,8 +1,9 @@
 # `lib/` — módulos reutilizables
 
-Dos módulos que arman los pósteres. `poster_goes.py` **importa** de
-`poster_anomalia.py` (constantes y paleta compartidas), así que deben quedar juntos
-en esta carpeta.
+Tres módulos: `poster_anomalia.py` y `poster_goes.py` arman los pósteres, y
+`goes_fetch.py` da acceso a los archivos GOES (claves S3, descarga y lectura).
+`poster_goes.py` **importa** de `poster_anomalia.py` (constantes y paleta compartidas)
+y `goes_fetch.py` de `poster_goes.py`, así que deben quedar juntos en esta carpeta.
 
 ---
 
@@ -112,3 +113,21 @@ que cae al borde del disco. Para Paraguay y Sudamérica conviene **GOES-East**
   `goes_c04_g18`, etc.).
 - **Salida**: `D:\Users\guill\dataset era5\salidas\poster_goes_<PLATAFORMA>_C<banda>.png`,
   o lo que diga `--out`. Nada se escribe dentro del repositorio.
+
+---
+
+## `goes_fetch.py`
+
+Acceso a archivos **GOES-R ABI L2 CMIP**: lo que antes estaba duplicado en los tres
+notebooks de animación y en `scripts/descargar_goes_c04.py`, ahora en un solo lugar.
+
+| Función | Qué hace |
+|---|---|
+| `claves_de_la_hora(sat, t)` / `clave_de(sat, banda, t)` | Arman la clave S3 a partir del slot de 10 min (modo 6) |
+| `ruta_local(datos_dir, clave)` / `descargar(datos_dir, sat, clave, permitir_red)` | Reutilizan el `.nc` local o bajan solo lo que falta |
+| `cargar(nc, tope_px=, caja=, escena=)` | `(campo, x, y, proj, unidad, rótulos)` listo para `draw_goes_poster` |
+| `cuadros_con_fundido(frames, …)` | Fundido leyendo de a dos cuadros por vez (poca RAM) |
+| `fundido_desde_imagenes(cuadros, …)` | Fundido en memoria, para animaciones cortas |
+
+`cargar` con `tope_px` submuestrea el disco completo; con `caja` (oeste, este, sur,
+norte) recorta a una zona. Los notebooks lo envuelven en un `cargar_cuadro(nc)`.
