@@ -1,7 +1,8 @@
-# `scripts/` — ejecutables de un solo uso
+# `scripts/` — ejecutables con CLI
 
-Scripts sueltos con CLI. Ambos resuelven la raíz del proyecto solos, así que funcionan
-desde cualquier carpeta.
+Scripts sueltos. Todos resuelven la raíz del proyecto solos, así que funcionan desde
+cualquier carpeta. Para el flujo completo de descarga + animación, ver
+[`../GUIA.md`](../GUIA.md).
 
 ---
 
@@ -46,3 +47,33 @@ Descarga **ERA5 2m temperature** (2024–2026) desde Copernicus CDS.
 
 Pide un día por mes a las 00/06/12/18 UTC (≈1464 pasos de tiempo, ~2.2 GB), que es la
 resolución temporal suficiente para las climatologías del póster de anomalía.
+
+---
+
+## `descargar_goes.py`
+
+Descarga archivos **GOES-R ABI L2 CMIP** desde el bucket público de NOAA S3 (infrarrojo,
+cirrus, visible… para cualquier satélite y banda). Saltea los que ya existen. Reutiliza
+`lib/goes_fetch.py`.
+
+```powershell
+.venv\Scripts\python.exe scripts\descargar_goes.py --sat G19 --banda C13 --desde 2026-10-02 --hasta 2026-10-05
+.venv\Scripts\python.exe scripts\descargar_goes.py --help   # no toca la red
+```
+
+Destino por defecto: `D:\Users\guill\dataset era5\goes_<banda>_<sat>`.
+
+---
+
+## `render_anim.py`
+
+**Animación por lotes**: renderiza los cuadros en varios procesos (poca RAM) y arma el
+MP4 con el ffmpeg de `imageio-ffmpeg`. Pensado para ventanas largas (cientos de cuadros),
+donde un notebook agotaría la memoria. Reutiliza los PNG si ya están.
+
+```powershell
+# Globo centrado en Paraguay, 432 cuadros a 720 px
+.venv\Scripts\python.exe scripts\render_anim.py --sat G19 --banda C13 --desde 2026-10-02 --n 432 --px 720 --globo --centro -73 -18 --geojson datos\paraguay_gadm.json --paleta ir_realce
+```
+
+Salida: `D:\Users\guill\dataset era5\salidas\animacion_<vista>_<SAT>_<fecha>_<N>f_<PX>px.mp4`.

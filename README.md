@@ -4,6 +4,9 @@ Visualizaciones de **temperatura** (reanálisis ERA5) y de **imágenes satelital
 (GOES-R ABI) en estilo póster: globo sobre fondo oscuro, barra de color fina al pie
 y rótulos (mes, variable, fuente, datos, crédito y marca de agua).
 
+> **Guía paso a paso** para descargar un dataset GOES y animarlo:
+> [`GUIA.md`](./GUIA.md).
+
 ## Estructura
 
 | Carpeta | Contenido |
