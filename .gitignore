@@ -20,3 +20,6 @@ venv/
 # OS
 Thumbs.db
 desktop.ini
+
+# Tooling local (skill registry / caches con rutas absolutas)
+.atl/

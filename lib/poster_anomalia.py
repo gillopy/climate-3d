@@ -11,11 +11,11 @@ diluir la anomalía consigo misma).
 
 Uso (desde la carpeta del proyecto):
 
-    .venv\\Scripts\\python.exe poster_anomalia.py                    # PNG del mes por defecto
-    .venv\\Scripts\\python.exe poster_anomalia.py --mes 2026-09      # otro mes
-    .venv\\Scripts\\python.exe poster_anomalia.py --credito "@miuser"
-    .venv\\Scripts\\python.exe poster_anomalia.py --gif              # PNG + GIF rotando 360°
-    .venv\\Scripts\\python.exe poster_anomalia.py --show             # abre la ventana al final
+    .venv\\Scripts\\python.exe lib\\poster_anomalia.py                    # PNG del mes por defecto
+    .venv\\Scripts\\python.exe lib\\poster_anomalia.py --mes 2026-09      # otro mes
+    .venv\\Scripts\\python.exe lib\\poster_anomalia.py --credito "@miuser"
+    .venv\\Scripts\\python.exe lib\\poster_anomalia.py --gif              # PNG + GIF rotando 360°
+    .venv\\Scripts\\python.exe lib\\poster_anomalia.py --show             # abre la ventana al final
 
 Salidas: planeta_anomalia_<AAAA-MM>.png y (con --gif) planeta_anomalia_rotando.gif
 """
@@ -61,6 +61,10 @@ CHUNK = 24                            # pasos por lectura del NetCDF (~36 MB en 
 BG = "#0c1014"                        # fondo del póster (muestreado de la referencia)
 TXT, TXT_DIM = "#ffffff", "#c9cfd6"
 WM_COLOR = "#46536b"                  # marca de agua, discreta sobre el mapa
+
+# Datos y salidas viven fuera del repositorio (los .nc y los GIF pesan varios GB).
+DATOS_D = Path(r"D:\Users\guill\dataset era5")
+SALIDAS = DATOS_D / "salidas"
 
 # Paleta muestreada píxel a píxel de la barra de color de la referencia
 ANOM_COLORS = [
@@ -311,8 +315,8 @@ def main(argv=None):
 
     ANOM_VMIN, ANOM_VMAX = args.vmin, args.vmax
 
-    data_dir = Path(__file__).resolve().parent
-    da, times, synthetic = load_field(data_dir, args.nc)
+    SALIDAS.mkdir(parents=True, exist_ok=True)
+    da, times, synthetic = load_field(DATOS_D, args.nc)
     tdim = "valid_time" if "valid_time" in da.dims else "time"
     to_c = lambda arr: np.asarray(arr, dtype=np.float64) - 273.15
 
@@ -347,7 +351,7 @@ def main(argv=None):
                             credit=args.credito, stride=max(1, args.stride),
                             center_lon=args.lon, center_lat=args.lat,
                             lon=da.longitude.values, lat=da.latitude.values)
-    png = data_dir / f"planeta_anomalia_{y_t}-{m_t:02d}.png"
+    png = SALIDAS / f"planeta_anomalia_{y_t}-{m_t:02d}.png"
     fig.savefig(png, facecolor=BG)
     print("PNG:", png)
 
@@ -366,7 +370,7 @@ def main(argv=None):
 
         anim = animation.FuncAnimation(gif_fig, update, frames=args.frames,
                                        interval=1000 / args.fps, blit=False)
-        gif = data_dir / "planeta_anomalia_rotando.gif"
+        gif = SALIDAS / "planeta_anomalia_rotando.gif"
         anim.save(gif, writer=animation.PillowWriter(fps=args.fps))
         plt.close(gif_fig)
         print("GIF:", gif)

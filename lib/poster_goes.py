@@ -17,14 +17,16 @@ con --paleta.
 
 Uso (desde la carpeta del proyecto):
 
-    .venv\\Scripts\\python.exe poster_goes.py                       # disco completo, gris
-    .venv\\Scripts\\python.exe poster_goes.py --paleta anomalia     # paleta del póster
-    .venv\\Scripts\\python.exe poster_goes.py --globo --zona sa    # globo entero, Sudamérica
-    .venv\\Scripts\\python.exe poster_goes.py --zona sa             # encuadre regional
-    .venv\\Scripts\\python.exe poster_goes.py --zona py --paleta anomalia
-    .venv\\Scripts\\python.exe poster_goes.py --lat -25.3 --lon -57.6 --ancho 20
-    .venv\\Scripts\\python.exe poster_goes.py --extent -63 -53 -30 -18
-    .venv\\Scripts\\python.exe poster_goes.py --nc OR_ABI-L2-CMIPF-M6C13_G19_....nc
+    .venv\\Scripts\\python.exe lib\\poster_goes.py                       # disco completo, gris
+    .venv\\Scripts\\python.exe lib\\poster_goes.py --paleta anomalia     # paleta del póster
+    .venv\\Scripts\\python.exe lib\\poster_goes.py --paleta anomalia --vmin 0 --vmax 45
+        # disco completo cirrus C04 (1.4 µm) como en la referencia
+    .venv\\Scripts\\python.exe lib\\poster_goes.py --globo --zona sa    # globo entero, Sudamérica
+    .venv\\Scripts\\python.exe lib\\poster_goes.py --zona sa             # encuadre regional
+    .venv\\Scripts\\python.exe lib\\poster_goes.py --zona py --paleta anomalia
+    .venv\\Scripts\\python.exe lib\\poster_goes.py --lat -25.3 --lon -57.6 --ancho 20
+    .venv\\Scripts\\python.exe lib\\poster_goes.py --extent -63 -53 -30 -18
+    .venv\\Scripts\\python.exe lib\\poster_goes.py --nc OR_ABI-L2-CMIPF-M6C13_G19_....nc
 
 Zonas predefinidas: py (Paraguay), br (Brasil), sa (Sudamérica), conus (EE.UU.),
 caribe. Ojo: un archivo de GOES-West (G18, satélite en -137°) apenas alcanza
@@ -51,14 +53,28 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
-from poster_anomalia import (ANOM_CMAP, BG, MONTHS_EN, POSTER_DPI, POSTER_SIZE,
-                             TXT, TXT_DIM, WM_COLOR)
+from matplotlib.colors import LinearSegmentedColormap
+
+from poster_anomalia import (ANOM_CMAP, BG, DATOS_D, MONTHS_EN, POSTER_DPI,
+                             POSTER_SIZE, SALIDAS, TXT, TXT_DIM, WM_COLOR)
+
+# Rampa IR con realce (estilo la referencia del usuario): colores para los topes
+# fríos (nubes) y gris para el fondo cálido. Ojo con el orden: la posición 0 es
+# el vmin (lo más frío) y la 1 el vmax (lo más cálido).
+IR_REALCE_COLORS = [
+    (0.00, "#ff2020"), (0.08, "#e00000"), (0.14, "#ff8000"),
+    (0.20, "#f0f000"), (0.26, "#00e000"), (0.32, "#00c8ff"),
+    (0.38, "#0050ff"), (0.45, "#0a2a8f"),
+    (0.55, "#b0b0b0"), (0.70, "#8c8c8c"), (1.00, "#5a5a5a"),
+]
+IR_REALCE_CMAP = LinearSegmentedColormap.from_list("ir_realce", IR_REALCE_COLORS)
 
 # Paletas disponibles: la del póster de anomalías y las clásicas de satélite.
 PALETTES = {
     "gris": "Greys_r",       # reflectancia: 0 = negro (espacio/mar), 1 = blanco (nubes)
     "termico": "Greys",      # IR: frío (nube alta) = blanco, cálido (superficie) = negro
     "anomalia": ANOM_CMAP,   # la muestreada de la imagen de referencia
+    "ir_realce": IR_REALCE_CMAP,  # IR con realce de color en los topes fríos
     "magma": "magma",
     "inferno": "inferno",
     "turbo": "turbo",
@@ -84,16 +100,21 @@ GLOBE_LON, GLOBE_LAT = -58.0, -23.0
 
 # ------------------------------------------------------------------- lectura
 def find_goes_file(data_dir: Path, explicit: str | None) -> Path:
+    """Archivo ABI a usar: el de `--nc`, o el más reciente bajo `data_dir`.
+
+    Busca recursivamente porque los .nc están en subcarpetas por satélite
+    (`goes_c13_g19`, `goes_c04_g18`, ...).
+    """
     if explicit:
         p = Path(explicit)
         if not p.exists():
             raise SystemExit(f"No existe el archivo indicado: {p}")
         return p
-    found = sorted(data_dir.glob("OR_ABI-L2-CMIP*.nc"))
+    found = list(data_dir.rglob("OR_ABI-L2-CMIP*.nc"))
     if not found:
-        raise SystemExit("No hay archivos OR_ABI-L2-CMIP*.nc en la carpeta "
+        raise SystemExit(f"No hay archivos OR_ABI-L2-CMIP*.nc bajo {data_dir} "
                          "(pasá uno con --nc).")
-    return max(found, key=lambda p: p.stat().st_size)
+    return max(found, key=lambda p: (p.stat().st_mtime, p.stat().st_size))
 
 
 def sat_longitude(ds) -> float:
@@ -173,13 +194,20 @@ def resolve_extent(args):
 def draw_goes_poster(field, *, x, y, proj, title, subtitle, unit_label,
                      src_line="", data_line="", credit="", cmap="Greys_r",
                      vmin=None, vmax=None, borders=True, xlim=None, ylim=None,
-                     globe_center=None):
+                     globe_center=None, size=None, dpi=None, grid=False,
+                     highlight_geojson=None, highlight_color="#ffffff",
+                     highlight_width=1.2):
     """Disco completo ABI (o zona de él) con el vestuario del póster de referencia.
 
     Con `globe_center` se reproyecta a Orthographic: el hemisferio entero llenando
     el cuadro, centrado en (lon, lat) — el aspecto "planeta" del póster de ERA5.
+    `size`/`dpi` permiten bajar la resolución: útil para los cuadros de una animación.
+    `grid` dibuja el retículo tenue (por defecto apagado).
+    `highlight_geojson` dibuja un borde destacado (p. ej. Paraguay, GeoJSON Polygon/
+    MultiPolygon en lon/lat) con `highlight_color` y `highlight_width`.
     """
-    fig = plt.figure(figsize=(POSTER_SIZE, POSTER_SIZE), dpi=POSTER_DPI)
+    fig = plt.figure(figsize=(size or POSTER_SIZE, size or POSTER_SIZE),
+                     dpi=dpi or POSTER_DPI)
     fig.patch.set_facecolor(BG)
 
     if globe_center is None:
@@ -203,8 +231,24 @@ def draw_goes_poster(field, *, x, y, proj, title, subtitle, unit_label,
         ax.set_xlim(min(xlim), max(xlim))
         ax.set_ylim(min(ylim), max(ylim))
 
-    ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=False,
-                 linewidth=0.35, color=TXT, alpha=0.3, zorder=3)
+    if grid:
+        ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=False,
+                     linewidth=0.35, color=TXT, alpha=0.3, zorder=3)
+    if highlight_geojson is not None:
+        import json
+        from matplotlib.collections import LineCollection
+        gj = json.load(open(highlight_geojson, encoding="utf-8"))
+        feats = gj["features"] if gj.get("type") == "FeatureCollection" else [gj]
+        segs = []
+        for f in feats:
+            g = f["geometry"]
+            polys = g["coordinates"] if g["type"] == "MultiPolygon" else [g["coordinates"]]
+            for poly in polys:
+                for ring in poly:
+                    segs.append(np.asarray(ring, dtype=float))
+        ax.add_collection(LineCollection(segs, transform=ccrs.PlateCarree(),
+                                         colors=highlight_color,
+                                         linewidths=highlight_width, zorder=5))
     if borders:
         try:
             ax.add_feature(cfeature.COASTLINE.with_scale("110m"), linewidth=0.5,
@@ -235,6 +279,29 @@ def draw_goes_poster(field, *, x, y, proj, title, subtitle, unit_label,
     return fig, ax, mesh
 
 
+def caption_lines(ds, cmi, kind, scene_label):
+    """Título, subtítulo, fuente y datos del póster, leídos del archivo ABI.
+
+    Se centraliza acá para que el póster fijo y la animación rotulen idéntico.
+    Devuelve (title, subtitle, src_line, data_line).
+    """
+    platform = ds.attrs.get("platform_ID", "GOES")
+    slot = ds.attrs.get("orbital_slot", "")
+    band = band_name(ds, cmi)
+    t = np.datetime64(ds["t"].values) if "t" in ds else None
+    if t is not None:
+        month = MONTHS_EN[int(str(t.astype("datetime64[M]")).split("-")[1]) - 1]
+        title = f"{month} {t.astype('datetime64[Y]')}"
+        data_line = (f"DATA: {platform} | {np.datetime_as_string(t, unit='m')} UTC | "
+                     f"MODO {ds.attrs.get('timeline_id', '').replace('ABI ', '')}")
+    else:
+        title = platform
+        data_line = f"DATA: {platform}"
+    subtitle = f"{platform} {slot}\n{kind.upper()} · {band}"
+    src_line = f"SOURCE: NOAA/NESDIS {platform} ABI L2 CMIP | {scene_label}"
+    return title, subtitle, src_line, data_line
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Póster de disco completo desde un archivo GOES-R ABI L2 CMIP.")
@@ -261,11 +328,12 @@ def main(argv=None):
     ap.add_argument("--sin-costas", action="store_true", help="no dibujar costas")
     ap.add_argument("--size", type=float, default=POSTER_SIZE, help="lado en pulgadas")
     ap.add_argument("--dpi", type=int, default=POSTER_DPI, help="resolución")
+    ap.add_argument("--out", help="PNG de salida (por defecto, nombre automático)")
     ap.add_argument("--show", action="store_true", help="abrir la ventana al final")
     args = ap.parse_args(argv)
 
-    data_dir = Path(__file__).resolve().parent
-    nc = find_goes_file(data_dir, args.nc)
+    SALIDAS.mkdir(parents=True, exist_ok=True)
+    nc = find_goes_file(DATOS_D, args.nc)
     ds = xr.open_dataset(nc)
     cmi = ds["CMI"]
 
@@ -323,19 +391,8 @@ def main(argv=None):
     slot = ds.attrs.get("orbital_slot", "")
     scene = ds.attrs.get("scene_id", "Full Disk")
     band = band_name(ds, cmi)
-    t = np.datetime64(ds["t"].values) if "t" in ds else None
-
-    if t is not None:
-        month = MONTHS_EN[int(str(t.astype("datetime64[M]")).split("-")[1]) - 1]
-        title = f"{month} {t.astype('datetime64[Y]')}"
-        data_line = (f"DATA: {platform} | {np.datetime_as_string(t, unit='m')} UTC | "
-                     f"MODO {ds.attrs.get('timeline_id', '').replace('ABI ', '')}")
-    else:
-        title = platform
-        data_line = f"DATA: {platform}"
-    subtitle = f"{platform} {slot}\n{kind.upper()} · {band}"
-    src_line = f"SOURCE: NOAA/NESDIS {platform} ABI L2 CMIP | " \
-               f"{vista or scene.upper()}"
+    title, subtitle, src_line, data_line = caption_lines(
+        ds, cmi, kind, vista or scene.upper())
 
     print(f"Archivo: {nc.name}")
     print(f"{platform} {slot} | {scene} | {band} | {kind} en {unit_label}")
@@ -355,7 +412,8 @@ def main(argv=None):
     tag += f"_{args.zona}" if args.zona else ""
     tag += "_centro" if args.lat is not None else ""
     tag += "_extent" if args.extent else ""
-    out = data_dir / f"poster_goes_{platform}_C{bid:02d}{tag}.png"
+    out = (Path(args.out) if args.out
+           else SALIDAS / f"poster_goes_{platform}_C{bid:02d}{tag}.png")
     fig.savefig(out, facecolor=BG)
     print("PNG:", out)
 
