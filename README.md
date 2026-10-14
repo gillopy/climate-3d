@@ -53,5 +53,7 @@ Los notebooks ya apuntan ahí.
 
 ## Notas
 
-- Los `.nc` y `.gif` están en `.gitignore` por tamaño.
-- Sin `ffmpeg` en el PATH, las animaciones se exportan a **GIF** (`PillowWriter`).
+- Los `.nc` y los `.gif` están ignorados por tamaño (`*.nc`, `*.gif`, `*.log`).
+- Las animaciones se exportan en **MP4** con el ffmpeg que trae `imageio-ffmpeg`
+  (no hace falta tener ffmpeg en el PATH); el **GIF** (`PillowWriter`) queda como opción
+  para reproducción en loop universal.

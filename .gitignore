@@ -14,6 +14,12 @@ venv/
 # Generated animations (heavy; regenerate with the scripts)
 *.gif
 
+# Generated outputs (must live under D:\..., never in the repo)
+poster_*.png
+animacion_*.png
+vista_*.png
+frames_*/
+
 # Logs
 *.log
 
