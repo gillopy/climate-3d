@@ -29,3 +29,6 @@ desktop.ini
 
 # Tooling local (skill registry / caches con rutas absolutas)
 .atl/
+
+# Internal workflow docs (local only, not published)
+odd/
