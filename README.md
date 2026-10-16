@@ -46,16 +46,18 @@ Cuatro salidas del mismo pipeline, todas con datos reales. En
 
 ### GeoColor (GOES-East): color real de día, IR y luces de ciudad de noche
 
-Dos cuadros consecutivos de una animación (10 minutos entre uno y otro):
+El mismo globo, el mismo día, a las 16:50 y a las 04:00 UTC:
 
-| 04 OCT 2026 · 16:50 UTC | 04 OCT 2026 · 17:00 UTC |
+| Día · 16:50 UTC | Noche · 04:00 UTC |
 | --- | --- |
-| ![GeoColor GOES-East, 4 de octubre de 2026, 16:50 UTC](docs/galeria/geocolor_globo_G19_2026-10-04T1650.png) | ![GeoColor GOES-East, 4 de octubre de 2026, 17:00 UTC](docs/galeria/geocolor_globo_G19_2026-10-04T1700.png) |
+| ![GeoColor de día — 4 de octubre de 2026, 16:50 UTC](docs/galeria/geocolor_globo_G19_2026-10-04T1650.png) | ![GeoColor de noche — 4 de octubre de 2026, 04:00 UTC](docs/galeria/geocolor_globo_G19_2026-10-04T0400.png) |
 
-GeoColor no es una banda: es un producto RGB ya mezclado. De día se ve color real —la
-Amazonía en verde, los Andes en ocre, el océano y las nubes tal como los vería el ojo— y de
-noche el terreno da paso al infrarrojo con las **luces de ciudad** encima. Se baja de NASA
-GIBS, así que no hay `.nc` que leer.
+GeoColor no es una banda: es un producto RGB ya mezclado. **De día** se ve color real —la
+Amazonía en verde, los Andes en ocre, el océano y las nubes tal como los vería el ojo—.
+**De noche** el terreno da paso al infrarrojo, que separa las nubes bajas de agua líquida
+(azul claro) de las altas de hielo (gris y blanco), y por encima van las **luces de ciudad**:
+esas motas anaranjadas sobre la costa de Brasil y los Andes. Se baja de NASA GIBS, así que no
+hay `.nc` que leer.
 
 ### Anomalía de temperatura (ERA5): el mes contra su propia climatología
 
