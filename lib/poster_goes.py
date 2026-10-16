@@ -97,6 +97,9 @@ ZONES = {
 # Centro por defecto del globo Orthographic (mismo del póster de ERA5).
 GLOBE_LON, GLOBE_LAT = -58.0, -23.0
 
+# Borde destacado por defecto: el contorno de Paraguay (el póster es de Paraguay).
+BORDE_DEFAULT = Path(__file__).resolve().parent.parent / "datos" / "paraguay_gadm.json"
+
 
 # ------------------------------------------------------------------- lectura
 def find_goes_file(data_dir: Path, explicit: str | None) -> Path:
@@ -195,8 +198,8 @@ def draw_goes_poster(field, *, x, y, proj, title, subtitle, unit_label,
                      src_line="", data_line="", credit="", cmap="Greys_r",
                      vmin=None, vmax=None, borders=True, xlim=None, ylim=None,
                      globe_center=None, size=None, dpi=None, grid=False,
-                     highlight_geojson=None, highlight_color="#ffffff",
-                     highlight_width=1.2):
+                     highlight_geojson=None, highlight_color="#000000",
+                     highlight_width=0.8, time_line=""):
     """Disco completo ABI (o zona de él) con el vestuario del póster de referencia.
 
     Con `globe_center` se reproyecta a Orthographic: el hemisferio entero llenando
@@ -205,6 +208,8 @@ def draw_goes_poster(field, *, x, y, proj, title, subtitle, unit_label,
     `grid` dibuja el retículo tenue (por defecto apagado).
     `highlight_geojson` dibuja un borde destacado (p. ej. Paraguay, GeoJSON Polygon/
     MultiPolygon en lon/lat) con `highlight_color` y `highlight_width`.
+    `time_line`, si viene, se rotula grande y en blanco debajo del título (fecha y
+    hora del cuadro) y empuja el subtítulo hacia abajo.
     """
     fig = plt.figure(figsize=(size or POSTER_SIZE, size or POSTER_SIZE),
                      dpi=dpi or POSTER_DPI)
@@ -266,9 +271,14 @@ def draw_goes_poster(field, *, x, y, proj, title, subtitle, unit_label,
 
     fig.text(0.026, 0.985, title, color=TXT, fontsize=19,
              fontweight="bold", ha="left", va="top")
-    fig.text(0.026, 0.950, subtitle, color=TXT_DIM, fontsize=16.5,
-             fontweight="bold", ha="left", va="top", linespacing=0.82)
-    fig.text(0.983, 0.983, credit, color=TXT_DIM, fontsize=5.8, ha="right", va="top")
+    sub_y = 0.945
+    if time_line:
+        fig.text(0.026, 0.944, time_line, color=TXT, fontsize=16,
+                 fontweight="bold", ha="left", va="top")
+        sub_y = 0.898
+    fig.text(0.026, sub_y, subtitle, color=TXT_DIM, fontsize=13.5,
+             fontweight="bold", ha="left", va="top", linespacing=1.12)
+    fig.text(0.983, 0.983, credit, color=TXT_DIM, fontsize=12, ha="right", va="top")
     fig.text(0.096, 0.105, unit_label, color=TXT, fontsize=24, fontweight="bold",
              ha="left", va="bottom")
     fig.text(0.026, 0.012, src_line, color=TXT_DIM, fontsize=7.4, ha="left", va="bottom")
@@ -302,6 +312,18 @@ def caption_lines(ds, cmi, kind, scene_label):
     return title, subtitle, src_line, data_line
 
 
+def time_label(ds) -> str:
+    """Fecha y hora del cuadro para el rótulo grande (p. ej. '04 OCT 2026 · 19:00 UTC')."""
+    if "t" not in ds:
+        return ""
+    t = np.datetime64(ds["t"].values)
+    month = MONTHS_EN[int(str(t.astype("datetime64[M]")).split("-")[1]) - 1][:3]
+    day = int(str(t.astype("datetime64[D]")).split("-")[2])
+    year = int(str(t.astype("datetime64[Y]")))
+    hhmm = np.datetime_as_string(t, unit="m").split("T")[1]
+    return f"{day:02d} {month} {year} · {hhmm} UTC"
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Póster de disco completo desde un archivo GOES-R ABI L2 CMIP.")
@@ -312,7 +334,7 @@ def main(argv=None):
     ap.add_argument("--vmax", type=float, help="máximo del colorbar (por defecto, auto)")
     ap.add_argument("--stride", type=int, default=0,
                     help="submuestreo de la grilla; 0 = automático (~1200 px de lado)")
-    ap.add_argument("--credito", default="Graphic by @tu_usuario",
+    ap.add_argument("--credito", default="Graphic by @Gillo97",
                     help="crédito y marca de agua central")
     ap.add_argument("--zona", choices=sorted(ZONES),
                     help="encuadre regional predefinido (si no, disco completo)")
@@ -326,6 +348,13 @@ def main(argv=None):
     ap.add_argument("--ancho", type=float, default=20.0,
                     help="ancho de la vista en grados cuando se usa --lat/--lon")
     ap.add_argument("--sin-costas", action="store_true", help="no dibujar costas")
+    ap.add_argument("--geojson", default=str(BORDE_DEFAULT),
+                    help="borde a destacar (GeoJSON Polygon/MultiPolygon); "
+                         "por defecto, el de Paraguay")
+    ap.add_argument("--borde-color", default="#000000", help="color del borde destacado")
+    ap.add_argument("--borde-ancho", type=float, default=0.8,
+                    help="grosor del borde destacado (fino = sutil)")
+    ap.add_argument("--sin-borde", action="store_true", help="no dibujar el borde destacado")
     ap.add_argument("--size", type=float, default=POSTER_SIZE, help="lado en pulgadas")
     ap.add_argument("--dpi", type=int, default=POSTER_DPI, help="resolución")
     ap.add_argument("--out", help="PNG de salida (por defecto, nombre automático)")
@@ -406,7 +435,12 @@ def main(argv=None):
                                   credit=args.credito, cmap=PALETTES[paleta],
                                   vmin=vmin, vmax=vmax, borders=not args.sin_costas,
                                   xlim=xlim, ylim=ylim, globe_center=centro_globo,
-                                  size=args.size, dpi=args.dpi)
+                                  size=args.size, dpi=args.dpi,
+                                  time_line=time_label(ds),
+                                  highlight_geojson=None if (args.sin_borde or not args.geojson)
+                                  else args.geojson,
+                                  highlight_color=args.borde_color,
+                                  highlight_width=args.borde_ancho)
     bid = int(np.ravel(ds["band_id"].values)[0])
     tag = "" if paleta == default_palette(unit_label) else f"_{paleta}"
     tag += "_globo" if args.globo else ""

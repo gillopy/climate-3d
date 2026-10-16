@@ -76,7 +76,8 @@ def render(cfg, sl_map, start, end, vmin, vmax):
             src_line=rot[2], data_line=rot[3], credit=cfg["credito"],
             cmap=PALETTES[cfg["paleta"]], vmin=vmin, vmax=vmax,
             size=cfg["lado"], dpi=cfg["dpi"], globe_center=cfg["globo_center"],
-            highlight_geojson=cfg["geojson"], highlight_width=cfg["hl_width"])
+            highlight_geojson=cfg["geojson"], highlight_color=cfg["hl_color"],
+            highlight_width=cfg["hl_width"], time_line=rot[4])
         fig.savefig(cfg["frames_dir"] / f"cuadro_{i:03d}.png", format="png", facecolor=BG)
         plt.close(fig)
         if i % 8 == 0 or i == end:
@@ -98,9 +99,13 @@ def main(argv=None):
     ap.add_argument("--centro", nargs=2, type=float, metavar=("LON", "LAT"),
                     help="centro del globo (default: -58 -23)")
     ap.add_argument("--zona", choices=sorted(ZONES), help="centro del globo a partir de una zona")
-    ap.add_argument("--geojson", help="borde a destacar (GeoJSON Polygon/MultiPolygon)")
-    ap.add_argument("--hl-width", type=float, default=1.2, help="grosor del borde")
-    ap.add_argument("--credito", default="Graphic by @tu_usuario")
+    ap.add_argument("--geojson", default=str(RAIZ / "datos" / "paraguay_gadm.json"),
+                    help="borde a destacar (GeoJSON Polygon/MultiPolygon); "
+                         "por defecto, el de Paraguay (vacío = sin borde)")
+    ap.add_argument("--hl-color", default="#000000", help="color del borde destacado")
+    ap.add_argument("--hl-width", type=float, default=0.8,
+                    help="grosor del borde destacado (fino = sutil)")
+    ap.add_argument("--credito", default="Graphic by @Gillo97")
     ap.add_argument("--vmin", type=float, help="mínimo de la escala (default: percentiles)")
     ap.add_argument("--vmax", type=float, help="máximo de la escala (default: percentiles)")
     ap.add_argument("--fps", type=float, default=12.5, help="cuadros por segundo del MP4")
@@ -128,7 +133,8 @@ def main(argv=None):
     salida = Path(args.out) if args.out else SALIDAS
     cfg = {
         "t0": t0, "paso": args.paso, "tope": args.px, "lado": lado, "dpi": args.dpi,
-        "paleta": args.paleta, "geojson": args.geojson, "hl_width": args.hl_width,
+        "paleta": args.paleta, "geojson": args.geojson or None, "hl_width": args.hl_width,
+        "hl_color": args.hl_color,
         "credito": args.credito, "globo_center": globo_center, "escena": "FULL DISK",
         "frames_dir": salida / f"frames_{args.sat}_{t0:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px",
     }

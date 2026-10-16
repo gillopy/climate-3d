@@ -315,7 +315,7 @@ def main(argv=None):
         description="Póster de anomalía de temperatura (estilo climatejulien) desde ERA5.")
     ap.add_argument("--nc", help="archivo ERA5 (.nc/.grib) a usar")
     ap.add_argument("--mes", help="mes a retratar, AAAA-MM (por defecto, el último del archivo)")
-    ap.add_argument("--credito", default="Graphic by @tu_usuario",
+    ap.add_argument("--credito", default="Graphic by @Gillo97",
                     help="texto del crédito (arriba a la derecha y marca de agua central)")
     ap.add_argument("--lat", type=float, default=POSTER_LAT, help="latitud central del globo")
     ap.add_argument("--lon", type=float, default=POSTER_LON, help="longitud central del globo")

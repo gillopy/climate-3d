@@ -26,7 +26,7 @@ import xarray as xr
 import cartopy.crs as ccrs
 from PIL import Image
 
-from poster_goes import box_indices, caption_lines, to_display
+from poster_goes import box_indices, caption_lines, time_label, to_display
 
 PATRON = re.compile(r"OR_ABI-L2-CMIPF-M6(?P<banda>C\d+)_(?P<sat>G\d+)_s(?P<s>\d{14})_")
 
@@ -96,6 +96,8 @@ def cargar(nc, tope_px=None, caja=None, escena="FULL DISK"):
 
     `tope_px` submuestrea el disco (None = resolución nativa). `caja` recorta a una
     caja lon/lat `(oeste, este, sur, norte)`. `escena` es la etiqueta del póster.
+    `rotulos` es `(titulo, subtitulo, fuente, datos, tiempo)`: el último es la
+    fecha/hora del cuadro para el rótulo grande (`time_line` de `draw_goes_poster`).
     """
     with xr.open_dataset(nc) as ds:
         cmi = ds["CMI"]
@@ -111,11 +113,11 @@ def cargar(nc, tope_px=None, caja=None, escena="FULL DISK"):
             i0, i1, j0, j1 = box_indices(proj, x, y, caja)
             crudo = np.asarray(cmi[j0:j1, i0:i1].values, dtype=np.float64)
             campo, unidad, tipo = to_display(crudo, cmi)
-            rotulos = caption_lines(ds, cmi, tipo, escena)
+            rotulos = (*caption_lines(ds, cmi, tipo, escena), time_label(ds))
             return campo, x[i0:i1], y[j0:j1], proj, unidad, rotulos
         crudo = np.asarray(cmi[::paso, ::paso].values, dtype=np.float64)
         campo, unidad, tipo = to_display(crudo, cmi)
-        rotulos = caption_lines(ds, cmi, tipo, escena)
+        rotulos = (*caption_lines(ds, cmi, tipo, escena), time_label(ds))
         return campo, x, y, proj, unidad, rotulos
 
 

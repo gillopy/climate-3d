@@ -32,14 +32,15 @@ import matplotlib.pyplot as plt
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ / "lib"))
 from poster_goes import (BG, PALETTES, caption_lines, draw_goes_poster,
-                         to_display)
+                         time_label, to_display)
 
 DATOS_D = Path(r"D:\Users\guill\dataset era5\goes_c13_g19")
 SALIDAS_D = Path(r"D:\Users\guill\dataset era5\salidas")
 CENTRO_LON, CENTRO_LAT = -73.0, -18.0
 GEOJSON = str(RAIZ / "datos" / "paraguay_gadm.json")
 PALETA = "ir_realce"
-CREDITO = "Graphic by @tu_usuario"
+CREDITO = "Graphic by @Gillo97"
+BORDE_COLOR, BORDE_ANCHO = "#000000", 0.8   # borde de Paraguay: negro y sutil
 
 
 def main(argv=None):
@@ -84,7 +85,8 @@ def main(argv=None):
         campo, x=x, y=y, proj=proj, title=titulo, subtitle=subtitulo,
         unit_label=unidad, src_line=fuente, data_line=datos, credit=args.credito,
         cmap=PALETTES[PALETA], vmin=float(lo), vmax=float(hi),
-        highlight_geojson=GEOJSON,
+        highlight_geojson=GEOJSON, highlight_color=BORDE_COLOR,
+        highlight_width=BORDE_ANCHO, time_line=time_label(ds),
         globe_center=(args.lon, args.lat))
     t = np.datetime64(ds["t"].values) if "t" in ds else None
     sello = np.datetime_as_string(t, unit="m").replace(":", "") if t is not None else "sin-fecha"
