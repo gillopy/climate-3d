@@ -17,16 +17,16 @@ con --paleta.
 
 Uso (desde la carpeta del proyecto):
 
-    .venv\\Scripts\\python.exe lib\\poster_goes.py                       # disco completo, gris
-    .venv\\Scripts\\python.exe lib\\poster_goes.py --paleta anomalia     # paleta del póster
-    .venv\\Scripts\\python.exe lib\\poster_goes.py --paleta anomalia --vmin 0 --vmax 45
+    .venv\\Scripts\\python.exe prototipos\\poster_goes.py                       # disco completo, gris
+    .venv\\Scripts\\python.exe prototipos\\poster_goes.py --paleta anomalia     # paleta del póster
+    .venv\\Scripts\\python.exe prototipos\\poster_goes.py --paleta anomalia --vmin 0 --vmax 45
         # disco completo cirrus C04 (1.4 µm) como en la referencia
-    .venv\\Scripts\\python.exe lib\\poster_goes.py --globo --zona sa    # globo entero, Sudamérica
-    .venv\\Scripts\\python.exe lib\\poster_goes.py --zona sa             # encuadre regional
-    .venv\\Scripts\\python.exe lib\\poster_goes.py --zona py --paleta anomalia
-    .venv\\Scripts\\python.exe lib\\poster_goes.py --lat -25.3 --lon -57.6 --ancho 20
-    .venv\\Scripts\\python.exe lib\\poster_goes.py --extent -63 -53 -30 -18
-    .venv\\Scripts\\python.exe lib\\poster_goes.py --nc OR_ABI-L2-CMIPF-M6C13_G19_....nc
+    .venv\\Scripts\\python.exe prototipos\\poster_goes.py --globo --zona sa    # globo entero, Sudamérica
+    .venv\\Scripts\\python.exe prototipos\\poster_goes.py --zona sa             # encuadre regional
+    .venv\\Scripts\\python.exe prototipos\\poster_goes.py --zona py --paleta anomalia
+    .venv\\Scripts\\python.exe prototipos\\poster_goes.py --lat -25.3 --lon -57.6 --ancho 20
+    .venv\\Scripts\\python.exe prototipos\\poster_goes.py --extent -63 -53 -30 -18
+    .venv\\Scripts\\python.exe prototipos\\poster_goes.py --nc OR_ABI-L2-CMIPF-M6C13_G19_....nc
 
 Zonas predefinidas: py (Paraguay), br (Brasil), sa (Sudamérica), conus (EE.UU.),
 caribe. Ojo: un archivo de GOES-West (G18, satélite en -137°) apenas alcanza
@@ -55,8 +55,13 @@ import cartopy.feature as cfeature
 
 from matplotlib.colors import LinearSegmentedColormap
 
-from poster_anomalia import (ANOM_CMAP, BG, DATOS_D, MONTHS_EN, POSTER_DPI,
-                             POSTER_SIZE, SALIDAS, TXT, TXT_DIM, WM_COLOR)
+# Bootstrap de imports: `estilo` y `rutas` viven en comun/.
+RAIZ = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RAIZ / "comun"))
+
+from estilo import (ANOM_CMAP, BG, MONTHS_EN, POSTER_DPI, POSTER_SIZE,  # noqa: E402
+                    TXT, TXT_DIM, WM_COLOR)
+from rutas import DATOS, SALIDAS  # noqa: E402
 
 # Rampa IR con realce (estilo la referencia del usuario): colores para los topes
 # fríos (nubes) y gris para el fondo cálido. Ojo con el orden: la posición 0 es
@@ -362,7 +367,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     SALIDAS.mkdir(parents=True, exist_ok=True)
-    nc = find_goes_file(DATOS_D, args.nc)
+    nc = find_goes_file(DATOS, args.nc)
     ds = xr.open_dataset(nc)
     cmi = ds["CMI"]
 

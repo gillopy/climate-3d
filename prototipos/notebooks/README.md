@@ -1,8 +1,9 @@
-# `notebooks/` — prototipos y animaciones
+# `prototipos/notebooks/` — prototipos y animaciones
 
 Cada notebook es autocontenido: configura, descarga lo que falte, renderiza y muestra
-el resultado. Todos detectan la raíz del proyecto y agregan `lib/` al `sys.path`, así
-que **se pueden correr desde esta carpeta o desde la raíz**.
+el resultado. Todos detectan la raíz del repositorio (la carpeta que contiene `comun/`)
+y agregan `comun/`, `prototipos/` y `descargar/` al `sys.path`, así que **se pueden
+correr desde esta carpeta o desde la raíz**.
 
 | Notebook | Qué genera | Dataset |
 |---|---|---|
@@ -18,9 +19,9 @@ Comparten la misma estructura de 7 celdas de código:
 
 1. **configuración** — `T0` (primer cuadro), `N_FRAMES`, `PASO_MIN`, satélite/banda,
    paleta, crédito, escala.
-2. **datos y utilidades** — importa de `lib/goes_fetch.py` la clave S3 (a partir del
-   slot de 10 min), la descarga (busca en local primero) y el fundido del GIF; define
-   `cargar_cuadro(nc)` según la vista (disco o zona).
+2. **datos y utilidades** — importa de `comun/goes_lectura.py` la lectura local (y el
+   fundido del GIF) y de `descargar/goes_descarga.py` la clave S3 (del slot de 10 min)
+   y la descarga; define `cargar_cuadro(nc)` según la vista (disco o zona).
 3. **descarga** — con barra de progreso `rich`; tolera huecos del archivo NOAA.
 4. **control** — imprime y valida los rótulos con `assert` (título, subtítulo,
    fuente, datos).
@@ -36,7 +37,7 @@ Comparten la misma estructura de 7 celdas de código:
 |---|---|
 | `T0`, `N_FRAMES`, `PASO_MIN` | Ventana de tiempo (10 min por slot) |
 | `SAT`, `BANDA` | `"G19"`/`"C13"` (IR), `"G18"`/`"C04"` (cirrus) |
-| `PALETA` | `ir_realce`, `termico`, `anomalia`, … (ver [`lib/README.md`](../lib/README.md)) |
+| `PALETA` | `ir_realce`, `termico`, `anomalia`, … (definidas en [`../poster_goes.py`](../poster_goes.py)) |
 | `VMIN`, `VMAX` | Escala fija; `None` = percentiles automáticos del primer cuadro |
 | `CENTRO_LON`, `CENTRO_LAT` | Giro del globo (solo en `animacion_globo_g19`) |
 | `GEOJSON` | Borde destacado a dibujar |
@@ -77,8 +78,9 @@ resolución nativa, a costa de tiempo.
 
 ### Datos y salidas
 
-- **Entrada**: `D:\Users\guill\dataset era5\goes_c13_g19` (o `...\goes_c04_g18`).
-- **Salida**: `D:\Users\guill\dataset era5\salidas` — el GIF, el PNG fijo y una
+- **Entrada**: `goes_c13_g19` (o `goes_c04_g18`) bajo la raíz de datos que define
+  `comun/rutas.py` (`CLIMATE3D_DATOS`).
+- **Salida**: la carpeta `salidas` de esa misma raíz — el GIF, el PNG fijo y una
   carpeta `frames_*` con los cuadros intermedios (se puede borrar al terminar).
 
 Nada de esto se guarda en el repositorio.

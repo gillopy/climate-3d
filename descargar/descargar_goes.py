@@ -1,14 +1,14 @@
 """Descarga archivos GOES-R ABI L2 CMIP desde el bucket público de NOAA S3.
 
-Reutiliza la lógica de `lib/goes_fetch.py` (la misma que usan los notebooks).
-Salta los archivos que ya existen localmente (> 1 MB) y guarda en la carpeta del
-satélite/banda bajo `D:\\Users\\guill\\dataset era5`.
+Reutiliza `descargar/goes_descarga.py` (claves S3 y bajada) y `comun/goes_lectura.py`
+(ruta local). Salta los archivos que ya existen localmente (> 1 MB) y guarda en la
+carpeta del satélite/banda bajo `comun.rutas.DATOS`.
 
 Uso (desde la raíz del proyecto):
 
-    .venv\\Scripts\\python.exe scripts\\descargar_goes.py
-    .venv\\Scripts\\python.exe scripts\\descargar_goes.py --sat G19 --banda C13 --desde 2026-10-02 --hasta 2026-10-05
-    .venv\\Scripts\\python.exe scripts\\descargar_goes.py --help   # no toca la red
+    .venv\\Scripts\\python.exe descargar\\descargar_goes.py
+    .venv\\Scripts\\python.exe descargar\\descargar_goes.py --sat G19 --banda C13 --desde 2026-10-02 --hasta 2026-10-05
+    .venv\\Scripts\\python.exe descargar\\descargar_goes.py --help   # no toca la red
 """
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(RAIZ / "lib"))
-from goes_fetch import clave_de, descargar, ruta_local  # noqa: E402
-
-RAIZ_DATOS = Path(r"D:\Users\guill\dataset era5")
+RAIZ = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RAIZ / "comun"))
+from goes_descarga import clave_de, descargar  # noqa: E402
+from goes_lectura import ruta_local  # noqa: E402
+from rutas import DATOS  # noqa: E402
 
 SAT, BANDA = "G19", "C13"
 DESDE = datetime(2026, 10, 2, 0, 0)   # UTC
@@ -32,7 +32,7 @@ PASO_MIN = 10
 
 def carpeta_datos(sat: str, banda: str) -> Path:
     """Carpeta destino: `goes_<banda>_<sat>` (p. ej. goes_c13_g19)."""
-    return RAIZ_DATOS / f"goes_c{banda[1:].lower()}_{sat.lower()}"
+    return DATOS / f"goes_c{banda[1:].lower()}_{sat.lower()}"
 
 
 def main(argv=None) -> int:

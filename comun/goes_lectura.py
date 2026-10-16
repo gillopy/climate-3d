@@ -1,62 +1,36 @@
-"""Acceso a archivos GOES-R ABI L2 CMIP: claves S3, descarga y lectura.
+"""Lectura local de archivos GOES-R ABI L2 CMIP (sin red).
 
-Centraliza lo que antes estaba duplicado en los tres notebooks de animación y en
-`scripts/descargar_goes_c04.py`:
+Parte local de lo que antes era `lib/goes_fetch.py`; la descarga (que sí toca la red)
+vive aparte, en `descargar/goes_descarga.py`.
 
-  * `claves_de_la_hora` / `clave_de` — arman la clave S3 a partir del slot de 10 min
-    (modo 6); no hace falta escribir el nombre del archivo a mano.
-  * `ruta_local` / `descargar` — reutilizan el .nc si ya está y bajan solo lo que falta.
+  * `PATRON` — regex del nombre de archivo ABI (banda, satélite, inicio de escaneo).
+  * `ruta_local` — reutiliza el .nc si ya está en la carpeta, sin copiarlo.
   * `cargar` — disco completo (con submuestreo opcional) o recorte a una caja lon/lat,
     listo para `draw_goes_poster`.
   * `cuadros_con_fundido` (streaming, poca RAM) y `fundido_desde_imagenes` (en memoria)
     — fotogramas con fundido para armar el GIF.
 
-Requiere que `lib/` esté en el `sys.path` (importa `poster_goes`).
+Requiere `prototipos/` en el `sys.path` (importa de `poster_goes`).
 """
 from __future__ import annotations
 
 import gc
 import re
-import urllib.request
-from datetime import datetime
+import sys
 from pathlib import Path
 
-import numpy as np
-import xarray as xr
-import cartopy.crs as ccrs
-from PIL import Image
+# `cargar` reutiliza los rótulos y el render del póster GOES (prototipos/).
+RAIZ = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RAIZ / "prototipos"))
 
-from poster_goes import box_indices, caption_lines, time_label, to_display
+import numpy as np  # noqa: E402
+import xarray as xr  # noqa: E402
+import cartopy.crs as ccrs  # noqa: E402
+from PIL import Image  # noqa: E402
+
+from poster_goes import box_indices, caption_lines, time_label, to_display  # noqa: E402
 
 PATRON = re.compile(r"OR_ABI-L2-CMIPF-M6(?P<banda>C\d+)_(?P<sat>G\d+)_s(?P<s>\d{14})_")
-
-# Caché de listados S3 por (satélite, hora): una sola consulta por hora.
-_POR_HORA: dict = {}
-
-
-def claves_de_la_hora(sat: str, t) -> list[str]:
-    """Claves S3 de la hora de `t` (una sola consulta por hora y satélite)."""
-    hora = t.replace(minute=0, second=0, microsecond=0)
-    clave_cache = (sat, hora)
-    if clave_cache not in _POR_HORA:
-        pref = (f"ABI-L2-CMIPF/{hora.year}/{int(hora.strftime('%j')):03d}/"
-                f"{hora.hour:02d}/")
-        url = f"https://noaa-goes{sat[1:]}.s3.amazonaws.com/?list-type=2&prefix={pref}"
-        xml = urllib.request.urlopen(url, timeout=120).read().decode()
-        _POR_HORA[clave_cache] = re.findall(r"<Key>([^<]+)</Key>", xml)
-    return _POR_HORA[clave_cache]
-
-
-def clave_de(sat: str, banda: str, t) -> str:
-    """Clave del archivo cuyo escaneo arranca en el slot de 10 min de `t`."""
-    for clave in claves_de_la_hora(sat, t):
-        m = PATRON.search(clave)
-        if not m or m["banda"] != banda or m["sat"] != sat:
-            continue
-        inicio = datetime.strptime(m["s"][:13], "%Y%j%H%M%S")
-        if (inicio.hour, inicio.minute) == (t.hour, t.minute):
-            return clave
-    raise LookupError(f"Sin archivo {sat} {banda} para {t:%Y-%m-%d %H:%M} UTC")
 
 
 def ruta_local(datos_dir, clave: str) -> Path:
@@ -67,28 +41,6 @@ def ruta_local(datos_dir, clave: str) -> Path:
         if candidato.exists():
             return candidato
     return datos_dir / nombre
-
-
-def descargar(datos_dir, sat: str, clave: str, permitir_red: bool = True,
-              minimo_bytes: int = 1_000_000) -> Path:
-    """Devuelve el .nc de `clave`: el local si existe, o el recién bajado de S3."""
-    datos_dir = Path(datos_dir)
-    datos_dir.mkdir(exist_ok=True)
-    destino = ruta_local(datos_dir, clave)
-    if destino.exists() and destino.stat().st_size > minimo_bytes:
-        return destino
-    if not permitir_red:
-        raise SystemExit(f"Falta {destino.name} y DESCARGAR=False: "
-                         "poné DESCARGAR=True para bajarlo de S3.")
-    url = f"https://noaa-goes{sat[1:]}.s3.amazonaws.com/{clave}"
-    with urllib.request.urlopen(url, timeout=300) as respuesta:
-        with open(destino, "wb") as salida:
-            while True:
-                trozo = respuesta.read(1 << 20)
-                if not trozo:
-                    break
-                salida.write(trozo)
-    return destino
 
 
 def cargar(nc, tope_px=None, caja=None, escena="FULL DISK"):

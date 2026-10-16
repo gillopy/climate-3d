@@ -29,13 +29,15 @@ if "--show" not in sys.argv:
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 
-RAIZ = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(RAIZ / "lib"))
-from poster_goes import (BG, PALETTES, caption_lines, draw_goes_poster,
+RAIZ = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RAIZ / "comun"))
+from poster_goes import (BG, PALETTES, caption_lines, draw_goes_poster,  # noqa: E402
                          time_label, to_display)
+from rutas import DATOS, SALIDAS  # noqa: E402
 
-DATOS_D = Path(r"D:\Users\guill\dataset era5\goes_c13_g19")
-SALIDAS_D = Path(r"D:\Users\guill\dataset era5\salidas")
+# Carpeta de los .nc de G19 C13 (el satélite/banda del cuadro fijo).
+DATOS_D = DATOS / "goes_c13_g19"
+SALIDAS_D = SALIDAS
 CENTRO_LON, CENTRO_LAT = -73.0, -18.0
 GEOJSON = str(RAIZ / "datos" / "paraguay_gadm.json")
 PALETA = "ir_realce"
@@ -62,7 +64,7 @@ def main(argv=None):
     else:
         candidatos = sorted(DATOS_D.glob("*.nc"))
         if not candidatos:
-            raise SystemExit("No hay archivos .nc en D:\\Users\\guill\\dataset era5\\goes_c13_g19 "
+            raise SystemExit(f"No hay archivos .nc en {DATOS_D} "
                              "(pasá uno con --nc).")
         nc = max(candidatos, key=lambda p: p.stat().st_size)
 
