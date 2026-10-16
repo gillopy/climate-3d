@@ -5,9 +5,9 @@ la resolución temporal suficiente para las climatologías del póster de anomal
 
 Uso (desde la raíz del proyecto):
 
-    .venv\\Scripts\\python.exe scripts\\descargar_era5.py
-    .venv\\Scripts\\python.exe scripts\\descargar_era5.py --out D:\\otra\\ruta
-    .venv\\Scripts\\python.exe scripts\\descargar_era5.py --force   # re-descargar
+    .venv\\Scripts\\python.exe descargar\\descargar_era5.py
+    .venv\\Scripts\\python.exe descargar\\descargar_era5.py --out D:\\otra\\ruta
+    .venv\\Scripts\\python.exe descargar\\descargar_era5.py --force   # re-descargar
 
 Requiere `cdsapi` y la API key configurada en `~/.cdsapirc`.
 La cola de CDS puede tardar bastante: conviene correrlo en segundo plano y mirar
@@ -20,6 +20,10 @@ import sys
 from pathlib import Path
 
 import cdsapi
+
+RAIZ = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RAIZ / "comun"))
+from rutas import DATOS  # noqa: E402
 
 DATASET = "reanalysis-era5-single-levels"
 REQUEST = {
@@ -35,7 +39,6 @@ REQUEST = {
     "download_format": "unarchived",
 }
 
-DESTINO_D = Path(r"D:\Users\guill\dataset era5")
 NOMBRE = "era5_t2m_2024-2026.nc"
 
 
@@ -55,13 +58,13 @@ def descargar(destino: Path, forzar: bool = False) -> Path:
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Descarga ERA5 2m temperature (2024-2026) desde Copernicus CDS.")
-    ap.add_argument("--out", help="carpeta destino (por defecto, D:\\Users\\guill\\dataset era5)")
+    ap.add_argument("--out", help="carpeta destino (por defecto, comun.rutas.DATOS)")
     ap.add_argument("--nc", help=f"nombre del archivo a escribir (por defecto, {NOMBRE})")
     ap.add_argument("--force", action="store_true",
                     help="volver a descargar aunque el archivo ya exista")
     args = ap.parse_args(argv)
 
-    carpeta = Path(args.out) if args.out else DESTINO_D
+    carpeta = Path(args.out) if args.out else DATOS
     descargar(carpeta / (args.nc or NOMBRE), forzar=args.force)
     return 0
 

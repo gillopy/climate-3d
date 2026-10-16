@@ -1,25 +1,26 @@
-"""Renderiza una animación GOES-R ABI por lotes y arma el MP4.
+"""Renderiza una animación GOES-R ABI por lotes (sólo los cuadros PNG).
 
 Pensado para ventanas largas (cientos de cuadros): renderizar todo en un solo proceso
 agota la memoria en máquinas chicas. Acá cada lote de `--lote` cuadros corre en su
-propio proceso (memoria limpia) y al final se arma el MP4 con el ffmpeg que trae
-`imageio-ffmpeg` (no hace falta tener ffmpeg en el PATH).
+propio proceso (memoria limpia). Deja `cuadro_NNN.png` en la carpeta de frames; el
+ensamblado del MP4/GIF va aparte, en `animar/armar.py`.
 
-Los cuadros se guardan como PNG en una carpeta y se reutilizan si ya están (para
-rearmar el MP4 sin volver a renderizar).
+Los cuadros se reutilizan si ya están (para rearmar el video sin volver a renderizar).
 
 Uso (desde la raíz del proyecto):
 
     # Globo centrado en Paraguay, 432 cuadros a 720 px (dataset G19 C13 completo)
-    .venv\\Scripts\\python.exe scripts\\render_anim.py --sat G19 --banda C13 ^
+    .venv\\Scripts\\python.exe cuadros\\cuadros_goes.py --sat G19 --banda C13 ^
         --desde 2026-10-02 --n 432 --px 720 --globo --centro -73 -18 ^
         --geojson datos\\paraguay_gadm.json --paleta ir_realce
 
     # Disco completo
-    .venv\\Scripts\\python.exe scripts\\render_anim.py --sat G18 --banda C04 --desde 2026-10-03 --n 144 --px 1200
+    .venv\\Scripts\\python.exe cuadros\\cuadros_goes.py --sat G18 --banda C04 --desde 2026-10-03 --n 144 --px 1200
 
     # Prueba rápida (pocos cuadros, chico)
-    .venv\\Scripts\\python.exe scripts\\render_anim.py --sat G19 --banda C13 --desde 2026-10-02 --n 4 --px 480 --globo
+    .venv\\Scripts\\python.exe cuadros\\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 --n 4 --px 480 --globo
+
+Después: `.venv\\Scripts\\python.exe animar\\armar.py --frames <carpeta>`.
 """
 from __future__ import annotations
 
@@ -37,19 +38,18 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-RAIZ = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(RAIZ / "lib"))
-import imageio_ffmpeg  # noqa: E402
-from goes_fetch import cargar  # noqa: E402
+RAIZ = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RAIZ / "comun"))
+sys.path.insert(0, str(RAIZ / "prototipos"))
+from goes_lectura import cargar  # noqa: E402
 from poster_goes import BG, PALETTES, ZONES, draw_goes_poster  # noqa: E402
+from rutas import DATOS, SALIDAS  # noqa: E402
 
-RAIZ_DATOS = Path(r"D:\Users\guill\dataset era5")
-SALIDAS = RAIZ_DATOS / "salidas"
 PATRON = re.compile(r"_s(\d{14})_")
 
 
 def carpeta_datos(sat: str, banda: str) -> Path:
-    return RAIZ_DATOS / f"goes_c{banda[1:].lower()}_{sat.lower()}"
+    return DATOS / f"goes_c{banda[1:].lower()}_{sat.lower()}"
 
 
 def slot_map(datos: Path) -> dict:
@@ -85,7 +85,8 @@ def render(cfg, sl_map, start, end, vmin, vmax):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Animación GOES-R ABI por lotes + MP4.")
+    ap = argparse.ArgumentParser(
+        description="Cuadros (PNG) de una animación GOES-R ABI, por lotes.")
     ap.add_argument("--sat", default="G19", help="satélite, p. ej. G19")
     ap.add_argument("--banda", default="C13", help="banda, p. ej. C13")
     ap.add_argument("--desde", default="2026-10-02", help="primer cuadro, UTC")
@@ -108,10 +109,9 @@ def main(argv=None):
     ap.add_argument("--credito", default="Graphic by @Gillo97")
     ap.add_argument("--vmin", type=float, help="mínimo de la escala (default: percentiles)")
     ap.add_argument("--vmax", type=float, help="máximo de la escala (default: percentiles)")
-    ap.add_argument("--fps", type=float, default=12.5, help="cuadros por segundo del MP4")
     ap.add_argument("--lote", type=int, default=24, help="cuadros por proceso")
     ap.add_argument("--datos", help="carpeta de los .nc (default: la del satélite/banda)")
-    ap.add_argument("--out", help="carpeta de salida (default: D:\\...\\salidas)")
+    ap.add_argument("--out", help="carpeta de salida (default: comun.rutas.SALIDAS)")
     # uso interno: renderiza un rango con escala fija
     ap.add_argument("--rango", nargs=4, metavar=("S", "E", "VMIN", "VMAX"),
                     help=argparse.SUPPRESS)
@@ -139,11 +139,11 @@ def main(argv=None):
         "frames_dir": salida / f"frames_{args.sat}_{t0:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px",
     }
     cfg["frames_dir"].mkdir(parents=True, exist_ok=True)
-    mp4 = salida / f"animacion_{vista}_{args.sat}_{t0:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px.mp4"
 
     sl_map = slot_map(datos)
     if not sl_map:
-        raise SystemExit(f"No hay .nc en {datos} (descargalos con scripts/descargar_goes.py).")
+        raise SystemExit(f"No hay .nc en {datos} "
+                         "(descargalos con descargar/descargar_goes.py).")
 
     # Modo lote: renderiza el rango y sale.
     if args.rango:
@@ -175,18 +175,8 @@ def main(argv=None):
                            check=True)
             print(f"  ok ({time.time() - t_inicio:.0f}s)", flush=True)
 
-    proc = subprocess.run([
-        imageio_ffmpeg.get_ffmpeg_exe(), "-y",
-        "-framerate", f"{args.fps:.6f}", "-start_number", "1",
-        "-i", str(cfg["frames_dir"] / "cuadro_%03d.png"),
-        "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-        "-c:v", "libx264", "-preset", "slow", "-pix_fmt", "yuv420p", "-crf", "16",
-        "-movflags", "+faststart", str(mp4)], capture_output=True, text=True,
-        encoding="utf-8", errors="replace")
-    if proc.returncode:
-        print(proc.stderr[-1200:])
-        raise SystemExit(f"ffmpeg falló con código {proc.returncode}")
-    print(f"MP4: {mp4} ({mp4.stat().st_size / 1e6:.1f} MB, {args.px}x{args.px})")
+    print(f"Cuadros en {cfg['frames_dir']} ({args.px}x{args.px} px). Armá el video con: "
+          f".venv\\Scripts\\python.exe animar\\armar.py --frames \"{cfg['frames_dir']}\"")
 
 
 if __name__ == "__main__":

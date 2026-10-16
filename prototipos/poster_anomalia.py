@@ -11,11 +11,11 @@ diluir la anomalía consigo misma).
 
 Uso (desde la carpeta del proyecto):
 
-    .venv\\Scripts\\python.exe lib\\poster_anomalia.py                    # PNG del mes por defecto
-    .venv\\Scripts\\python.exe lib\\poster_anomalia.py --mes 2026-09      # otro mes
-    .venv\\Scripts\\python.exe lib\\poster_anomalia.py --credito "@miuser"
-    .venv\\Scripts\\python.exe lib\\poster_anomalia.py --gif              # PNG + GIF rotando 360°
-    .venv\\Scripts\\python.exe lib\\poster_anomalia.py --show             # abre la ventana al final
+    .venv\\Scripts\\python.exe prototipos\\poster_anomalia.py                    # PNG del mes por defecto
+    .venv\\Scripts\\python.exe prototipos\\poster_anomalia.py --mes 2026-09      # otro mes
+    .venv\\Scripts\\python.exe prototipos\\poster_anomalia.py --credito "@miuser"
+    .venv\\Scripts\\python.exe prototipos\\poster_anomalia.py --gif              # PNG + GIF rotando 360°
+    .venv\\Scripts\\python.exe prototipos\\poster_anomalia.py --show             # abre la ventana al final
 
 Salidas: planeta_anomalia_<AAAA-MM>.png y (con --gif) planeta_anomalia_rotando.gif
 """
@@ -38,7 +38,12 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from matplotlib.colors import LinearSegmentedColormap
+# Bootstrap de imports: `estilo` y `rutas` viven en comun/.
+RAIZ = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RAIZ / "comun"))
+from estilo import (ANOM_CMAP, BG, MONTHS_EN, POSTER_DPI, POSTER_SIZE,  # noqa: E402
+                    TXT, TXT_DIM, WM_COLOR)
+from rutas import DATOS, ERA5_EXTRA_DIRS, SALIDAS, find_data_file  # noqa: E402
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -50,37 +55,12 @@ except Exception:
 
 # ---------------------------------------------------------------- configuración
 VAR_CANDIDATES = ("t2m", "stl2", "t")
-MONTHS_EN = ("JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
-             "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER")
 
 ANOM_VMIN, ANOM_VMAX = -6.0, 6.0      # rango de la anomalía, en °C
 POSTER_LON, POSTER_LAT = -45.0, -15.0  # centro del globo
-POSTER_SIZE, POSTER_DPI = 8.4, 140     # 1176 px de lado
 CHUNK = 24                            # pasos por lectura del NetCDF (~36 MB en ERA5 0.25°)
-
-BG = "#0c1014"                        # fondo del póster (muestreado de la referencia)
-TXT, TXT_DIM = "#ffffff", "#c9cfd6"
-WM_COLOR = "#46536b"                  # marca de agua, discreta sobre el mapa
-
-# Datos y salidas viven fuera del repositorio (los .nc y los GIF pesan varios GB).
-DATOS_D = Path(r"D:\Users\guill\dataset era5")
-SALIDAS = DATOS_D / "salidas"
-# El NetCDF de ERA5 puede haberse movido fuera de DATOS_D: se buscan también estas
-# ubicaciones (no recursivas) para no caer en datos sintéticos sin darse cuenta.
-ERA5_EXTRA_DIRS = (
-    Path(r"D:\Users\guill\Desktop"),
-    Path(__file__).resolve().parent.parent,
-)
-
-# Paleta muestreada píxel a píxel de la barra de color de la referencia
-ANOM_COLORS = [
-    (0 / 12,  "#02091b"), (1 / 12,  "#041f4c"), (2 / 12,  "#0a3874"),
-    (3 / 12,  "#165696"), (4 / 12,  "#2d77b6"), (5 / 12,  "#91b8d7"),
-    (6 / 12,  "#f7f8fa"), (7 / 12,  "#f5a099"), (8 / 12,  "#f0493a"),
-    (9 / 12,  "#b7231c"), (10 / 12, "#780912"), (11 / 12, "#47000a"),
-    (12 / 12, "#1b0002"),
-]
-ANOM_CMAP = LinearSegmentedColormap.from_list("anomaly_ref", ANOM_COLORS)
+# El vestuario (BG, TXT, MONTHS_EN, POSTER_SIZE/DPI, ANOM_CMAP) y las rutas de datos
+# (DATOS, SALIDAS, ERA5_EXTRA_DIRS, find_data_file) vienen de comun/.
 
 
 # ---------------------------------------------------------------------- datos
@@ -130,26 +110,6 @@ def synthetic_field(nlat=181, nlon=360, seed=0):
                         coords={"valid_time": times, "latitude": lat, "longitude": lon})
 
 
-def find_data_file(data_dir: Path, explicit: str | None) -> Path | None:
-    """Archivo de entrada: el indicado, o el .nc/.grib más grande que se encuentre.
-
-    Busca en `data_dir` en profundidad (por si el .nc vive en una subcarpeta) y
-    además en las ubicaciones alternativas de `ERA5_EXTRA_DIRS`.
-    """
-    if explicit:
-        p = Path(explicit)
-        if not p.exists():
-            raise SystemExit(f"No existe el archivo indicado: {p}")
-        return p
-    exts = ("*.nc", "*.grib", "*.grib2")
-    found = [f for pat in exts for f in data_dir.rglob(pat)]
-    for extra in ERA5_EXTRA_DIRS:
-        found += [f for pat in exts for f in extra.glob(pat)]
-    # Los OR_ABI-* son GOES (otra proyección y otras variables): no son ERA5.
-    found = [f for f in found if f.is_file() and not f.name.startswith("OR_ABI")]
-    return max(found, key=lambda p: p.stat().st_size) if found else None
-
-
 def load_field(data_dir: Path, explicit: str | None):
     """Devuelve (DataArray 3D en Kelvin, tiempos, es_sintetico).
 
@@ -184,7 +144,7 @@ def load_field(data_dir: Path, explicit: str | None):
     buscadas = ", ".join(str(d) for d in (data_dir, *ERA5_EXTRA_DIRS))
     print(f"AVISO: no se encontró ningún ERA5 (se buscó en {buscadas}) "
           "-> datos SINTÉTICOS.\n"
-          "       Descargalo con: .venv\\Scripts\\python.exe scripts\\descargar_era5.py\n"
+          "       Descargalo con: .venv\\Scripts\\python.exe descargar\\descargar_era5.py\n"
           "       o pasá uno con --nc.")
     da = synthetic_field()
     return da, da["valid_time"].values, True
@@ -331,7 +291,7 @@ def main(argv=None):
     ANOM_VMIN, ANOM_VMAX = args.vmin, args.vmax
 
     SALIDAS.mkdir(parents=True, exist_ok=True)
-    da, times, synthetic = load_field(DATOS_D, args.nc)
+    da, times, synthetic = load_field(DATOS, args.nc)
     tdim = "valid_time" if "valid_time" in da.dims else "time"
     to_c = lambda arr: np.asarray(arr, dtype=np.float64) - 273.15
 
