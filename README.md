@@ -39,16 +39,37 @@ Si tus datos están en otro lado, no toques código:
 $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 ```
 
-## Cómo se ven
+## Qué se puede lograr
 
-En [`docs/galeria/`](./docs/galeria) quedan los PNG generados. Un recorrido rápido de lo que
-hay:
+Cuatro salidas del mismo pipeline, todas con datos reales. En
+[`docs/galeria/`](./docs/galeria) están las demás.
 
-- **Disco completo, GOES-East C13** con la paleta `ir_realce` — la portada.
-- **Globo centrado en Paraguay**, con el contorno del país marcado.
-- **Zoom regional** a Paraguay, Sudamérica y el cono sur.
-- **Anomalía de temperatura (ERA5)**: la media del mes contra su propia climatología.
-- **Cirrus C04 de GOES-West (G18)**, en la rampa muestreada de la referencia.
+### GeoColor (GOES-East): color real de día, IR y luces de ciudad de noche
+
+Dos cuadros consecutivos de una animación (10 minutos entre uno y otro):
+
+| 04 OCT 2026 · 16:50 UTC | 04 OCT 2026 · 17:00 UTC |
+| --- | --- |
+| ![GeoColor GOES-East, 4 de octubre de 2026, 16:50 UTC](docs/galeria/geocolor_globo_G19_2026-10-04T1650.png) | ![GeoColor GOES-East, 4 de octubre de 2026, 17:00 UTC](docs/galeria/geocolor_globo_G19_2026-10-04T1700.png) |
+
+GeoColor no es una banda: es un producto RGB ya mezclado. De día se ve color real —la
+Amazonía en verde, los Andes en ocre, el océano y las nubes tal como los vería el ojo— y de
+noche el terreno da paso al infrarrojo con las **luces de ciudad** encima. Se baja de NASA
+GIBS, así que no hay `.nc` que leer.
+
+### Anomalía de temperatura (ERA5): el mes contra su propia climatología
+
+![Anomalía de temperatura de agosto de 2026](docs/galeria/planeta_anomalia_2026-08.png)
+
+Cada mes se compara contra la climatología de ese mismo mes calculada con **los otros años**
+del archivo. El rojo es más calor que lo normal, el azul menos.
+
+### Cirrus C04 (GOES-West): reflectancia en 1.4 µm
+
+![Cirrus C04 de GOES-West, 3 de octubre de 2026](docs/galeria/poster_cirrus_G18_2026-10-03T2220.png)
+
+La banda de cirrus aísla las nubes altas de hielo y las despega del resto de la escena: los
+topes convectivos aparecen en rojo sobre un fondo casi negro.
 
 ## Requisitos
 
@@ -73,7 +94,7 @@ hay:
     --n 432 --px 720 --globo --centro -73 -18 --paleta ir_realce
 
 # 4) Armar el MP4
-.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_disco_G19_2026-10-02T0000_432f_720px" --fps 12.5
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_G19_2026-10-02T0000_432f_720px" --fps 12.5
 ```
 
 Cada etapa imprime al terminar **el comando de la siguiente**, así que en la práctica alcanza

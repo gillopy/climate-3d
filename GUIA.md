@@ -122,7 +122,7 @@ cuadros en un solo proceso agota la memoria de una máquina chica.
 ## 5. Armar la animación
 
 ```powershell
-.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_globo_2026-10-02T0000_432f_720px" --fps 12.5
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_G19_2026-10-02T0000_432f_720px" --fps 12.5
 ```
 
 | Opción | Qué hace |
@@ -132,9 +132,14 @@ cuadros en un solo proceso agota la memoria de una máquina chica.
 | `--formato` | `mp4`, `gif` o `ambos` (por defecto `mp4`) |
 | `--salida` | Archivo de salida; si no, se deriva del nombre de la carpeta |
 
-El nombre sale del de la carpeta, con la **cantidad real** de cuadros: `frames_globo_...` →
-`animacion_globo_...`. Si la numeración tiene un hueco, aborta — `ffmpeg` cortaría el video ahí
-sin avisar.
+El nombre sale del de la carpeta, con la **cantidad real** de cuadros:
+
+```
+frames_G19_2026-10-02T0000_432f_720px   ->   animacion_G19_2026-10-02T0000_432f_720px.mp4
+```
+
+Si la carpeta dijera `432f` pero adentro hubiera 431, el video sale como `431f`. Y si la
+numeración tiene un hueco, aborta — `ffmpeg` cortaría el video ahí sin avisar.
 
 ---
 
@@ -144,9 +149,17 @@ En `D:\Users\guill\dataset era5\salidas`:
 
 | Archivo | Qué es |
 |---|---|
-| `animacion_<vista>_<SAT>_<AAAA-MM-DDTHHMM>_<N>f_<PX>px.mp4` | La animación |
-| `frames_<vista>_<SAT>_<AAAA-MM-DDTHHMM>_<N>f_<PX>px\` | Los cuadros PNG (podés borrarlos al terminar) |
+| `frames_<lo que defina el renderizador>\` | Los cuadros PNG (podés borrarlos al terminar) |
+| `animacion_<lo mismo>.mp4` | La animación |
 | `poster_*.png`, `vista_paraguay_*.png` | Cuadros fijos |
+
+El nombre de la carpeta lo define quién renderiza, y `animar/armar.py` deriva el video de ahí
+(`frames_` → `animacion_`):
+
+| Renderizador | Carpeta de cuadros |
+|---|---|
+| `cuadros/cuadros_goes.py` | `frames_<SAT>_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
+| `cuadros/cuadros_geocolor.py` | `frames_geocolor_<vista>_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 
 El nombre incluye **inicio + cantidad de cuadros + px**, así que una corrida **no pisa** la de
 otra ventana o resolución.
@@ -166,7 +179,7 @@ otra ventana o resolución.
 .venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 --n 432 --px 720 --globo --centro -73 -18 --paleta ir_realce
 
 # 4) Armar el MP4
-.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_globo_2026-10-02T0000_432f_720px"
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_G19_2026-10-02T0000_432f_720px"
 ```
 
 ---
