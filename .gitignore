@@ -32,3 +32,8 @@ desktop.ini
 
 # Internal workflow docs (local only, not published)
 odd/
+
+# Imágenes publicadas a propósito (portada + galería del README):
+# se exceptúan de las reglas de salidas de arriba.
+!docs/**/*.png
+!docs/*.png
