@@ -41,7 +41,7 @@ $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 
 ## Qué se puede lograr
 
-Seis salidas del mismo pipeline, todas con datos reales. En
+Siete salidas del mismo pipeline, todas con datos reales. En
 [`docs/galeria/`](./docs/galeria) están las demás.
 
 ### GeoColor (GOES-East): color real de día, IR y luces de ciudad de noche
@@ -97,6 +97,24 @@ color real: habría que componer bandas a mano. **Por qué NOAA-20 y no MODIS**:
 (Terra y Aqua) dejan **cuñas negras de barrido** sobre el ecuador porque su ancho de barrido es
 menor que la separación orbital; VIIRS NOAA-20 no. Los scripts son
 [`descargar/truecolor.py`](./descargar/truecolor.py) y [`cuadros/cuadros_truecolor.py`](./cuadros/cuadros_truecolor.py).
+
+### Sandwich RGB (GOES-19): la textura de las nubes sobre su temperatura
+
+![Sandwich RGB del 4 de octubre de 2026, 18:00 UTC](docs/galeria/sandwich_globo_G19_2026-10-04T1800.png)
+
+El Sandwich **no es un RGB de tres bandas**: junta **dos imágenes**. El **visible (0.64 µm)**
+pone la *morfología* del tope nuboso —las sombras que delatan un *overshooting top*, ondas de
+gravedad, plumas de hielo— y el **IR de 10.3 µm realzado en color** pone la *temperatura* de
+ese tope. Se mezclan 50/50 y queda una sola imagen: el color dice cuán frío (y alto) está el
+tope, el gris del visible dice qué forma tiene. Es **de día**: sin sol el visible es negro, así
+que se animan los **tramos diurnos del 4 y 5 de octubre de 2026** (10:00 a 22:00 UTC, paso 10
+min) → **146 cuadros** en globo Orthographic sobre Paraguay. Se compone a partir de dos capas de
+**NASA GIBS** (`GOES-East_ABI_Band2_Red_Visible_1km` y `GOES-East_ABI_Band13_Clean_Infrared`),
+no de los `.nc`: el ABI **C02 a 0.5 km pesa ~200 MB por archivo**, inviable para cientos de
+cuadros. Como GOES-East no ve el hemisferio centrado en Paraguay entero, el disco se dibuja con
+`--radio` (~53°) para que el borde entre dentro de lo que ve el satélite y no quede un gajo sin
+dato. Los scripts son [`descargar/sandwich.py`](./descargar/sandwich.py) y
+[`cuadros/cuadros_sandwich.py`](./cuadros/cuadros_sandwich.py).
 
 ## Requisitos
 

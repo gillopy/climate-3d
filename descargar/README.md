@@ -10,6 +10,7 @@ conexión** a partir de lo que ya está descargado.
 | `geocolor.py` | GeoColor (GOES-East), ya rasterizado | NASA GIBS | `SALIDAS/frames_<etiqueta>/crudo_NNN.jpg` |
 | `mur_sst.py` | GHRSST MUR L4 SST Anomalies (globo), ya rasterizado | NASA GIBS | `SALIDAS/frames_mur_globo_<...>/crudo_NNN.jpg` |
 | `truecolor.py` | True Color (MODIS/VIIRS) diario, ya rasterizado | NASA GIBS | `SALIDAS/frames_truecolor_<sensor>_globo_<...>/crudo_NNN.jpg` |
+| `sandwich.py` | Sandwich RGB (GOES-19): visible + IR realzado, dos JPEG por cuadro | NASA GIBS | `SALIDAS/frames_sandwich_globo_<...>/crudo_NNN_{vis,ir}.jpg` |
 | `goes_descarga.py` | *(módulo)* claves S3 y descarga | — | — |
 
 `DATOS` y `SALIDAS` salen de [`../comun/rutas.py`](../comun/rutas.py): se cambian con
@@ -138,6 +139,47 @@ Estas capas muestran el **humo de los incendios**, que es lo que se busca en la 
 - Como estas capas son **diarias**, un día puede no tener composición publicada y GIBS
   responde igual un JPEG **válido pero sin dato**. El descargador lo detecta con Pillow +
   numpy (imagen uniforme) y lo reintenta, en vez de dejar un hueco silencioso.
+
+---
+
+## `sandwich.py`
+
+Baja los **dos crudos** del producto **Sandwich RGB** de **GOES-19 (GOES-East)** desde la
+misma Worldview Snapshots API de NASA GIBS. El Sandwich **no es un RGB de tres bandas**:
+combina **dos imágenes** que después se mezclan en el render. Por eso baja **dos JPEG por
+cuadro**: el fondo **visible** (`crudo_NNN_vis.jpg`, banda ABI C02 0.64 µm) y el **IR
+10.8 µm** (`crudo_NNN_ir.jpg`, banda C13 10.3 µm) que se realza en color.
+
+| Capa GIBS | Rol | Archivo |
+|---|---|---|
+| `GOES-East_ABI_Band2_Red_Visible_1km` | fondo visible (gris) | `crudo_NNN_vis.jpg` |
+| `GOES-East_ABI_Band13_Clean_Infrared` | IR realzado en color | `crudo_NNN_ir.jpg` |
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--hasta` | Rango de días UTC (por defecto, `2026-10-04` a `2026-10-05`) |
+| `--hora-desde` / `--hora-hasta` | Tramo diurno de cada día, horas UTC (por defecto `10` a `22`) |
+| `--paso` | Minutos entre cuadros (por defecto `10`: la cadencia nativa de ABI) |
+| `--bbox O S E N` | Caja de origen (por defecto, el globo `-160 -80 15 80`) |
+| `--px` | Ancho de salida (por defecto `2048`); el origen se pide `max(1200, px*2)` |
+| `--src-px` / `--alto` | Tamaño del origen (overrides) |
+| `--hilos` | Descargas simultáneas (por defecto `8`: GIBS rate-limitea) |
+| `--out` | Carpeta de salida |
+
+- **Es sólo diurno**: el visible necesita sol, así que la serie son los **tramos diurnos**
+  de cada jornada (`--hora-desde/--hora-hasta`), no las horas corridas. `--hora-desde 10`
+  / `--hora-hasta 22` UTC ≈ `07:00–19:00` en Paraguay (UTC-3 en octubre) → 73 cuadros por
+  día.
+- **La serie y la etiqueta de la carpeta vienen de [`../comun/series.py`](../comun/series.py)**
+  (`serie_diurna` + `etiqueta_frames`), así que la descarga y el render calculan exactamente
+  los mismos cuadros.
+- **Ojo con el rate-limit de GIBS**: se manda `User-Agent` y se usan pocos hilos. Sin
+  `User-Agent` el servicio devuelve un XML `ServiceExceptionReport` **con HTTP 200** en vez
+  de la imagen; el descargador chequea el `Content-Type` (y la guarda de imagen uniforme) y
+  reintenta con backoff.
+- **Por qué GIBS y no el `.nc` de NOAA S3**: la banda visible de ABI (C02) es de 0.5 km y
+  cada `OR_ABI-L2-CMIPF-M6C02_*.nc` pesa ~200–228 MB. Para 2 días a 10 min serían ~57 GB:
+  inviable. GIBS sirve las mismas bandas ya rasterizadas a 1 km (~90–200 KB por cuadro).
 
 ---
 

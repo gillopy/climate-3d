@@ -10,6 +10,7 @@ deja `cuadro_NNN.png` en `SALIDAS/frames_<etiqueta>/` y termina diciéndote qué
 | `cuadros_geocolor.py` | `crudo_NNN.jpg` de `descargar/geocolor.py` | Globo o plano |
 | `cuadros_mur.py` | `crudo_NNN.jpg` de `descargar/mur_sst.py` | Globo |
 | `cuadros_truecolor.py` | `crudo_NNN.jpg` de `descargar/truecolor.py` | Globo |
+| `cuadros_sandwich.py` | `crudo_NNN_vis.jpg` + `crudo_NNN_ir.jpg` de `descargar/sandwich.py` | Globo |
 
 Todos **reutilizan** los PNG que ya existen, así que si se corta se retoma donde quedó.
 `cuadros_goes.py` además renderiza **por lotes en procesos separados**: con cientos de
@@ -129,6 +130,41 @@ El default de `--capa` es **VIIRS NOAA-20**, el mismo que la descarga. Las compo
 diarias de **Terra y Aqua (MODIS) dejan cuñas de barrido (swaths) cerca del ecuador**, que en
 el globo se ven como franjas negras diagonales; por eso **no se recomiendan** para el globo y
 NOAA-20 (cuyo barrido cubre la separación orbital) es la capa limpia.
+
+---
+
+## `cuadros_sandwich.py`
+
+```powershell
+# Convección de día, dos jornadas, globo a 2048 px
+.venv\Scripts\python.exe cuadros\cuadros_sandwich.py --desde 2026-10-04 --hasta 2026-10-05 --hora-desde 10 --hora-hasta 22 --paso 10 --px 2048
+```
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--hasta` | Rango de días UTC a renderizar |
+| `--hora-desde` / `--hora-hasta` / `--paso` | Tramo diurno y minutos entre cuadros (mismos que la descarga) |
+| `--px` | Lado del globo en píxeles (por defecto `2048`) |
+| `--dpi` | dpi del render del globo |
+| `--centro LON LAT` | Centro del globo (por defecto `-58 -23`) |
+| `--alpha` | Mezcla del Sandwich: `1` = sólo visible, `0` = sólo IR realzado (por defecto `0.5`) |
+| `--bbox O S E N` | Caja de origen (mismo default que la descarga) |
+| `--geojson`, `--borde-color`, `--borde-ancho` | Borde destacado |
+| `--credito` | Crédito y marca de agua |
+| `--sin-fecha` | No estampar la fecha/hora |
+
+El **Sandwich RGB** mezcla **dos imágenes** en vez de combinar tres bandas: el fondo visible
+aporta la morfología del tope nuboso y el IR realzado su temperatura. La composición es
+`alpha · visible + (1 - alpha) · IR_realzado`, con el IR pasado por una rampa de color
+(frío → rojo/naranja/amarillo/verde/cian) de la misma familia que
+`poster_goes.IR_REALCE_COLORS`. `componer` arma la mezcla y recién después se reproyecta al
+globo con el mismo warp a mano que el resto.
+
+Es siempre **globo** (no hay modo plano) y **sub-diario**: la línea de tiempo lleva hora,
+como GeoColor. El sello de render incluye el `alpha`: cambiar la mezcla descarta los PNG
+viejos en vez de reutilizarlos. Es **offline por construcción**: sólo lee los
+`crudo_NNN_vis.jpg` / `crudo_NNN_ir.jpg` que dejó `descargar/sandwich.py`; si falta alguno,
+aborta nombrándote el comando exacto de descarga.
 
 ---
 

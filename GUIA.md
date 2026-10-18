@@ -162,6 +162,7 @@ El nombre de la carpeta lo define quién renderiza, y `animar/armar.py` deriva e
 | `cuadros/cuadros_geocolor.py` | `frames_geocolor_<vista>_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 | `cuadros/cuadros_mur.py` | `frames_mur_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 | `cuadros/cuadros_truecolor.py` | `frames_truecolor_<sensor>_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
+| `cuadros/cuadros_sandwich.py` | `frames_sandwich_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 
 El nombre incluye **inicio + cantidad de cuadros + px**, así que una corrida **no pisa** la de
 otra ventana o resolución.
@@ -268,7 +269,55 @@ alternativas son `MODIS_Terra_...` y `MODIS_Aqua_...`. Ventana: `2024-07-11` a
 
 ---
 
-## 10. Notas
+## 10. Flujo extra: Sandwich RGB (convección profunda, de día)
+
+El **Sandwich RGB** sirve para monitorear **convección profunda**: combina el **visible**
+(la morfología del tope nuboso) con el **IR 10.8 µm realzado en color** (la temperatura del
+tope). **No es un RGB de tres bandas**: son **dos imágenes** que se mezclan, así que su par
+descarga/render baja y compone dos capas. En GOES-19 (GOES-East) son las bandas ABI **C02
+(0.64 µm)** para el visible y **C13 (10.3 µm)** para el IR.
+
+Es un producto **sólo diurno** (el visible necesita sol), así que la animación son los
+**tramos diurnos** de cada jornada, no las horas corridas. Pasa por las mismas cuatro etapas.
+
+**Identificar.** En GIBS son `GOES-East_ABI_Band2_Red_Visible_1km` y
+`GOES-East_ABI_Band13_Clean_Infrared`, ambas de cadencia de 10 min. Se toma el tramo
+`10`–`22` UTC de cada día (≈ `07:00`–`19:00` en Paraguay), que a `--paso 10` dan 73
+cuadros por día.
+
+**Descargar.**
+
+```powershell
+.venv\Scripts\python.exe descargar\sandwich.py --desde 2026-10-04 --hasta 2026-10-05 --hora-desde 10 --hora-hasta 22 --paso 10 --px 2048
+```
+
+**Cuadros.** El comando exacto lo imprime la descarga al terminar:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_sandwich.py --desde 2026-10-04 --hasta 2026-10-05 --hora-desde 10 --hora-hasta 22 --paso 10 --px 2048
+```
+
+**Animar.**
+
+```powershell
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_sandwich_globo_2026-10-04T1000_146f_2048px" --fps 12.5
+```
+
+- **Sólo de día**: `--hora-desde`/`--hora-hasta` recortan el tramo diurno; fuera de él el
+  visible de GIBS viene negro y la mezcla no aporta nada.
+- **Dos capas por cuadro**: `crudo_NNN_vis.jpg` + `crudo_NNN_ir.jpg`; el render los compone
+  con `--alpha` (por defecto `0.5`, la mezcla clásica).
+- **GIBS rate-limitea**: el descargador manda `User-Agent` y usa `--hilos 8` por defecto;
+  sin `User-Agent` el servicio devuelve un XML de error con HTTP 200.
+- **Por qué GIBS y no el `.nc` de NOAA S3**: la banda visible de ABI (C02) es de 0.5 km y
+  cada archivo pesa ~200 MB; para dos días serían decenas de GB. GIBS sirve las mismas
+  bandas ya rasterizadas a 1 km.
+- La serie y la etiqueta salen de [`comun/series.py`](./comun/series.py) (`serie_diurna`),
+  así que la descarga y el render nunca se desincronizan.
+
+---
+
+## 11. Notas
 
 - **RAM**: si ves errores de memoria, bajá `--px` y/o `--lote`. El render por lotes existe
   justamente por esto.
@@ -287,3 +336,5 @@ alternativas son `MODIS_Terra_...` y `MODIS_Aqua_...`. Ventana: `2024-07-11` a
   (`descargar/mur_sst.py` + `cuadros/cuadros_mur.py`).
 - **True Color**: el color real de MODIS/VIIRS cuando GeoColor no tiene archivo; su flujo
   está en la sección 9 (`descargar/truecolor.py` + `cuadros/cuadros_truecolor.py`).
+- **Sandwich RGB**: visible + IR realzado del GOES-19 para convección profunda de día; su
+  flujo está en la sección 10 (`descargar/sandwich.py` + `cuadros/cuadros_sandwich.py`).
