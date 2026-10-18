@@ -9,6 +9,7 @@ conexión** a partir de lo que ya está descargado.
 | `descargar_era5.py` | ERA5 2m temperature 2024–2026 | Copernicus CDS | `DATOS/era5_t2m_2024-2026.nc` |
 | `geocolor.py` | GeoColor (GOES-East), ya rasterizado | NASA GIBS | `SALIDAS/frames_<etiqueta>/crudo_NNN.jpg` |
 | `mur_sst.py` | GHRSST MUR L4 SST Anomalies (globo), ya rasterizado | NASA GIBS | `SALIDAS/frames_mur_globo_<...>/crudo_NNN.jpg` |
+| `truecolor.py` | True Color (MODIS/VIIRS) diario, ya rasterizado | NASA GIBS | `SALIDAS/frames_truecolor_<sensor>_globo_<...>/crudo_NNN.jpg` |
 | `goes_descarga.py` | *(módulo)* claves S3 y descarga | — | — |
 
 `DATOS` y `SALIDAS` salen de [`../comun/rutas.py`](../comun/rutas.py): se cambian con
@@ -89,6 +90,54 @@ semana** (`--paso` en días): ~94 cuadros en vez de los ~650 diarios.
 - Cada cuadro pesa ~1,4 MB a 4096×2048; la tierra y los polos van enmascarados en negro.
 - Ojo: GIBS a veces responde un JPEG **válido pero sin dato** (uniforme). El descargador lo
   detecta con Pillow + numpy y lo reintenta, en vez de dejar un hueco silencioso.
+
+---
+
+## `truecolor.py`
+
+Baja **True Color (Corrected Reflectance)** de MODIS/VIIRS desde la misma Worldview
+Snapshots API de NASA GIBS. Es la **composición de color real** del día (reflectancia
+corregida de los canales visibles), servida ya rasterizada: igual que GeoColor y MUR, se
+pide un JPEG por cuadro, sin `.nc` que leer. A diferencia de GeoColor —un disco GOES— estas
+capas son **globales** (caja `-180,-90,180,90`), y a diferencia de MUR son de **cadencia
+diaria** (`P1D`, composición del día): el `TIME` va como fecha sola `AAAA-MM-DD`.
+
+Estas capas muestran el **humo de los incendios**, que es lo que se busca en la ventana
+2024-07-11 → 2024-10-30.
+
+| Capa GIBS | Nombre corto |
+|---|---|
+| `VIIRS_NOAA20_CorrectedReflectance_TrueColor` (**default**) | `noaa20` |
+| `MODIS_Terra_CorrectedReflectance_TrueColor` | `terra` |
+| `MODIS_Aqua_CorrectedReflectance_TrueColor` | `aqua` |
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--hasta` | Rango UTC (por defecto, `2024-07-11` a `2024-10-30`) |
+| `--capa` | Capa GIBS (por defecto, NOAA-20) |
+| `--paso` | Días entre cuadros (por defecto `1`: composición diaria) |
+| `--bbox O S E N` | Caja de origen (por defecto, global) |
+| `--px` | Ancho de salida (por defecto `2711`); el origen se pide `8192` (`--src-px`) |
+| `--hilos` | Descargas simultáneas (por defecto 16) |
+| `--out` | Carpeta de salida |
+
+- **La serie y la etiqueta de la carpeta vienen de [`../comun/series.py`](../comun/series.py)**,
+  así que la descarga y el render calculan exactamente los mismos cuadros. El nombre corto
+  del sensor entra en la etiqueta (`frames_truecolor_terra_globo_<...>`), para que dos
+  sensores no se pisen la carpeta.
+- **Ojo con `VIIRS_SNPP_CorrectedReflectance_TrueColor`**: tiene un hueco de archivo
+  (2024-07-12..15 devuelve un placeholder). Por eso no se ofrece; para 2024 usá Terra o
+  NOAA-20.
+- **Por eso el default es VIIRS NOAA-20, no MODIS**: las composiciones diarias de **Terra y
+  Aqua traen huecos de franja (swaths) cerca del ecuador** —el ancho de barrido de MODIS
+  (2330 km) es menor que la separación de órbitas en el ecuador (~2800 km)—, así que cada día
+  quedan cuñas negras entre pasadas que en el globo se ven como franjas diagonales rayadas
+  (verificado en el globo del 2024-07-15/16). **NOAA-20 no las tiene** (el barrido de VIIRS
+  es más ancho que la separación orbital), así que es la capa por defecto y la recomendada
+  para el globo. Es una propiedad del producto, no del render.
+- Como estas capas son **diarias**, un día puede no tener composición publicada y GIBS
+  responde igual un JPEG **válido pero sin dato**. El descargador lo detecta con Pillow +
+  numpy (imagen uniforme) y lo reintenta, en vez de dejar un hueco silencioso.
 
 ---
 

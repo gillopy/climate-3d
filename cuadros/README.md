@@ -9,6 +9,7 @@ deja `cuadro_NNN.png` en `SALIDAS/frames_<etiqueta>/` y termina diciéndote qué
 | `cuadros_goes.py` | `.nc` de GOES-R ABI (`DATOS/goes_<banda>_<sat>/`) | Disco, globo o zona |
 | `cuadros_geocolor.py` | `crudo_NNN.jpg` de `descargar/geocolor.py` | Globo o plano |
 | `cuadros_mur.py` | `crudo_NNN.jpg` de `descargar/mur_sst.py` | Globo |
+| `cuadros_truecolor.py` | `crudo_NNN.jpg` de `descargar/truecolor.py` | Globo |
 
 Todos **reutilizan** los PNG que ya existen, así que si se corta se retoma donde quedó.
 `cuadros_goes.py` además renderiza **por lotes en procesos separados**: con cientos de
@@ -95,6 +96,39 @@ MUR siempre es **global**: no hay modo plano ni `--globo`; todo se reproyecta a 
 centrado en `--centro`, con el mismo vestuario y el mismo warp a mano que
 `cuadros_geocolor.py`. Es **offline por construcción**: sólo lee los `crudo_NNN.jpg` que dejó
 `descargar/mur_sst.py`; si falta alguno, aborta nombrándote el comando exacto de descarga.
+
+---
+
+## `cuadros_truecolor.py`
+
+```powershell
+# Diario, ventana de los incendios de 2024, globo a 2711 px
+.venv\Scripts\python.exe cuadros\cuadros_truecolor.py --desde 2024-07-11 --hasta 2024-10-30 --paso 1 --px 2711
+```
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--hasta` / `--paso` | Qué ventana renderizar (paso en días) |
+| `--capa` | Capa GIBS (mismo default que la descarga: NOAA-20) |
+| `--px` | Lado del globo en píxeles (por defecto `2711`) |
+| `--dpi` | dpi del render del globo |
+| `--centro LON LAT` | Centro del globo (por defecto `-58 -23`) |
+| `--geojson`, `--borde-color`, `--borde-ancho` | Borde destacado |
+| `--credito` | Crédito y marca de agua |
+| `--sin-fecha` | No estampar la fecha |
+
+True Color siempre es **global**: no hay modo plano ni `--globo`; todo se reproyecta a
+Orthographic centrado en `--centro`, con el mismo vestuario y el mismo warp a mano que
+`cuadros_mur.py`. El nombre del sensor en los rótulos (`MODIS TERRA` / `MODIS AQUA` /
+`VIIRS NOAA-20`) sale de `--capa`, y el sello de render incluye la capa: cambiar de sensor
+no reutiliza los PNG del anterior. Es **offline por construcción**: sólo lee los
+`crudo_NNN.jpg` que dejó `descargar/truecolor.py`; si falta alguno, aborta nombrándote el
+comando exacto de descarga.
+
+El default de `--capa` es **VIIRS NOAA-20**, el mismo que la descarga. Las composiciones
+diarias de **Terra y Aqua (MODIS) dejan cuñas de barrido (swaths) cerca del ecuador**, que en
+el globo se ven como franjas negras diagonales; por eso **no se recomiendan** para el globo y
+NOAA-20 (cuyo barrido cubre la separación orbital) es la capa limpia.
 
 ---
 

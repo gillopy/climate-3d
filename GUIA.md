@@ -161,6 +161,7 @@ El nombre de la carpeta lo define quién renderiza, y `animar/armar.py` deriva e
 | `cuadros/cuadros_goes.py` | `frames_<SAT>_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 | `cuadros/cuadros_geocolor.py` | `frames_geocolor_<vista>_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 | `cuadros/cuadros_mur.py` | `frames_mur_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
+| `cuadros/cuadros_truecolor.py` | `frames_truecolor_<sensor>_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 
 El nombre incluye **inicio + cantidad de cuadros + px**, así que una corrida **no pisa** la de
 otra ventana o resolución.
@@ -220,7 +221,54 @@ pero como la animación abarca dos años se muestrea **una vez por semana**.
 
 ---
 
-## 9. Notas
+## 9. Flujo extra: True Color (MODIS/VIIRS, el humo de 2024)
+
+Para ver el **humo de los incendios de 2024** hace falta color real. GeoColor (GOES-East)
+**no tiene archivo 2024**: su capa devuelve un placeholder. La salida es **True Color
+(Corrected Reflectance)** de MODIS/VIIRS vía NASA GIBS, que sí cubre 2024, es 250 m y es lo
+que muestra el humo.
+
+Es un producto **global** (no un disco GOES) y de **cadencia diaria** (composición del día),
+así que usa su propio par descarga/render, pero pasa por las mismas cuatro etapas.
+
+**Identificar.** En GIBS es `VIIRS_NOAA20_CorrectedReflectance_TrueColor` (default); las
+alternativas son `MODIS_Terra_...` y `MODIS_Aqua_...`. Ventana: `2024-07-11` a
+`2024-10-30`, un cuadro por día (**112 cuadros**).
+
+**Descargar.**
+
+```powershell
+.venv\Scripts\python.exe descargar\truecolor.py --desde 2024-07-11 --hasta 2024-10-30 --paso 1 --px 2711
+```
+
+**Cuadros.** El comando exacto lo imprime la descarga al terminar:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_truecolor.py --desde 2024-07-11 --hasta 2024-10-30 --paso 1 --px 2711
+```
+
+**Animar.**
+
+```powershell
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_truecolor_noaa20_globo_2024-07-11T0000_112f_2711px" --fps 12.5
+```
+
+- `--paso` va en **días** (acá `1`): la cadencia de la capa ya es diaria.
+- **No uses `VIIRS_SNPP_...`**: tiene un hueco de archivo (2024-07-12..15 devuelve un
+  placeholder); para 2024 usá Terra o NOAA-20.
+- **Por eso el default es NOAA-20**: la composición diaria de **Terra y Aqua** deja huecos de
+  franja (swaths) cerca del ecuador —el barrido de MODIS es más angosto que la separación de
+  órbitas—, que en el globo se ven como cuñas negras diagonales y dejan el globo rayado. Por
+  eso **no se recomiendan** para el globo. **NOAA-20** (VIIRS) no los tiene y es la capa por
+  defecto. Es una propiedad del producto, no del render.
+- El nombre corto del sensor entra en la etiqueta (`frames_truecolor_noaa20_...`), así que dos
+  sensores no se pisan la carpeta.
+- La serie y la etiqueta salen de [`comun/series.py`](./comun/series.py), igual que en el
+  resto del repo: la descarga y el render nunca se desincronizan.
+
+---
+
+## 10. Notas
 
 - **RAM**: si ves errores de memoria, bajá `--px` y/o `--lote`. El render por lotes existe
   justamente por esto.
@@ -237,3 +285,5 @@ pero como la animación abarca dos años se muestrea **una vez por semana**.
   (`descargar/geocolor.py`) y su propio render (`cuadros/cuadros_geocolor.py`).
 - **MUR SST**: dataset global de otra familia (SST, no nubes); su flujo está en la sección 8
   (`descargar/mur_sst.py` + `cuadros/cuadros_mur.py`).
+- **True Color**: el color real de MODIS/VIIRS cuando GeoColor no tiene archivo; su flujo
+  está en la sección 9 (`descargar/truecolor.py` + `cuadros/cuadros_truecolor.py`).
