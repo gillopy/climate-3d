@@ -41,7 +41,7 @@ $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 
 ## Qué se puede lograr
 
-Cuatro salidas del mismo pipeline, todas con datos reales. En
+Seis salidas del mismo pipeline, todas con datos reales. En
 [`docs/galeria/`](./docs/galeria) están las demás.
 
 ### GeoColor (GOES-East): color real de día, IR y luces de ciudad de noche
@@ -73,13 +73,38 @@ del archivo. El rojo es más calor que lo normal, el azul menos.
 La banda de cirrus aísla las nubes altas de hielo y las despega del resto de la escena: los
 topes convectivos aparecen en rojo sobre un fondo casi negro.
 
+### Anomalía de SST (MUR): el Pacífico ecuatorial, semana a semana
+
+![Anomalía de SST del 1 de enero de 2025](docs/galeria/mur_sst_globo_2025-01-01.png)
+
+El producto **GHRSST MUR (v4.1) Sea Surface Temperature Anomalies** es global y diario. Acá
+se anima **una muestra por semana**: del 2025-01-01 al 2026-10-17 son **94 cuadros**. El globo
+es Orthographic y está centrado en la **región Niño 3.4 corrida al este** (`-125 0`), así
+Sudamérica entra por el borde derecho. Las anomalías cálidas van en naranja y rojo, las frías
+en cian y azul, y la tierra y los polos quedan enmascarados en negro. Se baja de **NASA GIBS**
+(Worldview Snapshots API), igual que GeoColor: no hay `.nc` que leer. Los scripts son
+[`descargar/mur_sst.py`](./descargar/mur_sst.py) y [`cuadros/cuadros_mur.py`](./cuadros/cuadros_mur.py).
+
+### True Color (VIIRS): el humo de los incendios de 2024
+
+![True Color del 28 de setiembre de 2024](docs/galeria/truecolor_noaa20_globo_2024-09-28.png)
+
+Es la **Corrected Reflectance (True Color)** de **VIIRS NOAA-20** vía NASA GIBS, a **250 m** y
+con composición **diaria**. El remate va del 2024-07-11 al 2024-10-30: **112 cuadros** en globo
+Orthographic sobre Paraguay. **Por qué no GeoColor**: esa capa en GIBS sólo tiene ventana
+reciente (arranca el 2026-08-10), no hay archivo 2024. Y GOES-16 no publica ningún producto de
+color real: habría que componer bandas a mano. **Por qué NOAA-20 y no MODIS**: los MODIS
+(Terra y Aqua) dejan **cuñas negras de barrido** sobre el ecuador porque su ancho de barrido es
+menor que la separación orbital; VIIRS NOAA-20 no. Los scripts son
+[`descargar/truecolor.py`](./descargar/truecolor.py) y [`cuadros/cuadros_truecolor.py`](./cuadros/cuadros_truecolor.py).
+
 ## Requisitos
 
-- Python 3.12 y el entorno `.venv` de la raíz.
-- `numpy`, `xarray`, `matplotlib`, `cartopy`, `Pillow` y `rich`. Para ERA5, además `cdsapi`.
+- Python 3.14 y el entorno `.venv` de la raíz.
+- Las dependencias están fijadas en [`requirements.txt`](./requirements.txt).
 
 ```powershell
-.venv\Scripts\python.exe -c "import cartopy, xarray, rich; print('ok')"
+.venv\Scripts\python.exe -c "import cartopy, matplotlib, requests, PIL; print('ok')"
 ```
 
 ## Primeros pasos
