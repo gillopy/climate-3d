@@ -8,10 +8,11 @@ deja `cuadro_NNN.png` en `SALIDAS/frames_<etiqueta>/` y termina diciéndote qué
 |---|---|---|
 | `cuadros_goes.py` | `.nc` de GOES-R ABI (`DATOS/goes_<banda>_<sat>/`) | Disco, globo o zona |
 | `cuadros_geocolor.py` | `crudo_NNN.jpg` de `descargar/geocolor.py` | Globo o plano |
+| `cuadros_mur.py` | `crudo_NNN.jpg` de `descargar/mur_sst.py` | Globo |
 
-Los dos renderizan **por lotes en procesos separados**: con cientos de cuadros, un solo
-proceso agota la RAM de una máquina chica. Y los dos **reutilizan** los PNG que ya existen, así
-que si se corta se retoma donde quedó.
+Todos **reutilizan** los PNG que ya existen, así que si se corta se retoma donde quedó.
+`cuadros_goes.py` además renderiza **por lotes en procesos separados**: con cientos de
+cuadros, un solo proceso agota la RAM de una máquina chica.
 
 ---
 
@@ -70,6 +71,30 @@ Dos cosas que costó dejar bien y conviene no romper:
 
 Además el render está **sellado**: si cambiás un parámetro de aspecto (texto, borde, escala),
 los PNG viejos se descartan solos en vez de reutilizarse con el rótulo anterior.
+
+---
+
+## `cuadros_mur.py`
+
+```powershell
+# Semanal, dos años, globo a 2048 px
+.venv\Scripts\python.exe cuadros\cuadros_mur.py --desde 2025-01-01 --hasta 2026-10-17 --paso 7 --px 2048
+```
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--hasta` / `--paso` | Qué ventana renderizar (paso en días) |
+| `--px` | Lado del globo en píxeles (por defecto `2048`) |
+| `--dpi` | dpi del render del globo |
+| `--centro LON LAT` | Centro del globo (por defecto `-58 -23`) |
+| `--geojson`, `--borde-color`, `--borde-ancho` | Borde destacado |
+| `--credito` | Crédito y marca de agua |
+| `--sin-fecha` | No estampar la fecha/hora |
+
+MUR siempre es **global**: no hay modo plano ni `--globo`; todo se reproyecta a Orthographic
+centrado en `--centro`, con el mismo vestuario y el mismo warp a mano que
+`cuadros_geocolor.py`. Es **offline por construcción**: sólo lee los `crudo_NNN.jpg` que dejó
+`descargar/mur_sst.py`; si falta alguno, aborta nombrándote el comando exacto de descarga.
 
 ---
 

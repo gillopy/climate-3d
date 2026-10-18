@@ -8,6 +8,7 @@ conexión** a partir de lo que ya está descargado.
 | `descargar_goes.py` | GOES-R ABI L2 CMIP (`.nc`) | Bucket público NOAA S3 | `DATOS/goes_<banda>_<sat>/` |
 | `descargar_era5.py` | ERA5 2m temperature 2024–2026 | Copernicus CDS | `DATOS/era5_t2m_2024-2026.nc` |
 | `geocolor.py` | GeoColor (GOES-East), ya rasterizado | NASA GIBS | `SALIDAS/frames_<etiqueta>/crudo_NNN.jpg` |
+| `mur_sst.py` | GHRSST MUR L4 SST Anomalies (globo), ya rasterizado | NASA GIBS | `SALIDAS/frames_mur_globo_<...>/crudo_NNN.jpg` |
 | `goes_descarga.py` | *(módulo)* claves S3 y descarga | — | — |
 
 `DATOS` y `SALIDAS` salen de [`../comun/rutas.py`](../comun/rutas.py): se cambian con
@@ -60,6 +61,34 @@ Baja **ERA5 2m temperature** (2024–2026) desde Copernicus CDS.
   suficiente para las climatologías del póster de anomalía.
 - La cola de CDS puede tardar; conviene correrlo en segundo plano y mirar
   [`../logs/`](../logs).
+
+---
+
+## `mur_sst.py`
+
+Baja la **anomalía de SST** del análisis GHRSST Level 4 MUR (v4.1) desde la Worldview
+Snapshots API de NASA GIBS. Igual que GeoColor, no es una banda cruda sino un producto ya
+coloreado: se pide rasterizado, un JPEG por cuadro, sin `.nc` que leer. A diferencia de
+GeoColor, **es global** (caja `-180,-90,180,90`).
+
+Como el producto es diario pero la animación abarca dos años, se muestrea **una vez por
+semana** (`--paso` en días): ~94 cuadros en vez de los ~650 diarios.
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--hasta` | Rango UTC (por defecto, `2025-01-01` a `2026-10-17`) |
+| `--paso` | Días entre cuadros (por defecto `7`: una muestra por semana) |
+| `--bbox O S E N` | Caja de origen (por defecto, global) |
+| `--px` | Ancho de salida (por defecto `2048`); el origen se pide `max(1200, px*2)` |
+| `--src-px` / `--alto` | Tamaño del origen (overrides) |
+| `--hilos` | Descargas simultáneas (por defecto 16) |
+| `--out` | Carpeta de salida |
+
+- **La serie y la etiqueta de la carpeta vienen de [`../comun/series.py`](../comun/series.py)**,
+  así que la descarga y el render calculan exactamente los mismos cuadros.
+- Cada cuadro pesa ~1,4 MB a 4096×2048; la tierra y los polos van enmascarados en negro.
+- Ojo: GIBS a veces responde un JPEG **válido pero sin dato** (uniforme). El descargador lo
+  detecta con Pillow + numpy y lo reintenta, en vez de dejar un hueco silencioso.
 
 ---
 

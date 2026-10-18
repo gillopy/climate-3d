@@ -160,6 +160,7 @@ El nombre de la carpeta lo define quién renderiza, y `animar/armar.py` deriva e
 |---|---|
 | `cuadros/cuadros_goes.py` | `frames_<SAT>_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 | `cuadros/cuadros_geocolor.py` | `frames_geocolor_<vista>_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
+| `cuadros/cuadros_mur.py` | `frames_mur_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 
 El nombre incluye **inicio + cantidad de cuadros + px**, así que una corrida **no pisa** la de
 otra ventana o resolución.
@@ -184,7 +185,42 @@ otra ventana o resolución.
 
 ---
 
-## 8. Notas
+## 8. Flujo extra: MUR SST (anomalía semanal en globo)
+
+MUR es un producto **global** de anomalía de temperatura superficial del mar (GHRSST L4
+v4.1). No es una banda GOES: es otro dataset, con su propio par descarga/render, pero pasa
+por las mismas cuatro etapas de siempre (identificar → descargar → cuadros → animar).
+
+**Identificar.** Producto GHRSST MUR v4.1, capa *Sea Surface Temperature Anomalies*; en GIBS
+es `GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies`. Cobertura global y cadencia diaria,
+pero como la animación abarca dos años se muestrea **una vez por semana**.
+
+**Descargar.**
+
+```powershell
+.venv\Scripts\python.exe descargar\mur_sst.py --desde 2025-01-01 --hasta 2026-10-17 --paso 7 --px 2048
+```
+
+**Cuadros.** El comando exacto lo imprime la descarga al terminar:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_mur.py --desde 2025-01-01 --hasta 2026-10-17 --paso 7 --px 2048
+```
+
+**Animar.**
+
+```powershell
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_mur_globo_2025-01-01T0000_94f_2048px" --fps 6
+```
+
+- Son ~94 cuadros (`--paso 7` de días): una muestra por semana, no la cadencia diaria.
+- La serie y la etiqueta de la carpeta salen de [`comun/series.py`](./comun/series.py), así
+  que la descarga y el render nunca se desincronizan.
+- El render es globo Orthographic (MUR siempre es global), con el mismo vestuario del póster.
+
+---
+
+## 9. Notas
 
 - **RAM**: si ves errores de memoria, bajá `--px` y/o `--lote`. El render por lotes existe
   justamente por esto.
@@ -199,3 +235,5 @@ otra ventana o resolución.
   descarga con `descargar/descargar_era5.py`.
 - **GeoColor**: es un producto RGB, no una banda, así que tiene su propia descarga
   (`descargar/geocolor.py`) y su propio render (`cuadros/cuadros_geocolor.py`).
+- **MUR SST**: dataset global de otra familia (SST, no nubes); su flujo está en la sección 8
+  (`descargar/mur_sst.py` + `cuadros/cuadros_mur.py`).
