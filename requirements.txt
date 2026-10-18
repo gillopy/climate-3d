@@ -1,0 +1,8 @@
+# Dependencias del entorno (.venv, Python 3.14), fijadas a la serie major.minor instalada.
+# El pin `X.Y.*` toma cualquier parche de esa minor: reproducible sin quedar atado al patch.
+requests==2.34.*
+numpy==2.5.*
+pillow==13.0.*
+matplotlib==3.11.*
+cartopy==0.26.*
+imageio-ffmpeg==0.6.*
