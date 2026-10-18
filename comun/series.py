@@ -29,6 +29,37 @@ def serie_fechas(desde: str, hasta: str, paso_min: int) -> list[datetime]:
     return fechas
 
 
+def serie_diurna(desde: str, hasta: str, hora_desde: int, hora_hasta: int,
+                 paso_min: int) -> list[datetime]:
+    """Instantes del tramo diurno de cada día de `desde` a `hasta` (inclusive).
+
+    Devuelve, para cada día del rango, los instantes desde `hora_desde` hasta
+    `hora_hasta` UTC cada `paso_min` minutos, en orden cronológico y sin huecos dentro
+    de cada tramo. El borde `hora_hasta` entra sólo si cae justo sobre un paso (igual
+    que `serie_fechas` con su borde superior).
+
+    `desde`/`hasta` se parsean con `datetime.fromisoformat`, pero de ellos sólo importa
+    la **fecha**: la hora de esos dos strings se ignora, porque el tramo de cada día lo
+    fijan `hora_desde`/`hora_hasta`. Sirve para productos que sólo tienen sentido de día
+    (p. ej. el Sandwich, cuyo visible viene negro de noche): en vez de correr las 48 h
+    seguidas se toma el tramo iluminado de cada jornada, con el mismo `paso_min` en los
+    dos extremos para que la descarga y el render calculen exactamente la misma lista.
+    """
+    inicio = datetime.fromisoformat(desde).date()
+    fin = datetime.fromisoformat(hasta).date()
+    paso = timedelta(minutes=paso_min)
+    fechas: list[datetime] = []
+    dia = inicio
+    while dia <= fin:
+        t = datetime(dia.year, dia.month, dia.day, hora_desde, 0)
+        limite = datetime(dia.year, dia.month, dia.day, hora_hasta, 0)
+        while t <= limite:
+            fechas.append(t)
+            t += paso
+        dia += timedelta(days=1)
+    return fechas
+
+
 def etiqueta_frames(producto: str, vista: str, t0: datetime, n: int, px: int) -> str:
     """Etiqueta de la carpeta de cuadros: producto, vista, inicio, cantidad y px.
 
