@@ -18,6 +18,15 @@ El repo está separado por **rol**, y se lee en el orden en que se usa:
 | [`cuadros/`](./cuadros) | Renderiza una animación cuadro por cuadro | No |
 | [`animar/`](./animar) | Junta los cuadros en un MP4 o un GIF | No |
 
+### Scripts por etapa
+
+| Etapa | Scripts |
+| --- | --- |
+| `descargar/` | `descargar_goes.py`, `descargar_era5.py`, `geocolor.py`, `mur_sst.py`, `truecolor.py`, `sandwich.py`, `precipitacion_ecmwf.py` |
+| `prototipos/` | `poster_goes.py`, `poster_anomalia.py`, `vista_paraguay.py` |
+| `cuadros/` | `cuadros_goes.py`, `cuadros_geocolor.py`, `cuadros_mur.py`, `cuadros_truecolor.py`, `cuadros_sandwich.py`, `cuadros_precipitacion.py` |
+| `animar/` | `armar.py` |
+
 Aparte, [`comun/`](./comun) guarda lo compartido (rutas y constantes de estilo), también sin
 red.
 
@@ -41,7 +50,7 @@ $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 
 ## Qué se puede lograr
 
-Siete salidas del mismo pipeline, todas con datos reales. En
+Ocho salidas del mismo pipeline, todas con datos reales. En
 [`docs/galeria/`](./docs/galeria) están las demás.
 
 ### GeoColor (GOES-East): color real de día, IR y luces de ciudad de noche
@@ -116,13 +125,30 @@ cuadros. Como GOES-East no ve el hemisferio centrado en Paraguay entero, el disc
 dato. Los scripts son [`descargar/sandwich.py`](./descargar/sandwich.py) y
 [`cuadros/cuadros_sandwich.py`](./cuadros/cuadros_sandwich.py).
 
+### Precipitación total acumulada (ECMWF): 144 h de lluvia sobre Sudamérica
+
+![Precipitación total acumulada de ECMWF, FH +144 h](docs/galeria/precip_globo_ecmwf_2026-10-20_06z_fh144.png)
+
+El **acumulado total de precipitación (`tp`)** de **ECMWF IFS 0.25°** (`oper`) no es una
+imagen satelital: es un campo del modelo. La corrida `06z` del 20 de octubre de 2026 cubre
+**0 a 144 h** (hasta el 26 de octubre, 06z) en pasos de **3 h**: **49 cuadros** en globo
+Orthographic centrado en Paraguay. `tp` viene acumulado desde el inicio de la corrida en
+metros de agua equivalente, así que se convierte a **mm** y se pinta con la **paleta discreta
+de 30 niveles** de Tropical Tidbits (`0.2` a `500+ mm`), con sombreado esférico 3D, costas,
+fronteras y el contorno de Paraguay. El póster de cierre (`FH +144 h`) muestra el máximo sobre
+Paraguay y el sur de Brasil. En vez de bajar los ~4,8 GB de GRIB2 de los 49 pasos, el
+descargador lee el `.index` de cada paso y pide **sólo el rango de bytes** de `tp`/`sfc`:
+~20 MB en total. Los scripts son
+[`descargar/precipitacion_ecmwf.py`](./descargar/precipitacion_ecmwf.py) y
+[`cuadros/cuadros_precipitacion.py`](./cuadros/cuadros_precipitacion.py).
+
 ## Requisitos
 
 - Python 3.14 y el entorno `.venv` de la raíz.
 - Las dependencias están fijadas en [`requirements.txt`](./requirements.txt).
 
 ```powershell
-.venv\Scripts\python.exe -c "import cartopy, matplotlib, requests, PIL; print('ok')"
+.venv\Scripts\python.exe -c "import cartopy, matplotlib, requests, PIL, eccodes; print('ok')"
 ```
 
 ## Primeros pasos
@@ -144,6 +170,27 @@ dato. Los scripts son [`descargar/sandwich.py`](./descargar/sandwich.py) y
 
 Cada etapa imprime al terminar **el comando de la siguiente**, así que en la práctica alcanza
 con arrancar por la 1.
+
+## Ruta rápida: precipitación ECMWF en 3 pasos
+
+El flujo completo del globo de **precipitación total acumulada** (49 cuadros de `2712x2712 px`):
+
+```powershell
+# 1) Descargar tp de la corrida 06z del 20 de octubre de 2026 (0h a 144h, paso 3h)
+.venv\Scripts\python.exe descargar\precipitacion_ecmwf.py --fecha 2026-10-20 --ciclo 06 --hasta-hora 144 --paso 3
+
+# 2) Renderizar los 49 cuadros y el póster de cierre FH +144 h (2712 px)
+.venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --fecha 2026-10-20 --ciclo 06 --hasta-hora 144 --paso 3
+
+# Sólo el póster, sin la secuencia
+.venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --fecha 2026-10-20 --ciclo 06 --hasta-hora 144 --paso 3 --solo-poster
+
+# 3) Armar el MP4
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_precipitacion_globo_2026-10-20T0600_49f_2712px" --fps 12.5
+```
+
+El póster queda en `SALIDAS/poster_precip_ecmwf_2026-10-20_06z_fh144.png` y los cuadros en la
+carpeta `frames_precipitacion_globo_...` que imprime el paso 2.
 
 ## El formato
 

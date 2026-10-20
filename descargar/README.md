@@ -11,6 +11,7 @@ conexión** a partir de lo que ya está descargado.
 | `mur_sst.py` | GHRSST MUR L4 SST Anomalies (globo), ya rasterizado | NASA GIBS | `SALIDAS/frames_mur_globo_<...>/crudo_NNN.jpg` |
 | `truecolor.py` | True Color (MODIS/VIIRS) diario, ya rasterizado | NASA GIBS | `SALIDAS/frames_truecolor_<sensor>_globo_<...>/crudo_NNN.jpg` |
 | `sandwich.py` | Sandwich RGB (GOES-19): visible + IR realzado, dos JPEG por cuadro | NASA GIBS | `SALIDAS/frames_sandwich_globo_<...>/crudo_NNN_{vis,ir}.jpg` |
+| `precipitacion_ecmwf.py` | Precipitación total acumulada (`tp`) de IFS 0.25°, por HTTP Range | ECMWF Open Data | `DATOS/crudos_precip_ecmwf_<fecha>_<ciclo>z/` (GRIB2 + `serie_tp_mm.npz`) |
 | `goes_descarga.py` | *(módulo)* claves S3 y descarga | — | — |
 
 `DATOS` y `SALIDAS` salen de [`../comun/rutas.py`](../comun/rutas.py): se cambian con
@@ -180,6 +181,44 @@ cuadro**: el fondo **visible** (`crudo_NNN_vis.jpg`, banda ABI C02 0.64 µm) y e
 - **Por qué GIBS y no el `.nc` de NOAA S3**: la banda visible de ABI (C02) es de 0.5 km y
   cada `OR_ABI-L2-CMIPF-M6C02_*.nc` pesa ~200–228 MB. Para 2 días a 10 min serían ~57 GB:
   inviable. GIBS sirve las mismas bandas ya rasterizadas a 1 km (~90–200 KB por cuadro).
+
+---
+
+## `precipitacion_ecmwf.py`
+
+Baja la **precipitación total acumulada (`tp`)** de **ECMWF Open Data — IFS 0.25° (`oper`)**.
+No es una imagen: es un campo del modelo, y `tp` viene acumulado desde el inicio de la corrida
+en **metros de agua equivalente**. Por eso el descargador lo convierte a **mm**.
+
+La fuente publica, por cada paso, un `.index` (JSON Lines) y un `.grib2` con todos los campos.
+Bajar el `.grib2` completo son ~98 MB por paso (~4,8 GB para 49 pasos). Como el `.index`
+publica `_offset` y `_length`, el script pide **sólo el rango de bytes** de
+`"param": "tp", "levtype": "sfc"`: ~20 MB en total. Cada mensaje se decodifica con
+**eccodes** (el GRIB2 de ECMWF usa empaquetado CCSDS/AEC, que otras herramientas no leen) y la
+serie consolidada queda en **mm** en `serie_tp_mm.npz`, con la rejilla `721 x 1440` en el orden
+que espera el render (lat 90→-90, lon -180→179.75).
+
+Los crudos quedan como `crudo_NNN_fhHHH.grib2` y el paso `0h` se valida en **0 mm**: si el
+recorte por bytes o la orientación de la rejilla están mal, el script aborta en vez de dejar
+una serie corrida.
+
+| Opción | Qué hace |
+|---|---|
+| `--fecha` | Día UTC de la corrida, `AAAA-MM-DD` (por defecto `2026-10-20`) |
+| `--ciclo` | Ciclo UTC de la corrida: `00`, `06`, `12` o `18` (por defecto `06`) |
+| `--hasta-hora` | Último paso de pronóstico en horas (por defecto `144`) |
+| `--paso` | Horas entre pasos (por defecto `3`) |
+| `--hilos` | Descargas simultáneas (por defecto `6`) |
+| `--forzar` | Vuelve a bajar los pasos aunque ya estén completos |
+| `--out` | Carpeta de salida (por defecto, `DATOS/crudos_precip_ecmwf_<fecha>_<ciclo>z`) |
+
+- **Ventana rodante de 4 días**: el ECMWF Open Data sólo conserva las corridas recientes (unas
+  cuatro jornadas). Una corrida más vieja ya no está publicada, así que hay que descargarla
+  dentro de esa ventana; no es un archivo histórico.
+- **Reanudable**: si un `crudo_NNN_fhHHH.grib2` ya existe con el tamaño exacto que publica el
+  `.index` y el marco GRIB (`GRIB`…`7777`) está completo, no se vuelve a pedir.
+- La serie y la etiqueta de la carpeta salen de [`../comun/series.py`](../comun/series.py),
+  igual que en el resto del repo.
 
 ---
 

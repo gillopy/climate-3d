@@ -163,6 +163,7 @@ El nombre de la carpeta lo define quién renderiza, y `animar/armar.py` deriva e
 | `cuadros/cuadros_mur.py` | `frames_mur_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 | `cuadros/cuadros_truecolor.py` | `frames_truecolor_<sensor>_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 | `cuadros/cuadros_sandwich.py` | `frames_sandwich_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
+| `cuadros/cuadros_precipitacion.py` | `frames_precipitacion_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 
 El nombre incluye **inicio + cantidad de cuadros + px**, así que una corrida **no pisa** la de
 otra ventana o resolución.
@@ -317,7 +318,64 @@ cuadros por día.
 
 ---
 
-## 11. Notas
+## 11. Flujo extra: Precipitación total acumulada (ECMWF IFS 0.25°)
+
+El globo de **precipitación total acumulada** sale de un **campo del modelo**, no de una
+imagen satelital. Se usa el **ECMWF Open Data** del determinístico **IFS 0.25° (`oper`)**:
+la variable **`tp`** (`levtype=sfc`) viene acumulada desde el inicio de la corrida en metros
+de agua equivalente. La corrida del ejemplo es **06z del 20 de octubre de 2026**, de **0h a
+144h** (hasta el 26 de octubre, 06z) en pasos de **3h**: **49 cuadros**.
+
+Pasa por las mismas cuatro etapas (identificar → descargar → cuadros → animar), con un par
+descarga/render propio.
+
+**Identificar.** Base: `https://data.ecmwf.int/forecasts/20261020/06z/ifs/0p25/oper/`. Cada
+paso publica un `.index` (JSON Lines) y un `.grib2`. El `.index` trae `_offset` y `_length` de
+cada mensaje, así que se pide **sólo el rango de bytes** de `tp`/`sfc` en vez de bajar el
+`.grib2` completo: ~20 MB en total en lugar de ~4,8 GB.
+
+**Descargar.**
+
+```powershell
+.venv\Scripts\python.exe descargar\precipitacion_ecmwf.py --fecha 2026-10-20 --ciclo 06 --hasta-hora 144 --paso 3
+```
+
+El script decodifica cada mensaje con **eccodes**, convierte a **mm** y deja
+`serie_tp_mm.npz` (49, 721, 1440) en `DATOS/crudos_precip_ecmwf_2026-10-20_06z/`. Valida que
+el paso `0h` sea **0 mm**; si no, aborta.
+
+**Cuadros.** El comando exacto lo imprime la descarga al terminar:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --fecha 2026-10-20 --ciclo 06 --hasta-hora 144 --paso 3
+```
+
+Eso renderiza los **49 cuadros** de `2712x2712 px` en
+`frames_precipitacion_globo_2026-10-20T0600_49f_2712px` y el **póster de cierre**
+`poster_precip_ecmwf_2026-10-20_06z_fh144.png`. Para ver sólo el póster:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --fecha 2026-10-20 --ciclo 06 --hasta-hora 144 --paso 3 --solo-poster
+```
+
+**Animar.**
+
+```powershell
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_precipitacion_globo_2026-10-20T0600_49f_2712px" --fps 12.5
+```
+
+- **Ventana de 4 días**: el ECMWF Open Data sólo conserva las corridas recientes; una corrida
+  más vieja ya no está publicada.
+- **`tp` es acumulado, no por paso**: cada cuadro muestra el total desde el inicio de la
+  corrida. Por eso el `0h` es `0 mm` y el máximo crece hasta el `144h`.
+- **Escala fija**: los 30 niveles van de `0.2` a `500+ mm` y no se reescalan por cuadro, así
+  que la animación se lee de corrido.
+- **Globo**: por defecto `--centro -58 -23` (Paraguay), `--radio 58` (Sudamérica y Atlántico
+  Sur) y `--px 2712`; `--radio 90` abre el hemisferio completo.
+
+---
+
+## 12. Notas
 
 - **RAM**: si ves errores de memoria, bajá `--px` y/o `--lote`. El render por lotes existe
   justamente por esto.
@@ -338,3 +396,5 @@ cuadros por día.
   está en la sección 9 (`descargar/truecolor.py` + `cuadros/cuadros_truecolor.py`).
 - **Sandwich RGB**: visible + IR realzado del GOES-19 para convección profunda de día; su
   flujo está en la sección 10 (`descargar/sandwich.py` + `cuadros/cuadros_sandwich.py`).
+- **Precipitación ECMWF**: acumulado de lluvia del IFS 0.25°; su flujo está en la sección 11
+  (`descargar/precipitacion_ecmwf.py` + `cuadros/cuadros_precipitacion.py`).

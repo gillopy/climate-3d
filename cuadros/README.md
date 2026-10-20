@@ -11,6 +11,7 @@ deja `cuadro_NNN.png` en `SALIDAS/frames_<etiqueta>/` y termina diciéndote qué
 | `cuadros_mur.py` | `crudo_NNN.jpg` de `descargar/mur_sst.py` | Globo |
 | `cuadros_truecolor.py` | `crudo_NNN.jpg` de `descargar/truecolor.py` | Globo |
 | `cuadros_sandwich.py` | `crudo_NNN_vis.jpg` + `crudo_NNN_ir.jpg` de `descargar/sandwich.py` | Globo |
+| `cuadros_precipitacion.py` | `serie_tp_mm.npz` (o los `.grib2` / `--nc`) de `descargar/precipitacion_ecmwf.py` | Globo |
 
 Todos **reutilizan** los PNG que ya existen, así que si se corta se retoma donde quedó.
 `cuadros_goes.py` además renderiza **por lotes en procesos separados**: con cientos de
@@ -165,6 +166,57 @@ como GeoColor. El sello de render incluye el `alpha`: cambiar la mezcla descarta
 viejos en vez de reutilizarlos. Es **offline por construcción**: sólo lee los
 `crudo_NNN_vis.jpg` / `crudo_NNN_ir.jpg` que dejó `descargar/sandwich.py`; si falta alguno,
 aborta nombrándote el comando exacto de descarga.
+
+---
+
+## `cuadros_precipitacion.py`
+
+```powershell
+# Póster de cierre FH +144 h, sin secuencia
+.venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --fecha 2026-10-20 --ciclo 06 --hasta-hora 144 --paso 3 --solo-poster
+
+# Secuencia completa: 49 cuadros + póster a 2712 px
+.venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --fecha 2026-10-20 --ciclo 06 --hasta-hora 144 --paso 3
+```
+
+| Opción | Qué hace |
+|---|---|
+| `--fecha` | Día UTC de la corrida, `AAAA-MM-DD` (por defecto `2026-10-20`) |
+| `--ciclo` | Ciclo UTC de la corrida: `00`, `06`, `12` o `18` (por defecto `06`) |
+| `--hasta-hora` / `--paso` | Último paso y horas entre pasos (por defecto `144` y `3`) |
+| `--px` | Lado del rectángulo donde se warpea el disco (por defecto `2712`) |
+| `--centro LON LAT` | Centro del globo (por defecto `-58 -23`: Paraguay) |
+| `--radio` | Grados al borde del disco; `90` = hemisferio (por defecto `58`) |
+| `--fondo-globo` | `claro` u `oscuro` (por defecto `claro`) |
+| `--solo-poster` | Renderiza sólo el póster estático del último paso |
+| `--forzar` | Vuelve a renderizar los cuadros aunque los PNG ya existan |
+| `--nc` | Archivo ERA5 (`.nc`/`.npz`) alternativo a los crudos |
+| `--crudos` | Carpeta de entrada (por defecto, la que deja el descargador) |
+
+Lee `serie_tp_mm.npz`, que ya viene en **mm**; si no existe, decodifica al vuelo los
+`crudo_*_fh*.grib2` de la corrida, y con `--nc` puede leer un acumulado de ERA5 (`.nc` o
+`.npz`) para el mismo diseño. La geometría del **warp Orthographic** —índices bilineales,
+pesos y factor de luz esférico— se **precomputa una sola vez**, así que cada cuadro cuesta
+sólo cuatro lecturas por píxel y una mezcla.
+
+El campo se interpola a resolución de píxel y recién después se mapea a la **paleta discreta
+de 30 niveles** de Tropical Tidbits (`0.2` a `500+ mm`): verdes, azules, violetas, bordó/rojos
+y naranjas/amarillos. Donde llueve menos de `0.2 mm` el alfa queda en 0 y se ve la superficie
+base del globo (océano y tierra) con el sombreado esférico 3D hacia el limbo. Encima van
+costas, fronteras y el contorno de **Paraguay** (`datos/paraguay_gadm.json`), más el aro del
+disco y la barra de colores al pie.
+
+Las salidas son dos:
+
+- `poster_precip_ecmwf_<fecha>_<ciclo>z_fh<hora>.png` — el póster estático del último paso.
+- `frames_precipitacion_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px/cuadro_NNN.png` — la secuencia
+  (49 cuadros de `2712x2712 px` con `--hasta-hora 144 --paso 3`), lista para `animar/armar.py`.
+
+El guardado es **atómico** y el render está **sellado**: si cambiás `--px`, `--dpi`,
+`--centro`, `--radio`, el fondo, el crédito o la paleta, los PNG viejos se descartan solos en
+vez de reutilizarse con otro aspecto. Es **offline por construcción**: sólo lee los crudos que
+dejó `descargar/precipitacion_ecmwf.py`; si no hay datos, aborta nombrándote el comando exacto
+de descarga.
 
 ---
 
