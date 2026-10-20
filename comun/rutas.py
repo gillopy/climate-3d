@@ -13,7 +13,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[1]
 
 # Raíz de datos: los .nc (varios GB) y las salidas viven fuera del repositorio.
-DATOS = Path(os.environ.get("CLIMATE3D_DATOS", r"D:\Users\guill\dataset era5"))
+DATOS = Path(os.environ.get("CLIMATE3D_DATOS") or r"D:\Users\guill\dataset era5")
 SALIDAS = DATOS / "salidas"
 
 # El NetCDF de ERA5 puede haberse movido fuera de DATOS: se buscan también estas
