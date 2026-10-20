@@ -1,9 +1,11 @@
-"""Renderiza la **precipitación total acumulada** de ECMWF IFS 0.25° en un globo 3D.
+"""Renderiza la **precipitación total acumulada** de ECMWF en un globo 3D.
 
-Lee `serie_tp_mm.npz` (lo deja `descargar/precipitacion_ecmwf.py`) o, si sólo hay los
-`.grib2` crudos, los decodifica al vuelo. Cada paso se reproyecta a un disco Orthographic
-con un warp escalar precomputado **una sola vez** y se pinta con la paleta discreta de
-Tropical Tidbits (30 niveles, `0.2` a `500+ mm`).
+Soporta IFS 0.25° (`--modelo ifs`, por defecto), AIFS-ENS 0.25° (`aifs-ens`) y
+AIFS-SINGLE 0.25° (`aifs-single`). Lee `serie_tp_mm.npz` (lo deja
+`descargar/precipitacion_ecmwf.py`) o, si sólo hay los crudos, los decodifica al vuelo
+(`.grib2` en IFS/AIFS-single, `.npy` con la media del ensamble en AIFS-ENS). Cada paso se
+reproyecta a un disco Orthographic con un warp escalar precomputado **una sola vez** y se
+pinta con la paleta discreta de Tropical Tidbits (30 niveles, `0.2` a `500+ mm`).
 
 El disco se dibuja con `imshow` en la proyección del eje (no `contourf`): el campo se
 interpola bilinealmente a resolución de píxel y recién después se mapea a la paleta, así
@@ -17,8 +19,9 @@ Uso (desde la raíz del proyecto):
     .venv\\Scripts\\python.exe cuadros\\cuadros_precipitacion.py --hasta-hora 144 --paso 3
     .venv\\Scripts\\python.exe cuadros\\cuadros_precipitacion.py --help   # no toca la red
 
-Salidas: `poster_precip_ecmwf_<fecha>_<ciclo>z_fh<hora>.png` y, en la corrida completa,
-`frames_<etiqueta>/cuadro_NNN.png` (1-based, como espera `animar/armar.py`).
+Salidas: `poster_precip_ecmwf_<fecha>_<ciclo>z_fh<hora>.png` para IFS,
+`poster_precip_<modelo>_<fecha>_<ciclo>z_fh<hora>.png` para AIFS y, en la corrida
+completa, `frames_<etiqueta>/cuadro_NNN.png` (1-based, como espera `animar/armar.py`).
 """
 from __future__ import annotations
 
@@ -63,6 +66,18 @@ TICKS_LEYENDA = [0.2, 1, 2, 3, 6, 9, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 12
                  150, 175, 200, 250, 300, 400, 500]
 
 # ------------------------------------------------------------------ configuración
+MODELOS = ("ifs", "aifs-ens", "aifs-single")
+TITULOS_MODELO = {
+    "ifs": "ECMWF IFS 0.25° · TOTAL ACCUMULATED PRECIPITATION (mm)",
+    "aifs-ens": "AIFS-ENS 0.25° · TOTAL ACCUMULATED PRECIPITATION (mm)",
+    "aifs-single": "AIFS-SINGLE 0.25° · TOTAL ACCUMULATED PRECIPITATION (mm)",
+}
+FUENTES_MODELO = {
+    "ifs": "Source: ECMWF Open Data · IFS HRES 0.25° (oper)",
+    "aifs-ens": "Source: ECMWF Open Data · AIFS-ENS 0.25° (enfo)",
+    "aifs-single": "Source: ECMWF Open Data · AIFS-SINGLE 0.25° (oper)",
+}
+
 FECHA = "2026-10-20"                   # UTC: día de la corrida
 CICLO = "06"                           # UTC: 00, 06, 12 o 18
 HASTA_HORA = 144                       # último paso de pronóstico (6 días)
@@ -193,22 +208,28 @@ def _pasos(hasta_hora: int, paso: int) -> list[int]:
 
 
 def _parece_crudos(p: Path) -> bool:
-    """True si `p` es una carpeta con `serie_tp_mm.npz` o con GRIB2 de la corrida."""
+    """True si `p` es una carpeta con `serie_tp_mm.npz` o con crudos de la corrida."""
     if not p.is_dir():
         return False
     return ((p / "serie_tp_mm.npz").exists()
-            or any(p.glob("crudo_*_fh*.grib2")))
+            or any(p.glob("crudo_*_fh*.grib2"))
+            or any(p.glob("crudo_*_fh*.npy")))
 
 
 def _dir_crudos(args, ciclo: str) -> Path:
-    """Carpeta de entrada: `--crudos` > `--out-crudos` > `--out` (si es de crudos)."""
+    """Carpeta de entrada: `--crudos` > `--out-crudos` > `--out` (si es de crudos).
+
+    El valor por defecto replica el del descargador para el modelo elegido.
+    """
     if args.crudos:
         return Path(args.crudos)
     if args.out_crudos:
         return Path(args.out_crudos)
     if args.out and _parece_crudos(Path(args.out)):
         return Path(args.out)
-    return DATOS / f"crudos_precip_ecmwf_{args.fecha}_{ciclo}z"
+    if args.modelo == "ifs":
+        return DATOS / f"crudos_precip_ecmwf_{args.fecha}_{ciclo}z"
+    return DATOS / f"crudos_precip_{args.modelo}_{args.fecha}_{ciclo}z"
 
 
 def _dir_salidas(args) -> Path:
@@ -311,8 +332,30 @@ def _fh_de(ruta: Path) -> int:
     return int(partes[-1]) if len(partes) == 2 else -1
 
 
-def _cargar_gribs(crudos: Path, horas_pedidas: list[int]):
-    """Decodifica sólo los GRIB2 de los pasos pedidos con el lector del descargador."""
+def _rejilla_estandar():
+    """Lat/lon de la rejilla global 0.25° (la que usan los `.npy` del ensamble)."""
+    lat = np.linspace(90.0, -90.0, FILAS, dtype=np.float32)
+    lon = np.linspace(-180.0, 179.75, COLUMNAS, dtype=np.float32)
+    return lat, lon
+
+
+def _cargar_crudos(crudos: Path, horas_pedidas: list[int], modelo: str):
+    """Decodifica los crudos de los pasos pedidos (`.npy` en ensamble, GRIB2 si no)."""
+    if modelo == "aifs-ens":
+        rutas = {_fh_de(p): p for p in crudos.glob("crudo_*_fh*.npy")}
+        faltan = [h for h in horas_pedidas if h not in rutas]
+        if faltan:
+            raise SystemExit(f"Faltan los .npy de los pasos {faltan} en {crudos}.")
+        serie = np.empty((len(horas_pedidas), FILAS, COLUMNAS), dtype=np.float32)
+        for i, h in enumerate(horas_pedidas):
+            campo = np.asarray(np.load(rutas[h]), dtype=np.float32)
+            if campo.shape != (FILAS, COLUMNAS):
+                raise SystemExit(f"{rutas[h].name}: forma {campo.shape}, se esperaba "
+                                 f"({FILAS}, {COLUMNAS}).")
+            serie[i] = campo
+        lat, lon = _rejilla_estandar()
+        return serie, lat, lon
+
     from descargar.precipitacion_ecmwf import leer_tp_mm
 
     rutas = {_fh_de(p): p for p in crudos.glob("crudo_*_fh*.grib2")}
@@ -350,8 +393,8 @@ def cargar_serie(args, ciclo: str):
 
     pedidas = _pasos(args.hasta_hora, args.paso)
     if _parece_crudos(crudos):
-        print(f"Sin serie consolidada: decodificando GRIB2 de {crudos}...")
-        tp, lat, lon = _cargar_gribs(crudos, pedidas)
+        print(f"Sin serie consolidada: decodificando crudos de {crudos}...")
+        tp, lat, lon = _cargar_crudos(crudos, pedidas, args.modelo)
         _validar_rejilla(lat, lon)
         return tp, lat, lon, np.asarray(pedidas, dtype=np.int32), None
 
@@ -361,8 +404,9 @@ def cargar_serie(args, ciclo: str):
 
 
 def _comando_descarga(args) -> str:
+    modelo = f"--modelo {args.modelo} " if args.modelo != "ifs" else ""
     return (f".venv\\Scripts\\python.exe descargar\\precipitacion_ecmwf.py "
-            f"--fecha {args.fecha} --ciclo {args.ciclo} "
+            f"{modelo}--fecha {args.fecha} --ciclo {args.ciclo} "
             f"--hasta-hora {args.hasta_hora} --paso {args.paso}")
 
 
@@ -527,7 +571,7 @@ def render_globo(campo, t_init: datetime, t_valid: datetime, hora: int, max_sa: 
              f"(FH +{hora:03d}h)",
              color=TXT, fontsize=13.5 * esc, fontweight="bold", ha="left", va="top",
              path_effects=halo, zorder=11)
-    fig.text(0.026, 0.912, "ECMWF IFS 0.25° · TOTAL ACCUMULATED PRECIPITATION (mm)",
+    fig.text(0.026, 0.912, TITULOS_MODELO[args.modelo],
              color=TXT_DIM, fontsize=11.5 * esc, fontweight="bold", ha="left", va="top",
              path_effects=halo, zorder=11)
     fig.text(0.983, 0.983, args.credito, color=TXT_DIM, fontsize=12 * esc,
@@ -562,7 +606,7 @@ def render_globo(campo, t_init: datetime, t_valid: datetime, hora: int, max_sa: 
              fontsize=max(7.0, 9.8 * esc), fontweight="bold",
              ha="left", va="center", zorder=11)
 
-    fig.text(0.026, 0.012, "Source: ECMWF Open Data · IFS HRES 0.25° (oper)",
+    fig.text(0.026, 0.012, FUENTES_MODELO[args.modelo],
              color=TXT_DIM, fontsize=7.4 * esc, ha="left", va="bottom")
     fig.text(0.980, 0.012,
              f"Accumulated from {t_init:%Y-%m-%d %H:%M} UTC · Peak SA: {max_sa:.0f} mm",
@@ -580,8 +624,9 @@ def _sello_render(args) -> str:
     """Huella de los parámetros que cambian el aspecto; invalida cuadros viejos."""
     import hashlib
     datos = {
-        "px": args.px, "dpi": args.dpi, "centro": list(args.centro),
-        "radio": args.radio, "fondo": args.fondo_globo, "credito": args.credito,
+        "modelo": args.modelo, "px": args.px, "dpi": args.dpi,
+        "centro": list(args.centro), "radio": args.radio,
+        "fondo": args.fondo_globo, "credito": args.credito,
         "niveles": NIVELES_MM, "colores": COLORES_TT,
     }
     return hashlib.sha256(json.dumps(datos, sort_keys=True).encode()).hexdigest()[:16]
@@ -590,7 +635,10 @@ def _sello_render(args) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Globo Orthographic de precipitación total acumulada (mm) de "
-                    "ECMWF IFS 0.25°, con paleta discreta y barra de colores.")
+                    "ECMWF (IFS, AIFS-ENS o AIFS-SINGLE) 0.25°, con paleta discreta "
+                    "y barra de colores.")
+    ap.add_argument("--modelo", choices=MODELOS, default="ifs",
+                    help="modelo de ECMWF Open Data (por defecto ifs)")
     ap.add_argument("--fecha", default=FECHA,
                     help=f"día UTC de la corrida, YYYY-MM-DD (por defecto {FECHA})")
     ap.add_argument("--ciclo", default=CICLO,
@@ -600,7 +648,9 @@ def main(argv=None) -> int:
     ap.add_argument("--paso", type=int, default=PASO_HORA,
                     help=f"horas entre pasos (por defecto {PASO_HORA})")
     ap.add_argument("--crudos", help="carpeta de crudos/serie de entrada (por defecto, "
-                                     "DATOS/crudos_precip_ecmwf_<fecha>_<ciclo>z)")
+                                     "DATOS/crudos_precip_ecmwf_<fecha>_<ciclo>z para "
+                                     "ifs o DATOS/crudos_precip_<modelo>_<fecha>_"
+                                     "<ciclo>z para aifs-ens/aifs-single)")
     ap.add_argument("--out-crudos", help="alias de --crudos")
     ap.add_argument("--nc", help="archivo ERA5 (.nc/.npz) alternativo a los crudos")
     ap.add_argument("--px", type=int, default=PX,
@@ -637,8 +687,11 @@ def main(argv=None) -> int:
 
     salidas = _dir_salidas(args)
     salidas.mkdir(parents=True, exist_ok=True)
-    poster = salidas / (f"poster_precip_ecmwf_{args.fecha}_{ciclo}z_"
-                        f"fh{args.hasta_hora:03d}.png")
+    if args.modelo == "ifs":
+        nombre_poster = f"poster_precip_ecmwf_{args.fecha}_{ciclo}z"
+    else:
+        nombre_poster = f"poster_precip_{args.modelo}_{args.fecha}_{ciclo}z"
+    poster = salidas / f"{nombre_poster}_fh{args.hasta_hora:03d}.png"
 
     serie, lat, lon, horas, fecha_init = cargar_serie(args, ciclo)
     indices, horas_pedidas = _seleccionar(horas, args.hasta_hora, args.paso)
@@ -662,7 +715,9 @@ def main(argv=None) -> int:
         return 0
 
     n = len(indices)
-    frames_dir = salidas / f"frames_{etiqueta_frames('precipitacion', 'globo', t_init, n, args.px)}"
+    producto = ("precipitacion" if args.modelo == "ifs"
+                else f"precipitacion_{args.modelo.replace('-', '_')}")
+    frames_dir = salidas / f"frames_{etiqueta_frames(producto, 'globo', t_init, n, args.px)}"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
     # Si cambió el aspecto, los cuadros viejos quedaron obsoletos: se rehacen.
@@ -675,7 +730,8 @@ def main(argv=None) -> int:
         print("Cambiaron los parámetros de render -> se rehacen los cuadros")
     archivo_sello.write_text(sello, encoding="utf-8")
 
-    print(f"Precipitación ECMWF | {n} cuadros | init {t_init:%Y-%m-%d %H:%M} UTC | "
+    print(f"Precipitación {args.modelo.upper()} | {n} cuadros | "
+          f"init {t_init:%Y-%m-%d %H:%M} UTC | "
           f"centro {args.centro[0]} {args.centro[1]} | radio {args.radio:g}° | "
           f"{args.px}x{args.px} px | frames en {frames_dir}")
 
