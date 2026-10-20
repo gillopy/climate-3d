@@ -6,3 +6,5 @@ pillow==13.0.*
 matplotlib==3.11.*
 cartopy==0.26.*
 imageio-ffmpeg==0.6.*
+# GRIB2 de ECMWF IFS (dataRepresentationTemplate 42 / CCSDS-AEC); trae la librería.
+eccodes==2.50.*
