@@ -8,3 +8,5 @@ cartopy==0.26.*
 imageio-ffmpeg==0.6.*
 # GRIB2 de ECMWF IFS (dataRepresentationTemplate 42 / CCSDS-AEC); trae la librería.
 eccodes==2.50.*
+# Lectura directa del NetCDF/HDF5 de ERA5 (t2m) sin xarray.
+h5py==3.16.*
