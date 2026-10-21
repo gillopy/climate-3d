@@ -11,7 +11,9 @@ conexión** a partir de lo que ya está descargado.
 | `mur_sst.py` | GHRSST MUR L4 SST Anomalies (globo), ya rasterizado | NASA GIBS | `SALIDAS/frames_mur_globo_<...>/crudo_NNN.jpg` |
 | `truecolor.py` | True Color (MODIS/VIIRS) diario, ya rasterizado | NASA GIBS | `SALIDAS/frames_truecolor_<sensor>_globo_<...>/crudo_NNN.jpg` |
 | `sandwich.py` | Sandwich RGB (GOES-19): visible + IR realzado, dos JPEG por cuadro | NASA GIBS | `SALIDAS/frames_sandwich_globo_<...>/crudo_NNN_{vis,ir}.jpg` |
-| `precipitacion_ecmwf.py` | Precipitación total acumulada (`tp`) de IFS 0.25°, por HTTP Range | ECMWF Open Data | `DATOS/crudos_precip_ecmwf_<fecha>_<ciclo>z/` (GRIB2 + `serie_tp_mm.npz`) |
+| `precipitacion_ecmwf.py` | Precipitación total acumulada (`tp`) de IFS 0.25° / AIFS, por HTTP Range | ECMWF Open Data | `DATOS/crudos_precip_<modelo>_<fecha>_<ciclo>z/` (GRIB2 o `.npy` + `serie_tp_mm.npz`) |
+| `anomalia_2t_ecmwf.py` | Temperatura a 2 m (`2t`) del IFS 0.25° y su anomalía vs la climatología ERA5, por HTTP Range | ECMWF Open Data | `DATOS/crudos_anom2t_<modelo>_<fecha>_<ciclo>z/` (GRIB2 + `serie_anom_2t_c.npz`) |
+| `viento_250_mslp.py` | Viento en 250 mb (`u`, `v`) y presión a nivel del mar (`msl`) del IFS 0.25°, por HTTP Range | ECMWF Open Data | `DATOS/crudos_viento250_<fecha>_<ciclo>z/` (GRIB2 + `serie_viento_250.npz`) |
 | `goes_descarga.py` | *(módulo)* claves S3 y descarga | — | — |
 
 `DATOS` y `SALIDAS` salen de [`../comun/rutas.py`](../comun/rutas.py): se cambian con
@@ -186,9 +188,16 @@ cuadro**: el fondo **visible** (`crudo_NNN_vis.jpg`, banda ABI C02 0.64 µm) y e
 
 ## `precipitacion_ecmwf.py`
 
-Baja la **precipitación total acumulada (`tp`)** de **ECMWF Open Data — IFS 0.25° (`oper`)**.
-No es una imagen: es un campo del modelo, y `tp` viene acumulado desde el inicio de la corrida
-en **metros de agua equivalente**. Por eso el descargador lo convierte a **mm**.
+Baja la **precipitación total acumulada (`tp`)** de **ECMWF Open Data** a 0.25°. No es una
+imagen: es un campo del modelo, y `tp` viene acumulado desde el inicio de la corrida, así que
+el descargador lo convierte a **mm**. Con `--modelo` se elige cuál de los tres modelos se
+baja:
+
+| `--modelo` | Ruta en el servidor | Qué es |
+|---|---|---|
+| `ifs` (por defecto) | `ifs/0p25/oper` | IFS HRES determinístico (`oper-fc`) |
+| `aifs-single` | `aifs-single/0p25/oper` | AIFS determinístico (`oper-fc`) |
+| `aifs-ens` | `aifs-ens/0p25/enfo` | AIFS ensamble (`enfo-cf` + `enfo-pf`) |
 
 La fuente publica, por cada paso, un `.index` (JSON Lines) y un `.grib2` con todos los campos.
 Bajar el `.grib2` completo son ~98 MB por paso (~4,8 GB para 49 pasos). Como el `.index`
@@ -198,27 +207,151 @@ publica `_offset` y `_length`, el script pide **sólo el rango de bytes** de
 serie consolidada queda en **mm** en `serie_tp_mm.npz`, con la rejilla `721 x 1440` en el orden
 que espera el render (lat 90→-90, lon -180→179.75).
 
-Los crudos quedan como `crudo_NNN_fhHHH.grib2` y el paso `0h` se valida en **0 mm**: si el
-recorte por bytes o la orientación de la rejilla están mal, el script aborta en vez de dejar
-una serie corrida.
+**El ensamble AIFS-ENS.** ECMWF publica el AIFS-ENS partido en **dos archivos por paso**:
+`enfo-cf` (el control) y `enfo-pf` (los 50 miembros perturbados, con `number` de 1 a 50 en el
+`.index`). El script lee el `.index` de cada tipo, pide el rango de `tp`/`sfc` de `cf` y de los
+miembros `pf` elegidos, los promedia y guarda **un `.npy` por paso** con la media del
+ensamble en mm (no se guardan los 11 GRIB). `--miembros` decide cuántos `pf` entran:
+
+| `--miembros` | Qué se promedia |
+|---|---|
+| `1` | Sólo el control `cf` (no pide ningún `pf`) |
+| `11` (por defecto) | `cf` + los 10 `pf` equiespaciados (`5, 10, …, 50`): media suave y barata |
+| `51` | `cf` + los 50 `pf` |
+
+Los crudos quedan como `crudo_NNN_fhHHH.grib2` (en `aifs-ens`, como `crudo_NNN_fhHHH.npy` con
+la media ya calculada) y el paso `0h` se valida en **0 mm**: si el recorte por bytes o la
+orientación de la rejilla están mal, el script aborta en vez de dejar una serie corrida.
+
+**Unidades.** El **IFS publica `tp` en metros (`m`)** y el **AIFS en `kg m**-2`** (numéricamente
+igual a mm). El lector consulta el `units` de cada mensaje y aplica el factor 1000 sólo cuando
+corresponde, así que los tres modelos quedan en la misma escala sin tocar nada.
 
 | Opción | Qué hace |
 |---|---|
+| `--modelo` | Modelo de ECMWF Open Data: `ifs`, `aifs-ens` o `aifs-single` (por defecto `ifs`) |
 | `--fecha` | Día UTC de la corrida, `AAAA-MM-DD` (por defecto `2026-10-20`) |
 | `--ciclo` | Ciclo UTC de la corrida: `00`, `06`, `12` o `18` (por defecto `06`) |
 | `--hasta-hora` | Último paso de pronóstico en horas (por defecto `144`) |
 | `--paso` | Horas entre pasos (por defecto `3`) |
-| `--hilos` | Descargas simultáneas (por defecto `6`) |
+| `--hilos` | Descargas simultáneas (por defecto `12` para `aifs-ens` y `6` para el resto) |
+| `--miembros` | Miembros del ensamble en `aifs-ens`: `1` = sólo `cf`, `11` = `cf` + 10 `pf`, `51` = `cf` + los 50 `pf` (por defecto `11`) |
 | `--forzar` | Vuelve a bajar los pasos aunque ya estén completos |
-| `--out` | Carpeta de salida (por defecto, `DATOS/crudos_precip_ecmwf_<fecha>_<ciclo>z`) |
+| `--out` | Carpeta de salida (por defecto, `DATOS/crudos_precip_ecmwf_<fecha>_<ciclo>z` para `ifs` o `DATOS/crudos_precip_<modelo>_<fecha>_<ciclo>z` para los AIFS) |
 
+- **Base de ECMWF Open Data**: `https://data.ecmwf.int/forecasts/{yyyymmdd}/{ciclo}z/<ruta>/`.
+  Ojo: la fecha va **sin guiones** (`20261020`, no `2026-10-20`) y el ciclo con la `z` pegada
+  (`12z`). Cada paso publica `<yyyymmdd><ciclo>0000-<paso>h-<sufijo>.index` y `.grib2`, donde
+  el sufijo es `oper-fc` en los determinísticos y `enfo-cf` / `enfo-pf` en el ensamble.
 - **Ventana rodante de 4 días**: el ECMWF Open Data sólo conserva las corridas recientes (unas
   cuatro jornadas). Una corrida más vieja ya no está publicada, así que hay que descargarla
   dentro de esa ventana; no es un archivo histórico.
 - **Reanudable**: si un `crudo_NNN_fhHHH.grib2` ya existe con el tamaño exacto que publica el
   `.index` y el marco GRIB (`GRIB`…`7777`) está completo, no se vuelve a pedir.
+- Si cambias `--miembros` con la serie ya cacheada, el script **descarta la media anterior y
+  la rehace**: la media cacheada no representa lo pedido.
 - La serie y la etiqueta de la carpeta salen de [`../comun/series.py`](../comun/series.py),
   igual que en el resto del repo.
+
+---
+
+## `anomalia_2t_ecmwf.py`
+
+Baja la **temperatura a 2 m (`2t`)** del **ECMWF Open Data** a 0.25° y calcula su **anomalía
+contra una climatología diurna de ERA5**. Soporta los dos determinísticos: `ifs` (por
+defecto) y `aifs-single`.
+
+| Variable | Índice | Notas |
+|---|---|---|
+| `2t` | `levtype="sfc"` | Temperatura a 2 m en kelvin |
+
+Como en el resto de los productos ECMWF, se pide **sólo el rango de bytes** de `2t`/`sfc` de
+cada paso (el `.index` publica `_offset` y `_length`), así que no baja el `.grib2` completo.
+Los mensajes se decodifican con **eccodes** y salen en kelvin; el script los pasa a **°C**
+(`- 273.15`) y de ahí a la anomalía.
+
+**La climatología.** Se construye una **climatología diurna por mes y hora UTC** —12 meses ×
+las 4 horas `00`, `06`, `12` y `18`— a partir del NetCDF local **`era5_t2m_2024-2026.nc`**
+(1464 instantes cada 6 h). Ese archivo es HDF5/NetCDF4 y se lee **directamente con `h5py`**,
+sin `xarray`: por mes, para no cargar los ~6 GB de una vez. De cada mes se promedia `t2m` por
+hora UTC, se pasa a °C, se rota la longitud de `0..359.75` a `-180..179.75` (para calzar 1:1
+con ECMWF Open Data) y se suaviza con un **Gaussiano separable de σ = 1 celda** (`0.25°`): los
+Andes tienen celdas de orografía muy distintas entre ERA5 e IFS HRES y el suavizado evita
+picos aislados sin borrar estructura sinóptica.
+
+El resultado se cachea en **`DATOS/climatologia_era5_t2m_mes_hora.npz`** y **se reutiliza
+entre corridas**: la primera vez tarda ~7 minutos, después se lee de la caché al instante.
+`--forzar-climatologia` la reconstruye.
+
+Al calcular la anomalía, la climatología se **interpola en hora** (entre los dos slots UTC que
+rodean, con vuelta `18 → 0`) y **en mes** (entre los centros `15 → 16` de los meses
+vecinos), así que el paso del 31 de octubre al 1 de noviembre **no tiene salto**.
+
+| Opción | Qué hace |
+|---|---|
+| `--modelo` | Modelo de ECMWF Open Data: `ifs` o `aifs-single` (por defecto `ifs`) |
+| `--fecha` | Día UTC de la corrida, `AAAA-MM-DD` (por defecto `2026-10-20`) |
+| `--ciclo` | Ciclo UTC de la corrida: `00`, `06`, `12` o `18` (por defecto `12`) |
+| `--hasta-hora` | Último paso de pronóstico en horas (por defecto `360`: 15 días) |
+| `--paso` | Horas entre pasos (por defecto `6`) |
+| `--hilos` | Descargas simultáneas (por defecto `8`) |
+| `--era5-nc` | NetCDF/HDF5 de ERA5 con `t2m` (por defecto se busca con `comun.rutas.find_data_file`) |
+| `--forzar-climatologia` | Reconstruye la climatología aunque el `.npz` ya exista |
+| `--forzar` | Vuelve a bajar los pasos aunque ya estén completos |
+| `--out` | Carpeta de salida (por defecto, `DATOS/crudos_anom2t_<modelo>_<fecha>_<ciclo>z`) |
+
+- Los crudos quedan como `crudo_NNN_fhHHH.grib2` y la serie consolidada en
+  `serie_anom_2t_c.npz`, con la anomalía en **°C** en `(pasos, 721, 1440)` float32, más `lat`,
+  `lon`, `horas`, `fecha_init` y `modelo`.
+- Es **reanudable**: un crudo con el tamaño exacto que publica el `.index` y el marco GRIB
+  sano no se vuelve a pedir.
+- La **base** es la misma de los demás productos ECMWF:
+  `https://data.ecmwf.int/forecasts/{yyyymmdd}/{ciclo}z/ifs/0p25/oper/` (fecha **sin guiones**,
+  ciclo con la `z` pegada).
+- **Ventana rodante de 4 días**: como todo el ECMWF Open Data, sólo conserva las corridas
+  recientes.
+
+---
+
+## `viento_250_mslp.py`
+
+Baja el **viento en 250 mb** (`u` y `v`) y la **presión a nivel del mar** (`msl`) del **ECMWF
+IFS 0.25°** (`oper`). Los tres campos se piden **por HTTP Range** con los offsets del `.index`,
+igual que el resto de los productos ECMWF.
+
+| Variable | Índice | Unidades | Uso |
+|---|---|---|---|
+| `u` | `levtype="pl"`, `levelist=250` | m s**-1 | viento zonal a 250 mb |
+| `v` | `levtype="pl"`, `levelist=250` | m s**-1 | viento meridional a 250 mb |
+| `msl` | `levtype="sfc"` | Pa | presión a nivel del mar |
+
+**Ojo con el `.index`**: `levelist` viene como **string** (`"250"`), así que hay que castear
+antes de comparar. Además `u`/`v` aparecen en muchos niveles de presión: sin filtrar por
+`levtype` **y** `levelist` se agarra el nivel equivocado.
+
+Las unidades de salida son `u`/`v` en **m/s** (el render multiplica por `1.9438445` para
+obtener nudos) y `msl` en **hPa** (`Pa / 100`).
+
+| Opción | Qué hace |
+|---|---|
+| `--fecha` | Día UTC de la corrida, `AAAA-MM-DD` (por defecto `2026-10-20`) |
+| `--ciclo` | Ciclo UTC de la corrida: `00`, `06`, `12` o `18` (por defecto `18`) |
+| `--hasta-hora` | Último paso de pronóstico en horas (por defecto `144`) |
+| `--paso` | Horas entre pasos (por defecto `6`) |
+| `--hilos` | Descargas simultáneas (por defecto `8`) |
+| `--forzar` | Vuelve a bajar los pasos aunque ya estén completos |
+| `--out` | Carpeta de salida (por defecto, `DATOS/crudos_viento250_<fecha>_<ciclo>z`) |
+
+- Los crudos quedan como `crudo_NNN_fhHHH_u.grib2`, `crudo_NNN_fhHHH_v.grib2` y
+  `crudo_NNN_fhHHH_msl.grib2` (uno por variable y paso), y la serie consolidada en
+  `serie_viento_250.npz`, con `u_ms`, `v_ms` y `msl_hpa` en `(pasos, 721, 1440)` float32, más
+  `lat`, `lon`, `horas` y `fecha_init`.
+- Es **reanudable**: un crudo con el tamaño exacto que publica el `.index` y el marco GRIB
+  sano no se vuelve a pedir.
+- La **base** es `https://data.ecmwf.int/forecasts/{yyyymmdd}/{ciclo}z/ifs/0p25/oper/`
+  (fecha **sin guiones**, ciclo con la `z` pegada).
+- **Ventana rodante de 4 días**: el ECMWF Open Data sólo conserva las corridas recientes.
+- Los pasos `12z` y `18z` publican hasta `144 h`.
 
 ---
 

@@ -12,6 +12,8 @@ deja `cuadro_NNN.png` en `SALIDAS/frames_<etiqueta>/` y termina diciéndote qué
 | `cuadros_truecolor.py` | `crudo_NNN.jpg` de `descargar/truecolor.py` | Globo |
 | `cuadros_sandwich.py` | `crudo_NNN_vis.jpg` + `crudo_NNN_ir.jpg` de `descargar/sandwich.py` | Globo |
 | `cuadros_precipitacion.py` | `serie_tp_mm.npz` (o los `.grib2` / `--nc`) de `descargar/precipitacion_ecmwf.py` | Globo |
+| `cuadros_anomalia_2t.py` | `serie_anom_2t_c.npz` de `descargar/anomalia_2t_ecmwf.py` | Globo |
+| `cuadros_viento_250.py` | `serie_viento_250.npz` de `descargar/viento_250_mslp.py` | Globo |
 
 Todos **reutilizan** los PNG que ya existen, así que si se corta se retoma donde quedó.
 `cuadros_goes.py` además renderiza **por lotes en procesos separados**: con cientos de
@@ -177,10 +179,14 @@ aborta nombrándote el comando exacto de descarga.
 
 # Secuencia completa: 49 cuadros + póster a 2712 px
 .venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --fecha 2026-10-20 --ciclo 06 --hasta-hora 144 --paso 3
+
+# Media del ensamble AIFS-ENS: 61 cuadros a 2712 px
+.venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --modelo aifs-ens --fecha 2026-10-20 --ciclo 12 --hasta-hora 360 --paso 6
 ```
 
 | Opción | Qué hace |
 |---|---|
+| `--modelo` | Modelo de ECMWF Open Data: `ifs`, `aifs-ens` o `aifs-single` (por defecto `ifs`) |
 | `--fecha` | Día UTC de la corrida, `AAAA-MM-DD` (por defecto `2026-10-20`) |
 | `--ciclo` | Ciclo UTC de la corrida: `00`, `06`, `12` o `18` (por defecto `06`) |
 | `--hasta-hora` / `--paso` | Último paso y horas entre pasos (por defecto `144` y `3`) |
@@ -212,11 +218,146 @@ Las salidas son dos:
 - `frames_precipitacion_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px/cuadro_NNN.png` — la secuencia
   (49 cuadros de `2712x2712 px` con `--hasta-hora 144 --paso 3`), lista para `animar/armar.py`.
 
+**Con `--modelo` cambian el nombre del póster y la carpeta de cuadros**, para que una corrida
+no pise a la de otro modelo:
+
+| `--modelo` | Póster | Carpeta de cuadros |
+|---|---|---|
+| `ifs` | `poster_precip_ecmwf_<fecha>_<ciclo>z_fh<hora>.png` | `frames_precipitacion_globo_<...>` |
+| `aifs-ens` | `poster_precip_aifs-ens_<fecha>_<ciclo>z_fh<hora>.png` | `frames_precipitacion_aifs_ens_globo_<...>` |
+| `aifs-single` | `poster_precip_aifs-single_<fecha>_<ciclo>z_fh<hora>.png` | `frames_precipitacion_aifs_single_globo_<...>` |
+
+El **título** y el **pie de fuente** cambian con el modelo, y el modelo forma parte de la
+huella del render: un PNG de un modelo no se reutiliza para otro.
+
 El guardado es **atómico** y el render está **sellado**: si cambiás `--px`, `--dpi`,
 `--centro`, `--radio`, el fondo, el crédito o la paleta, los PNG viejos se descartan solos en
 vez de reutilizarse con otro aspecto. Es **offline por construcción**: sólo lee los crudos que
 dejó `descargar/precipitacion_ecmwf.py`; si no hay datos, aborta nombrándote el comando exacto
 de descarga.
+
+---
+
+## `cuadros_anomalia_2t.py`
+
+```powershell
+# Póster de cierre FH +360 h, sin secuencia
+.venv\Scripts\python.exe cuadros\cuadros_anomalia_2t.py --fecha 2026-10-20 --ciclo 12 --hasta-hora 360 --paso 6 --solo-poster
+
+# Secuencia completa: 61 cuadros + póster a 2712 px
+.venv\Scripts\python.exe cuadros\cuadros_anomalia_2t.py --fecha 2026-10-20 --ciclo 12 --hasta-hora 360 --paso 6
+```
+
+| Opción | Qué hace |
+|---|---|
+| `--modelo` | Modelo de ECMWF Open Data: `ifs` o `aifs-single` (por defecto `ifs`) |
+| `--fecha` | Día UTC de la corrida, `AAAA-MM-DD` (por defecto `2026-10-20`) |
+| `--ciclo` | Ciclo UTC de la corrida: `00`, `06`, `12` o `18` (por defecto `12`) |
+| `--hasta-hora` / `--paso` | Último paso y horas entre pasos (por defecto `360` y `6`) |
+| `--px` | Lado del rectángulo donde se warpea el disco (por defecto `2712`) |
+| `--dpi` | dpi del render (por defecto `140`) |
+| `--centro LON LAT` | Centro del globo (por defecto `-58 -23`: Paraguay) |
+| `--radio` | Grados al borde del disco; `90` = hemisferio (por defecto `58`) |
+| `--fondo-globo` | `claro` u `oscuro` (por defecto `claro`) |
+| `--credito` | Crédito de la esquina superior |
+| `--solo-poster` | Renderiza sólo el póster estático del último paso |
+| `--forzar` | Vuelve a renderizar los cuadros aunque los PNG ya existan |
+| `--crudos` / `--out-crudos` | Carpeta de entrada (por defecto, la que deja el descargador) |
+| `--salidas` / `--out` | Carpeta de salida (por defecto `comun.rutas.SALIDAS`) |
+
+Lee `serie_anom_2t_c.npz`, que ya viene con la **anomalía en °C** (la calcula
+`descargar/anomalia_2t_ecmwf.py` contra la climatología diurna de ERA5). La geometría del
+**warp Orthographic** —índices bilineales, pesos y factor de luz esférico— se **precomputa una
+sola vez**, así que cada cuadro cuesta sólo cuatro lecturas por píxel y una mezcla.
+
+El campo se interpola a resolución de píxel y recién después se mapea a la **paleta divergente
+discreta de 37 colores** de Tropical Tidbits (35 intervalos entre `-28` y `+28 °C`, más las
+extensiones `under` y `over`): violetas y rosas para el frío extremo, azules y cianes en el
+frío, amarillos, naranjas y rojos en el cálido. La **banda neutra `[-0.5, +0.5] °C` queda
+transparente**, así que ahí se ve la **superficie base del globo** (océano, tierra y el
+sombreado esférico hacia el limbo) en vez de un parche blanco. Encima van costas, fronteras
+y el contorno de **Paraguay** (`datos/paraguay_gadm.json`), más el aro del disco y la barra
+de colores al pie.
+
+**Memoria plana a 2712 px**: el blend bilineal va **por bloques de filas** (`512`) en
+**float32**, y el color se busca con una **consulta directa a la tabla RGBA** (sin máscaras
+booleanas 1D). A resolución completa, un blend entero en float64 dispararía el consumo de RAM
+y el OOM por los temporales; así el pico se mantiene plano.
+
+Las salidas son dos:
+
+- `poster_anom2t_<modelo>_<fecha>_<ciclo>z_fh<hora>.png` — el póster estático del último paso.
+- `frames_anomalia_2t_<modelo>_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px/cuadro_NNN.png` — la
+  secuencia (61 cuadros de `2712x2712 px` con `--hasta-hora 360 --paso 6`), lista para
+  `animar/armar.py`.
+
+El guardado es **atómico** y el render está **sellado**: si cambiás `--px`, `--dpi`,
+`--centro`, `--radio`, el fondo, el crédito o el modelo, los PNG viejos se descartan solos.
+Es **offline por construcción**: sólo lee la serie que dejó
+`descargar/anomalia_2t_ecmwf.py`; si no hay datos, aborta nombrándote el comando exacto de
+descarga.
+
+---
+
+## `cuadros_viento_250.py`
+
+```powershell
+# Póster de cierre FH +144 h, sin secuencia
+.venv\Scripts\python.exe cuadros\cuadros_viento_250.py --fecha 2026-10-20 --ciclo 18 --hasta-hora 144 --paso 6 --solo-poster
+
+# Secuencia completa: 25 cuadros + póster a 2712 px
+.venv\Scripts\python.exe cuadros\cuadros_viento_250.py --fecha 2026-10-20 --ciclo 18 --hasta-hora 144 --paso 6
+```
+
+| Opción | Qué hace |
+|---|---|
+| `--fecha` | Día UTC de la corrida, `AAAA-MM-DD` (por defecto `2026-10-20`) |
+| `--ciclo` | Ciclo UTC de la corrida: `00`, `06`, `12` o `18` (por defecto `18`) |
+| `--hasta-hora` / `--paso` | Último paso y horas entre pasos (por defecto `144` y `6`) |
+| `--px` | Lado del rectángulo donde se warpea el disco (por defecto `2712`) |
+| `--dpi` | dpi del render (por defecto `140`) |
+| `--centro LON LAT` | Centro del globo (por defecto `-58 -23`: Paraguay) |
+| `--radio` | Grados al borde del disco; `90` = hemisferio (por defecto `58`) |
+| `--fondo-globo` | `claro` u `oscuro` (por defecto `claro`) |
+| `--credito` | Crédito de la esquina superior |
+| `--solo-poster` | Renderiza sólo el póster estático del último paso |
+| `--forzar` | Vuelve a renderizar los cuadros aunque los PNG ya existan |
+| `--crudos` | Carpeta de entrada (por defecto, la que deja el descargador) |
+| `--salidas` | Carpeta de salida (por defecto `comun.rutas.SALIDAS`) |
+
+Lee `serie_viento_250.npz`, que trae `u_ms`, `v_ms` y `msl_hpa` en la rejilla `721 x 1440`. La
+velocidad del viento sale de `hypot(u, v) × 1.9438445` (m/s → nudos) y se pinta con la
+**escala discreta de 10 kt de 20 a 250** (cian → verde → amarillo → naranja → rojo → bordó →
+violeta → magenta → rosa → marrón), con extensión `under` (< 20 kt) y `over` (> 250 kt). A
+diferencia de la anomalía, **todo el disco es opaco**: las zonas de viento débil toman el color
+`under`.
+
+Encima van dos capas extra:
+
+- **Streamlines**: las líneas de corriente se calculan con `streamplot` sobre una rejilla
+  regular de ~1° y se dibujan como un único `LineCollection` de trazos finos y oscuros
+  (`0.35 pt`), con las **puntas de flecha triangulares dibujadas a mano** (matplotlib
+  dibuja las suyas con `arrowsize=0`).
+- **Extremos de MSLP**: marcadores `L` en **rojo** y `H` en **azul**, con el valor en **hPa**
+  arriba. Sólo cuentan los más significativos (`L` por debajo de `1002 hPa`, `H` por encima de
+  `1016 hPa`), con un máximo de 6 de cada tipo, separados al menos 4° entre sí y dentro del
+  disco.
+
+La geometría del **warp Orthographic** se **precomputa una sola vez** y el blend va **por
+bloques de filas** en **float32**, con la **consulta directa a la tabla RGBA**: a
+`2712x2712 px` el consumo de RAM se mantiene plano.
+
+Las salidas son dos:
+
+- `poster_viento250_<fecha>_<ciclo>z_fh<hora>.png` — el póster estático del último paso.
+- `frames_viento_250_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px/cuadro_NNN.png` — la secuencia
+  (25 cuadros de `2712x2712 px` con `--hasta-hora 144 --paso 6`), lista para `animar/armar.py`.
+
+El guardado es **atómico** y el render está **sellado**: si cambiás `--px`, `--dpi`,
+`--centro`, `--radio`, el fondo, el crédito, la escala de colores o los umbrales de MSLP, los
+PNG viejos se descartan solos. Es **offline por construcción**: sólo lee la serie que dejó
+`descargar/viento_250_mslp.py`; si no hay datos, aborta nombrándote el comando exacto de
+descarga.
 
 ---
 

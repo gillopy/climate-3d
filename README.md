@@ -22,10 +22,16 @@ El repo está separado por **rol**, y se lee en el orden en que se usa:
 
 | Etapa | Scripts |
 | --- | --- |
-| `descargar/` | `descargar_goes.py`, `descargar_era5.py`, `geocolor.py`, `mur_sst.py`, `truecolor.py`, `sandwich.py`, `precipitacion_ecmwf.py` |
+| `descargar/` | `descargar_goes.py`, `descargar_era5.py`, `geocolor.py`, `mur_sst.py`, `truecolor.py`, `sandwich.py`, `precipitacion_ecmwf.py`, `anomalia_2t_ecmwf.py`, `viento_250_mslp.py` |
 | `prototipos/` | `poster_goes.py`, `poster_anomalia.py`, `vista_paraguay.py` |
-| `cuadros/` | `cuadros_goes.py`, `cuadros_geocolor.py`, `cuadros_mur.py`, `cuadros_truecolor.py`, `cuadros_sandwich.py`, `cuadros_precipitacion.py` |
+| `cuadros/` | `cuadros_goes.py`, `cuadros_geocolor.py`, `cuadros_mur.py`, `cuadros_truecolor.py`, `cuadros_sandwich.py`, `cuadros_precipitacion.py`, `cuadros_anomalia_2t.py`, `cuadros_viento_250.py` |
 | `animar/` | `armar.py` |
+
+Los tres últimos scripts de cada fila son **pares de ECMWF**: cada descargador escribe una
+serie `.npz` y su render la convierte en globo.
+`descargar/precipitacion_ecmwf.py` y `cuadros/cuadros_precipitacion.py` aceptan
+`--modelo {ifs,aifs-ens,aifs-single}`; `descargar/anomalia_2t_ecmwf.py` y
+`cuadros/cuadros_anomalia_2t.py` aceptan `--modelo {ifs,aifs-single}`.
 
 Aparte, [`comun/`](./comun) guarda lo compartido (rutas y constantes de estilo), también sin
 red.
@@ -50,7 +56,7 @@ $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 
 ## Qué se puede lograr
 
-Ocho salidas del mismo pipeline, todas con datos reales. En
+Once salidas del mismo pipeline, todas con datos reales. En
 [`docs/galeria/`](./docs/galeria) están las demás.
 
 ### GeoColor (GOES-East): color real de día, IR y luces de ciudad de noche
@@ -142,14 +148,71 @@ descargador lee el `.index` de cada paso y pide **sólo el rango de bytes** de `
 [`descargar/precipitacion_ecmwf.py`](./descargar/precipitacion_ecmwf.py) y
 [`cuadros/cuadros_precipitacion.py`](./cuadros/cuadros_precipitacion.py).
 
+### Precipitación del ensamble AIFS-ENS: 360 h de lluvia hasta el 4 de noviembre
+
+![Precipitación media del ensamble AIFS-ENS, FH +360 h](docs/galeria/precip_aifs_ens_globo_2026-10-20_12z_fh360.png)
+
+El **AIFS-ENS** es el **ensamble** del modelo de IA de ECMWF: publica el **control (`cf`)** y
+**50 miembros perturbados (`pf`)** en archivos separados, y el campo que se pinta es la
+**media** de `cf` más 10 `pf` equiespaciados. La corrida `12z` del 20 de octubre de 2026
+cubre **0 a 360 h** (hasta el 4 de noviembre, 12z) en pasos de **6 h**: **61 cuadros** en
+globo Orthographic centrado en Paraguay. El acumulado del ensamble llega a ~**226 mm** sobre
+el este de Paraguay y el sur de Brasil en el paso `+360 h`, y se pinta con la misma **paleta
+discreta de 30 niveles** de Tropical Tidbits (`0.2` a `500+ mm`) que el determinístico.
+
+Ojo con las unidades: el **IFS publica `tp` en metros (`m`)** y el **AIFS en `kg m**-2`**
+(numéricamente igual a mm). El descargador lee el `units` de cada mensaje y escala, así que
+los tres modelos quedan en la misma escala. Es el mismo par de scripts, con
+`--modelo aifs-ens`.
+
+### Anomalía de temperatura a 2 m (ECMWF): el pronóstico contra la climatología de ERA5
+
+![Anomalía de temperatura a 2 m del IFS, FH +360 h](docs/galeria/anomalia_2t_ifs_globo_2026-10-20_12z_fh360.png)
+
+La **anomalía de temperatura a 2 m** (`2t`) del **ECMWF IFS 0.25°** se calcula contra una
+**climatología diurna** hecha con **ERA5**: para cada mes y cada hora UTC (`00`, `06`, `12`,
+`18`) se promedia el período 2024–2026 del archivo local `era5_t2m_2024-2026.nc`, que se lee
+con **h5py** —sin `xarray`. La corrida `12z` del 20 de octubre de 2026 cubre **0 a 360 h**
+en pasos de **6 h**: **61 cuadros** en globo Orthographic.
+
+La paleta es **divergente y discreta** (Tropical Tidbits, de `-28` a `+28 °C`): violetas y
+azules para el frío, amarillos y rojos para el cálido. La **banda neutra `[-0.5, +0.5] °C`
+queda transparente**, así que en las zonas sin anomalía se ve la superficie base del globo
+(océano, tierra y sombreado esférico) en vez de un parche blanco. El campo se interpola en
+**mes** y en **hora**, así que el paso del 31 de octubre al 1 de noviembre no tiene salto. Los
+scripts son [`descargar/anomalia_2t_ecmwf.py`](./descargar/anomalia_2t_ecmwf.py) y
+[`cuadros/cuadros_anomalia_2t.py`](./cuadros/cuadros_anomalia_2t.py).
+
+### Viento en 250 mb y extremos de presión (ECMWF): la troposfera alta
+
+![Viento en 250 mb y extremos de MSLP del IFS, FH +144 h](docs/galeria/viento_250_globo_2026-10-20_18z_fh144.png)
+
+El **viento en 250 mb** (`u` y `v` en el nivel de 250 hPa) del **ECMWF IFS 0.25°** es la
+troposfera alta: la **velocidad** se pinta con una **escala discreta de 10 kt de 20 a 250**
+(cian → verde → amarillo → naranja → rojo → bordó → violeta → magenta → rosa → marrón) y
+encima van las **streamlines**, con puntas de flecha triangulares, que muestran la dirección
+del flujo. La corrida `18z` del 20 de octubre de 2026 cubre **0 a 144 h** en pasos de
+**6 h**: **25 cuadros** en globo Orthographic.
+
+Encima se marcan los **extremos de la presión a nivel del mar** (`msl`): `L` en **rojo** para
+los lows y `H` en **azul** para los highs, con el valor en hPa. Sólo cuentan los más
+significativos (`L` por debajo de `1002 hPa`, `H` por encima de `1016 hPa`) y los que caen
+dentro del disco. El viento máximo global llega a ~**182 kt** y la presión va de ~**947** a
+~**1046 hPa**. Los scripts son
+[`descargar/viento_250_mslp.py`](./descargar/viento_250_mslp.py) y
+[`cuadros/cuadros_viento_250.py`](./cuadros/cuadros_viento_250.py).
+
 ## Requisitos
 
 - Python 3.14 y el entorno `.venv` de la raíz.
 - Las dependencias están fijadas en [`requirements.txt`](./requirements.txt).
 
 ```powershell
-.venv\Scripts\python.exe -c "import cartopy, matplotlib, requests, PIL, eccodes; print('ok')"
+.venv\Scripts\python.exe -c "import cartopy, matplotlib, requests, PIL, eccodes, h5py; print('ok')"
 ```
+
+`eccodes` hace falta para los GRIB2 de ECMWF y `h5py` para leer el NetCDF/HDF5 de ERA5
+sin `xarray`.
 
 ## Primeros pasos
 
@@ -191,6 +254,11 @@ El flujo completo del globo de **precipitación total acumulada** (49 cuadros de
 
 El póster queda en `SALIDAS/poster_precip_ecmwf_2026-10-20_06z_fh144.png` y los cuadros en la
 carpeta `frames_precipitacion_globo_...` que imprime el paso 2.
+
+El mismo par de scripts sirve para los otros dos modelos: agregá `--modelo aifs-ens` (media
+del ensamble AIFS) o `--modelo aifs-single` (AIFS determinístico) a **los dos** comandos. El
+nombre del póster y de la carpeta de cuadros cambian con el modelo, así que una corrida no
+pisa a la otra.
 
 ## El formato
 

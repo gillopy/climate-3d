@@ -164,6 +164,8 @@ El nombre de la carpeta lo define quién renderiza, y `animar/armar.py` deriva e
 | `cuadros/cuadros_truecolor.py` | `frames_truecolor_<sensor>_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 | `cuadros/cuadros_sandwich.py` | `frames_sandwich_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 | `cuadros/cuadros_precipitacion.py` | `frames_precipitacion_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
+| `cuadros/cuadros_anomalia_2t.py` | `frames_anomalia_2t_<modelo>_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
+| `cuadros/cuadros_viento_250.py` | `frames_viento_250_globo_<AAAA-MM-DDTHHMM>_<N>f_<PX>px` |
 
 El nombre incluye **inicio + cantidad de cuadros + px**, así que una corrida **no pisa** la de
 otra ventana o resolución.
@@ -375,7 +377,209 @@ Eso renderiza los **49 cuadros** de `2712x2712 px` en
 
 ---
 
-## 12. Notas
+## 12. Flujo extra: Precipitación del ensamble AIFS-ENS (ECMWF, 360 h)
+
+El **AIFS-ENS** es el **ensamble** del modelo de IA de ECMWF. Publica cada paso partido en
+**dos archivos**: `enfo-cf` (el **control**) y `enfo-pf` (los **50 miembros perturbados**, con
+`number` de 1 a 50 en el `.index`). El campo que se anima es la **media** del ensamble: el
+control `cf` más 10 miembros `pf` equiespaciados.
+
+La corrida del ejemplo es **12z del 20 de octubre de 2026**, de **0h a 360h** (hasta el 4 de
+noviembre, 12z) en pasos de **6h**: **61 cuadros** de `2712x2712 px`. Pasa por las mismas
+cuatro etapas, con el **mismo par de scripts** de la sección 11 — sólo cambia `--modelo`.
+
+**Identificar.** Base: `https://data.ecmwf.int/forecasts/20261020/12z/aifs-ens/0p25/enfo/`. La
+variable es la misma `tp` (`levtype=sfc`), sólo que partida entre `cf` y `pf`. El `.index`
+trae `_offset` y `_length`, así que se pide **sólo el rango de bytes** de cada mensaje, como
+en los demás flujos ECMWF.
+
+**Descargar.**
+
+```powershell
+.venv\Scripts\python.exe descargar\precipitacion_ecmwf.py --modelo aifs-ens --fecha 2026-10-20 --ciclo 12 --hasta-hora 360 --paso 6
+```
+
+El script lee el `.index` de `cf` y de `pf`, baja el rango de `tp`/`sfc` de cada miembro
+elegido, los **promedia** y deja un `.npy` por paso con la media en **mm**, más la serie
+consolidada `serie_tp_mm.npz` (61, 721, 1440) en
+`DATOS/crudos_precip_aifs-ens_2026-10-20_12z/`.
+
+**Cuadros.** El comando exacto lo imprime la descarga al terminar:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --modelo aifs-ens --fecha 2026-10-20 --ciclo 12 --hasta-hora 360 --paso 6
+```
+
+Eso renderiza los **61 cuadros** de `2712x2712 px` en
+`frames_precipitacion_aifs_ens_globo_2026-10-20T1200_61f_2712px` y el **póster de cierre**
+`poster_precip_aifs-ens_2026-10-20_12z_fh360.png`. Para ver sólo el póster:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --modelo aifs-ens --fecha 2026-10-20 --ciclo 12 --hasta-hora 360 --paso 6 --solo-poster
+```
+
+**Animar.**
+
+```powershell
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_precipitacion_aifs_ens_globo_2026-10-20T1200_61f_2712px" --fps 12.5
+```
+
+- **Unidades distintas entre modelos**: el **IFS publica `tp` en metros (`m`)** y el **AIFS en
+  `kg m**-2`** (numéricamente igual a mm). El descargador lee el `units` de cada mensaje y
+  escala, así que los tres modelos quedan en la misma escala.
+- **Cuántos miembros**: `--miembros 11` (por defecto) es `cf` + los 10 `pf` equiespaciados;
+  `--miembros 51` usa los 50; `--miembros 1` es sólo el control. Si cambiás `--miembros` con
+  la serie ya cacheada, el script **descarta la media anterior y la rehace**.
+- **Nombres propios**: el póster y la carpeta de cuadros llevan el modelo, así que la corrida
+  del ensamble no pisa a la del IFS.
+- El máximo del ensamble al paso `+360 h` es de ~**226 mm** sobre el este de Paraguay y el
+  sur de Brasil.
+- **Ventana de 4 días** y **HTTP Range**: igual que en la sección 11.
+
+---
+
+## 13. Flujo extra: Anomalía de temperatura a 2 m (ECMWF IFS vs climatología ERA5)
+
+La **anomalía de temperatura a 2 m** (`2t`) del **ECMWF IFS 0.25°** es el pronóstico medido
+contra lo **normal** para ese mes y esa hora. Para eso hace falta una **climatología
+diurna**: el promedio de ERA5 2024–2026 para cada mes y cada hora UTC (`00`, `06`, `12`,
+`18`).
+
+La corrida del ejemplo es **12z del 20 de octubre de 2026**, de **0h a 360h** en pasos de
+**6h**: **61 cuadros** de `2712x2712 px`. Pasa por las mismas cuatro etapas, con su propio par
+descarga/render.
+
+**Identificar.** Dos fuentes distintas:
+
+- **Pronóstico**: `https://data.ecmwf.int/forecasts/20261020/12z/ifs/0p25/oper/`, variable
+  `2t` (`levtype=sfc`).
+- **Climatología**: el NetCDF local **`era5_t2m_2024-2026.nc`** (1464 instantes cada 6 h,
+  `t2m` en kelvin, rejilla 0.25°). Es HDF5/NetCDF4 y se lee **directamente con `h5py`**, sin
+  `xarray`; por mes, para no cargar los ~6 GB de una sola vez.
+
+**Descargar.**
+
+```powershell
+.venv\Scripts\python.exe descargar\anomalia_2t_ecmwf.py --fecha 2026-10-20 --ciclo 12 --hasta-hora 360 --paso 6
+```
+
+La primera vez el script **construye la climatología** (tarda ~7 minutos) y la cachea en
+`DATOS/climatologia_era5_t2m_mes_hora.npz`; de ahí en adelante **la reutiliza** y la descarga
+arranca al instante. Con `--forzar-climatologia` se reconstruye.
+
+Después baja el `2t` de cada paso **por HTTP Range** (el `.index` trae `_offset` y `_length`),
+lo pasa a °C, le resta la climatología interpolada y deja `serie_anom_2t_c.npz` (61, 721,
+1440) en **°C** en `DATOS/crudos_anom2t_ifs_2026-10-20_12z/`.
+
+**Cuadros.** El comando exacto lo imprime la descarga al terminar:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_anomalia_2t.py --fecha 2026-10-20 --ciclo 12 --hasta-hora 360 --paso 6
+```
+
+Eso renderiza los **61 cuadros** de `2712x2712 px` en
+`frames_anomalia_2t_ifs_globo_2026-10-20T1200_61f_2712px` y el **póster de cierre**
+`poster_anom2t_ifs_2026-10-20_12z_fh360.png`. Para ver sólo el póster:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_anomalia_2t.py --fecha 2026-10-20 --ciclo 12 --hasta-hora 360 --paso 6 --solo-poster
+```
+
+**Animar.**
+
+```powershell
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_anomalia_2t_ifs_globo_2026-10-20T1200_61f_2712px" --fps 12.5
+```
+
+- **La paleta es divergente y discreta**: de `-28` a `+28 °C` en 35 intervalos, con las
+  extensiones `under` y `over`. La **banda neutra `[-0.5, +0.5] °C` queda transparente**, así
+  que ahí se ve la superficie base del globo (océano, tierra y sombreado esférico) en vez de
+  un parche blanco.
+- **Sin salto entre meses**: la climatología se interpola en **mes** (entre los centros `15 →
+  16` de los meses vecinos) y en **hora** (entre los dos slots UTC que rodean, con vuelta
+  `18 → 0`), así que el paso del 31 de octubre al 1 de noviembre es continuo.
+- **El suavizado no es cosmético**: los Andes tienen celdas de orografía muy distintas entre
+  ERA5 e IFS HRES, así que la climatología se suaviza con un Gaussiano separable de `σ = 1`
+  celda (`0.25°`) para evitar picos aislados.
+- **RAM**: el blend va por bloques de filas en float32 y el color se busca con una consulta
+  directa a la tabla RGBA, así que a `2712x2712 px` el consumo se mantiene plano.
+- **Ventana de 4 días** y **HTTP Range**: igual que en la sección 11.
+
+---
+
+## 14. Flujo extra: Viento en 250 mb y extremos de MSLP (ECMWF IFS)
+
+El **viento en 250 mb** es la **troposfera alta**: ahí está el **jet** y los sistemas de
+presión que lo delimitan. Se anima la **velocidad** (en nudos) con las **streamlines** encima, y
+al lado los **extremos de la presión a nivel del mar** (`msl`) marcados como `L` y `H`.
+
+La corrida del ejemplo es **18z del 20 de octubre de 2026**, de **0h a 144h** (hasta el 26 de
+octubre, 18z) en pasos de **6h**: **25 cuadros** de `2712x2712 px`. Pasa por las mismas cuatro
+etapas, con su propio par descarga/render.
+
+**Identificar.** Base: `https://data.ecmwf.int/forecasts/20261020/18z/ifs/0p25/oper/`. Tres
+campos del mismo paso:
+
+| Variable | Índice | Unidades | Uso |
+|---|---|---|---|
+| `u` | `levtype="pl"`, `levelist=250` | m s**-1 | viento zonal a 250 mb |
+| `v` | `levtype="pl"`, `levelist=250` | m s**-1 | viento meridional a 250 mb |
+| `msl` | `levtype="sfc"` | Pa | presión a nivel del mar |
+
+**Ojo**: en el `.index`, `levelist` viene como **string** (`"250"`), y `u`/`v` aparecen en
+muchos niveles de presión: sin filtrar por `levtype` **y** `levelist` se agarra el nivel
+equivocado.
+
+**Descargar.**
+
+```powershell
+.venv\Scripts\python.exe descargar\viento_250_mslp.py --fecha 2026-10-20 --ciclo 18 --hasta-hora 144 --paso 6
+```
+
+El script pide **por HTTP Range** los tres campos de cada paso (el `.index` trae `_offset` y
+`_length`), los decodifica con **eccodes** y deja `serie_viento_250.npz` (`u_ms`, `v_ms`,
+`msl_hpa`, cada uno de `(25, 721, 1440)` float32) en
+`DATOS/crudos_viento250_2026-10-20_18z/`. El `msl` viene en Pa y queda en **hPa**
+(`Pa / 100`); el viento queda en **m/s** y el render lo pasa a nudos.
+
+**Cuadros.** El comando exacto lo imprime la descarga al terminar:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_viento_250.py --fecha 2026-10-20 --ciclo 18 --hasta-hora 144 --paso 6
+```
+
+Eso renderiza los **25 cuadros** de `2712x2712 px` en
+`frames_viento_250_globo_2026-10-20T1800_25f_2712px` y el **póster de cierre**
+`poster_viento250_2026-10-20_18z_fh144.png`. Para ver sólo el póster:
+
+```powershell
+.venv\Scripts\python.exe cuadros\cuadros_viento_250.py --fecha 2026-10-20 --ciclo 18 --hasta-hora 144 --paso 6 --solo-poster
+```
+
+**Animar.**
+
+```powershell
+.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_viento_250_globo_2026-10-20T1800_25f_2712px" --fps 12.5
+```
+
+- **Escala de 10 kt**: la velocidad se pinta con niveles discretos de `20` a `250 kt`
+  (cian → verde → amarillo → naranja → rojo → bordó → violeta → magenta → rosa → marrón), con
+  extensión `under` (< 20 kt) y `over` (> 250 kt). Todo el disco es opaco: el viento débil
+  toma el color `under`.
+- **Streamlines**: se calculan con `streamplot` sobre una rejilla de ~1° y se dibujan como un
+  único `LineCollection` de trazos finos y oscuros, con las **puntas de flecha triangulares
+  dibujadas a mano**.
+- **Extremos de MSLP**: `L` en **rojo** y `H` en **azul**, con el valor en **hPa** arriba. Sólo
+  cuentan los más significativos (`L` < `1002 hPa`, `H` > `1016 hPa`), como mucho 6 de cada
+  tipo, separados al menos 4° entre sí y dentro del disco.
+- **Rangos de la corrida**: el viento máximo global llega a ~**182 kt** y la presión va de
+  ~**947** a ~**1046 hPa**.
+- **Hasta 144 h**: los ciclos `12z` y `18z` publican hasta `144 h`.
+- **Ventana de 4 días** y **HTTP Range**: igual que en la sección 11.
+
+---
+
+## 15. Notas
 
 - **RAM**: si ves errores de memoria, bajá `--px` y/o `--lote`. El render por lotes existe
   justamente por esto.
@@ -398,3 +602,12 @@ Eso renderiza los **49 cuadros** de `2712x2712 px` en
   flujo está en la sección 10 (`descargar/sandwich.py` + `cuadros/cuadros_sandwich.py`).
 - **Precipitación ECMWF**: acumulado de lluvia del IFS 0.25°; su flujo está en la sección 11
   (`descargar/precipitacion_ecmwf.py` + `cuadros/cuadros_precipitacion.py`).
+- **Precipitación AIFS-ENS**: la media del ensamble del modelo de IA de ECMWF (control + 10
+  perturbados); su flujo está en la sección 12, con los mismos scripts de la sección 11 pero
+  `--modelo aifs-ens`.
+- **Anomalía de temperatura a 2 m (ECMWF)**: el pronóstico del IFS contra la climatología
+  diurna de ERA5; su flujo está en la sección 13 (`descargar/anomalia_2t_ecmwf.py` +
+  `cuadros/cuadros_anomalia_2t.py`).
+- **Viento en 250 mb y MSLP (ECMWF)**: troposfera alta con streamlines y extremos de presión;
+  su flujo está en la sección 14 (`descargar/viento_250_mslp.py` +
+  `cuadros/cuadros_viento_250.py`).
