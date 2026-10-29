@@ -7,6 +7,8 @@ deja `cuadro_NNN.png` en `SALIDAS/frames_<etiqueta>/` y termina diciéndote qué
 | Archivo | Entrada | Vista |
 |---|---|---|
 | `cuadros_goes.py` | `.nc` de GOES-R ABI (`DATOS/goes_<banda>_<sat>/`) | Disco, globo o zona |
+| `cuadros_c13_ir.py` | `.nc` de GOES-19 ABI C13 (`DATOS/goes_c13_g19/`) | Globo, formato ECMWF |
+| `cuadros_himawari_ir.py` | `.npz` de `descargar/descargar_himawari.py` | Globo, formato ECMWF |
 | `cuadros_geocolor.py` | `crudo_NNN.jpg` de `descargar/geocolor.py` | Globo o plano |
 | `cuadros_mur.py` | `crudo_NNN.jpg` de `descargar/mur_sst.py` | Globo |
 | `cuadros_truecolor.py` | `crudo_NNN.jpg` de `descargar/truecolor.py` | Globo |
@@ -14,6 +16,8 @@ deja `cuadro_NNN.png` en `SALIDAS/frames_<etiqueta>/` y termina diciéndote qué
 | `cuadros_precipitacion.py` | `serie_tp_mm.npz` (o los `.grib2` / `--nc`) de `descargar/precipitacion_ecmwf.py` | Globo |
 | `cuadros_anomalia_2t.py` | `serie_anom_2t_c.npz` de `descargar/anomalia_2t_ecmwf.py` | Globo |
 | `cuadros_viento_250.py` | `serie_viento_250.npz` de `descargar/viento_250_mslp.py` | Globo |
+| `cuadros_follaje.py` | `.nc` diarios de LANDVI (`DATOS/pace_landvi/`) | Plano global |
+| `cuadros_follaje_globo.py` | `.nc` diarios de LANDVI (`DATOS/pace_landvi/`) | Globo |
 
 Todos **reutilizan** los PNG que ya existen, así que si se corta se retoma donde quedó.
 `cuadros_goes.py` además renderiza **por lotes en procesos separados**: con cientos de
@@ -358,6 +362,150 @@ El guardado es **atómico** y el render está **sellado**: si cambiás `--px`, `
 PNG viejos se descartan solos. Es **offline por construcción**: sólo lee la serie que dejó
 `descargar/viento_250_mslp.py`; si no hay datos, aborta nombrándote el comando exacto de
 descarga.
+
+---
+
+## `cuadros_c13_ir.py`
+
+Globo Orthographic de la **banda 13 (IR 10.3 µm) del ABI de GOES-19**, con el **formato de
+póster de los productos ECMWF**: texto con halo que escala sublineal, barra sobre una
+pastilla oscura, aro exterior, viñeta hacia el limbo y marca de agua al medio del disco.
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--n` / `--paso` | Primer cuadro, cantidad y minutos entre cuadros |
+| `--px` / `--dpi` | Lado del cuadro (por defecto 2712) y dpi (140) |
+| `--centro LON LAT` / `--radio` | Centro del globo y grados al borde (90 = disco completo) |
+| `--vmin` / `--vmax` | Extremos de la escala (por defecto, percentiles del primer cuadro) |
+| `--tope` | Resolución del campo leído (por defecto, igual a `--px`) |
+| `--datos` / `--out` / `--frames` | Carpetas de entrada y salida |
+| `--lote` | Cuadros por proceso (cada lote corre en su propio proceso) |
+| `--solo-poster` / `--forzar` | Sólo el póster del último cuadro / rehacer PNG existentes |
+
+- Usa la paleta `ir_realce` de [`../prototipos/poster_goes.py`](../prototipos/poster_goes.py);
+  para la rampa oficial de Worldview está `clean_ir` (ver `cuadros_himawari_ir.py`).
+- Los cuadros van a `frames_G19_C13_<AAAA-MM-DDTHHMM>_<N>f_<PX>px/`, listos para
+  `animar/armar.py`.
+
+---
+
+## `cuadros_himawari_ir.py`
+
+Globo Orthographic de la **banda 13 (IR 10.4 µm) del AHI de Himawari-9**. Es el gemelo de
+`cuadros_c13_ir.py` (GOES-19 ABI C13): mismo formato de póster, misma parafernalia, misma
+lógica de lotes por proceso. Cambia el satélite, el foco y la rampa.
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--n` / `--paso` | Primer cuadro, cantidad y minutos entre cuadros |
+| `--px` / `--dpi` | Lado del cuadro (por defecto 2712) y dpi (140) |
+| `--centro LON LAT` | Centro del globo (por defecto `133 17`, el mar Filipino) |
+| `--radio` | Grados al borde del disco (90 = el disco completo en el círculo) |
+| `--vmin` / `--vmax` | Extremos de la escala (por defecto los de GIBS: -92.1 / 56.9 °C) |
+| `--credito` | Crédito de la esquina |
+| `--datos` / `--out` / `--frames` | Carpetas de entrada y salida |
+| `--lote` | Cuadros por proceso (cada lote corre en su propio proceso) |
+| `--solo-poster` | Renderiza sólo el póster del último cuadro |
+
+- **La rampa es la de NASA Worldview / GIBS** (`Clean_Longwave_Infrared_Window_Band`), la
+  misma que usan las capas `GOES-East_ABI_Band13_Clean_Infrared` y
+  `Himawari_AHI_Band13_Clean_Infrared`. Vive en
+  [`../comun/paleta_gibs.py`](../comun/paleta_gibs.py) con los 237 bins originales.
+- **La escala es fija** (-92.1 a 56.9 °C, el rango de la rampa), no percentiles: es lo que
+  hace GIBS, y así la barra no salta entre cuadros.
+- **Los rótulos van en hora de Paraguay (UTC-4)**, no en UTC.
+- **Se corta el anillo fuera del limbo**: la grilla del disco completo del AHI es un
+  cuadrado de 11.000 km, pero la Tierra visible desde el satélite sólo ocupa un disco de
+  radio ~5.416 km en el plano geostacionario. Fuera de ese limbo no hay observación (JMA
+  deja la cuenta saturada) y al invertirla aparecen valores de -150 °C: sin el corte se
+  veían como un peine de picos de color en el borde.
+- Los cuadros se nombran `cuadro_NNN.png` en
+  `frames_H09_B13_<AAA-MM-DDTHHMM>_<N>f_<PX>px/`, listos para `animar/armar.py`.
+
+---
+
+## `cuadros_follaje.py`
+
+La animación del **follaje de otoño** (PACE/OCI LANDVI) en **mapa global plano**, la
+versión Robinson del póster: fondo blanco, océano celeste, continentes en gris crema y la
+vegetación de verde a rojo.
+
+```powershell
+# Serie completa: del 7 de agosto al 11 de octubre de 2026, 66 cuadros a 1920 px
+.venv\Scripts\python.exe cuadros\cuadros_follaje.py --desde 2026-08-07 --hasta 2026-10-11
+.venv\Scripts\python.exe animar\armar.py --frames <carpeta> --fps 6
+```
+
+Cada cuadro es un **compuesto móvil de 7 días** terminado en su fecha (`--ventana`): un día
+suelto de LANDVI tiene demasiados huecos de nubes y el compuesto los rellena, que es lo que
+deja ver la onda de rojo avanzando. El compuesto se mantiene con **sumas incrementales**
+—entra el día nuevo, sale el que quedó afuera— así que cada cuadro cuesta dos lecturas de
+gránulo y no siete.
+
+Por defecto usa el L3M **`0p1deg`** (34 MB por día en vez de 170 MB del 4 km): a 1920 px de
+ancho sobra resolución y bajar los ~2,5 GB de dos meses es viable. El índice, las máscaras
+y la paleta están en [`../comun/follaje.py`](../comun/follaje.py), compartidos con el
+póster y con la versión en globo.
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--hasta` | Ventana de cuadros (por defecto, `2026-08-07` a `2026-10-11`) |
+| `--ventana` | Días del compuesto móvil (por defecto `7`) |
+| `--res` | Resolución del insumo: `0p1deg` (por defecto), `4km`, `2km` |
+| `--px` | Ancho del cuadro (por defecto `1920`) |
+| `--paso` | Submuestreo antes del warp (por defecto `1` en `0p1deg`, `3` en `4km`) |
+| `--out` | Carpeta de cuadros |
+
+---
+
+## `cuadros_follaje_globo.py`
+
+La misma serie, pero en **globo Orthographic realista**, con rotación.
+
+```powershell
+# Barrido completo: 127 días (7 jun - 11 oct 2026) x 3 sub-cuadros = 381 cuadros
+.venv\Scripts\python.exe cuadros\cuadros_follaje_globo.py
+.venv\Scripts\python.exe animar\armar.py --frames <carpeta> --fps 8
+
+# Globo fijo sobre Sudamérica, con Paraguay como foco (sin rotación)
+.venv\Scripts\python.exe cuadros\cuadros_follaje_globo.py --giro 0 --centro -73 -18
+```
+
+**Ritmo**: el giro se reparte entre los cuadros, así que la velocidad angular depende de la
+duración total. Con 381 cuadros a 8 fps el video dura ~48 s y el globo gira a ~7,5°/s. Cada
+día de dato ocupa `--sub` cuadros (3 por defecto): el giro se interpola, **la fecha no**.
+Para ver más despacio el cambio de follaje, subí `--sub` (más cuadros por día) o bajá
+`--fps`; para adelantar la rotación, subí `--fps`.
+
+**Cómo se logra el 3D** (el mismo camino que
+[`../prototipos/poster_mur_realista.py`](../prototipos/poster_mur_realista.py), ahora en
+[`../comun/globo3d.py`](../comun/globo3d.py)):
+
+1. **Base de relieve real**: Blue Marble *Shaded Relief + Bathymetry* de NASA GIBS, bajada
+   una vez y cacheada en `SALIDAS/_globo3d/`. Aporta montañas y fondos oceánicos.
+2. **El color del índice va modulado por la luminancia de la base** (`0.72 + 0.62·lum`):
+   el terreno se sigue leyendo a través de la vegetación en vez de quedar tapado.
+3. **Sombreado de esfera** sobre el disco ya proyectado: limb darkening
+   (`1 - 0.22·ρ²`) más una lambertiana leve desde arriba-izquierda. Sin esto el disco se
+   ve plano, por uniformes que sean los colores.
+4. El raster se reproyecta con un **warp inverso propio con interpolación bilineal**
+   (`warp_ortho`), así que no hace falta cartopy, scipy ni pykdtree para esta versión.
+
+**La rotación** (`--giro`, por defecto `360`) reparte el giro entre los cuadros: el centro
+arranca en `--centro` (por defecto `-125 0`, Pacífico ecuatorial) y avanza
+`giro/(n-1)` grados por cuadro. Como el compuesto móvil avanza un día por cuadro, en el
+mismo video pasan la estación **y** el giro. Con `--giro 0` queda el globo fijo.
+
+- Fuera del disco se pinta el color del fondo: si quedara en negro se vería el cuadrado
+  del `imshow` recortado contra el fondo.
+- **Memoria**: `warp_ortho` procesa por franjas de filas y `iluminar` trabaja en float32;
+  con el cálculo completo, 1440×1440 deja una docena de matrices vivas y en una máquina con
+  poca RAM revienta con `ArrayMemoryError`. Además el render es **reanudable**: los cuadros
+  que ya existen se saltean, así que `--max-cuadros 90` permite hacerlo por tandas.
+- El limbo es un `Circle` en `transAxes`, no anillos concéntricos (a 1440 px los anillos
+  se ven como aliasing).
+- Mismos `--ventana`, `--res`, `--px` que la versión plana; `--base-px` fija la grilla
+  global de trabajo (por defecto `3600`, la del insumo `0p1deg`).
 
 ---
 

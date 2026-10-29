@@ -8,6 +8,7 @@ toca la red: la descarga vive entera en `descargar/`.
 | `rutas.py` | La raíz de datos en un solo lugar: `RAIZ`, `DATOS`, `SALIDAS`, `ERA5_EXTRA_DIRS`, `find_data_file` |
 | `estilo.py` | Constantes visuales de los pósteres: `BG`, `TXT`, `TXT_DIM`, `WM_COLOR`, `MONTHS_EN`, `POSTER_SIZE`, `POSTER_DPI`, `ANOM_COLORS`, `ANOM_CMAP` |
 | `goes_lectura.py` | Lectura local de archivos GOES-R ABI: `PATRON`, `ruta_local`, `cargar` y los fundidos para GIF |
+| `paleta_gibs.py` | Rampa de color **Clean Infrared** de NASA Worldview / GIBS (`Clean_Longwave_Infrared_Window_Band`): los 237 bins originales, `VMIN`/`VMAX` y `CMAP_GIBS_CLEAN_IR` |
 
 ## Quick path
 

@@ -6,7 +6,10 @@ conexión** a partir de lo que ya está descargado.
 | Archivo | Qué baja | Fuente | Destino |
 |---|---|---|---|
 | `descargar_goes.py` | GOES-R ABI L2 CMIP (`.nc`) | Bucket público NOAA S3 | `DATOS/goes_<banda>_<sat>/` |
-| `descargar_era5.py` | ERA5 2m temperature 2024–2026 | Copernicus CDS | `DATOS/era5_t2m_2024-2026.nc` |
+| `descargar_era5.py` | ERA5 2m temperature 2024–2026 (requiere `cdsapi`) | Copernicus CDS | `DATOS/era5_t2m_2024-2026.nc` |
+| `descargar_himawari.py` | Himawari-9 AHI banda 13 en HSD, decodificada a `.npz` | Bucket público NOAA S3 | `DATOS/himawari_b13_h09/` |
+| `truecolor_goes.py` | Bandas visibles C01 / C02 / C03 del GOES-R ABI | Bucket público NOAA S3 | `DATOS/goes_c0{1,2,3}_<sat>/` |
+| `pace_landvi.py` | PACE OCI L3M LANDVI diario (`.nc`) | OB.DAAC (**Earthdata Login**) | `DATOS/pace_landvi/` |
 | `geocolor.py` | GeoColor (GOES-East), ya rasterizado | NASA GIBS | `SALIDAS/frames_<etiqueta>/crudo_NNN.jpg` |
 | `mur_sst.py` | GHRSST MUR L4 SST Anomalies (globo), ya rasterizado | NASA GIBS | `SALIDAS/frames_mur_globo_<...>/crudo_NNN.jpg` |
 | `truecolor.py` | True Color (MODIS/VIIRS) diario, ya rasterizado | NASA GIBS | `SALIDAS/frames_truecolor_<sensor>_globo_<...>/crudo_NNN.jpg` |
@@ -183,6 +186,42 @@ cuadro**: el fondo **visible** (`crudo_NNN_vis.jpg`, banda ABI C02 0.64 µm) y e
 - **Por qué GIBS y no el `.nc` de NOAA S3**: la banda visible de ABI (C02) es de 0.5 km y
   cada `OR_ABI-L2-CMIPF-M6C02_*.nc` pesa ~200–228 MB. Para 2 días a 10 min serían ~57 GB:
   inviable. GIBS sirve las mismas bandas ya rasterizadas a 1 km (~90–200 KB por cuadro).
+
+---
+
+## `pace_landvi.py`
+
+Baja los gránulos diarios de **PACE OCI L3M LANDVI**: la suite de **índices de vegetación
+terrestre** del satélite PACE. Es la primera fuente del repo que **no** sale de GIBS ni de
+ECMWF, y la única que **exige cuenta**: `getfile` de OB.DAAC redirige a *Earthdata Login* y
+sin sesión válida no entrega nada.
+
+El producto es una grilla global de **4320×8640** (1/24°, ~4,6 km) en NetCDF-4, con diez
+índices por día: los heredados de la era MODIS (`ndvi`, `evi`, `ndwi`, `ndii`, `cci`, `ndsi`)
+y los cuatro que sólo un sensor hiperespectral puede calcular (`pri`, `cire`, `car`, `mari`).
+Pesa **~170 MB por día** y **ya viene enmascarado para nubes**.
+
+```
+https://oceandata.sci.gsfc.nasa.gov/getfile/
+  PACE_OCI.<AAAA-MM-DD>.L3m.DAY.LANDVI.V3_1.<res>.NRT.nc
+```
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--hasta` | Rango UTC inclusive (por defecto, `2026-09-29` a `2026-10-04`) |
+| `--res` | `4km` (por defecto), `2km` u `0p1deg` |
+| `--destino` | Carpeta de salida (por defecto, `DATOS/pace_landvi`) |
+| `--cookies` | JSON con las cookies de un navegador ya logueado en Earthdata |
+
+- **Autenticación, dos caminos**: `--cookies navegador.json` (formato de Playwright:
+  `[{name, value, domain, path}]`) o `~/.netrc` con `machine urs.earthdata.nasa.gov`. Sin
+  ninguno de los dos, el script corta con un mensaje explícito; nunca guarda la contraseña.
+- **Las cookies de URS solas no alcanzan**: hay que completar el OAuth visitando una URL
+  `getfile` en el navegador para que quede la cookie `GETFILE_APP` del dominio de oceandata.
+- El `.nc` va a `*.parcial` y se renombra al final, así que un corte deja el archivo
+  incompleto marcado y no un gránulo corrupto con nombre definitivo.
+- **Por qué no GIBS**: GIBS publica PACE sólo para océano y atmósfera; los índices de
+  vegetación terrestre no están ahí.
 
 ---
 
@@ -376,6 +415,38 @@ de noche), así que se pide ya rasterizado: no hay `.nc` que leer.
   ~0,45 MB/s y 32 hilos ~1,45 MB/s. Subir de 16 casi no cambia nada.
 - Ojo: algunos slots **sin dato** vuelven como un JPEG válido pero en blanco. No son un
   hueco: hay que detectarlos comparando contra los cuadros vecinos.
+
+---
+
+## `descargar_himawari.py`
+
+Baja la **banda 13 (infrarrojo ventana 10.4 µm) del AHI de Himawari-9** y la deja como
+un `.npz` por slot de 10 min. Es el gemelo identico de `descargar_goes.py`, pero el dato no
+viene en NetCDF: viene en **HSD** (Himawari Standard Data), un formato binario propio de
+JMA, así que este script también lo decodifica.
+
+Fuente: el bucket público de NOAA en AWS,
+`https://noaa-himawari9.s3.amazonaws.com/AHI-L1b-FLDK/<AAA>/<MM>/<DD>/<HHMM>/`.
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` / `--hasta` | Ventana de slots, UTC |
+| `--paso` | Minutos entre slots (por defecto 10) |
+| `--banda` | Banda del AHI (por defecto 13) |
+| `--sat` | Satélite (por defecto `H09`) |
+| `--out` | Carpeta destino (por defecto `himawari_b13_h09`) |
+| `--cache` | Si se pasa, guarda los `.DAT.bz2` crudos ahí (por defecto no) |
+
+- Salida: `himawari_b13_h09/<AAAAMMDD_HHMM>.npz` con `tb` (2750×2750, °C), la geometría
+  de la grilla (`x0`, `y0`, `dx`, `dy`, `sub_lon`, `a`, `b`, `h`) y la hora del slot.
+- **El disco se guarda a 4 km** (promedio 2×2 de los 2 km nativos): mismo detalle
+  efectivo que la serie GOES C13 a 2712 px, y 21 MB por slot en vez de 80.
+- **El HSD no es trivial de leer**: la cabecera va en *little-endian*, son 11 bloques y
+  el `blocklength` de cada uno dice dónde termina; los coeficientes de los canales IR
+  van *dentro* del bloque 5; y el bloque 7 trae `first_line_number_of_image_segment`, que
+  es lo que ordena las 10 franjas del disco. Todo está documentado en el código.
+- Hay **slots que no están en el bucket** (404): el script los cuenta como error y
+  sigue, así que la serie puede quedar con huecos.
 
 ---
 

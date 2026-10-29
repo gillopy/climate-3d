@@ -22,10 +22,13 @@ El repo está separado por **rol**, y se lee en el orden en que se usa:
 
 | Etapa | Scripts |
 | --- | --- |
-| `descargar/` | `descargar_goes.py`, `descargar_era5.py`, `geocolor.py`, `mur_sst.py`, `truecolor.py`, `sandwich.py`, `precipitacion_ecmwf.py`, `anomalia_2t_ecmwf.py`, `viento_250_mslp.py` |
-| `prototipos/` | `poster_goes.py`, `poster_anomalia.py`, `vista_paraguay.py` |
-| `cuadros/` | `cuadros_goes.py`, `cuadros_geocolor.py`, `cuadros_mur.py`, `cuadros_truecolor.py`, `cuadros_sandwich.py`, `cuadros_precipitacion.py`, `cuadros_anomalia_2t.py`, `cuadros_viento_250.py` |
+| `descargar/` | `descargar_goes.py`, `descargar_era5.py`, `descargar_himawari.py`, `truecolor_goes.py`, `geocolor.py`, `mur_sst.py`, `truecolor.py`, `sandwich.py`, `pace_landvi.py`, `precipitacion_ecmwf.py`, `anomalia_2t_ecmwf.py`, `viento_250_mslp.py` |
+| `prototipos/` | `poster_goes.py`, `poster_goes_realista.py`, `poster_goes_truecolor.py`, `poster_goes_disco.py`, `poster_mur_realista.py`, `animar_mur_realista.py`, `poster_pace.py`, `poster_pace_gibs.py`, `poster_anomalia.py`, `poster_follaje.py`, `vista_paraguay.py` |
+| `cuadros/` | `cuadros_goes.py`, `cuadros_c13_ir.py`, `cuadros_himawari_ir.py`, `cuadros_geocolor.py`, `cuadros_mur.py`, `cuadros_truecolor.py`, `cuadros_sandwich.py`, `cuadros_follaje.py`, `cuadros_follaje_globo.py`, `cuadros_precipitacion.py`, `cuadros_anomalia_2t.py`, `cuadros_viento_250.py` |
 | `animar/` | `armar.py` |
+
+El catálogo completo, flujo por flujo —qué baja cada script, qué póster produce, cómo se
+anima y qué se verificó— está en [`docs/FLUJOS.md`](./docs/FLUJOS.md).
 
 Los tres últimos scripts de cada fila son **pares de ECMWF**: cada descargador escribe una
 serie `.npz` y su render la convierte en globo.
@@ -56,7 +59,7 @@ $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 
 ## Qué se puede lograr
 
-Once salidas del mismo pipeline, todas con datos reales. En
+Doce salidas del mismo pipeline, todas con datos reales. En
 [`docs/galeria/`](./docs/galeria) están las demás.
 
 ### GeoColor (GOES-East): color real de día, IR y luces de ciudad de noche
@@ -131,6 +134,33 @@ cuadros. Como GOES-East no ve el hemisferio centrado en Paraguay entero, el disc
 dato. Los scripts son [`descargar/sandwich.py`](./descargar/sandwich.py) y
 [`cuadros/cuadros_sandwich.py`](./cuadros/cuadros_sandwich.py).
 
+### Himawari-9 AHI B13 (Clean Infrared): el ciclón del mar Filipino
+
+![Clean Infrared de Himawari-9, 21 de octubre de 2026, 20:20 (UTC-4)](docs/galeria/himawari_b13_globo_2026-10-21T2020.png)
+
+La serie hermana de la de GOES, pero del **satélite de Asia**. Es la **banda 13 del AHI de
+Himawari-9** (infrarrojo ventana, 10.4 µm) a **2 km** y **10 min**, del 20 al 22 de
+octubre de 2026 → **288 cuadros** en globo Orthographic centrado en el **mar Filipino**
+(`133 17`), con el ciclón cerca de Taiwan en el centro.
+
+Dos diferencias con la serie GOES, y las dos importan:
+
+- **La rampa no es la del repo**: es la **Clean Infrared de NASA Worldview / GIBS**
+  (`Clean_Longwave_Infrared_Window_Band`), la misma que usan las capas
+  `GOES-East_ABI_Band13_Clean_Infrared` y `Himawari_AHI_Band13_Clean_Infrared`. Se copió
+  del colormap oficial de GIBS (237 bins) y se verificó contra la leyenda real de
+  Worldview. Está en [`comun/paleta_gibs.py`](./comun/paleta_gibs.py).
+- **El dato no viene en NetCDF**: es **HSD** (Himawari Standard Data), un formato binario
+  propio de JMA, así que [`descargar/descargar_himawari.py`](./descargar/descargar_himawari.py)
+  también lo decodifica (cabecera de 11 bloques en little-endian, 10 franjas del disco,
+  calibración de JMA a temperatura de brillo).
+
+Los rótulos van en **hora de Paraguay (UTC-4)**. Los scripts son
+[`descargar/descargar_himawari.py`](./descargar/descargar_himawari.py) y
+[`cuadros/cuadros_himawari_ir.py`](./cuadros/cuadros_himawari_ir.py).
+
+---
+
 ### Precipitación total acumulada (ECMWF): 144 h de lluvia sobre Sudamérica
 
 ![Precipitación total acumulada de ECMWF, FH +144 h](docs/galeria/precip_globo_ecmwf_2026-10-20_06z_fh144.png)
@@ -201,6 +231,35 @@ dentro del disco. El viento máximo global llega a ~**182 kt** y la presión va 
 ~**1046 hPa**. Los scripts son
 [`descargar/viento_250_mslp.py`](./descargar/viento_250_mslp.py) y
 [`cuadros/cuadros_viento_250.py`](./cuadros/cuadros_viento_250.py).
+
+---
+
+### Follaje de otoño (PACE/OCI): cazar hojas rojas desde el espacio
+
+![Follaje de otoño de PACE/OCI, semanas del 29 de setiembre y del 5 de octubre de 2026](docs/galeria/follaje_pace_2026-10-11.png)
+
+Dos semanas del **índice de rojez de la vegetación** medido por el **OCI de PACE**: del
+**29 de setiembre al 4 de octubre** y del **5 al 11 de octubre de 2026**. La escala va de
+**1.00 a 3.00** y es la **antocianina sobre la clorofila** (`mari ÷ cire`): cerca de 1 la
+copa tiene tanto rojo como verde (todavía no cambió), y por encima de 2 el rojo domina. Los
+rojos de Siberia, el norte de Canadá y Alaska de la primera semana se corren hacia el sur en
+la segunda, y aparecen en Australia, el sur de África y el cinturón agrícola de Brasil.
+
+El dato **no sale de GIBS**: son los gránulos **L3M LANDVI** de OB.DAAC a **4 km** y diarios,
+que traen diez índices de vegetación por archivo y **ya vienen enmascarados para nubes**.
+Cada día pesa ~170 MB y **exige Earthdata Login**, así que es la única rama del repo que
+necesita cuenta. El póster promedia los índices de la semana y recién después divide —al
+revés deja mucho más ruido—, y dibuja en **Robinson** sobre fondo blanco. Los scripts son
+[`descargar/pace_landvi.py`](./descargar/pace_landvi.py) y
+[`prototipos/poster_follaje.py`](./prototipos/poster_follaje.py).
+
+También hay **dos animaciones** de la temporada completa (del 7 de agosto al 11 de octubre
+de 2026, 66 cuadros, cada uno compuesto móvil de 7 días): una en mapa plano
+([`cuadros/cuadros_follaje.py`](./cuadros/cuadros_follaje.py)) y otra en **globo
+Orthographic realista que rota**: arranca en el Pacífico ecuatorial, da una vuelta entera y
+usa el relieve del Blue Marble para que el planeta no se vea plano
+([`cuadros/cuadros_follaje_globo.py`](./cuadros/cuadros_follaje_globo.py), con
+[`comun/globo3d.py`](./comun/globo3d.py) para la base y el warp).
 
 ## Requisitos
 
