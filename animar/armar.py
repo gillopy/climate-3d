@@ -70,7 +70,8 @@ def armar_mp4(frames_dir: Path, destino: Path, fps: float) -> Path:
         "-framerate", f"{fps:.6f}", "-start_number", "1",
         "-i", str(frames_dir / PATRON),
         "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-        "-c:v", "libx264", "-preset", "slow", "-pix_fmt", "yuv420p", "-crf", "18",
+        "-c:v", "libx264", "-preset", "slow", "-threads", "2",
+        "-pix_fmt", "yuv420p", "-crf", "18",
         "-movflags", "+faststart", str(destino)], capture_output=True, text=True,
         encoding="utf-8", errors="replace")
     if proc.returncode:
