@@ -10,3 +10,8 @@ imageio-ffmpeg==0.6.*
 eccodes==2.50.*
 # Lectura directa del NetCDF/HDF5 de ERA5 (t2m) sin xarray.
 h5py==3.16.*
+# Deformación de imágenes de cartopy (`imshow` con `transform=`): pykdtree o scipy.
+pykdtree==1.4.*
+# Opcional: solo `descargar/descargar_era5.py` (Copernicus CDS + ~/.cdsapirc).
+# No se instala por defecto: el .nc de ERA5 ya esta bajado y nada mas lo usa.
+# cdsapi
