@@ -18,6 +18,9 @@ los pósteres y las animaciones.
   - `anomalia_2t_ifs_globo_2026-10-20_12z_fh360.png` — anomalía de 2 m del IFS.
   - `viento_250_globo_2026-10-20_18z_fh144.png` — viento en 250 mb y MSLP.
   - `follaje_pace_2026-10-11.png` — follaje de otoño de PACE/OCI (dos semanas).
+  - `goes_c13_realista_2026-10-24T1950.png` — C13 de GOES-19 con el diseño realista.
+  - `goes_truecolor_globo_2026-10-24T1950.png` — color real de GOES-19 (C01 + C02 + C03).
+  - `pace_truecolor_2026-10-24.png` — color real de PACE/OCI (compuesto de 8 días).
 
 Los originales se escriben en `D:\Users\guill\dataset era5\salidas`; acá se copian
 solo los que queremos publicar. Los MP4 y los GIF no se versionan (pesan mucho y se

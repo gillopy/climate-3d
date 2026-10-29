@@ -59,7 +59,7 @@ $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 
 ## Qué se puede lograr
 
-Doce salidas del mismo pipeline, todas con datos reales. En
+Quince salidas del mismo pipeline, todas con datos reales. En
 [`docs/galeria/`](./docs/galeria) están las demás.
 
 ### GeoColor (GOES-East): color real de día, IR y luces de ciudad de noche
@@ -91,6 +91,18 @@ del archivo. El rojo es más calor que lo normal, el azul menos.
 La banda de cirrus aísla las nubes altas de hielo y las despega del resto de la escena: los
 topes convectivos aparecen en rojo sobre un fondo casi negro.
 
+### C13 realista (GOES-19): el disco en clave Earth Observatory
+
+![Banda 13 de GOES-19 con el diseño realista, 24 de octubre de 2026, 16:50 UTC-3](docs/galeria/goes_c13_realista_2026-10-24T1950.png)
+
+El mismo infrarrojo de la portada, pero con el vestuario del póster MUR: fondo blanco, globo
+Orthographic inscripto, sombra exterior, retícula tenue y una tarjeta de leyenda con la
+distribución. El gris es la superficie y las nubes bajas; el color, los topes fríos. La escala
+es la **física de la rampa** (`-92.1` a `56.9 °C`), no percentiles, así que una serie de 144
+cuadros no cambia de color entre cuadro y cuadro. Lo dibuja
+[`prototipos/poster_goes_realista.py`](./prototipos/poster_goes_realista.py), que también
+acepta `--frames` para armar la animación.
+
 ### Anomalía de SST (MUR): el Pacífico ecuatorial, semana a semana
 
 ![Anomalía de SST del 1 de enero de 2025](docs/galeria/mur_sst_globo_2025-01-01.png)
@@ -115,6 +127,20 @@ color real: habría que componer bandas a mano. **Por qué NOAA-20 y no MODIS**:
 (Terra y Aqua) dejan **cuñas negras de barrido** sobre el ecuador porque su ancho de barrido es
 menor que la separación orbital; VIIRS NOAA-20 no. Los scripts son
 [`descargar/truecolor.py`](./descargar/truecolor.py) y [`cuadros/cuadros_truecolor.py`](./cuadros/cuadros_truecolor.py).
+
+### Color real de GOES-19: tres bandas, sin inventar el verde
+
+![Color real de GOES-19 compuesto con C01, C02 y C03, 24 de octubre de 2026, 16:50 UTC-3](docs/galeria/goes_truecolor_globo_2026-10-24T1950.png)
+
+El ABI **no tiene banda verde**: para ver color real hay que bajar tres canales —`C01`
+(0.47 µm), `C02` (0.64 µm) y `C03` (0.86 µm)— y sintetizar el verde con la receta de
+CIMSS/Unidata (`0.45·rojo + 0.10·veggie + 0.45·azul`). El peso bajo del "veggie" es a
+propósito: mide clorofila, no luz verde, y usarlo al 45 % pinta la Patagonia de esmeralda.
+Con una sola banda visible —lo único que lleva HRIT— no hay color posible. Los scripts son
+[`descargar/truecolor_goes.py`](./descargar/truecolor_goes.py) y
+[`prototipos/poster_goes_truecolor.py`](./prototipos/poster_goes_truecolor.py); el mismo
+slot en la **grilla nativa** del satélite, sin reproyectar, sale con
+[`prototipos/poster_goes_disco.py`](./prototipos/poster_goes_disco.py).
 
 ### Sandwich RGB (GOES-19): la textura de las nubes sobre su temperatura
 
@@ -260,6 +286,18 @@ Orthographic realista que rota**: arranca en el Pacífico ecuatorial, da una vue
 usa el relieve del Blue Marble para que el planeta no se vea plano
 ([`cuadros/cuadros_follaje_globo.py`](./cuadros/cuadros_follaje_globo.py), con
 [`comun/globo3d.py`](./comun/globo3d.py) para la base y el warp).
+
+### PACE en color real: el mismo satélite del follaje, otra mirada
+
+![Color real de PACE/OCI, compuesto del 17 al 24 de octubre de 2026](docs/galeria/pace_truecolor_2026-10-24.png)
+
+PACE no sólo mide índices de vegetación: su **OCI** también ve color. A diferencia del ABI,
+tiene **banda verde real (555 nm)**, así que el RGB es (670, 555, 443) medido y no hay verde
+sintético. Este póster usa el compuesto oficial **OCI_PACE_True_Color** de NASA GIBS
+(`--dias 8`), que trae nubes, aerosoles y sombras; el camino alternativo,
+[`prototipos/poster_pace.py`](./prototipos/poster_pace.py), lee un L3M SFREFL crudo con las
+bandas medidas, pero al ser reflectancia de superficie las nubes vienen enmascaradas. El
+script del compuesto es [`prototipos/poster_pace_gibs.py`](./prototipos/poster_pace_gibs.py).
 
 ## Requisitos
 
