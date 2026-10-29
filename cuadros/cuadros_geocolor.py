@@ -124,7 +124,7 @@ def _borde_geojson(ax, ruta, color, ancho):
                                          colors=color, linewidths=ancho, zorder=5))
 
 
-def _warp_ortho(rgb, bbox, centro, lado):
+def _warp_ortho(rgb, bbox, centro, lado, banda=256):
     """Reproyecta una imagen lon/lat a Orthographic (mapeo inverso, con numpy).
 
     Para cada píxel del disco de destino se calcula su (lon, lat) y se muestrea la
@@ -135,6 +135,11 @@ def _warp_ortho(rgb, bbox, centro, lado):
     cartopy importa `warp_array`, que exige `pykdtree` o `scipy` — y este venv no los
     tiene. Haciendo el warp nosotros, `imshow` recibe la imagen ya en la proyección del
     eje y cartopy toma el atajo (no importa `img_transform`).
+
+    El cálculo va **por franjas de filas**: como es por píxel, el resultado es idéntico
+    al de una sola pasada, pero el pico de memoria deja de crecer con el cuadrado de
+    `lado`. A 2712 px la versión de una sola pasada pide ~1.5 GB de arrays flotantes y
+    revienta con `MemoryError` en máquinas de 8 GB; por franjas el pico es ~250 MB.
     """
     o, s, e, n = bbox
     lon0, lat0 = np.radians(centro[0]), np.radians(centro[1])
@@ -143,43 +148,52 @@ def _warp_ortho(rgb, bbox, centro, lado):
     # Disco normalizado: x, y en [-1, 1], radio 1 = 90° de distancia al centro.
     y = np.linspace(1.0, -1.0, lado)        # la fila 0 es el norte
     x = np.linspace(-1.0, 1.0, lado)
-    X, Y = np.meshgrid(x, y)
-    rho = np.hypot(X, Y)
-    dentro = rho <= 1.0
+    salida = np.zeros((lado, lado, 4), dtype=np.uint8)
 
-    rho_s = np.where(dentro & (rho > 1e-12), rho, 1.0)   # evita 0/0 en el centro
-    c = np.arcsin(np.clip(rho_s, 0.0, 1.0))
-    sin_c, cos_c = np.sin(c), np.cos(c)
+    for i0 in range(0, lado, banda):
+        i1 = min(i0 + banda, lado)
+        filas = i1 - i0
+        # Mismas grillas que `np.meshgrid(x, y)`, pero de la franja sola y sin copia.
+        X = np.broadcast_to(x, (filas, lado))
+        Y = np.broadcast_to(y[i0:i1, None], (filas, lado))
+        rho = np.hypot(X, Y)
+        dentro = rho <= 1.0
 
-    lat = np.arcsin(np.clip(cos_c * np.sin(lat0)
-                            + (Y * sin_c * np.cos(lat0)) / rho_s, -1.0, 1.0))
-    lon = lon0 + np.arctan2(X * sin_c,
-                            rho_s * np.cos(lat0) * cos_c - Y * np.sin(lat0) * sin_c)
-    es_centro = dentro & (rho <= 1e-12)
-    lat = np.where(es_centro, lat0, lat)
-    lon = np.where(es_centro, lon0, lon)
+        rho_s = np.where(dentro & (rho > 1e-12), rho, 1.0)   # evita 0/0 en el centro
+        c = np.arcsin(np.clip(rho_s, 0.0, 1.0))
+        sin_c, cos_c = np.sin(c), np.cos(c)
 
-    lon_deg = (np.degrees(lon) + 180.0) % 360.0 - 180.0
-    lat_deg = np.degrees(lat)
+        lat = np.arcsin(np.clip(cos_c * np.sin(lat0)
+                                + (Y * sin_c * np.cos(lat0)) / rho_s, -1.0, 1.0))
+        lon = lon0 + np.arctan2(X * sin_c,
+                                rho_s * np.cos(lat0) * cos_c - Y * np.sin(lat0) * sin_c)
+        es_centro = dentro & (rho <= 1e-12)
+        lat = np.where(es_centro, lat0, lat)
+        lon = np.where(es_centro, lon0, lon)
 
-    # Posición de muestreo en la imagen de origen (plate carrée).
-    col = (lon_deg - o) / (e - o) * (ancho_o - 1)
-    fila = (n - lat_deg) / (n - s) * (alto_o - 1)
-    valido = (dentro & (col >= 0) & (col <= ancho_o - 1)
-              & (fila >= 0) & (fila <= alto_o - 1))
+        lon_deg = (np.degrees(lon) + 180.0) % 360.0 - 180.0
+        lat_deg = np.degrees(lat)
 
-    c0 = np.clip(np.floor(col), 0, ancho_o - 2).astype(np.intp)
-    f0 = np.clip(np.floor(fila), 0, alto_o - 2).astype(np.intp)
-    fc = np.clip(col - c0, 0.0, 1.0)[..., None]
-    ff = np.clip(fila - f0, 0.0, 1.0)[..., None]
-    a = rgb[f0, c0].astype(np.float32)
-    b = rgb[f0, c0 + 1].astype(np.float32)
-    cc = rgb[f0 + 1, c0].astype(np.float32)
-    d = rgb[f0 + 1, c0 + 1].astype(np.float32)
-    mezcla = (a * (1 - fc) + b * fc) * (1 - ff) + (cc * (1 - fc) + d * fc) * ff
+        # Posición de muestreo en la imagen de origen (plate carrée).
+        col = (lon_deg - o) / (e - o) * (ancho_o - 1)
+        fila = (n - lat_deg) / (n - s) * (alto_o - 1)
+        valido = (dentro & (col >= 0) & (col <= ancho_o - 1)
+                  & (fila >= 0) & (fila <= alto_o - 1))
 
-    alfa = np.where(valido, 255, 0).astype(np.uint8)[..., None]
-    return np.concatenate([np.clip(mezcla, 0, 255).astype(np.uint8), alfa], axis=2)
+        c0 = np.clip(np.floor(col), 0, ancho_o - 2).astype(np.intp)
+        f0 = np.clip(np.floor(fila), 0, alto_o - 2).astype(np.intp)
+        fc = np.clip(col - c0, 0.0, 1.0)[..., None]
+        ff = np.clip(fila - f0, 0.0, 1.0)[..., None]
+        a = rgb[f0, c0].astype(np.float32)
+        b = rgb[f0, c0 + 1].astype(np.float32)
+        cc = rgb[f0 + 1, c0].astype(np.float32)
+        d = rgb[f0 + 1, c0 + 1].astype(np.float32)
+        mezcla = (a * (1 - fc) + b * fc) * (1 - ff) + (cc * (1 - fc) + d * fc) * ff
+
+        salida[i0:i1, :, :3] = np.clip(mezcla, 0, 255).astype(np.uint8)
+        salida[i0:i1, :, 3] = np.where(valido, 255, 0).astype(np.uint8)
+
+    return salida
 
 
 def render_globo(crudo: Path, t: datetime, args, destino: Path) -> Path:
@@ -209,6 +223,9 @@ def render_globo(crudo: Path, t: datetime, args, destino: Path) -> Path:
     # El warp va antes y en coordenadas de la proyección del eje: así cartopy no
     # reproyecta nada y evita el import de `img_transform` (que pide scipy/pykdtree).
     disco = _warp_ortho(rgb, args.bbox, args.centro, args.px)
+    # La imagen de origen (80 MB a 5424 px) ya no se usa: se suelta antes de `imshow`,
+    # que copia el disco a float32 y es el pico de memoria del render.
+    del rgb
     xl, yl = ax.projection.x_limits, ax.projection.y_limits
     ax.imshow(disco, origin="upper", extent=[xl[0], xl[1], yl[0], yl[1]],
               transform=ax.projection, zorder=2)
