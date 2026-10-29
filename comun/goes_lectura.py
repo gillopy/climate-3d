@@ -51,7 +51,7 @@ def cargar(nc, tope_px=None, caja=None, escena="FULL DISK"):
     `rotulos` es `(titulo, subtitulo, fuente, datos, tiempo)`: el último es la
     fecha/hora del cuadro para el rótulo grande (`time_line` de `draw_goes_poster`).
     """
-    with xr.open_dataset(nc) as ds:
+    with xr.open_dataset(nc, engine="h5netcdf") as ds:
         cmi = ds["CMI"]
         gp = ds["goes_imager_projection"].attrs
         h = float(gp["perspective_point_height"])
