@@ -93,6 +93,10 @@ def main(argv=None):
     ap.add_argument("--n", type=int, default=144, help="cantidad de cuadros")
     ap.add_argument("--paso", type=int, default=10, help="minutos entre cuadros")
     ap.add_argument("--px", type=int, default=720, help="lado de cada cuadro en píxeles")
+    ap.add_argument("--tope", type=int,
+                    help="resolución del campo leído del .nc (default: --px). Bajarlo "
+                         "reduce la memoria y el tiempo del render a cambio de un "
+                         "ligerísimo suavizado; el lienzo sigue siendo --px")
     ap.add_argument("--dpi", type=int, default=140, help="dpi del render")
     ap.add_argument("--paleta", default="ir_realce", choices=sorted(PALETTES),
                     help="paleta de color")
@@ -132,7 +136,7 @@ def main(argv=None):
             globo_center = (-58.0, -23.0)
     salida = Path(args.out) if args.out else SALIDAS
     cfg = {
-        "t0": t0, "paso": args.paso, "tope": args.px, "lado": lado, "dpi": args.dpi,
+        "t0": t0, "paso": args.paso, "tope": args.tope or args.px, "lado": lado, "dpi": args.dpi,
         "paleta": args.paleta, "geojson": args.geojson or None, "hl_width": args.hl_width,
         "hl_color": args.hl_color,
         "credito": args.credito, "globo_center": globo_center, "escena": "FULL DISK",

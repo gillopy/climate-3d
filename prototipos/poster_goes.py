@@ -50,6 +50,7 @@ if "--show" not in sys.argv:
     matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as patheffects
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
@@ -62,6 +63,8 @@ sys.path.insert(0, str(RAIZ / "comun"))
 from estilo import (ANOM_CMAP, BG, MONTHS_EN, POSTER_DPI, POSTER_SIZE,  # noqa: E402
                     TXT, TXT_DIM, WM_COLOR)
 from rutas import DATOS, SALIDAS  # noqa: E402
+sys.path.insert(0, str(RAIZ / 'comun'))
+from paleta_gibs import CMAP_GIBS_CLEAN_IR as CMAP_GIBS_CLEAN_IR  # noqa: E402
 
 # Rampa IR con realce (estilo la referencia del usuario): colores para los topes
 # fríos (nubes) y gris para el fondo cálido. Ojo con el orden: la posición 0 es
@@ -80,6 +83,7 @@ PALETTES = {
     "termico": "Greys",      # IR: frío (nube alta) = blanco, cálido (superficie) = negro
     "anomalia": ANOM_CMAP,   # la muestreada de la imagen de referencia
     "ir_realce": IR_REALCE_CMAP,  # IR con realce de color en los topes fríos
+    "clean_ir": CMAP_GIBS_CLEAN_IR,  # Clean Infrared de NASA Worldview/GIBS (default para ABI C13)
     "magma": "magma",
     "inferno": "inferno",
     "turbo": "turbo",
@@ -87,7 +91,7 @@ PALETTES = {
 # Paleta por defecto según el tipo de variable: reflectancia vs temperatura de brillo.
 def default_palette(unit_label):
     """Gris invertido para temperatura (frío = blanco); gris normal para reflectancia."""
-    return "termico" if unit_label == "°C" else "gris"
+    return "ir_realce" if unit_label == "°C" else "gris"
 
 
 # Zonas predefinidas: (oeste, este, sur, norte) en grados lon/lat.
@@ -269,28 +273,41 @@ def draw_goes_poster(field, *, x, y, proj, title, subtitle, unit_label,
         except Exception as exc:
             print(f"AVISO: costas omitidas ({exc})")
 
-    cax = fig.add_axes([0.096, 0.067, 0.812, 0.019])
+    import matplotlib.patches as mpatches
+    fondo_cbar = mpatches.FancyBboxPatch(
+        (0.050, 0.030), 0.900, 0.055,
+        boxstyle="round,pad=0.006,rounding_size=0.010",
+        transform=fig.transFigure, facecolor=(0.047, 0.063, 0.078, 0.86),
+        edgecolor="#2a3442", linewidth=0.8, zorder=9,
+    )
+    fig.add_artist(fondo_cbar)
+    cax = fig.add_axes([0.066, 0.055, 0.822, 0.017], zorder=10)
     cbar = fig.colorbar(mesh, cax=cax, orientation="horizontal")
     cbar.outline.set_visible(False)
-    cbar.ax.tick_params(colors=TXT, length=3, width=0.8, labelsize=10.5, pad=3)
+    if vmin is not None and vmax is not None:
+        ticks = list(range(int(np.ceil(vmin / 20.0)) * 20, int(vmax), 20))
+        if ticks:
+            cbar.set_ticks(ticks)
+    cbar.ax.tick_params(colors=TXT, length=3, width=0.8, labelsize=10.5, pad=2)
 
-    fig.text(0.026, 0.985, title, color=TXT, fontsize=19,
-             fontweight="bold", ha="left", va="top")
+    halo = [patheffects.withStroke(linewidth=3.2, foreground=BG)]
+    fig.text(0.026, 0.985, title, color=TXT, fontsize=20,
+             fontweight="bold", ha="left", va="top", path_effects=halo, zorder=11)
     sub_y = 0.945
     if time_line:
-        fig.text(0.026, 0.944, time_line, color=TXT, fontsize=16,
-                 fontweight="bold", ha="left", va="top")
-        sub_y = 0.898
-    fig.text(0.026, sub_y, subtitle, color=TXT_DIM, fontsize=13.5,
-             fontweight="bold", ha="left", va="top", linespacing=1.12)
-    fig.text(0.983, 0.983, credit, color=TXT_DIM, fontsize=12, ha="right", va="top")
-    fig.text(0.096, 0.105, unit_label, color=TXT, fontsize=24, fontweight="bold",
-             ha="left", va="bottom")
-    fig.text(0.026, 0.012, src_line, color=TXT_DIM, fontsize=7.4, ha="left", va="bottom")
-    fig.text(0.980, 0.012, data_line, color=TXT_DIM, fontsize=7.4, ha="right", va="bottom")
+        fig.text(0.026, 0.963, time_line, color=TXT, fontsize=19,
+                 fontweight="bold", ha="left", va="top", path_effects=halo, zorder=11)
+        sub_y = 0.941
+    fig.text(0.026, sub_y, subtitle, color=TXT_DIM, fontsize=14.5,
+             fontweight="bold", ha="left", va="top", linespacing=1.12, path_effects=halo, zorder=11)
+    fig.text(0.983, 0.983, credit, color=TXT_DIM, fontsize=13, ha="right", va="top")
+    fig.text(0.916, 0.0635, unit_label, color=TXT, fontsize=26, fontweight="bold",
+             ha="left", va="center", zorder=11)
+    fig.text(0.026, 0.012, src_line, color=TXT_DIM, fontsize=10.5, ha="left", va="bottom")
+    fig.text(0.980, 0.012, data_line, color=TXT_DIM, fontsize=10.5, ha="right", va="bottom")
     if credit:
-        fig.text(0.5, 0.150, " ".join(credit.upper()), color=WM_COLOR, fontsize=8.5,
-                 ha="center", va="bottom")
+        fig.text(0.5, 0.150, " ".join(credit.upper()), color="#7c8698", fontsize=10.5,
+                 ha="center", va="bottom", zorder=11)
     return fig, ax, mesh
 
 
@@ -307,7 +324,8 @@ def caption_lines(ds, cmi, kind, scene_label):
     if t is not None:
         month = MONTHS_EN[int(str(t.astype("datetime64[M]")).split("-")[1]) - 1]
         title = f"{month} {t.astype('datetime64[Y]')}"
-        data_line = (f"DATA: {platform} | {np.datetime_as_string(t, unit='m')} UTC | "
+        t_local = t - np.timedelta64(3, "h")
+        data_line = (f"DATA: {platform} | {np.datetime_as_string(t_local, unit='m')} UTC-3 | "
                      f"MODO {ds.attrs.get('timeline_id', '').replace('ABI ', '')}")
     else:
         title = platform
@@ -321,12 +339,12 @@ def time_label(ds) -> str:
     """Fecha y hora del cuadro para el rótulo grande (p. ej. '04 OCT 2026 · 19:00 UTC')."""
     if "t" not in ds:
         return ""
-    t = np.datetime64(ds["t"].values)
+    t = np.datetime64(ds["t"].values) - np.timedelta64(3, "h")
     month = MONTHS_EN[int(str(t.astype("datetime64[M]")).split("-")[1]) - 1][:3]
     day = int(str(t.astype("datetime64[D]")).split("-")[2])
     year = int(str(t.astype("datetime64[Y]")))
     hhmm = np.datetime_as_string(t, unit="m").split("T")[1]
-    return f"{day:02d} {month} {year} · {hhmm} UTC"
+    return f"{day:02d} {month} {year} · {hhmm} UTC-3"
 
 
 def main(argv=None):
