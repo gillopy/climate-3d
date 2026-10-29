@@ -37,3 +37,12 @@ odd/
 # se exceptúan de las reglas de salidas de arriba.
 !docs/**/*.png
 !docs/*.png
+
+# Local scratch and tooling artifacts (never committed)
+.playwright-mcp/
+
+# Reference images downloaded by hand: kept on disk, not part of the pipeline
+/d28crpyip6yh1.png
+/earthdata_login.png
+/chlorophyll_pace_20250630_lrg.jpg
+/fallfoliagephenology_pace_20261004_lrg.jpg
