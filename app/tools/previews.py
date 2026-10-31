@@ -24,7 +24,7 @@ CALIDAD = 82
 # Render de referencia por producto. `None` = no hay muestra disponible.
 FUENTES: dict[str, Path | None] = {
     "goes_c13": CACHE / "625bac70faf5" / "frames" / "cuadro_001.png",
-    "goes_truecolor": CACHE / "b4a59b896798" / "truecolor_2026-10-24T1650.png",
+    "goes_truecolor": CACHE / "d2b759e57810" / "truecolor_2026-04-15T1700.png",
     "mur_sst": SALIDAS / "frames_mur_globo_2025-01-01T0000_94f_2711px" / "cuadro_001.png",
     "mur_realista": CACHE / "70d167e92153" / "mur_realista_1400px.png",
     "precipitacion_ecmwf": CACHE / "4af5f2bccc3b" / "poster_precip_ecmwf_2026-10-31_00z_fh012.png",

@@ -573,6 +573,10 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
         # regional. El default del script es (-71, -10), que corta los bordes.
         lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
         centro = ["--centro", f"{lon_sub:g}", "0"]
+        if str(params.get("limbo", "completo")) == "completo":
+            # Sin esto el script corta en 73.3 grados y deja afuera el 6 %
+            # del disco: el limite visible real del satelite esta en 81.3.
+            centro += ["--recorte", "1.0"]
         if animar and n > 1:
             render_step = Step(
                 kind="render",

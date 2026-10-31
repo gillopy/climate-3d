@@ -114,6 +114,17 @@ PRODUCTS: list[Product] = [
                 ],
                 help="el disco nativo es la perspectiva geoestacionaria real, sin perder el limbo",
             ),
+            ParamSpec(
+                name="limbo",
+                label="Limbo",
+                kind="select",
+                default="completo",
+                options=[
+                    ParamOption(value="completo", label="Completo: todo el disco captado"),
+                    ParamOption(value="recortado", label="Recortado: sin la franja estirada"),
+                ],
+                help="el script recorta por defecto hasta 73.3 grados; el limite real del satelite es 81.3",
+            ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="2000", options=_RESOLUCIONES),
             ParamSpec(

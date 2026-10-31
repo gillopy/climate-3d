@@ -152,6 +152,26 @@ estilo, se vuelve a correr:
 app\.venv\Scripts\python.exe app\tools\previews.py
 ```
 
+### El limbo del color real: está recortado por diseño
+
+`radio_visible()` en `prototipos/poster_goes_realista.py` corta el disco en
+`LIMBO_DEG = 73.3°` de ángulo central, mientras que el límite visible real de un
+satélite geoestacionario está en `acos(R/(R+h)) = 81.3°`. Consecuencia: se
+descarta el **6.1 % del área del disco** (el anillo exterior) y el resto queda
+ampliado ~3 %.
+
+El corte existe porque esa franja es donde el remuestreo estira los píxeles. La
+app lo expone como `limbo`:
+
+| Valor | Qué hace |
+| --- | --- |
+| `completo` (default) | `--recorte 1.0`: todo el disco captado, hasta 81.3° |
+| `recortado` | deja el default del script, sin la franja estirada |
+
+Ninguna de las dos es la captura cruda: ambas reproyectan a Orthographic. Para
+**cero reproyección** está `encuadre = disco nativo` (`poster_goes_disco.py`),
+que usa la perspectiva geoestacionaria tal como sale del ABI.
+
 ### Vista y centro
 
 | Producto | Encuadre | Centro |
