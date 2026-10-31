@@ -26,8 +26,17 @@ export function getCatalog(): Promise<CatalogResponse> {
   return fetch("/api/catalog").then((r) => leer<CatalogResponse>(r));
 }
 
-export function getDates(productId: string): Promise<DatesResponse> {
-  return fetch(`/api/catalog/${productId}/dates`).then((r) => leer<DatesResponse>(r));
+export function getDates(
+  productId: string,
+  extra?: { satelite?: string; banda?: string },
+): Promise<DatesResponse> {
+  const query = new URLSearchParams();
+  if (extra?.satelite) query.set("satelite", extra.satelite);
+  if (extra?.banda) query.set("banda", extra.banda);
+  const sufijo = query.toString() ? `?${query}` : "";
+  return fetch(`/api/catalog/${productId}/dates${sufijo}`).then((r) =>
+    leer<DatesResponse>(r),
+  );
 }
 
 export function getJobs(): Promise<Job[]> {

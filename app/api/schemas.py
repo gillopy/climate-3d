@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-ParamKind = Literal["select", "date-range", "toggle", "slider"]
+ParamKind = Literal["select", "date-range", "date", "toggle", "slider"]
 JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
 RunMode = Literal["preview", "real"]
 
@@ -58,6 +58,8 @@ class CatalogResponse(BaseModel):
     data_root: str
     data_root_exists: bool
     media_root: str
+    repo_python: str
+    repo_ready: bool
 
 
 class DatesResponse(BaseModel):
@@ -71,7 +73,7 @@ class RecipeRequest(BaseModel):
 
     product_id: str
     params: dict[str, Any] = Field(default_factory=dict)
-    mode: RunMode = "preview"
+    mode: RunMode = "real"
 
 
 class Artifact(BaseModel):
@@ -101,4 +103,5 @@ class JobSnapshot(BaseModel):
     finished_at: str | None = None
     logs: list[LogLine] = Field(default_factory=list)
     artifacts: list[Artifact] = Field(default_factory=list)
+    plan: list[str] = Field(default_factory=list)
     error: str | None = None

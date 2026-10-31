@@ -457,6 +457,20 @@ input[type="range"] {
   color: var(--tenue);
 }
 
+.plan {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  color: var(--tenue);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.plan li::marker {
+  color: var(--acento);
+}
+
 .badge {
   font-size: 10px;
   letter-spacing: 0.1em;

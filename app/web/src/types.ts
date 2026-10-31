@@ -1,4 +1,4 @@
-export type ParamKind = "select" | "date-range" | "toggle" | "slider";
+export type ParamKind = "select" | "date-range" | "date" | "toggle" | "slider";
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type RunMode = "preview" | "real";
 
@@ -35,6 +35,8 @@ export interface CatalogResponse {
   data_root: string;
   data_root_exists: boolean;
   media_root: string;
+  repo_python: string;
+  repo_ready: boolean;
 }
 
 export interface DatesResponse {
@@ -70,6 +72,7 @@ export interface Job {
   finished_at: string | null;
   logs: LogLine[];
   artifacts: Artifact[];
+  plan: string[];
   error: string | null;
 }
 

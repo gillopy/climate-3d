@@ -7,6 +7,7 @@ interface Props {
   mode: RunMode;
   busy: boolean;
   error: string | null;
+  repoPython: string;
   onChange: (nombre: string, valor: Params[string]) => void;
   onMode: (modo: RunMode) => void;
   onSubmit: () => void;
@@ -32,12 +33,14 @@ export function RecipeForm({
   mode,
   busy,
   error,
+  repoPython,
   onChange,
   onMode,
   onSubmit,
 }: Props) {
   const primeraFecha = dates?.dates.at(-1) ?? "";
   const ultimaFecha = dates?.dates.at(0) ?? "";
+  const pideDescarga = product.params.some((spec) => spec.name === "descargar");
 
   return (
     <form
@@ -70,6 +73,28 @@ export function RecipeForm({
                   </option>
                 ))}
               </select>
+            </div>
+          );
+        }
+
+        if (spec.kind === "date") {
+          return (
+            <div className="campo" key={spec.name}>
+              <Etiqueta
+                texto={spec.label}
+                ayuda={
+                  dates?.source === "demo"
+                    ? "calendario de demostracion: no hay salidas de este producto en disco"
+                    : "fechas con datos en disco"
+                }
+              />
+              <input
+                type="date"
+                value={String(valor ?? spec.default)}
+                min={primeraFecha}
+                max={ultimaFecha || undefined}
+                onChange={(e) => onChange(spec.name, e.target.value)}
+              />
             </div>
           );
         }
@@ -110,7 +135,7 @@ export function RecipeForm({
         if (spec.kind === "toggle") {
           return (
             <div className="campo campo--fila" key={spec.name}>
-              <Etiqueta texto={spec.label} />
+              <Etiqueta texto={spec.label} ayuda={spec.help || undefined} />
               <button
                 type="button"
                 role="switch"
@@ -145,27 +170,34 @@ export function RecipeForm({
           <input
             type="radio"
             name="modo"
-            checked={mode === "preview"}
-            onChange={() => onMode("preview")}
-          />
-          Preview sintetico (funciona sin datos)
-        </label>
-        <label className={product.command_ready ? "" : "receta__modo--off"}>
-          <input
-            type="radio"
-            name="modo"
             checked={mode === "real"}
             disabled={!product.command_ready}
             onChange={() => onMode("real")}
           />
-          Script real del repo
+          Ejecutar el pipeline real
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="modo"
+            checked={mode === "preview"}
+            onChange={() => onMode("preview")}
+          />
+          Preview sintetico (no toca datos)
         </label>
       </div>
 
-      {product.command_ready ? null : (
+      {product.command_ready ? (
         <p className="receta__aviso">
-          El comando real todavia no esta conectado: falta una linea en{" "}
-          <code>catalog.py</code> con los flags que acepta el script.
+          Corre con <code>{repoPython.split("\\").slice(-3).join("\\")}</code>.{" "}
+          {pideDescarga
+            ? "Las descargas usan la carpeta de datos compartida y quedan cacheadas."
+            : "Sin descarga: usa lo que ya esta en disco, y si falta algo el job lo dice."}
+        </p>
+      ) : (
+        <p className="receta__error">
+          No se encontro el Python del repo: falta <code>{repoPython}</code>. Solo
+          queda disponible el preview.
         </p>
       )}
 

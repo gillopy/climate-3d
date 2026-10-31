@@ -25,10 +25,13 @@ export default function App() {
   const [params, setParams] = useState<Params>({});
   const [fechas, setFechas] = useState<DatesResponse | null>(null);
   const [job, setJob] = useState<Job | null>(null);
-  const [modo, setModo] = useState<RunMode>("preview");
+  const [modo, setModo] = useState<RunMode>("real");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const corte = useRef<(() => void) | null>(null);
+
+  const satelite = typeof params.satelite === "string" ? params.satelite : "";
+  const banda = typeof params.banda === "string" ? params.banda : "";
 
   useEffect(() => {
     getCatalog()
@@ -41,18 +44,32 @@ export default function App() {
       });
 
     return () => corte.current?.();
-    // Un solo fetch al montar: elegir() es estable dentro del efecto.
+    // Un solo fetch al montar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Las fechas dependen del producto y, en GOES, tambien del satelite y la banda.
+  useEffect(() => {
+    if (!producto) return;
+    let vigente = true;
+    const extra = satelite || banda ? { satelite, banda } : undefined;
+    getDates(producto.id, extra)
+      .then((datos) => {
+        if (vigente) setFechas(datos);
+      })
+      .catch(() => {
+        if (vigente) setFechas(null);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [producto, satelite, banda]);
 
   function elegir(siguiente: Product) {
     setProducto(siguiente);
     setParams(valoresIniciales(siguiente));
-    setModo("preview");
+    setModo(siguiente.command_ready ? "real" : "preview");
     setError(null);
-    getDates(siguiente.id)
-      .then(setFechas)
-      .catch(() => setFechas(null));
   }
 
   async function generar() {
@@ -103,7 +120,7 @@ export default function App() {
           <span className="marca__punto" />
           <div>
             <h1>Climate 3D</h1>
-            <p>consola interactiva - demo</p>
+            <p>consola interactiva</p>
           </div>
         </div>
         <div className="pills">
@@ -111,12 +128,17 @@ export default function App() {
             {catalogo ? `${catalogo.products.length} productos` : "cargando..."}
           </span>
           <span
+            className={`pill ${catalogo?.repo_ready ? "pill--ok" : "pill--warn"}`}
+            title={catalogo?.repo_python ?? ""}
+          >
+            {catalogo?.repo_ready ? "pipeline listo" : "sin .venv del repo"}
+          </span>
+          <span
             className={`pill ${catalogo?.data_root_exists ? "pill--ok" : "pill--warn"}`}
             title={catalogo?.data_root ?? ""}
           >
             {catalogo?.data_root_exists ? "datos en disco" : "sin datos locales"}
           </span>
-          <span className="pill pill--tenue">preview offline</span>
         </div>
       </header>
 
@@ -151,6 +173,7 @@ export default function App() {
               mode={modo}
               busy={enviando}
               error={null}
+              repoPython={catalogo?.repo_python ?? ".venv\\Scripts\\python.exe"}
               onChange={(nombre, valor) =>
                 setParams((previo) => ({ ...previo, [nombre]: valor }))
               }

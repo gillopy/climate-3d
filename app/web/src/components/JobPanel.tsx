@@ -14,6 +14,9 @@ function peso(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
+const esGif = (nombre: string) => nombre.toLowerCase().endsWith(".gif");
+const esVideo = (nombre: string) => nombre.toLowerCase().endsWith(".mp4");
+
 interface Props {
   job: Job | null;
   onCancel: () => void;
@@ -55,6 +58,14 @@ export function JobPanel({ job, onCancel }: Props) {
       <p className="panel__producto">{job.product_name}</p>
       <code className="panel__id">{job.id}</code>
 
+      {job.plan.length > 0 ? (
+        <ol className="plan">
+          {job.plan.map((paso, indice) => (
+            <li key={indice}>{paso}</li>
+          ))}
+        </ol>
+      ) : null}
+
       <div className="progreso">
         <div className="progreso__barra">
           <div
@@ -92,10 +103,17 @@ export function JobPanel({ job, onCancel }: Props) {
           ))}
           {videos.map((arte) => (
             <figure key={arte.name} className="salida">
-              <video src={arte.url} controls loop muted playsInline />
+              {esVideo(arte.name) ? (
+                <video src={arte.url} controls loop muted playsInline />
+              ) : (
+                <img src={arte.url} alt={arte.name} loading="lazy" />
+              )}
               <figcaption>
                 <span>{arte.name}</span>
-                <span className="tenue">{peso(arte.bytes)}</span>
+                <span className="tenue">
+                  {esGif(arte.name) ? "animo " : ""}
+                  {peso(arte.bytes)}
+                </span>
               </figcaption>
             </figure>
           ))}

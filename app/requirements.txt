@@ -1,7 +1,9 @@
-# Dependencias de la app interactiva (entorno propio: app\.venv).
+﻿# Dependencias de la app interactiva (entorno propio: app\.venv).
 # El .venv de la raiz no se toca: sigue teniendo solo lo que pide requirements.txt.
 fastapi==0.162.*
 uvicorn==0.54.*
 # Render de demostracion (el camino real usa los scripts de cuadros/ en su env).
 numpy==2.5.*
 pillow==13.0.*
+# Corte de arbol de procesos al cancelar un job (Windows).
+psutil==7.*

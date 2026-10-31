@@ -1,25 +1,63 @@
 """Cola de trabajos y stream de progreso.
 
-La regla de oro: un pedido nunca bloquea. Crear un job devuelve un id al toque;
-el trabajo corre en background y el resultado se sigue por SSE. Con un semaforo
-de 1 se ve el comportamiento real: los pedidos se encolan en vez de pelearse la
-maquina.
+Dos modos:
+
+- ``real``: corre los scripts del repo con el Python del repo (``.venv``), les
+  sigue el stdout linea por linea y publica los archivos que dejan.
+- ``preview``: dibuja un campo sintetico, para probar la app sin datos.
+
+Un pedido nunca bloquea: crear un job devuelve un id; el trabajo corre en
+background y el resultado se sigue por SSE.
 """
 from __future__ import annotations
 
 import asyncio
-import shutil
+import hashlib
+import json
+import os
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator
 
+import psutil
+
 from . import render
 from .catalog import get_product
+from .recipes import RAIZ_REPO, planear, python_repo
 from .schemas import Artifact, JobSnapshot, LogLine
 
 TERMINALES = ("done", "error", "cancelled")
+
+# Reparto del progreso entre etapas. La descarga y el render son lo que pesa.
+_PESO = {"download": 0.4, "render": 0.5, "animate": 0.1}
+
+# Cuanto se espera a que cierren los pipes despues de cancelar.
+_GRACIA_CANCEL = 6.0
+
+
+def _matar_arbol(proc: asyncio.subprocess.Process) -> None:
+    """Mata el proceso y todos sus hijos.
+
+    Los scripts de render lanzan un hijo por lote y ese hijo hereda el stdout:
+    si solo se mata al padre, el pipe sigue abierto y el job queda colgado.
+    """
+    try:
+        padre = psutil.Process(proc.pid)
+        victimas = padre.children(recursive=True) + [padre]
+    except psutil.NoSuchProcess:
+        return
+    for proceso in victimas:
+        try:
+            proceso.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    try:
+        padre.wait(timeout=3)
+    except (psutil.TimeoutExpired, psutil.NoSuchProcess):
+        pass
 
 
 def _ahora() -> str:
@@ -41,10 +79,23 @@ class Job:
     finished_at: str | None = None
     logs: list[LogLine] = field(default_factory=list)
     artifacts: list[Artifact] = field(default_factory=list)
+    plan: list[str] = field(default_factory=list)
     error: str | None = None
     dir: Path | None = None
+    proc: asyncio.subprocess.Process | None = None
     cancelar: asyncio.Event = field(default_factory=asyncio.Event)
     subs: set[asyncio.Queue] = field(default_factory=set)
+
+    @property
+    def work(self) -> Path:
+        """Carpeta de trabajo, compartida por recetas identicas.
+
+        Los scripts del repo ya saben retomar: si el PNG existe y el sello de
+        render no cambio, lo saltean. Reusar la carpeta es lo que hace que un
+        render de horas se pueda continuar en vez de empezar de cero.
+        """
+        assert self.dir is not None
+        return self.dir
 
     def snapshot(self) -> JobSnapshot:
         return JobSnapshot(
@@ -61,6 +112,7 @@ class Job:
             finished_at=self.finished_at,
             logs=list(self.logs),
             artifacts=list(self.artifacts),
+            plan=list(self.plan),
             error=self.error,
         )
 
@@ -70,6 +122,7 @@ class JobManager:
         self.media_root = media_root
         self.jobs: dict[str, Job] = {}
         self.max_historial = max_historial
+        # Un solo worker: los pedidos se encolan en vez de pelearse la maquina.
         self._un_slot = asyncio.Semaphore(1)
         self._tareas: set[asyncio.Task] = set()
 
@@ -78,22 +131,39 @@ class JobManager:
         producto = get_product(product_id)
         if producto is None:
             raise ValueError(f"Producto desconocido: {product_id}")
-        if mode == "real" and not producto.command:
-            raise ValueError("Este producto todavia no tiene el comando real conectado")
 
         job_id = uuid.uuid4().hex[:12]
+        # `descargar` no cambia el resultado del render: se excluye de la firma
+        # para que activar la descarga no invalide cuadros ya hechos.
+        firma_params = {k: v for k, v in params.items() if k != "descargar"}
+        firma = hashlib.sha1(
+            f"{product_id}|{mode}|"
+            f"{json.dumps(firma_params, sort_keys=True, default=str)}".encode("utf-8")
+        ).hexdigest()[:12]
         job = Job(
             id=job_id,
             product_id=producto.id,
             product_name=producto.name,
             params=params,
             mode=mode,
-            dir=self.media_root / "jobs" / job_id,
+            dir=self.media_root / "cache" / firma,
         )
+
+        if mode == "real":
+            if not python_repo().is_file():
+                raise ValueError(
+                    f"Falta el Python del repo: {python_repo()}. "
+                    "Sin eso no se puede ejecutar el pipeline."
+                )
+            try:
+                job.plan = [p.label for p in planear(product_id, params, job.work)]
+            except ValueError as exc:
+                raise ValueError(str(exc)) from exc
+
         self.jobs[job_id] = job
         self._podar()
 
-        tarea = asyncio.create_task(self._correr(job, producto.stage))
+        tarea = asyncio.create_task(self._correr(job))
         self._tareas.add(tarea)
         tarea.add_done_callback(self._tareas.discard)
         return job
@@ -109,13 +179,18 @@ class JobManager:
         if job is None or job.status in TERMINALES:
             return False
         job.cancelar.set()
+        if job.proc is not None and job.proc.returncode is None:
+            _matar_arbol(job.proc)
+            try:
+                job.proc.kill()
+            except ProcessLookupError:
+                pass
         if job.status == "queued":
             job.status = "cancelled"
             job.stage = "cancelado antes de arrancar"
             job.finished_at = _ahora()
             self._emitir(job, {"type": "cancelled"})
         else:
-            # El corte lo aplica el loop del render en el proximo cuadro.
             job.stage = "cancelando..."
         return True
 
@@ -142,13 +217,12 @@ class JobManager:
 
     # --- interno ---------------------------------------------------------
     def _podar(self) -> None:
+        """Olvida jobs viejos de la lista. Nunca borra la cache de renders."""
         if len(self.jobs) <= self.max_historial:
             return
         terminados = [j for j in self.listar() if j.status in TERMINALES]
         for viejo in terminados[: max(0, len(self.jobs) - self.max_historial)]:
             self.jobs.pop(viejo.id, None)
-            if viejo.dir and viejo.dir.exists():
-                shutil.rmtree(viejo.dir, ignore_errors=True)
 
     def _emitir(self, job: Job, evento: dict[str, Any]) -> None:
         for cola in list(job.subs):
@@ -157,6 +231,7 @@ class JobManager:
     def _log(self, job: Job, texto: str, level: str = "info") -> None:
         linea = LogLine(at=_ahora(), level=level, text=texto)  # type: ignore[arg-type]
         job.logs.append(linea)
+        del job.logs[:-400]  # el historial de la UI no crece sin limite
         self._emitir(job, {"type": "log", "line": linea.model_dump()})
 
     def _progreso(self, job: Job, valor: float, etapa: str) -> None:
@@ -165,81 +240,73 @@ class JobManager:
         self._emitir(job, {"type": "progress", "progress": job.progress, "stage": etapa})
 
     def _artefacto(self, job: Job, path: Path, kind: str) -> None:
-        relativa = path.relative_to(self.media_root).as_posix()
+        try:
+            relativa = path.relative_to(self.media_root).as_posix()
+        except ValueError:
+            return
+        url = f"/media/{relativa}"
+        if any(a.url == url for a in job.artifacts):
+            return
         artefacto = Artifact(
             name=path.name,
-            url=f"/media/{relativa}",
+            url=url,
             kind=kind,  # type: ignore[arg-type]
             bytes=path.stat().st_size if path.exists() else 0,
         )
         job.artifacts.append(artefacto)
         self._emitir(job, {"type": "artifact", "artifact": artefacto.model_dump()})
 
-    async def _correr(self, job: Job, etapa_script: str) -> None:
+    def _frames_dir(self, job: Job) -> Path | None:
+        """Carpeta de cuadros: la primera con `cuadro_*.png` dentro del work."""
+        candidatas = [
+            carpeta
+            for carpeta in job.work.rglob("*")
+            if carpeta.is_dir() and next(carpeta.glob("cuadro_*.png"), None) is not None
+        ]
+        if not candidatas:
+            return None
+        return max(
+            candidatas,
+            key=lambda c: max(f.stat().st_mtime for f in c.glob("cuadro_*.png")),
+        )
+
+    def _publicar(self, job: Job) -> None:
+        frames = self._frames_dir(job)
+        if frames is not None:
+            cuadros = sorted(frames.glob("cuadro_*.png"))
+            if cuadros:
+                self._artefacto(job, cuadros[0], "image")
+                if len(cuadros) > 1:
+                    self._artefacto(job, cuadros[-1], "image")
+        for patron, kind in (("*.mp4", "video"), ("*.gif", "video")):
+            for archivo in sorted(job.work.rglob(patron)):
+                self._artefacto(job, archivo, kind)
+
+    async def _correr(self, job: Job) -> None:
         async with self._un_slot:
             if job.status == "cancelled":
                 return
             job.status = "running"
             job.started_at = _ahora()
+            assert job.dir is not None
+            job.dir.mkdir(parents=True, exist_ok=True)
             try:
-                self._progreso(job, 0.02, "preparando receta")
-                self._log(job, f"job {job.id} | producto={job.product_id} | modo={job.mode}")
-                self._log(job, f"script real del flujo: {etapa_script}")
-                await asyncio.sleep(0)
+                self._log(job, f"job {job.id} | {job.product_id} | modo={job.mode}")
+                if job.mode == "real":
+                    await self._real(job)
+                else:
+                    await self._preview(job)
 
-                parametros = job.params
-                total = render.frame_count(parametros)
-                marcas = render.build_timeline(parametros, total)
-                tamaño = int(parametros.get("resolucion", 1400))
-                estilo = str(parametros.get("estilo", "realista"))
-
-                self._log(
-                    job,
-                    f"plan: {total} cuadro(s) | {marcas[0]} -> {marcas[-1]} | "
-                    f"estilo={estilo} | {tamaño}px",
-                )
-
-                assert job.dir is not None
-                frames: list[Path] = []
-                for i, marca in enumerate(marcas):
-                    if job.cancelar.is_set():
-                        raise asyncio.CancelledError
-                    destino = job.dir / f"cuadro_{i:03d}.png"
-                    await asyncio.to_thread(
-                        render.render_frame,
-                        destino,
-                        titulo=job.product_name,
-                        subtitulo=marca,
-                        estilo=estilo,
-                        marca=f"{job.product_id} - preview",
-                        indice=i,
-                        total=total,
-                        tamaño=tamaño,
+                self._publicar(job)
+                if not job.artifacts:
+                    raise RuntimeError(
+                        "el pipeline termino pero no dejo ninguna imagen; "
+                        "revisa el log de arriba"
                     )
-                    frames.append(destino)
-                    self._log(job, f"[{i + 1}/{total}] {marca} -> {destino.name}")
-                    self._progreso(
-                        job,
-                        0.05 + 0.8 * (i + 1) / total,
-                        f"renderizando cuadro {i + 1}/{total}",
-                    )
-
-                if frames:
-                    self._artefacto(job, frames[0], "image")
-
-                if len(frames) > 1 and parametros.get("animar", True):
-                    fps = int(parametros.get("fps", 12))
-                    self._progreso(job, 0.9, "armando la animacion")
-                    gif = job.dir / f"{job.product_id}_{job.id}.gif"
-                    await asyncio.to_thread(render.save_gif, frames, gif, fps)
-                    self._log(job, f"animacion lista: {gif.name} ({fps} fps)")
-                    # Un GIF animado lo renderiza el navegador dentro de un <img>.
-                    self._artefacto(job, gif, "image")
-
                 job.status = "done"
                 job.finished_at = _ahora()
                 self._progreso(job, 1.0, "listo")
-                self._log(job, "listo")
+                self._log(job, f"listo: {len(job.artifacts)} artefacto(s)")
                 self._emitir(job, {"type": "done", "job": job.snapshot().model_dump()})
             except asyncio.CancelledError:
                 job.status = "cancelled"
@@ -249,8 +316,168 @@ class JobManager:
                 self._emitir(job, {"type": "cancelled"})
             except Exception as exc:  # noqa: BLE001 - se reporta tal cual a la UI
                 job.status = "error"
-                job.error = f"{type(exc).__name__}: {exc}"
+                job.error = str(exc) if isinstance(exc, RuntimeError) else f"{type(exc).__name__}: {exc}"
                 job.finished_at = _ahora()
                 job.stage = "error"
                 self._log(job, job.error, "error")
                 self._emitir(job, {"type": "error", "error": job.error})
+            finally:
+                job.proc = None
+
+    # --- modo real -------------------------------------------------------
+    async def _real(self, job: Job) -> None:
+        pasos = planear(job.product_id, job.params, job.work)
+        if not pasos:
+            raise RuntimeError("la receta no genero ningun paso")
+
+        total_peso = sum(_PESO.get(p.kind, 0.2) for p in pasos)
+        base = 0.0
+        frames: Path | None = None
+
+        for numero, paso in enumerate(pasos, start=1):
+            span = _PESO.get(paso.kind, 0.2) / total_peso
+            etiqueta = f"[{numero}/{len(pasos)}] {paso.label}"
+
+            if paso.kind == "animate":
+                frames = self._frames_dir(job)
+                if frames is None:
+                    self._log(job, "no hay cuadros para animar; se omite el video", "warn")
+                    base += span
+                    continue
+                if len(list(frames.glob("cuadro_*.png"))) < 2:
+                    self._log(job, "un solo cuadro: no hay animacion que armar", "warn")
+                    base += span
+                    continue
+                args = [str(frames) if a == "{frames}" else a for a in paso.args]
+            else:
+                args = list(paso.args)
+
+            codigo = await self._lanzar(job, paso, args, base, span, etiqueta)
+            if codigo != 0:
+                raise RuntimeError(
+                    f"`{paso.script}` salio con codigo {codigo}. Mira el log de arriba."
+                )
+            base += span
+            self._progreso(job, base, f"{paso.label}: ok")
+
+    async def _lanzar(
+        self,
+        job: Job,
+        paso: Any,
+        args: list[str],
+        base: float,
+        span: float,
+        etiqueta: str,
+    ) -> int:
+        script = RAIZ_REPO / paso.script
+        if not script.is_file():
+            raise RuntimeError(f"no existe el script del repo: {paso.script}")
+
+        entorno = os.environ.copy()
+        entorno.update(
+            PYTHONUTF8="1",
+            PYTHONIOENCODING="utf-8",
+            PYTHONUNBUFFERED="1",
+        )
+
+        cmd = [str(python_repo()), str(script), *args]
+        self._log(job, etiqueta)
+        self._log(job, "  " + " ".join([Path(cmd[0]).name, *cmd[1:]]))
+        self._progreso(job, base, etiqueta)
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=str(RAIZ_REPO),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env=entorno,
+        )
+        job.proc = proc
+        assert proc.stdout is not None
+
+        # Un hilo lector alimenta la cola: asi el loop principal nunca se cuelga
+        # esperando un pipe que un hijo huerfano dejo abierto.
+        cola: asyncio.Queue[bytes | None] = asyncio.Queue()
+
+        async def bombear() -> None:
+            assert proc.stdout is not None
+            async for crudo in proc.stdout:
+                cola.put_nowait(crudo)
+            cola.put_nowait(None)
+
+        bomba = asyncio.create_task(bombear())
+        vistos = 0
+        limite: float | None = None
+
+        try:
+            while True:
+                try:
+                    crudo = await asyncio.wait_for(cola.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    if not job.cancelar.is_set():
+                        continue
+                    if limite is None:
+                        limite = time.monotonic() + _GRACIA_CANCEL
+                    _matar_arbol(proc)
+                    if time.monotonic() > limite:
+                        self._log(job, "corte forzado: el proceso no cerro el pipe", "warn")
+                        break
+                    continue
+
+                if crudo is None:
+                    break
+
+                if job.cancelar.is_set():
+                    _matar_arbol(proc)
+
+                linea = crudo.decode("utf-8", "replace").rstrip()
+                if not linea:
+                    continue
+                self._log(job, linea[:600])
+                vistos += 1
+                if paso.expected > 0:
+                    self._progreso(job, base + span * min(0.95, vistos / paso.expected), etiqueta)
+
+            codigo = await asyncio.wait_for(proc.wait(), timeout=10)
+        finally:
+            bomba.cancel()
+            job.proc = None
+
+        if job.cancelar.is_set():
+            raise asyncio.CancelledError
+        return codigo
+
+    # --- modo preview ----------------------------------------------------
+    async def _preview(self, job: Job) -> None:
+        total = render.frame_count(job.params)
+        marcas = render.build_timeline(job.params, total)
+        tamaño = int(job.params.get("resolucion", 1400) or 1400)
+        estilo = str(job.params.get("estilo", "realista"))
+
+        self._log(job, f"plan: {total} cuadro(s) | {marcas[0]} -> {marcas[-1]} | {tamaño}px")
+        frames: list[Path] = []
+        for i, marca in enumerate(marcas):
+            if job.cancelar.is_set():
+                raise asyncio.CancelledError
+            destino = job.work / "preview" / f"cuadro_{i:03d}.png"
+            await asyncio.to_thread(
+                render.render_frame,
+                destino,
+                titulo=job.product_name,
+                subtitulo=marca,
+                estilo=estilo,
+                marca=f"{job.product_id} - preview",
+                indice=i,
+                total=total,
+                tamaño=tamaño,
+            )
+            frames.append(destino)
+            self._log(job, f"[{i + 1}/{total}] {marca} -> {destino.name}")
+            self._progreso(job, 0.05 + 0.8 * (i + 1) / total, f"cuadro {i + 1}/{total}")
+
+        if len(frames) > 1 and job.params.get("animar", True):
+            fps = int(job.params.get("fps", 12) or 12)
+            self._progreso(job, 0.9, "armando la animacion")
+            gif = job.work / f"{job.product_id}_{job.id}.gif"
+            await asyncio.to_thread(render.save_gif, frames, gif, fps)
+            self._log(job, f"animacion lista: {gif.name}")

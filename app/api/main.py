@@ -1,19 +1,28 @@
-"""App interactiva de Climate 3D (demo).
+"""App interactiva de Climate 3D.
 
-Capas: catalogo -> cola de trabajos -> render -> artefactos. La UI nunca habla
-con un script: habla con esta API.
+Capas: catalogo -> receta -> comandos reales del repo -> artefactos. La UI nunca
+habla con un script: habla con esta API, y la API corre el pipeline con el Python
+del repo.
 """
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .catalog import PRODUCTS, available_dates, data_root, data_root_exists, get_product
+from .catalog import (
+    available_dates,
+    data_root,
+    data_root_exists,
+    get_product,
+    productos_disponibles,
+)
 from .jobs import JobManager
+from .recipes import python_repo, repo_listo
 from .schemas import CatalogResponse, DatesResponse, JobSnapshot, RecipeRequest
 
 RAIZ_APP = Path(__file__).resolve().parents[1]
@@ -22,8 +31,8 @@ MEDIA.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(
     title="Climate 3D - consola interactiva",
-    version="0.1.0",
-    description="Demo: receta -> job -> progreso en vivo -> artefacto.",
+    version="0.2.0",
+    description="Receta -> comandos reales del repo -> progreso en vivo -> artefacto.",
 )
 
 # Vite corre en otro puerto durante el desarrollo.
@@ -43,28 +52,41 @@ app.mount("/media", StaticFiles(directory=MEDIA), name="media")
 def health() -> dict[str, object]:
     return {
         "ok": True,
-        "productos": len(PRODUCTS),
+        "productos": len(productos_disponibles()),
         "data_root": str(data_root()),
         "data_root_exists": data_root_exists(),
+        "repo_ready": repo_listo(),
+        "repo_python": str(python_repo()),
     }
 
 
 @app.get("/api/catalog", response_model=CatalogResponse)
 def catalogo() -> CatalogResponse:
     return CatalogResponse(
-        products=PRODUCTS,
+        products=productos_disponibles(),
         data_root=str(data_root()),
         data_root_exists=data_root_exists(),
         media_root=str(MEDIA),
+        repo_python=str(python_repo()),
+        repo_ready=repo_listo(),
     )
 
 
 @app.get("/api/catalog/{product_id}/dates", response_model=DatesResponse)
-def fechas(product_id: str) -> DatesResponse:
+def fechas(
+    product_id: str,
+    satelite: str | None = None,
+    banda: str | None = None,
+) -> DatesResponse:
     producto = get_product(product_id)
     if producto is None:
         raise HTTPException(status_code=404, detail="Producto desconocido")
-    source, dates = available_dates(producto)
+    params: dict[str, Any] = {}
+    if satelite:
+        params["satelite"] = satelite
+    if banda:
+        params["banda"] = banda
+    source, dates = available_dates(producto, params)
     return DatesResponse(product_id=product_id, source=source, dates=dates)  # type: ignore[arg-type]
 
 
