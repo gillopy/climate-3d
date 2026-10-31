@@ -100,6 +100,34 @@ El descargador de GOES devuelve 1 si algún slot no existe (huecos normales en l
 grilla). Eso **no** aborta el job: se registra como advertencia y se sigue con lo
 que bajó. Si aun así no hay con qué renderizar, el error dice qué pasó.
 
+### Corridas ECMWF: cuál se usa
+
+`data.ecmwf.int` **no publica la corrida del día apenas cierra el ciclo**, y borra
+las viejas por retención. Pedir "hoy 00z" a primera hora da 404 en todos los
+pasos — es exactamente el error que se veía antes.
+
+Antes de planear, la app consulta qué corrida existe de verdad y ajusta la
+receta:
+
+1. Mismo ciclo hacia atrás, hasta 7 días → cubre "la de hoy todavía no salió".
+2. Si no hay, hacia adelante hasta hoy → cubre una fecha que ya salió del archivo.
+3. Si la corrida publica menos horizonte que el pedido, lo recorta.
+
+Cada ajuste queda en el log con nombre y apellido:
+
+```
+la corrida 2026-10-31 00z no esta publicada; uso 2026-10-30 00z
+la corrida 2026-10-30 00z publica hasta 144 h; recorto el horizonte de 240 h
+la fecha 2026-10-20 ya no esta en el archivo de ECMWF; uso la mas cercana: 2026-10-28 12z
+```
+
+Si no hay red para verificar, se registra una advertencia y se sigue con la
+corrida pedida: nunca se bloquea el job por no poder consultar.
+
+Los crudos de ECMWF se detectan por carpeta
+(`crudos_precip_<modelo>_<fecha>_<ciclo>z`, `crudos_anom2t_<modelo>_<fecha>_<ciclo>z`).
+Si no están, la descarga entra al plan sin que haya que tocar el toggle.
+
 ### Vista y centro
 
 | Producto | Por defecto | Con globo 3D |

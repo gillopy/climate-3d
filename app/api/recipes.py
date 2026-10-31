@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import math
 import re
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -19,6 +21,19 @@ from typing import Any
 
 RAIZ_REPO = Path(__file__).resolve().parents[2]
 PYTHON_REPO = RAIZ_REPO / ".venv" / "Scripts" / "python.exe"
+
+# Tabla de productos ECMWF en data.ecmwf.int (copiada del propio descargador).
+_BASE_ECMWF = "https://data.ecmwf.int/forecasts/{ymd}/{ciclo}z/{ruta}/{ymd}{ciclo}0000-{paso}.index"
+_RUTA_ECMWF = {
+    "ifs": "ifs/0p25/oper",
+    "aifs-single": "aifs-single/0p25/oper",
+    "aifs-ens": "aifs-ens/0p25/enfo",
+}
+PRODUCTOS_ECMWF = ("precipitacion_ecmwf", "anomalia_2t")
+
+
+class SinRed(Exception):
+    """No se pudo consultar la disponibilidad (no es un 404)."""
 
 
 @dataclass(frozen=True)
@@ -92,6 +107,123 @@ def _fps(params: dict[str, Any]) -> str:
 
 def _bool(params: dict[str, Any], clave: str) -> bool:
     return bool(params.get(clave, False))
+
+
+# --- disponibilidad de corridas ECMWF -----------------------------------
+def _paso_ecmwf(modelo: str, hora: int) -> str:
+    """Sufijo del paso, igual que `_sufijo()` del descargador del repo."""
+    return f"{hora}h-enfo-cf" if modelo == "aifs-ens" else f"{hora}h-oper-fc"
+
+
+def _url_indice(modelo: str, dia: date, ciclo: str, hora: int) -> str:
+    ymd = dia.strftime("%Y%m%d")
+    return _BASE_ECMWF.format(
+        ymd=ymd,
+        ciclo=ciclo,
+        ruta=_RUTA_ECMWF[modelo],
+        paso=_paso_ecmwf(modelo, hora),
+    )
+
+
+def _publicado(modelo: str, dia: date, ciclo: str, hora: int) -> bool:
+    """True si el `.index` de ese paso existe en data.ecmwf.int."""
+    pedido = urllib.request.Request(_url_indice(modelo, dia, ciclo, hora), method="HEAD")
+    try:
+        with urllib.request.urlopen(pedido, timeout=6) as respuesta:
+            return 200 <= respuesta.status < 300
+    except urllib.error.HTTPError:
+        return False  # 404/403: ese paso no esta publicado
+    except Exception as exc:  # noqa: BLE001 - red caida, DNS, proxy...
+        raise SinRed(str(exc)) from exc
+
+
+def _horizonte_disponible(modelo: str, dia: date, ciclo: str, horizonte: int) -> int:
+    """El horizonte pedido, recortado a lo que la corrida publica de verdad."""
+    if _publicado(modelo, dia, ciclo, horizonte):
+        return horizonte
+    # Baja de a 6 h: los modelos publican de forma progresiva y los 404 en
+    # cadena del descargador son justamente esto.
+    for intento in range(1, 21):
+        candidato = horizonte - intento * 6
+        if candidato <= 0:
+            break
+        if _publicado(modelo, dia, ciclo, candidato):
+            return candidato
+    return 0
+
+
+def resolver_corrida(params: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Ubica la corrida publicada mas conveniente y recorta el horizonte.
+
+    `data.ecmwf.int` no publica la corrida del dia hasta horas despues del
+    ciclo, y borra las viejas por retencion. Pedir "hoy 00z" a las 03:00 UTC da
+    404 en todos los pasos; esta funcion encuentra la ultima que si existe.
+    """
+    modelo = str(params.get("modelo", "ifs"))
+    if modelo not in _RUTA_ECMWF:
+        return params, None
+
+    pedida = _a_fecha(params.get("fecha"), date.today())
+    ciclo = str(params.get("corrida", "00")).zfill(2)
+    horizonte = int(params.get("horizonte", 144) or 144)
+    hoy = date.today()
+
+    elegida: date | None = None
+    mensaje: str | None = None
+
+    # 1) Mismo ciclo hacia atras: cubre "la de hoy todavia no salio".
+    for atras in range(0, 8):
+        dia = pedida - timedelta(days=atras)
+        if _publicado(modelo, dia, ciclo, 0):
+            elegida = dia
+            if atras:
+                mensaje = (
+                    f"la corrida {pedida} {ciclo}z no esta publicada; "
+                    f"uso {dia} {ciclo}z"
+                )
+            break
+
+    # 2) Hacia adelante: la fecha pedida ya salio del archivo por retencion.
+    if elegida is None:
+        for adelante in range(1, 11):
+            dia = pedida + timedelta(days=adelante)
+            if dia > hoy:
+                break
+            if _publicado(modelo, dia, ciclo, 0):
+                elegida = dia
+                mensaje = (
+                    f"la fecha {pedida} ya no esta en el archivo de ECMWF; "
+                    f"uso la mas cercana: {dia} {ciclo}z"
+                )
+                break
+
+    if elegida is None:
+        raise ValueError(
+            f"No hay ninguna corrida {ciclo}z de {modelo} cerca de {pedida}. "
+            "Proba otra fecha o ciclo."
+        )
+
+    disponible = _horizonte_disponible(modelo, elegida, ciclo, horizonte)
+    if disponible <= 0:
+        raise ValueError(
+            f"La corrida {elegida} {ciclo}z de {modelo} no publica ningun paso. "
+            "Proba otra fecha o ciclo."
+        )
+    if disponible < horizonte:
+        aviso = (
+            f"la corrida {elegida} {ciclo}z publica hasta {disponible} h; "
+            f"recorto el horizonte de {horizonte} h"
+        )
+        mensaje = f"{mensaje}. {aviso}" if mensaje else aviso
+        horizonte = disponible
+
+    ajustado = {
+        **params,
+        "fecha": elegida.isoformat(),
+        "corrida": ciclo,
+        "horizonte": horizonte,
+    }
+    return ajustado, mensaje
 
 
 def planear(product_id: str, params: dict[str, Any], work: Path) -> Plan:
@@ -258,6 +390,19 @@ def _mur(params: dict[str, Any], work: Path) -> Plan:
 
 
 # --- ECMWF: precipitacion y anomalia ------------------------------------
+def _crudos_existen(producto: str, modelo: str, fecha: str, ciclo: str) -> bool:
+    """Si ya estan los crudos que el render de ECMWF va a leer."""
+    from .catalog import data_root  # import local: evita el ciclo
+
+    nombre = "ecmwf" if modelo == "ifs" else modelo
+    carpeta = (
+        data_root() / f"crudos_precip_{nombre}_{fecha}_{ciclo}z"
+        if producto == "precipitacion"
+        else data_root() / f"crudos_anom2t_{modelo}_{fecha}_{ciclo}z"
+    )
+    return carpeta.is_dir() and any(carpeta.iterdir())
+
+
 def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
     inicio, _ = _rango(params)
     modelo = str(params.get("modelo", "ifs"))
@@ -299,7 +444,10 @@ def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
         ],
         expected=n,
     )
-    pasos = [descarga, render_step] if _bool(params, "descargar") else [render_step]
+    pasos = [descarga, render_step] if (
+        _bool(params, "descargar")
+        or not _crudos_existen(producto, modelo, inicio.isoformat(), corrida)
+    ) else [render_step]
     return Plan(pasos=pasos, descarga=descarga)
 
 

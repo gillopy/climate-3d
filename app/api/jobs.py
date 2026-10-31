@@ -26,7 +26,14 @@ import psutil
 
 from . import render
 from .catalog import get_product
-from .recipes import RAIZ_REPO, planear, python_repo
+from .recipes import (
+    PRODUCTOS_ECMWF,
+    RAIZ_REPO,
+    SinRed,
+    planear,
+    python_repo,
+    resolver_corrida,
+)
 from .schemas import Artifact, JobSnapshot, LogLine
 
 TERMINALES = ("done", "error", "cancelled")
@@ -316,7 +323,11 @@ class JobManager:
                 self._emitir(job, {"type": "cancelled"})
             except Exception as exc:  # noqa: BLE001 - se reporta tal cual a la UI
                 job.status = "error"
-                job.error = str(exc) if isinstance(exc, RuntimeError) else f"{type(exc).__name__}: {exc}"
+                job.error = (
+                    str(exc)
+                    if isinstance(exc, (RuntimeError, ValueError, SinRed))
+                    else f"{type(exc).__name__}: {exc}"
+                )
                 job.finished_at = _ahora()
                 job.stage = "error"
                 self._log(job, job.error, "error")
@@ -325,11 +336,35 @@ class JobManager:
                 job.proc = None
 
     # --- modo real -------------------------------------------------------
+    async def _resolver_corrida(self, job: Job) -> None:
+        """Ubica la corrida ECMWF realmente publicada antes de planear."""
+        self._progreso(job, 0.01, "verificando la corrida publicada")
+        try:
+            ajustado, aviso = await asyncio.to_thread(resolver_corrida, job.params)
+        except SinRed as exc:
+            self._log(
+                job,
+                f"no pude verificar la corrida publicada ({exc}); sigo con la pedida",
+                "warn",
+            )
+            return
+        if aviso:
+            self._log(job, aviso, "warn")
+        if ajustado != job.params:
+            job.params = ajustado
+            self._emitir(job, {"type": "snapshot", "job": job.snapshot().model_dump()})
+
     async def _real(self, job: Job) -> None:
+        if job.product_id in PRODUCTOS_ECMWF:
+            await self._resolver_corrida(job)
+
         plan = planear(job.product_id, job.params, job.work)
         pasos = list(plan.pasos)
         if not pasos:
             raise RuntimeError("la receta no genero ningun paso")
+
+        job.plan = [p.label for p in pasos]
+        self._emitir(job, {"type": "snapshot", "job": job.snapshot().model_dump()})
 
         total_peso = sum(_PESO.get(p.kind, 0.2) for p in pasos)
         base = 0.0
