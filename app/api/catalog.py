@@ -46,11 +46,11 @@ def _rango(dias_atras: int = 2) -> dict[str, str]:
 PRODUCTS: list[Product] = [
     Product(
         id="goes_c13",
-        name="GOES - disco ABI",
+        name="GOES - IR en globo (C13)",
         group="satelite",
-        stage="descargar/descargar_goes.py + cuadros/cuadros_goes.py",
-        summary="Banda ABI. Por defecto, el disco completo en la proyeccion nativa "
-        "en que lo capto el satelite; opcionalmente, globo centrado en el.",
+        stage="descargar/descargar_goes.py + cuadros/cuadros_c13_ir.py",
+        summary="Disco completo en globo, centrado en el punto subsatelital: entra el globo "
+        "entero, sin recorte regional y sin perder el limbo.",
         params=[
             ParamSpec(
                 name="satelite",
@@ -62,26 +62,7 @@ PRODUCTS: list[Product] = [
                     ParamOption(value="G18", label="GOES-West G18 (137.2 W)"),
                     ParamOption(value="G16", label="GOES-East G16 (retirado)"),
                 ],
-                help="define la carpeta de datos goes_<banda>_<sat>",
-            ),
-            ParamSpec(
-                name="banda",
-                label="Banda",
-                kind="select",
-                default="C13",
-                options=[
-                    ParamOption(value="C13", label="C13 - 10.3 um (IR limpio)"),
-                    ParamOption(value="C02", label="C02 - 0.64 um (visible, solo de dia)"),
-                    ParamOption(value="C04", label="C04 - 1.38 um (cirrus)"),
-                ],
-            ),
-            ParamSpec(name="paleta", label="Paleta", kind="select", default="clean_ir", options=_PALETAS),
-            ParamSpec(
-                name="globo",
-                label="Reproyectar a globo 3D",
-                kind="toggle",
-                default=False,
-                help="apagado = disco nativo del satelite; encendido = globo centrado en su punto subsatelite",
+                help="define la carpeta de datos goes_c13_<sat>",
             ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
@@ -94,6 +75,48 @@ PRODUCTS: list[Product] = [
             ),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
+        ],
+    ),
+    Product(
+        id="goes_truecolor",
+        name="GOES - color real (3 bandas)",
+        group="satelite",
+        stage="descargar/truecolor_goes.py + prototipos/poster_goes_truecolor.py",
+        summary="C01 + C02 + C03 sintetizadas con la receta CIMSS: color real de dia. "
+        "Globo orthographic o disco nativo sin reproyectar.",
+        params=[
+            ParamSpec(
+                name="satelite",
+                label="Satelite",
+                kind="select",
+                default="G19",
+                options=[
+                    ParamOption(value="G19", label="GOES-East G19 (75.2 W)"),
+                    ParamOption(value="G18", label="GOES-West G18 (137.2 W)"),
+                ],
+            ),
+            ParamSpec(
+                name="encuadre",
+                label="Encuadre",
+                kind="select",
+                default="globo",
+                options=[
+                    ParamOption(value="globo", label="Globo orthographic"),
+                    ParamOption(value="disco", label="Disco nativo (sin reproyectar)"),
+                ],
+                help="el disco nativo es la perspectiva geoestacionaria real, sin perder el limbo",
+            ),
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
+            ParamSpec(name="resolucion", label="Resolucion", kind="select", default="2000", options=_RESOLUCIONES),
+            ParamSpec(
+                name="descargar",
+                label="Forzar descarga",
+                kind="toggle",
+                default=False,
+                help="cada slot son tres bandas (~500 MB); sin forzar usa lo que ya esta en disco",
+            ),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=8, min=4, max=30, step=2),
         ],
     ),
     Product(
@@ -118,6 +141,46 @@ PRODUCTS: list[Product] = [
             ParamSpec(name="descargar", label="Bajar los cuadros de GIBS", kind="toggle", default=False),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
+        ],
+    ),
+    Product(
+        id="mur_realista",
+        name="MUR - SST poster realista",
+        group="satelite",
+        stage="descargar/mur_sst.py + prototipos/poster_mur_realista.py",
+        summary="Fondo blanco, globo inscripto y campana de distribucion: el diseno de "
+        "poster del repo, no el globo oscuro.",
+        params=[
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango(30)),
+            ParamSpec(
+                name="resolucion",
+                label="Resolucion",
+                kind="select",
+                default="2000",
+                options=[
+                    ParamOption(value="1400", label="1400 px"),
+                    ParamOption(value="2000", label="2000 px"),
+                    ParamOption(value="2711", label="2711 px (poster)"),
+                ],
+            ),
+            ParamSpec(
+                name="paleta",
+                label="Paleta",
+                kind="select",
+                default="realista",
+                options=[
+                    ParamOption(value="realista", label="realista (Earth Observatory)"),
+                    ParamOption(value="gibs", label="gibs (SST oficial)"),
+                ],
+            ),
+            ParamSpec(name="trend", label="Mostrar tendencia", kind="toggle", default=False),
+            ParamSpec(
+                name="descargar",
+                label="Forzar descarga",
+                kind="toggle",
+                default=False,
+                help="baja la serie semanal de GIBS si no esta en cache",
+            ),
         ],
     ),
     Product(
@@ -270,9 +333,10 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
     encontradas: set[str] = set()
     raiz = data_root()
 
-    if product.id == "goes_c13":
+    if product.id in ("goes_c13", "goes_truecolor"):
+        banda = "C02" if product.id == "goes_truecolor" else str(params.get("banda", "C13"))
         carpeta = _CARPETAS_GOES.get(
-            (str(params.get("satelite", "G19")), str(params.get("banda", "C13"))),
+            (str(params.get("satelite", "G19")), banda),
             "goes_c13_g19",
         )
         datos = raiz / carpeta
@@ -288,7 +352,9 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
     if salidas.is_dir():
         prefijo = {
             "goes_c13": "frames_G",
+            "goes_truecolor": "poster_G19_truecolor",
             "mur_sst": "frames_mur",
+            "mur_realista": "frames_mur",
             "precipitacion_ecmwf": "frames_precipitacion",
             "anomalia_2t": "frames_anomalia",
             "follaje": "frames_follaje",

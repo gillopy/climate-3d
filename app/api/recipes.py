@@ -290,10 +290,13 @@ def _slots_goes(sat: str, banda: str) -> list[datetime]:
 def _goes(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
     sat = str(params.get("satelite", "G19"))
-    banda = str(params.get("banda", "C13"))
+    banda = "C13"
     px = _px(params)
     forzar = _bool(params, "descargar")
 
+    from .catalog import data_root  # import local: evita el ciclo
+
+    datos_dir = data_root() / f"goes_c13_{sat.lower()}"
     disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
 
     if disponibles and not forzar:
@@ -327,27 +330,27 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         expected=max(1, math.ceil(n / 10)),
     )
 
+    # `cuadros_c13_ir.py` encuadra el disco completo con margen (`--radio`) y
+    # centra donde se le diga. `cuadros_goes.py --globo` no tiene radio y el
+    # globo se sale del marco por abajo.
+    lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
     args = [
-        "--sat", sat,
-        "--banda", banda,
         "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
         "--n", str(n),
         "--paso", str(paso),
         "--px", str(px),
-        "--paleta", str(params.get("paleta", "clean_ir")),
+        "--centro", f"{lon_sub:g}", "0",
+        "--radio", "90",
+        "--datos", str(datos_dir),
         "--out", str(work),
+        "--frames", str(work / "frames"),
         "--lote", "1",
     ]
-    if _bool(params, "globo"):
-        # Globo centrado en el punto subsatelite (lat 0): la reproyeccion
-        # natural del disco, no un recorte sobre Paraguay.
-        lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
-        args += ["--globo", "--centro", f"{lon_sub:g}", "0"]
 
     render_step = Step(
         kind="render",
-        label=f"renderizando {n} cuadro(s) de {banda}",
-        script="cuadros/cuadros_goes.py",
+        label=f"renderizando {n} cuadro(s) de C13",
+        script="cuadros/cuadros_c13_ir.py",
         args=args,
         expected=n,
     )
@@ -410,14 +413,16 @@ def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
     horizonte = int(params.get("horizonte", 144) or 144)
     px = _px(params, 1400)
     fondo = str(params.get("fondo", "oscuro"))
-    n = max(2, min(horizonte // 6 + 2, 42))
+    # El descargador y los cuadros del repo trabajan cada 3 h (PASO_HORA = 3).
+    paso_horas = 3
+    n = max(2, min(horizonte // paso_horas + 2, 81))
 
     comunes = [
         "--modelo", modelo,
         "--fecha", inicio.isoformat(),
         "--ciclo", corrida,
         "--hasta-hora", str(horizonte),
-        "--paso", "6",
+        "--paso", str(paso_horas),
     ]
     descarga_script, render_script = (
         ("descargar/precipitacion_ecmwf.py", "cuadros/cuadros_precipitacion.py")
@@ -489,9 +494,146 @@ def _follaje(params: dict[str, Any], work: Path) -> Plan:
     return Plan(pasos=pasos, descarga=descarga)
 
 
+# --- GOES color real: C01 + C02 + C03 -----------------------------------
+def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
+    inicio, fin = _rango(params)
+    sat = str(params.get("satelite", "G19"))
+    px = _px(params, 2400)
+    forzar = _bool(params, "descargar")
+    animar = _bool(params, "animar")
+    disco = str(params.get("encuadre", "globo")) == "disco"
+
+    # C02 es la banda pesada (~410 MB): si esta, el slot existe.
+    disponibles = [s for s in _slots_goes(sat, "C02") if inicio <= s.date() <= fin]
+
+    if disponibles and not forzar:
+        desde = disponibles[0]
+        paso = 10
+        conocidos = set(disponibles)
+        n = 1
+        while n < 24 and (desde + timedelta(minutes=paso * n)) in conocidos:
+            n += 1
+    else:
+        desde = datetime.combine(inicio, time.min)
+        n, paso = _cuadros_goes(inicio, fin)
+        n = min(n, 24)  # cada slot son 3 bandas: ~500 MB
+
+    slot = desde.strftime("%Y-%m-%dT%H:%M")
+    descarga = Step(
+        kind="download",
+        label=f"bajando C01+C02+C03 de {sat} ({n} slot(s))",
+        script="descargar/truecolor_goes.py",
+        args=[
+            "--desde", slot,
+            "--n", str(n),
+            "--paso", str(paso),
+            "--sat", sat,
+        ],
+        expected=max(1, n),
+    )
+
+    if disco:
+        render_step = Step(
+            kind="render",
+            label=f"disco nativo {px}px",
+            script="prototipos/poster_goes_disco.py",
+            args=[
+                "--desde", slot,
+                "--sat", sat,
+                "--px", str(px),
+                "--out", str(work / f"truecolor_nativo_{desde:%Y-%m-%dT%H%M}.png"),
+            ],
+            expected=1,
+        )
+    else:
+        # Globo centrado en el punto subsatelital: disco completo, sin recorte
+        # regional. El default del script es (-71, -10), que corta los bordes.
+        lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+        centro = ["--centro", f"{lon_sub:g}", "0"]
+        if animar and n > 1:
+            render_step = Step(
+                kind="render",
+                label=f"globo color real {n} cuadro(s)",
+                script="prototipos/poster_goes_truecolor.py",
+                args=[
+                    "--desde", slot,
+                    "--sat", sat,
+                    "--px", str(px),
+                    *centro,
+                    "--n", str(n),
+                    "--paso", str(paso),
+                    "--frames", str(work / "frames"),
+                ],
+                expected=n,
+            )
+        else:
+            render_step = Step(
+                kind="render",
+                label=f"poster color real {px}px",
+                script="prototipos/poster_goes_truecolor.py",
+                args=[
+                    "--desde", slot,
+                    "--sat", sat,
+                    "--px", str(px),
+                    *centro,
+                    "--out", str(work / f"truecolor_{desde:%Y-%m-%dT%H%M}.png"),
+                ],
+                expected=1,
+            )
+
+    pasos = [descarga, render_step] if (forzar or not disponibles) else [render_step]
+    return Plan(pasos=pasos, descarga=descarga)
+
+
+# --- MUR: poster realista ----------------------------------------------
+def _mur_realista(params: dict[str, Any], work: Path) -> Plan:
+    inicio, fin = _rango(params)
+    dias = max(1, (fin - inicio).days + 1)
+    paso = max(1, int(math.ceil(dias / 12)))
+    px = _px(params, 2000)
+    n = max(1, dias // paso)
+
+    descarga = Step(
+        kind="download",
+        label="bajando la serie semanal de SST",
+        script="descargar/mur_sst.py",
+        args=[
+            "--desde", inicio.isoformat(),
+            "--hasta", fin.isoformat(),
+            "--paso", str(paso),
+            "--px", "2048",
+            "--out", str(work),
+        ],
+        expected=n,
+    )
+
+    args = [
+        "--crudo", "{crudo}",
+        "--px", str(px),
+        "--paleta", str(params.get("paleta", "realista")),
+        "--out", str(work / f"mur_realista_{px}px.png"),
+    ]
+    if _bool(params, "trend"):
+        args.append("--trend")
+
+    render_step = Step(
+        kind="render",
+        label=f"poster realista {px}px",
+        script="prototipos/poster_mur_realista.py",
+        args=args,
+        expected=1,
+    )
+    # Sin crudos en la cache no hay poster: la descarga no es opcional.
+    hay_crudos = any(work.rglob("crudo_*.jpg"))
+    pasos = [descarga, render_step] if (_bool(params, "descargar") or not hay_crudos) else [render_step]
+    return Plan(pasos=pasos, descarga=descarga)
+
+
 _CONSTRUCTORES = {
     "goes_c13": _goes,
+    "goes_truecolor": _goes_truecolor,
     "mur_sst": _mur,
+    "mur_realista": _mur_realista,
     "precipitacion_ecmwf": _precipitacion,
     "anomalia_2t": _anomalia,
     "follaje": _follaje,

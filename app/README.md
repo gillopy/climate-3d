@@ -80,11 +80,13 @@ GET  /media/...
 
 | Producto | Descarga | Render | Animación |
 | --- | --- | --- | --- |
-| GOES (C13/C02/C04, G19/G18/G16) | `descargar_goes.py --sat --banda --desde --hasta --paso` | `cuadros_goes.py --sat --banda --desde --n --paso --px --paleta [--globo --centro LON 0] --out --lote 1` | `armar.py --frames --fps --formato mp4 --salida` |
-| MUR SST | `mur_sst.py --desde --hasta --paso --px --out` | `cuadros_mur.py --desde --hasta --paso --px --out` | idem |
-| Precipitación ECMWF | `precipitacion_ecmwf.py --modelo --fecha --ciclo --hasta-hora --paso` | `cuadros_precipitacion.py ... --px --fondo-globo --salidas` | idem |
-| Anomalía 2 m ECMWF | `anomalia_2t_ecmwf.py ...` | `cuadros_anomalia_2t.py ...` | idem |
-| Follaje PACE | `pace_landvi.py --desde --hasta` | `cuadros_follaje.py --desde --hasta --px --out` | idem |
+| GOES IR (C13, G19/G18/G16) | `descargar_goes.py --sat --banda C13 --desde --hasta --paso` | `cuadros_c13_ir.py --desde --n --paso --px --centro LON 0 --radio 90 --datos --out --frames --lote 1` | `armar.py --frames --fps --formato mp4 --salida` |
+| GOES color real (C01+C02+C03) | `truecolor_goes.py --desde --n --paso --sat` | `poster_goes_truecolor.py --centro LON 0 --px --out` o `poster_goes_disco.py --px --out` | `armar.py` sobre la serie |
+| MUR SST (globo oscuro) | `mur_sst.py --desde --hasta --paso --px --out` | `cuadros_mur.py --desde --hasta --paso --px --out` | `armar.py` |
+| MUR SST poster realista | `mur_sst.py ...` | `poster_mur_realista.py --crudo --px --paleta [--trend] --out` | — |
+| Precipitación ECMWF | `precipitacion_ecmwf.py --modelo --fecha --ciclo --hasta-hora --paso 3` | `cuadros_precipitacion.py ... --px --fondo-globo --salidas` | `armar.py` |
+| Anomalía 2 m ECMWF | `anomalia_2t_ecmwf.py ... --paso 3` | `cuadros_anomalia_2t.py ...` | `armar.py` |
+| Follaje PACE | `pace_landvi.py --desde --hasta` | `cuadros_follaje.py --desde --hasta --px --out` | `armar.py` |
 
 ### Fechas y datos faltantes
 
@@ -130,14 +132,27 @@ Si no están, la descarga entra al plan sin que haya que tocar el toggle.
 
 ### Vista y centro
 
-| Producto | Por defecto | Con globo 3D |
+| Producto | Encuadre | Centro |
 | --- | --- | --- |
-| GOES | disco nativo, proyección ABI | centro en el punto subsatelital |
-| MUR, precipitación, anomalía, follaje | default del script del repo | igual |
+| GOES IR | globo completo con `--radio 90` | punto subsatelital (75.2 W / 137.2 W, lat 0) |
+| GOES color real | globo o disco nativo | punto subsatelital |
+| MUR, ECMWF, follaje | default del script del repo | igual |
 
-`cuadros_goes.py` centra en `-58 -23` (Paraguay) si no le pasás `--centro`. La app
-siempre le pasa el subsatelital cuando se pide globo, así que el resultado no
-depende de ese default.
+`cuadros_goes.py --globo` no tiene `--radio` y el globo se sale del marco por
+abajo, así que el IR usa `cuadros_c13_ir.py`, que sí encuadra el disco entero.
+El default de `cuadros_goes.py` y de `poster_goes_truecolor.py` es `-58 -23` /
+`-71 -10` (recorte sobre Sudamérica): la app siempre pasa el subsatelital.
+
+### Paso temporal en ECMWF
+
+Los cuadros van **cada 3 h**, igual que el `PASO_HORA = 3` de los scripts del
+repo. Con horizonte 144 h son 49 cuadros, no 25.
+
+### Posters sueltos
+
+`truecolor` y `mur_realista` producen un PNG, no una serie de cuadros. El runner
+publica tanto cuadros (`frames_*/cuadro_*.png`) como **PNG en la raíz del work**,
+por eso el visor muestra el póster igual que una animación.
 
 Decisiones que vienen de leer los scripts, no de suponer:
 

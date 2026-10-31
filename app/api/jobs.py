@@ -288,6 +288,13 @@ class JobManager:
         for patron, kind in (("*.mp4", "video"), ("*.gif", "video")):
             for archivo in sorted(job.work.rglob(patron)):
                 self._artefacto(job, archivo, kind)
+        # Posters sueltos (true color, MUR realista): PNG en la raiz del work.
+        posters = sorted(
+            job.work.glob("*.png"),
+            key=lambda p: p.stat().st_mtime,
+        )
+        for poster in posters[-3:]:
+            self._artefacto(job, poster, "image")
 
     async def _correr(self, job: Job) -> None:
         async with self._un_slot:
@@ -387,6 +394,14 @@ class JobManager:
                 args = [str(frames) if a == "{frames}" else a for a in paso.args]
             else:
                 args = list(paso.args)
+                if "{crudo}" in args:
+                    crudos = sorted(job.work.rglob("crudo_*.jpg"))
+                    if not crudos:
+                        raise RuntimeError(
+                            "no hay crudos de SST para el poster realista; "
+                            "activa 'Forzar descarga' para bajarlos"
+                        )
+                    args = [str(crudos[0]) if a == "{crudo}" else a for a in args]
 
             codigo = await self._lanzar(job, paso, args, base, span, etiqueta)
 
