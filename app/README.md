@@ -152,6 +152,21 @@ estilo, se vuelve a correr:
 app\.venv\Scripts\python.exe app\tools\previews.py
 ```
 
+### GOES-16: fechas anteriores a 2025
+
+G16 fue el GOES-East operativo hasta 2025, así que las fechas viejas se piden con
+`satelite = G16`. No hubo que tocar el descargador: arma el bucket desde el
+código del satélite (`noaa-goes{sat[1:]}` → `noaa-goes16`), y las carpetas de
+datos ya eran `goes_<banda>_<sat>`.
+
+Lo que sí faltaba era el rótulo: `cuadros_c13_ir.py` tenía `G19` escrito a mano
+en el nombre de la carpeta de cuadros, el del póster y el log. Ahora acepta
+`--sat` (default `G19`, así que nada existente cambia), y los textos dentro de la
+imagen ya salían del archivo (`platform_ID`), por eso dicen `G16 GOES-East` solos.
+
+Verificado de punta a punta: `2024-04-09 17:00 UTC` bajó de `noaa-goes16` en 4 s
+y renderizó con el rótulo correcto en las cuatro líneas del póster.
+
 ### Nitidez del color real
 
 El póster salía borroso no por el dato sino por el post-proceso:

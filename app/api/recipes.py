@@ -363,6 +363,7 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
     # globo se sale del marco por abajo.
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
     args = [
+        "--sat", sat,
         "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
         "--n", str(n),
         "--paso", str(paso),

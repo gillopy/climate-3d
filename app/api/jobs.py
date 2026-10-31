@@ -39,7 +39,7 @@ TERMINALES = ("done", "error", "cancelled")
 
 # Subir esto invalida la cache: la firma tiene que representar la receta entera,
 # incluido como se dibuja (paleta, fondo, capas), no solo los parametros.
-RECETA_VERSION = 6
+RECETA_VERSION = 7
 
 # Reparto del progreso entre etapas. La descarga y el render son lo que pesa.
 _PESO = {"download": 0.4, "render": 0.5, "animate": 0.1}
@@ -534,5 +534,6 @@ class JobManager:
         if job.cancelar.is_set():
             raise asyncio.CancelledError
         return codigo
+
 
 

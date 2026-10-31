@@ -288,7 +288,7 @@ def _sello_render(args) -> str:
     import hashlib
     datos = {
         "px": args.px, "dpi": args.dpi, "centro": list(args.centro),
-        "radio": args.radio, "credito": args.credito, "titulo": TITULO,
+        "radio": args.radio, "credito": args.credito, "sat": args.sat,
         "vmin": args.vmin, "vmax": args.vmax, "borde": args.geojson,
         "paleta": args.paleta,
     }
@@ -311,6 +311,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Globo Orthographic de la banda 13 (IR 10.3 µm) de GOES-19, con el "
                     "formato de póster de los productos ECMWF.")
+    ap.add_argument("--sat", default=SAT,
+                    help=f"satélite, p. ej. G16 o G19 (por defecto {SAT})")
     ap.add_argument("--desde", default=DESDE, help="primer cuadro, UTC")
     ap.add_argument("--n", type=int, default=N, help="cantidad de cuadros")
     ap.add_argument("--paso", type=int, default=PASO_MIN, help="minutos entre cuadros")
@@ -346,7 +348,7 @@ def main(argv=None) -> int:
         raise SystemExit(f"--radio debe estar en (0, 90] (recibí {args.radio}).")
 
     t0 = datetime.fromisoformat(args.desde)
-    datos = Path(args.datos) if args.datos else carpeta_datos()
+    datos = Path(args.datos) if args.datos else carpeta_datos(args.sat)
     if not datos.exists():
         raise SystemExit(f"No existe {datos}. Bajá los .nc con "
                          "descargar/descargar_goes.py.")
@@ -360,7 +362,7 @@ def main(argv=None) -> int:
 
     salida = Path(args.out) if args.out else SALIDAS
     salida.mkdir(parents=True, exist_ok=True)
-    etiqueta = f"G19_C13_{slots[0]:%Y-%m-%dT%H%M}_{len(slots)}f_{args.px}px"
+    etiqueta = f"{args.sat}_C13_{slots[0]:%Y-%m-%dT%H%M}_{len(slots)}f_{args.px}px"
     frames_dir = Path(args.frames) if args.frames else salida / f"frames_{etiqueta}"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
@@ -394,7 +396,7 @@ def main(argv=None) -> int:
         t = slots[-1]
         campo, x, y, proj, unidad, rot = cargar(sl_map[(t.date(), t.hour, t.minute)],
                                                 tope_px=args.tope, escena="FULL DISK")
-        poster = salida / f"poster_G19_C13_{t:%Y-%m-%dT%H%M}.png"
+        poster = salida / f"poster_{args.sat}_C13_{t:%Y-%m-%dT%H%M}.png"
         render_globo(campo, x, y, proj, rot, args.vmin, args.vmax, args, poster)
         print(f"Póster: {poster}")
         return 0
@@ -409,7 +411,7 @@ def main(argv=None) -> int:
         args.forzar = True
     archivo_sello.write_text(sello, encoding="utf-8")
 
-    print(f"G19 C13 | {len(slots)} cuadros desde {slots[0]:%Y-%m-%d %H:%M} UTC | "
+    print(f"{args.sat} C13 | {len(slots)} cuadros desde {slots[0]:%Y-%m-%d %H:%M} UTC | "
           f"{args.px}x{args.px} px | radio {args.radio:g}° | frames en {frames_dir}",
           flush=True)
 

@@ -60,7 +60,7 @@ PRODUCTS: list[Product] = [
                 options=[
                     ParamOption(value="G19", label="GOES-East G19 (75.2 W)"),
                     ParamOption(value="G18", label="GOES-West G18 (137.2 W)"),
-                    ParamOption(value="G16", label="GOES-East G16 (retirado)"),
+                    ParamOption(value="G16", label="GOES-East G16 (hasta 2025)"),
                 ],
                 help="define la carpeta de datos goes_c13_<sat>",
             ),
@@ -101,6 +101,7 @@ PRODUCTS: list[Product] = [
                 options=[
                     ParamOption(value="G19", label="GOES-East G19 (75.2 W)"),
                     ParamOption(value="G18", label="GOES-West G18 (137.2 W)"),
+                    ParamOption(value="G16", label="GOES-East G16 (hasta 2025)"),
                 ],
             ),
             ParamSpec(
