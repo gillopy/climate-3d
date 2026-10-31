@@ -83,7 +83,7 @@ LIMBO_COMP = 0.25          # exponente de compensación del limbo (0 = sin compe
 # como si fuera un aro inventado. Gamma más bajo y pedestal más suave emparejan la curva.
 GAMMA_DEF = 0.80
 PCT_LO_DEF = 0.2
-FUENTE = "NOAA/NESDIS GOES-19 ABI L2 CMIP · B1+B2+B3"
+FUENTE = "NOAA/NESDIS {goes} ABI L2 CMIP · B1+B2+B3"
 
 BG = "#000000"
 INK = "#f2f5f8"
@@ -381,6 +381,7 @@ def main(argv=None) -> int:
                     help="meridianos y paralelos cada 30° (por defecto, NO)")
     ap.add_argument("--out", help="PNG de salida (por defecto, en comun.rutas.SALIDAS)")
     args = ap.parse_args(argv)
+    args.fuente = args.fuente.replace("{goes}", "GOES-" + str(args.sat or SAT)[1:])
 
     sat = args.sat or "G19"
     desde = datetime.fromisoformat(args.desde) if args.desde else None

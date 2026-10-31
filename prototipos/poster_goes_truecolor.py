@@ -102,7 +102,7 @@ SUAVIZADO = 0.8                         # px de desenfoque final (limpia el mote
 
 TITULO = "True color"
 CREDITO = "Graphic by @Gillo97"
-FUENTE = f"SOURCE: NOAA/NESDIS {SAT} ABI L2 CMIP | B1+B2+B3 COMPOSITE"
+FUENTE = "SOURCE: NOAA/NESDIS {sat} ABI L2 CMIP | B1+B2+B3 COMPOSITE"
 
 # Vestuario, calcado del pÃ³ster realista (misma familia visual).
 WHITE = "#ffffff"
@@ -631,6 +631,7 @@ def main(argv=None) -> int:
     ap.add_argument("--paso", type=int, default=10, help="minutos entre cuadros")
     ap.add_argument("--forzar", action="store_true", help="rehace cuadros ya existentes")
     args = ap.parse_args(argv)
+    args.fuente = args.fuente.replace("{sat}", args.sat)
 
     if args.fondo == "oscuro":
         # Mismo póster, tinta invertida: sobre negro la tinta oscura no se lee.

@@ -296,34 +296,65 @@ def _slot_cenital(dia: date, lon: float) -> datetime:
 # cadencia, media hora cubre el horario sin caer en la noche.
 _TOLERANCIA_CENIT = timedelta(minutes=30)
 
+# Los horarios se eligen en hora local (UTC-3), que es como se leen los posters.
+_DESFASE_LOCAL = timedelta(hours=3)
+_PASO_SLOT = 10  # minutos entre cuadros: la cadencia real del ABI
+_MAX_CUADROS = 288  # 2 dias a 10 min: tope para no disparar 10 GB sin querer
+
+
+def _ventana_animacion(
+    inicio: date,
+    fin: date,
+    hora_desde: Any,
+    hora_hasta: Any,
+) -> tuple[datetime, datetime]:
+    """Rango UTC que cubre las horas locales elegidas, en el primer y ultimo dia."""
+    h0 = max(0, min(23, int(hora_desde)))
+    h1 = max(h0 + 1, min(24, int(hora_hasta)))
+    desde = datetime.combine(inicio, time(h0)) + _DESFASE_LOCAL
+    if h1 >= 24:
+        # Cerrar el dia: medianoche local del dia siguiente.
+        hasta = datetime.combine(fin + timedelta(days=1), time(0)) + _DESFASE_LOCAL
+    else:
+        hasta = datetime.combine(fin, time(h1)) + _DESFASE_LOCAL
+    return desde, hasta
+
 
 def _plan_slots(
-    disponibles: list[datetime],
+    disponibles: set[datetime],
     cenital: datetime,
     animar: bool,
+    ventana: tuple[datetime, datetime],
 ) -> tuple[datetime, int, int, bool]:
-    """Slot a renderizar, cuantos cuadros y si hay que descargarlo.
+    """Slot inicial, cuantos cuadros y si hay que descargarlos.
 
-    El disco tiene que estar iluminado: si no hay datos cerca del cenit, se pide
-    ese horario. Antes se tomaba el dato mas cercano aunque fuera medianoche y
-    salia el globo a oscuras.
+    - Poster: un cuadro en el cenit (disco iluminado).
+    - Animacion: todo el rango horario elegido, cada 10 minutos.
     """
-    paso = 10
-    objetivo = cenital - timedelta(minutes=30) if animar else cenital
-    n = 8 if animar else 1
+    paso = _PASO_SLOT
 
-    if objetivo in disponibles:
-        return objetivo, n, paso, False
+    if animar:
+        desde, hasta = ventana
+        n = max(1, int((hasta - desde).total_seconds() // (paso * 60)))
+        n = min(n, _MAX_CUADROS)
+        faltan = any(
+            (desde + timedelta(minutes=paso * i)) not in disponibles
+            for i in range(n)
+        )
+        return desde, n, paso, faltan
+
+    if cenital in disponibles:
+        return cenital, 1, paso, False
 
     cercanos = [
         s for s in disponibles
-        if abs((s - objetivo).total_seconds()) <= _TOLERANCIA_CENIT.total_seconds()
+        if abs((s - cenital).total_seconds()) <= _TOLERANCIA_CENIT.total_seconds()
     ]
     if cercanos:
-        elegido = min(cercanos, key=lambda s: abs((s - objetivo).total_seconds()))
-        return elegido, n, paso, False
+        elegido = min(cercanos, key=lambda s: abs((s - cenital).total_seconds()))
+        return elegido, 1, paso, False
 
-    return objetivo, n, paso, True
+    return cenital, 1, paso, True
 
 
 def _goes(params: dict[str, Any], work: Path) -> Plan:
@@ -340,8 +371,12 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
 
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
     cenital = _slot_cenital(inicio, lon_sub)
-    del_dia = [s for s in disponibles if s.date() == inicio] or disponibles
-    desde, n, paso, falta = _plan_slots(del_dia, cenital, _bool(params, "animar"))
+    ventana = _ventana_animacion(
+        inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+    )
+    desde, n, paso, falta = _plan_slots(
+        set(disponibles), cenital, _bool(params, "animar"), ventana
+    )
 
     # `descargar_goes.py` recorre [desde, hasta) en pasos de `paso` minutos.
     descarga = Step(
@@ -539,8 +574,10 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
 
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
     cenital = _slot_cenital(inicio, lon_sub)
-    del_dia = [s for s in disponibles if s.date() == inicio] or disponibles
-    desde, n, paso, falta = _plan_slots(del_dia, cenital, animar)
+    ventana = _ventana_animacion(
+        inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+    )
+    desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
 
     slot = desde.strftime("%Y-%m-%dT%H:%M")
     descarga = Step(

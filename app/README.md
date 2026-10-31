@@ -152,6 +152,28 @@ estilo, se vuelve a correr:
 app\.venv\Scripts\python.exe app\tools\previews.py
 ```
 
+### Animación: rango horario y cadencia
+
+Al animar, la serie cubre el **rango horario elegido** con la cadencia real del
+ABI: **cada 10 minutos**. Las horas se eligen en hora local (UTC-3), que es como
+se leen los pósters.
+
+| Desde | Hasta | Cuadros |
+| --- | --- | --- |
+| 0 | 24 | **144** (el día completo) |
+| 6 | 18 | 72 |
+| 13 | 15 | 12 |
+
+- El rango se convierte a UTC sumando 3 h: `00–24` local = `03:00` a `03:00` del
+  día siguiente en UTC.
+- El tope duro es 288 cuadros (2 días) para no disparar una descarga de decenas
+  de GB sin querer.
+- Con `animar` apagado, el rango no se usa: se renderiza un solo cuadro en el
+  cenit.
+
+Cuidado con el peso: 144 slots de C13 son ~7 GB de `.nc`. La descarga saltea lo
+que ya está en disco, así que repetir una animación no vuelve a bajarla.
+
 ### GOES-16: fechas anteriores a 2025
 
 G16 fue el GOES-East operativo hasta 2025, así que las fechas viejas se piden con
