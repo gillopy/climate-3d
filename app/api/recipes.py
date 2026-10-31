@@ -78,19 +78,6 @@ def _rango(params: dict[str, Any]) -> tuple[date, date]:
     return inicio, fin
 
 
-def _cuadros_goes(inicio: date, fin: date) -> tuple[int, int]:
-    """Cuantos cuadros y cada cuantos minutos, sobre la ventana elegida.
-
-    Los slots de GOES caen en multiplos de 10 minutos, asi que el paso se
-    redondea a 10 para que cada cuadro encuentre (o descargue) su `.nc`.
-    """
-    dias = max(1, (fin - inicio).days + 1)
-    n = max(4, min(dias * 8 + 4, 48))
-    total_min = dias * 1440
-    paso = max(10, int(round(total_min / max(1, n - 1) / 10.0)) * 10)
-    return n, paso
-
-
 def _px(params: dict[str, Any], por_defecto: int = 1400) -> int:
     try:
         return max(400, min(int(params.get("resolucion", por_defecto)), 2712))
@@ -287,6 +274,58 @@ def _slots_goes(sat: str, banda: str) -> list[datetime]:
     return sorted(set(slots))
 
 
+def _hora_cenital(lon: float) -> time:
+    """Hora UTC con el sol sobre el punto subsatelital.
+
+    Es el momento en que el centro del disco esta iluminado: el que conviene
+    para un poster de color real. Para G19 (75.2 W) cae cerca de las 17:00 UTC.
+    """
+    horas = (12.0 - lon / 15.0) % 24.0
+    h = int(horas)
+    m = int(round((horas - h) * 6)) * 10
+    if m >= 60:
+        h, m = (h + 1) % 24, 0
+    return time(h, m)
+
+
+def _slot_cenital(dia: date, lon: float) -> datetime:
+    return datetime.combine(dia, _hora_cenital(lon))
+
+
+# Que tan lejos del cenit se acepta un slot que ya esta en disco. Con 10 min de
+# cadencia, media hora cubre el horario sin caer en la noche.
+_TOLERANCIA_CENIT = timedelta(minutes=30)
+
+
+def _plan_slots(
+    disponibles: list[datetime],
+    cenital: datetime,
+    animar: bool,
+) -> tuple[datetime, int, int, bool]:
+    """Slot a renderizar, cuantos cuadros y si hay que descargarlo.
+
+    El disco tiene que estar iluminado: si no hay datos cerca del cenit, se pide
+    ese horario. Antes se tomaba el dato mas cercano aunque fuera medianoche y
+    salia el globo a oscuras.
+    """
+    paso = 10
+    objetivo = cenital - timedelta(minutes=30) if animar else cenital
+    n = 8 if animar else 1
+
+    if objetivo in disponibles:
+        return objetivo, n, paso, False
+
+    cercanos = [
+        s for s in disponibles
+        if abs((s - objetivo).total_seconds()) <= _TOLERANCIA_CENIT.total_seconds()
+    ]
+    if cercanos:
+        elegido = min(cercanos, key=lambda s: abs((s - objetivo).total_seconds()))
+        return elegido, n, paso, False
+
+    return objetivo, n, paso, True
+
+
 def _goes(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
     sat = str(params.get("satelite", "G19"))
@@ -299,21 +338,10 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
     datos_dir = data_root() / f"goes_c13_{sat.lower()}"
     disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
 
-    if disponibles and not forzar:
-        # Ya hay datos: se arranca en el primer slot real y se avanza solo
-        # mientras el siguiente exista. `cuadros_goes.py` asume una grilla
-        # contigua de 10 minutos y revienta con KeyError si falta uno.
-        desde = disponibles[0]
-        paso = 10
-        conocidos = set(disponibles)
-        n = 1
-        while n < 48 and (desde + timedelta(minutes=paso * n)) in conocidos:
-            n += 1
-    else:
-        # Sin datos, o con descarga forzada: la receta manda y la descarga
-        # trae exactamente los slots que el render va a pedir.
-        desde = datetime.combine(inicio, time.min)
-        n, paso = _cuadros_goes(inicio, fin)
+    lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+    cenital = _slot_cenital(inicio, lon_sub)
+    del_dia = [s for s in disponibles if s.date() == inicio] or disponibles
+    desde, n, paso, falta = _plan_slots(del_dia, cenital, _bool(params, "animar"))
 
     # `descargar_goes.py` recorre [desde, hasta) en pasos de `paso` minutos.
     descarga = Step(
@@ -357,8 +385,8 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         expected=n,
     )
 
-    # Sin datos locales la descarga no es opcional: no hay nada que renderizar.
-    pasos = [descarga, render_step] if (forzar or not disponibles) else [render_step]
+    # Si el slot del cenit no esta en disco, se baja: no se renderiza la noche.
+    pasos = [descarga, render_step] if (forzar or falta) else [render_step]
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -508,17 +536,10 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
     # C02 es la banda pesada (~410 MB): si esta, el slot existe.
     disponibles = [s for s in _slots_goes(sat, "C02") if inicio <= s.date() <= fin]
 
-    if disponibles and not forzar:
-        desde = disponibles[0]
-        paso = 10
-        conocidos = set(disponibles)
-        n = 1
-        while n < 24 and (desde + timedelta(minutes=paso * n)) in conocidos:
-            n += 1
-    else:
-        desde = datetime.combine(inicio, time.min)
-        n, paso = _cuadros_goes(inicio, fin)
-        n = min(n, 24)  # cada slot son 3 bandas: ~500 MB
+    lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+    cenital = _slot_cenital(inicio, lon_sub)
+    del_dia = [s for s in disponibles if s.date() == inicio] or disponibles
+    desde, n, paso, falta = _plan_slots(del_dia, cenital, animar)
 
     slot = desde.strftime("%Y-%m-%dT%H:%M")
     descarga = Step(
@@ -587,7 +608,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                 expected=1,
             )
 
-    pasos = [descarga, render_step] if (forzar or not disponibles) else [render_step]
+    pasos = [descarga, render_step] if (forzar or falta) else [render_step]
     return Plan(pasos=pasos, descarga=descarga)
 
 

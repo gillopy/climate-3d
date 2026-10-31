@@ -58,7 +58,6 @@ artefactos (/media/...)
 | Catálogo | `api/catalog.py` | Productos y **solo** los controles que su script acepta. |
 | Receta | `api/recipes.py` | Convierte la receta en `descargar_goes.py --sat G19 ...`, `cuadros_goes.py ...`, `animar/armar.py ...`. |
 | Cola | `api/jobs.py` | Un worker, jobs encolados, stdout a streaming, cancelación por árbol de procesos. |
-| Preview | `api/render.py` | Campo sintético para probar la UI sin datos ni pipeline. |
 | API | `api/main.py` | `/api/catalog`, `/api/jobs`, SSE, `/media`. |
 | UI | `web/src` | React + TS, formulario generado desde el esquema. |
 
@@ -68,7 +67,7 @@ Endpoints:
 GET  /api/health
 GET  /api/catalog
 GET  /api/catalog/{producto}/dates?satelite=G19&banda=C13
-POST /api/jobs                { product_id, params, mode: "real" | "preview" }
+POST /api/jobs                { product_id, params }
 GET  /api/jobs
 GET  /api/jobs/{id}
 GET  /api/jobs/{id}/events    text/event-stream
@@ -129,6 +128,29 @@ corrida pedida: nunca se bloquea el job por no poder consultar.
 Los crudos de ECMWF se detectan por carpeta
 (`crudos_precip_<modelo>_<fecha>_<ciclo>z`, `crudos_anom2t_<modelo>_<fecha>_<ciclo>z`).
 Si no están, la descarga entra al plan sin que haya que tocar el toggle.
+
+### Horario de los GOES: el cenit
+
+El color real necesita sol. El slot se elige con el **sol sobre el punto
+subsatelital**: para G19 (75.2 W) son las **17:00 UTC = 14:00 UTC-3**, el
+"mediodía" del disco.
+
+- Si hay un `.nc` a menos de 30 minutos de ese horario, se usa ese (por ejemplo
+  el slot de 16:50, que en hora local es 13:50).
+- Si no, se descarga el slot del cenit. Nunca se renderiza un horario nocturno
+  solo porque "era el dato más cercano": eso producía globos a oscuras.
+- Con `anima` encendido, la serie arranca media hora antes del cenit.
+
+### Muestras de cada producto
+
+`app/tools/previews.py` genera un WebP por producto desde un **render real** y lo
+deja en `app/web/public/previews/<producto>.webp`. La API lo expone como
+`preview` y la UI lo muestra en la tarjeta y arriba del formulario. Si cambia un
+estilo, se vuelve a correr:
+
+```powershell
+app\.venv\Scripts\python.exe app\tools\previews.py
+```
 
 ### Vista y centro
 
@@ -194,7 +216,7 @@ Decisiones que vienen de leer los scripts, no de suponer:
 ## Caché de renders
 
 La carpeta de trabajo es `app/var/media/cache/<firma>/`, donde la firma es un
-hash de producto + modo + parámetros (sin `descargar`, que no cambia el render).
+hash de producto + parámetros (sin `descargar`, que no cambia el render).
 
 Consecuencias:
 
@@ -218,7 +240,6 @@ hijo renderizando y el pipe abierto. Verificado: cancelar en 79 % deja el job en
 - **Descargar** (opcional, apagado por defecto): internet y credenciales según la
   fuente — NOAA S3 para GOES/MUR, NASA Earthdata para LACE/PACE, CDS para ERA5.
   Si la descarga falla, el job muestra el error real del script.
-- **Preview**: nada. Dibuja un campo sintético para probar la UI.
 
 ## Entornos separados
 

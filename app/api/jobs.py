@@ -24,7 +24,6 @@ from typing import Any, AsyncIterator
 
 import psutil
 
-from . import render
 from .catalog import get_product
 from .recipes import (
     PRODUCTOS_ECMWF,
@@ -138,7 +137,7 @@ class JobManager:
         self._tareas: set[asyncio.Task] = set()
 
     # --- API publica -----------------------------------------------------
-    def crear(self, product_id: str, params: dict[str, Any], mode: str) -> Job:
+    def crear(self, product_id: str, params: dict[str, Any]) -> Job:
         producto = get_product(product_id)
         if producto is None:
             raise ValueError(f"Producto desconocido: {product_id}")
@@ -148,7 +147,7 @@ class JobManager:
         # para que activar la descarga no invalide cuadros ya hechos.
         firma_params = {k: v for k, v in params.items() if k != "descargar"}
         firma = hashlib.sha1(
-            f"v{RECETA_VERSION}|{product_id}|{mode}|"
+            f"v{RECETA_VERSION}|{product_id}|"
             f"{json.dumps(firma_params, sort_keys=True, default=str)}".encode("utf-8")
         ).hexdigest()[:12]
         job = Job(
@@ -156,20 +155,19 @@ class JobManager:
             product_id=producto.id,
             product_name=producto.name,
             params=params,
-            mode=mode,
+            mode="real",
             dir=self.media_root / "cache" / firma,
         )
 
-        if mode == "real":
-            if not python_repo().is_file():
-                raise ValueError(
-                    f"Falta el Python del repo: {python_repo()}. "
-                    "Sin eso no se puede ejecutar el pipeline."
-                )
-            try:
-                job.plan = [p.label for p in planear(product_id, params, job.work).pasos]
-            except ValueError as exc:
-                raise ValueError(str(exc)) from exc
+        if not python_repo().is_file():
+            raise ValueError(
+                f"Falta el Python del repo: {python_repo()}. "
+                "Sin eso no se puede ejecutar el pipeline."
+            )
+        try:
+            job.plan = [p.label for p in planear(product_id, params, job.work).pasos]
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
 
         self.jobs[job_id] = job
         self._podar()
@@ -310,10 +308,7 @@ class JobManager:
             job.dir.mkdir(parents=True, exist_ok=True)
             try:
                 self._log(job, f"job {job.id} | {job.product_id} | modo={job.mode}")
-                if job.mode == "real":
-                    await self._real(job)
-                else:
-                    await self._preview(job)
+                await self._real(job)
 
                 self._publicar(job)
                 if not job.artifacts:
@@ -539,40 +534,3 @@ class JobManager:
         if job.cancelar.is_set():
             raise asyncio.CancelledError
         return codigo
-
-    # --- modo preview ----------------------------------------------------
-    async def _preview(self, job: Job) -> None:
-        total = render.frame_count(job.params)
-        marcas = render.build_timeline(job.params, total)
-        tamaño = int(job.params.get("resolucion", 1400) or 1400)
-        estilo = str(job.params.get("estilo", "realista"))
-
-        self._log(job, f"plan: {total} cuadro(s) | {marcas[0]} -> {marcas[-1]} | {tamaño}px")
-        frames: list[Path] = []
-        for i, marca in enumerate(marcas):
-            if job.cancelar.is_set():
-                raise asyncio.CancelledError
-            destino = job.work / "preview" / f"cuadro_{i:03d}.png"
-            await asyncio.to_thread(
-                render.render_frame,
-                destino,
-                titulo=job.product_name,
-                subtitulo=marca,
-                estilo=estilo,
-                marca=f"{job.product_id} - preview",
-                indice=i,
-                total=total,
-                tamaño=tamaño,
-            )
-            frames.append(destino)
-            self._log(job, f"[{i + 1}/{total}] {marca} -> {destino.name}")
-            self._progreso(job, 0.05 + 0.8 * (i + 1) / total, f"cuadro {i + 1}/{total}")
-
-        if len(frames) > 1 and job.params.get("animar", True):
-            fps = int(job.params.get("fps", 12) or 12)
-            self._progreso(job, 0.9, "armando la animacion")
-            gif = job.work / f"{job.product_id}_{job.id}.gif"
-            await asyncio.to_thread(render.save_gif, frames, gif, fps)
-            self._log(job, f"animacion lista: {gif.name}")
-
-

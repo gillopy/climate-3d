@@ -8,7 +8,6 @@ import type {
   Job,
   Params,
   Product,
-  RunMode,
 } from "./types";
 
 function valoresIniciales(producto: Product): Params {
@@ -25,7 +24,6 @@ export default function App() {
   const [params, setParams] = useState<Params>({});
   const [fechas, setFechas] = useState<DatesResponse | null>(null);
   const [job, setJob] = useState<Job | null>(null);
-  const [modo, setModo] = useState<RunMode>("real");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const corte = useRef<(() => void) | null>(null);
@@ -68,7 +66,6 @@ export default function App() {
   function elegir(siguiente: Product) {
     setProducto(siguiente);
     setParams(valoresIniciales(siguiente));
-    setModo(siguiente.command_ready ? "real" : "preview");
     setError(null);
   }
 
@@ -77,7 +74,7 @@ export default function App() {
     setEnviando(true);
     setError(null);
     try {
-      const nuevo = await createJob(producto.id, params, modo);
+      const nuevo = await createJob(producto.id, params);
       setJob(nuevo);
 
       // Un pedido viejo no debe seguir escribiendo en el panel nuevo.
@@ -154,6 +151,14 @@ export default function App() {
               className={`producto${producto?.id === item.id ? " producto--activo" : ""}`}
               onClick={() => elegir(item)}
             >
+              {item.preview ? (
+                <img
+                  className="producto__preview"
+                  src={item.preview}
+                  alt=""
+                  loading="lazy"
+                />
+              ) : null}
               <span className="producto__grupo">{item.group}</span>
               <span className="producto__nombre">{item.name}</span>
               <span className="producto__resumen">{item.summary}</span>
@@ -170,14 +175,12 @@ export default function App() {
               product={producto}
               params={params}
               dates={fechas}
-              mode={modo}
               busy={enviando}
               error={null}
               repoPython={catalogo?.repo_python ?? ".venv\\Scripts\\python.exe"}
               onChange={(nombre, valor) =>
                 setParams((previo) => ({ ...previo, [nombre]: valor }))
               }
-              onMode={setModo}
               onSubmit={generar}
             />
           ) : (

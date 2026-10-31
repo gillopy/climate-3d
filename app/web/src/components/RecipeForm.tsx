@@ -1,15 +1,13 @@
-import type { DatesResponse, Params, Product, RangoFechas, RunMode } from "../types";
+import type { DatesResponse, Params, Product, RangoFechas } from "../types";
 
 interface Props {
   product: Product;
   params: Params;
   dates: DatesResponse | null;
-  mode: RunMode;
   busy: boolean;
   error: string | null;
   repoPython: string;
   onChange: (nombre: string, valor: Params[string]) => void;
-  onMode: (modo: RunMode) => void;
   onSubmit: () => void;
 }
 
@@ -30,12 +28,10 @@ export function RecipeForm({
   product,
   params,
   dates,
-  mode,
   busy,
   error,
   repoPython,
   onChange,
-  onMode,
   onSubmit,
 }: Props) {
   const ultimaFecha = dates?.dates.at(0) ?? "";
@@ -60,6 +56,13 @@ export function RecipeForm({
         <p className="receta__resumen">{product.summary}</p>
         <code className="receta__script">{product.stage}</code>
       </div>
+
+      {product.preview ? (
+        <figure className="receta__muestra">
+          <img src={product.preview} alt={`Resultado de ${product.name}`} />
+          <figcaption>salida real de este producto</figcaption>
+        </figure>
+      ) : null}
 
       {product.params.map((spec) => {
         const valor = params[spec.name];
@@ -149,28 +152,6 @@ export function RecipeForm({
           </div>
         );
       })}
-
-      <div className="receta__modo">
-        <label className={product.command_ready ? "" : "receta__modo--off"}>
-          <input
-            type="radio"
-            name="modo"
-            checked={mode === "real"}
-            disabled={!product.command_ready}
-            onChange={() => onMode("real")}
-          />
-          Ejecutar el pipeline real
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="modo"
-            checked={mode === "preview"}
-            onChange={() => onMode("preview")}
-          />
-          Preview sintetico (no toca datos)
-        </label>
-      </div>
 
       {product.command_ready ? (
         <p className="receta__aviso">

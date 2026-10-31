@@ -26,6 +26,7 @@ export interface Product {
   stage: string;
   summary: string;
   params: ParamSpec[];
+  preview: string | null;
   command_ready: boolean;
   command: string[] | null;
 }

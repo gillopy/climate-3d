@@ -46,6 +46,10 @@ class Product(BaseModel):
     stage: str
     summary: str
     params: list[ParamSpec]
+    preview: str | None = Field(
+        default=None,
+        description="WebP de muestra generado con el pipeline real, servido en /previews.",
+    )
     command_ready: bool = Field(
         default=False,
         description="True cuando el producto ya declara el comando real en catalog.py.",
@@ -69,11 +73,10 @@ class DatesResponse(BaseModel):
 
 
 class RecipeRequest(BaseModel):
-    """El pedido del usuario: producto + parametros + modo de ejecucion."""
+    """El pedido del usuario: producto + parametros. Siempre corre el pipeline real."""
 
     product_id: str
     params: dict[str, Any] = Field(default_factory=dict)
-    mode: RunMode = "real"
 
 
 class Artifact(BaseModel):

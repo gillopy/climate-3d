@@ -5,7 +5,6 @@ import type {
   Job,
   LogLine,
   Params,
-  RunMode,
 } from "./types";
 
 async function leer<T>(res: Response): Promise<T> {
@@ -43,15 +42,11 @@ export function getJobs(): Promise<Job[]> {
   return fetch("/api/jobs").then((r) => leer<Job[]>(r));
 }
 
-export function createJob(
-  productId: string,
-  params: Params,
-  mode: RunMode,
-): Promise<Job> {
+export function createJob(productId: string, params: Params): Promise<Job> {
   return fetch("/api/jobs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ product_id: productId, params, mode }),
+    body: JSON.stringify({ product_id: productId, params }),
   }).then((r) => leer<Job>(r));
 }
 

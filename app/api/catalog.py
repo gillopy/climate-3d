@@ -81,7 +81,7 @@ PRODUCTS: list[Product] = [
                 default=False,
                 help="si la fecha no tiene datos en disco se descarga igual; esto baja los .nc aunque ya existan",
             ),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
@@ -147,7 +147,7 @@ PRODUCTS: list[Product] = [
                 ],
             ),
             ParamSpec(name="descargar", label="Bajar los cuadros de GIBS", kind="toggle", default=False),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
@@ -221,7 +221,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="claro", options=_FONDO),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
             ParamSpec(name="descargar", label="Bajar los crudos de ECMWF", kind="toggle", default=False),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
@@ -254,7 +254,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="claro", options=_FONDO),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
             ParamSpec(name="descargar", label="Bajar los crudos de ECMWF", kind="toggle", default=False),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
@@ -274,7 +274,7 @@ PRODUCTS: list[Product] = [
                 default=False,
                 help="necesita credenciales de NASA Earthdata configuradas",
             ),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
@@ -288,9 +288,21 @@ def get_product(product_id: str) -> Product | None:
 
 
 def productos_disponibles() -> list[Product]:
-    """Marca cada producto segun si el entorno real esta listo."""
+    """Marca cada producto segun si el entorno real esta listo y si hay muestra."""
     listo = repo_listo()
-    return [p.model_copy(update={"command_ready": listo}) for p in PRODUCTS]
+    muestras = RAIZ_REPO / "app" / "web" / "public" / "previews"
+    salida: list[Product] = []
+    for producto in PRODUCTS:
+        webp = muestras / f"{producto.id}.webp"
+        salida.append(
+            producto.model_copy(
+                update={
+                    "command_ready": listo,
+                    "preview": f"/previews/{producto.id}.webp" if webp.is_file() else None,
+                }
+            )
+        )
+    return salida
 
 
 def data_root() -> Path:
@@ -376,3 +388,4 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
 
     hoy = date.today()
     return "demo", [(hoy - timedelta(days=i)).isoformat() for i in range(30)]
+

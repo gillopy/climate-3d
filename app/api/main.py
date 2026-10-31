@@ -94,7 +94,7 @@ def fechas(
 async def crear_job(receta: RecipeRequest) -> JobSnapshot:
     # async a proposito: `crear` agenda la tarea en el event loop que corre la API.
     try:
-        job = gestor.crear(receta.product_id, receta.params, receta.mode)
+        job = gestor.crear(receta.product_id, receta.params)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return job.snapshot()
