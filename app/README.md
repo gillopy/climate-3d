@@ -152,6 +152,29 @@ estilo, se vuelve a correr:
 app\.venv\Scripts\python.exe app\tools\previews.py
 ```
 
+### La paleta GIBS y su escala
+
+La rampa `clean_ir` de `comun/paleta_gibs.py` es la de Worldview y **es correcta**:
+237 bins copiados del XML oficial. El problema era la **escala**.
+
+- Himawari la usa con el rango fijo de GIBS: **-92.1 a 56.9 °C**.
+- GOES la usaba con percentiles 0.5/99.5 del primer cuadro.
+
+Con percentiles, la misma temperatura caía en otro color: a -40 °C GIBS pinta
+verde y el póster de GOES pintaba rojo. Ahora, cuando la paleta es `clean_ir`,
+la app pasa `--vmin -92.1 --vmax 56.9` y las dos barras quedan idénticas.
+
+### Himawari-9
+
+Producto propio (`descargar_himawari.py` + `cuadros_himawari_ir.py`): disco
+completo en la proyección del satélite, centrado en su punto subsatelital
+(**140.7 E, lat 0**) con `--radio 90`. Sin recorte regional.
+
+- Los slots son `.npz` de ~21 MB en `himawari_b13_h09` (`YYYYMMDD_HHMM.npz`).
+- La descarga decodifica HSD de JMA, así que es más lenta que un `.nc` de GOES.
+- Resolución por defecto **2712 px**: es el default del script y por debajo el
+  título se superpone con el crédito.
+
 ### Animación: rango horario y cadencia
 
 Al animar, la serie cubre el **rango horario elegido** con la cadencia real del

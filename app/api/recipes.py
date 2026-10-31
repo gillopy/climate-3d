@@ -426,6 +426,11 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         "--frames", str(work / "frames"),
         "--lote", "1",
     ]
+    if str(params.get("paleta", "clean_ir")) == "clean_ir":
+        # La rampa de GIBS tiene escala fija (-92.1 a 56.9 C). Con percentiles
+        # los mismos colores caen en otras temperaturas y deja de coincidir con
+        # Worldview (y con el render de Himawari, que si la usa fija).
+        args += ["--vmin", "-92.1", "--vmax", "56.9"]
 
     render_step = Step(
         kind="render",
@@ -717,6 +722,89 @@ def _mur_realista(params: dict[str, Any], work: Path) -> Plan:
     return Plan(pasos=pasos, descarga=descarga)
 
 
+
+# --- HIMAWARI-9: disco completo en la proyeccion del satelite -----------
+_LON_SUBSAT["H09"] = 140.7  # Himawari-9 esta en 140.7 E
+
+_SLOT_HIMAWARI = re.compile(r"(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})")
+
+
+def _carpeta_himawari() -> Path:
+    from .catalog import data_root  # import local: evita el ciclo
+
+    return data_root() / "himawari_b13_h09"
+
+
+def _slots_himawari() -> list[datetime]:
+    """Marcas con `.npz` en disco, leidas del nombre (`YYYYMMDD_HHMM.npz`)."""
+    carpeta = _carpeta_himawari()
+    if not carpeta.is_dir():
+        return []
+    slots: list[datetime] = []
+    for archivo in carpeta.glob("*.npz"):
+        match = _SLOT_HIMAWARI.search(archivo.name)
+        if not match:
+            continue
+        anio, mes, dia, hora, minuto = (int(g) for g in match.groups())
+        try:
+            slots.append(datetime(anio, mes, dia, hora, minuto))
+        except ValueError:
+            continue
+    return sorted(set(slots))
+
+
+def _himawari(params: dict[str, Any], work: Path) -> Plan:
+    inicio, fin = _rango(params)
+    px = _px(params, 1400)
+    forzar = _bool(params, "descargar")
+    animar = _bool(params, "animar")
+
+    disponibles = [s for s in _slots_himawari() if inicio <= s.date() <= fin]
+    cenital = _slot_cenital(inicio, _LON_SUBSAT["H09"])
+    ventana = _ventana_animacion(
+        inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+    )
+    desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
+
+    descarga = Step(
+        kind="download",
+        label=f"bajando B13 de Himawari-9 ({n} slot(s))",
+        script="descargar/descargar_himawari.py",
+        args=[
+            "--sat", "H09",
+            "--banda", "13",
+            "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
+            "--hasta", (desde + timedelta(minutes=paso * n)).strftime("%Y-%m-%dT%H:%M"),
+            "--paso", str(paso),
+        ],
+        expected=max(1, math.ceil(n / 10)),
+    )
+
+    render_step = Step(
+        kind="render",
+        label=f"renderizando {n} cuadro(s) de Himawari",
+        script="cuadros/cuadros_himawari_ir.py",
+        args=[
+            "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
+            "--n", str(n),
+            "--paso", str(paso),
+            "--px", str(px),
+            # Centro en el punto subsatelital y radio 90: el disco completo,
+            # sin recorte regional.
+            "--centro", f"{_LON_SUBSAT['H09']:g}", "0",
+            "--radio", "90",
+            "--datos", str(_carpeta_himawari()),
+            "--out", str(work),
+            "--frames", str(work / "frames"),
+            "--lote", "1",
+        ],
+        expected=n,
+    )
+
+    pasos = [descarga, render_step] if (forzar or falta) else [render_step]
+    return Plan(pasos=pasos, descarga=descarga)
+
+
 _CONSTRUCTORES = {
     "goes_c13": _goes,
     "goes_truecolor": _goes_truecolor,
@@ -725,6 +813,7 @@ _CONSTRUCTORES = {
     "precipitacion_ecmwf": _precipitacion,
     "anomalia_2t": _anomalia,
     "follaje": _follaje,
+    "himawari": _himawari,
 }
 
 

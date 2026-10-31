@@ -329,6 +329,54 @@ PRODUCTS: list[Product] = [
         ],
     ),
     Product(
+        id="himawari",
+        name="Himawari-9 - disco completo (B13)",
+        group="satelite",
+        stage="descargar/descargar_himawari.py + cuadros/cuadros_himawari_ir.py",
+        summary="AHI banda 13 (10.4 um). El disco entero, centrado en el punto "
+        "subsatelital (140.7 E): la vista del satelite, sin recorte regional.",
+        params=[
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
+            ParamSpec(
+                name="resolucion",
+                label="Resolucion",
+                kind="select",
+                default="2712",
+                options=_RESOLUCIONES,
+                help="2712 px es el default del script; por debajo el titulo se superpone",
+            ),
+            ParamSpec(
+                name="descargar",
+                label="Forzar descarga",
+                kind="toggle",
+                default=False,
+                help="baja los HSD de JMA y los decodifica a .npz (uno por slot)",
+            ),
+            ParamSpec(
+                name="hora_desde",
+                label="Desde (hora local UTC-3)",
+                kind="slider",
+                default=0,
+                min=0,
+                max=23,
+                step=1,
+                help="solo al animar: 0 a 24 son los 144 cuadros del dia, cada 10 min",
+            ),
+            ParamSpec(
+                name="hora_hasta",
+                label="Hasta (hora local UTC-3)",
+                kind="slider",
+                default=24,
+                min=1,
+                max=24,
+                step=1,
+                help="fin exclusivo: 24 cierra el dia completo",
+            ),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
+        ],
+    ),
+    Product(
         id="follaje",
         name="PACE - follaje (LANDVI)",
         group="satelite",
@@ -432,6 +480,11 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
         datos = raiz / carpeta
         if datos.is_dir():
             encontradas |= _fechas_de_nombres([f.name for f in datos.glob("*.nc")], _DIA_GOES)
+
+    if product.id == "himawari":
+        datos = raiz / "himawari_b13_h09"
+        if datos.is_dir():
+            encontradas |= _fechas_de_nombres([f.name for f in datos.glob("*.npz")], _FECHA_ISO)
 
     if product.id == "follaje":
         datos = raiz / "pace_landvi"
