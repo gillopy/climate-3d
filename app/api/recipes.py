@@ -577,6 +577,10 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
             # Sin esto el script corta en 73.3 grados y deja afuera el 6 %
             # del disco: el limite visible real del satelite esta en 81.3.
             centro += ["--recorte", "1.0"]
+        if str(params.get("nitidez", "maxima")) == "maxima":
+            # La mediana 3x3 y el desenfoque de 0.8 px borronean las nubes:
+            # a 2712 px se nota. Se apagan salvo que se pida el look suave.
+            centro += ["--no-mediana", "--suavizado", "0"]
         if animar and n > 1:
             render_step = Step(
                 kind="render",

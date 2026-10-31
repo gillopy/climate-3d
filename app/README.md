@@ -152,6 +152,25 @@ estilo, se vuelve a correr:
 app\.venv\Scripts\python.exe app\tools\previews.py
 ```
 
+### Nitidez del color real
+
+El póster salía borroso no por el dato sino por el post-proceso:
+
+| Paso | Qué hacía | Efecto medido |
+| --- | --- | --- |
+| `--mediana` (3×3) | mata el píxel suelto del limbo | pierde textura fina de nube |
+| `--suavizado 0.8` | desenfoque gaussiano | 0.9 px a 2712 px de salida |
+| `px 1400` | disco a 1400 px | 26 % de los 5424 nativos del ABI |
+
+Los tres juntos dejan el disco con aspecto algodonoso. Ahora `nitidez = maxima`
+(default) apaga mediana y desenfoque, y la resolución por defecto es **2712 px**,
+el tamaño del disco nativo. Con `nitidez = suave` vuelve el look anterior, útil
+si el limbo completo aparece con moteado.
+
+El límite físico no cambia: ABI da 0.5–1 km por píxel, mientras que un mosaico
+VIIRS/MODIS tiene 250–750 m. Un compuesto de GOES nunca va a igualar ese detalle;
+lo que sí se puede es no tirar el que hay.
+
 ### El limbo del color real: está recortado por diseño
 
 `radio_visible()` en `prototipos/poster_goes_realista.py` corta el disco en

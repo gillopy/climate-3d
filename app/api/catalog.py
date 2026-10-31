@@ -125,8 +125,26 @@ PRODUCTS: list[Product] = [
                 ],
                 help="el script recorta por defecto hasta 73.3 grados; el limite real del satelite es 81.3",
             ),
+            ParamSpec(
+                name="nitidez",
+                label="Nitidez",
+                kind="select",
+                default="maxima",
+                options=[
+                    ParamOption(value="maxima", label="Maxima: sin mediana ni desenfoque"),
+                    ParamOption(value="suave", label="Suave: mediana 3x3 y desenfoque 0.8 px"),
+                ],
+                help="el suavizado limpia el moteado del limbo pero borronea las nubes",
+            ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
-            ParamSpec(name="resolucion", label="Resolucion", kind="select", default="2000", options=_RESOLUCIONES),
+            ParamSpec(
+                name="resolucion",
+                label="Resolucion",
+                kind="select",
+                default="2712",
+                options=_RESOLUCIONES,
+                help="2712 px es la resolucion del disco nativo: por debajo se pierde detalle",
+            ),
             ParamSpec(
                 name="descargar",
                 label="Forzar descarga",
