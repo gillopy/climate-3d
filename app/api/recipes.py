@@ -339,6 +339,8 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         "--n", str(n),
         "--paso", str(paso),
         "--px", str(px),
+        "--paleta", str(params.get("paleta", "clean_ir")),
+        "--geojson", "",  # sin el contorno de Paraguay: solo el dato
         "--centro", f"{lon_sub:g}", "0",
         "--radio", "90",
         "--datos", str(datos_dir),
@@ -559,6 +561,8 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                     "--desde", slot,
                     "--sat", sat,
                     "--px", str(px),
+                    "--fondo", "oscuro",
+                    "--no-lineas", "--no-fronteras", "--borde", "",
                     *centro,
                     "--n", str(n),
                     "--paso", str(paso),
@@ -575,6 +579,8 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                     "--desde", slot,
                     "--sat", sat,
                     "--px", str(px),
+                    "--fondo", "oscuro",
+                    "--no-lineas", "--no-fronteras", "--borde", "",
                     *centro,
                     "--out", str(work / f"truecolor_{desde:%Y-%m-%dT%H%M}.png"),
                 ],
@@ -611,6 +617,7 @@ def _mur_realista(params: dict[str, Any], work: Path) -> Plan:
         "--crudo", "{crudo}",
         "--px", str(px),
         "--paleta", str(params.get("paleta", "realista")),
+        "--rios",
         "--out", str(work / f"mur_realista_{px}px.png"),
     ]
     if _bool(params, "trend"):
@@ -646,3 +653,5 @@ def python_repo() -> Path:
 
 def repo_listo() -> bool:
     return PYTHON_REPO.is_file()
+
+

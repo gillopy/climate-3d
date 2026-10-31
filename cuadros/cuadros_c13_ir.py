@@ -40,7 +40,7 @@ sys.path.insert(0, str(RAIZ / "descargar"))
 sys.path.insert(0, str(RAIZ / "prototipos"))
 from goes_lectura import PATRON, cargar  # noqa: E402
 from goes_descarga import clave_de  # noqa: E402
-from poster_goes import IR_REALCE_CMAP  # noqa: E402
+from poster_goes import IR_REALCE_CMAP, PALETTES  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
 from estilo import BG, TXT, TXT_DIM  # noqa: E402
 
@@ -141,7 +141,8 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
 
     # El campo viene en proyección geostacionaria: `pcolormesh` lo reproyecta al
     # Orthographic del eje (no hace falta warp previo ni scipy).
-    mesh = ax.pcolormesh(x, y, campo, transform=proj, cmap=IR_REALCE_CMAP,
+    mesh = ax.pcolormesh(x, y, campo, transform=proj,
+                         cmap=PALETTES.get(args.paleta, IR_REALCE_CMAP),
                          vmin=vmin, vmax=vmax, shading="auto", zorder=2)
 
     try:
@@ -151,7 +152,8 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
                        edgecolor="#0b0b0b", linestyle=":", zorder=4)
     except Exception as exc:
         print(f"AVISO: costas/fronteras omitidas ({exc})")
-    _borde_geojson(ax, BORDE_SA, "#ffffff", ESPESOR_BORDE_PY)
+    if args.geojson:
+        _borde_geojson(ax, args.geojson, "#ffffff", ESPESOR_BORDE_PY)
 
     # --------------------------------------------------------------- vestuario
     # Estructura de tres líneas como los ECMWF: título (mes y año), fecha/hora del
@@ -287,7 +289,8 @@ def _sello_render(args) -> str:
     datos = {
         "px": args.px, "dpi": args.dpi, "centro": list(args.centro),
         "radio": args.radio, "credito": args.credito, "titulo": TITULO,
-        "vmin": args.vmin, "vmax": args.vmax, "borde": BORDE_SA,
+        "vmin": args.vmin, "vmax": args.vmax, "borde": args.geojson,
+        "paleta": args.paleta,
     }
     return hashlib.sha256(json.dumps(datos, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -320,6 +323,10 @@ def main(argv=None) -> int:
     ap.add_argument("--credito", default=CREDITO, help="crédito de la esquina")
     ap.add_argument("--vmin", type=float, default=VMIN, help="mínimo de la escala (°C)")
     ap.add_argument("--vmax", type=float, default=VMAX, help="máximo de la escala (°C)")
+    ap.add_argument("--paleta", default="ir_realce", choices=sorted(PALETTES),
+                    help="paleta de color (default: ir_realce, la histórica)")
+    ap.add_argument("--geojson", default=BORDE_SA,
+                    help="contorno destacado (GeoJSON); vacío = sin borde, p. ej. --geojson \"\"")
     ap.add_argument("--tope", type=int, default=2712,
                     help="resolución del campo leído del .nc (default: igual a --px)")
     ap.add_argument("--datos", help="carpeta de los .nc (default: la del satélite/banda)")

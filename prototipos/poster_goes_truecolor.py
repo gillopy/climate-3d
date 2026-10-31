@@ -510,25 +510,26 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px):
               extent=[-1, 1, -1, 1], interpolation="lanczos", zorder=2)
 
     centro = tuple(args.centro)
-    meridianos, paralelos = [], []
-    for lon in np.arange(-180.0, 180.01, 30.0):
-        la = np.linspace(-90.0, 90.0, 181)
-        meridianos.append(np.column_stack(_orto_directo(np.full_like(la, lon), la,
-                                                        centro, escala)))
-    for lat in np.arange(-90.0, 90.01, 30.0):
-        lo = np.linspace(-180.0, 180.0, 361)
-        paralelos.append(np.column_stack(_orto_directo(lo, np.full_like(lo, lat),
-                                                       centro, escala)))
-    for segs in (paralelos, meridianos):
-        ax.add_collection(LineCollection(segs, colors=GRID, linewidths=0.45,
-                                         alpha=0.24, zorder=5, capstyle="round"))
+    if args.lineas:
+        meridianos, paralelos = [], []
+        for lon in np.arange(-180.0, 180.01, 30.0):
+            la = np.linspace(-90.0, 90.0, 181)
+            meridianos.append(np.column_stack(_orto_directo(np.full_like(la, lon), la,
+                                                            centro, escala)))
+        for lat in np.arange(-90.0, 90.01, 30.0):
+            lo = np.linspace(-180.0, 180.0, 361)
+            paralelos.append(np.column_stack(_orto_directo(lo, np.full_like(lo, lat),
+                                                           centro, escala)))
+        for segs in (paralelos, meridianos):
+            ax.add_collection(LineCollection(segs, colors=GRID, linewidths=0.45,
+                                             alpha=0.24, zorder=5, capstyle="round"))
 
-    lineas = _lineas_natural_earth("physical", "coastline", "50m")
-    if lineas:
-        ax.add_collection(LineCollection(
-            [np.column_stack(_orto_directo(np.asarray(s)[:, 0], np.asarray(s)[:, 1],
-                                           centro, escala)) for s in lineas],
-            colors=COAST, linewidths=0.55, alpha=0.55, zorder=6))
+        lineas = _lineas_natural_earth("physical", "coastline", "50m")
+        if lineas:
+            ax.add_collection(LineCollection(
+                [np.column_stack(_orto_directo(np.asarray(s)[:, 0], np.asarray(s)[:, 1],
+                                               centro, escala)) for s in lineas],
+                colors=COAST, linewidths=0.55, alpha=0.55, zorder=6))
     if args.fronteras:
         bordes = _lineas_natural_earth("cultural", "admin_0_boundary_lines_land", "50m")
         if bordes:
@@ -621,11 +622,25 @@ def main(argv=None) -> int:
     ap.add_argument("--fronteras", action=argparse.BooleanOptionalAction, default=True,
                     help="lÃ­mites polÃ­ticos punteados (por defecto, sÃ­)")
     ap.add_argument("--out", help="PNG de salida (por defecto, en comun.rutas.SALIDAS)")
+    ap.add_argument("--fondo", choices=["claro", "oscuro"], default="claro",
+                    help="fondo del poster (por defecto, claro)")
+    ap.add_argument("--lineas", action=argparse.BooleanOptionalAction, default=True,
+                    help="reticula y costas (por defecto, si); --no-lineas deja la imagen limpia")
     ap.add_argument("--frames", help="carpeta de cuadros: renderiza una serie numerada")
     ap.add_argument("--n", type=int, default=1, help="cantidad de cuadros de la serie")
     ap.add_argument("--paso", type=int, default=10, help="minutos entre cuadros")
     ap.add_argument("--forzar", action="store_true", help="rehace cuadros ya existentes")
     args = ap.parse_args(argv)
+
+    if args.fondo == "oscuro":
+        # Mismo póster, tinta invertida: sobre negro la tinta oscura no se lee.
+        global WHITE, INK, INK_SOFT, COAST, BORDER, GRID
+        WHITE = "#000000"
+        INK = "#eef2f5"
+        INK_SOFT = "#9aa0a6"
+        COAST = "#cfd6dc"
+        BORDER = "#cfd6dc"
+        GRID = "#5a6672"
 
     desde = datetime.fromisoformat(args.desde) if args.desde else None
     lista = slots_comunes(desde, args.n if args.frames else 1, args.paso,

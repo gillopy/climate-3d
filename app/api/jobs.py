@@ -38,6 +38,10 @@ from .schemas import Artifact, JobSnapshot, LogLine
 
 TERMINALES = ("done", "error", "cancelled")
 
+# Subir esto invalida la cache: la firma tiene que representar la receta entera,
+# incluido como se dibuja (paleta, fondo, capas), no solo los parametros.
+RECETA_VERSION = 4
+
 # Reparto del progreso entre etapas. La descarga y el render son lo que pesa.
 _PESO = {"download": 0.4, "render": 0.5, "animate": 0.1}
 
@@ -144,7 +148,7 @@ class JobManager:
         # para que activar la descarga no invalide cuadros ya hechos.
         firma_params = {k: v for k, v in params.items() if k != "descargar"}
         firma = hashlib.sha1(
-            f"{product_id}|{mode}|"
+            f"v{RECETA_VERSION}|{product_id}|{mode}|"
             f"{json.dumps(firma_params, sort_keys=True, default=str)}".encode("utf-8")
         ).hexdigest()[:12]
         job = Job(
@@ -570,3 +574,5 @@ class JobManager:
             gif = job.work / f"{job.product_id}_{job.id}.gif"
             await asyncio.to_thread(render.save_gif, frames, gif, fps)
             self._log(job, f"animacion lista: {gif.name}")
+
+

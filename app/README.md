@@ -154,6 +154,31 @@ repo. Con horizonte 144 h son 49 cuadros, no 25.
 publica tanto cuadros (`frames_*/cuadro_*.png`) como **PNG en la raíz del work**,
 por eso el visor muestra el póster igual que una animación.
 
+### Estética de cada producto
+
+| Producto | Cómo se pide |
+| --- | --- |
+| GOES IR (C13) | paleta `clean_ir` (la de `comun/paleta_gibs.py`) y `--geojson ""`: sin el contorno de Paraguay |
+| GOES color real | `--fondo oscuro --no-lineas --no-fronteras --borde ""`: imagen limpia, sin retícula, costas ni bordes |
+| MUR realista | `--rios`: ríos y lagos de Natural Earth sobre el continente |
+| ECMWF (precipitación y anomalía) | `--fondo-globo claro` por defecto: el globo blanco, no negro |
+
+### Flags nuevos en los scripts del repo
+
+Para lograr lo anterior se agregaron **flags opcionales** a tres scripts del
+pipeline. Los valores por defecto son los de siempre, así que ningún flujo
+existente cambia:
+
+| Script | Flag | Default (comportamiento previo) |
+| --- | --- | --- |
+| `cuadros/cuadros_c13_ir.py` | `--paleta`, `--geojson` | `ir_realce`, Paraguay |
+| `prototipos/poster_goes_truecolor.py` | `--fondo`, `--lineas` | `claro`, líneas activas |
+| `prototipos/poster_mur_realista.py` | `--rios` | sin ríos |
+
+La firma de caché incluye `RECETA_VERSION` en `api/jobs.py`: cuando cambia cómo
+se dibuja (paleta, fondo, capas) hay que subirla, si no los artefactos viejos se
+reusan aunque la receta ya no sea la misma.
+
 Decisiones que vienen de leer los scripts, no de suponer:
 
 - **Solo se muestran los controles que existen.** GOES expone `--paleta`; MUR no

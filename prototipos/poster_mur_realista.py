@@ -503,6 +503,17 @@ def dibujar(disco: np.ndarray, centro: tuple[float, float], fecha: datetime,
     except Exception:
         ax.add_feature(cfeature.COASTLINE.with_scale("110m"), linewidth=0.5,
                        edgecolor="#666b70", alpha=0.55, zorder=6)
+    if args.rios:
+        # Ríos y lagos de Natural Earth: sin esto el continente queda como una
+        # mancha lisa y no se lee la cuenca del Amazonas.
+        try:
+            ax.add_feature(cfeature.RIVERS.with_scale("50m"), linewidth=0.45,
+                           edgecolor="#4c6f86", alpha=0.70, zorder=6)
+            ax.add_feature(cfeature.LAKES.with_scale("50m"), linewidth=0.35,
+                           edgecolor="#4c6f86", facecolor="none",
+                           alpha=0.70, zorder=6)
+        except Exception as exc:
+            print(f"AVISO: ríos omitidos ({exc})")
     # Limbo azulado muy fino: la "atmósfera" que remata la esfera.
     ax.spines["geo"].set_edgecolor("#c6d8e4")
     ax.spines["geo"].set_linewidth(1.0)
@@ -654,6 +665,8 @@ def main(argv=None) -> int:
                     help="crédito al pie; vacío = sin crédito")
     ap.add_argument("--trend", action="store_true",
                     help="agregar marca de la media y mini trend de media/p95 de la serie")
+    ap.add_argument("--rios", action="store_true",
+                    help="dibujar rios y lagos de Natural Earth (Amazonas y demas)")
     ap.add_argument("--out", help="PNG de salida")
     args = ap.parse_args(argv)
 
