@@ -1,0 +1,13 @@
+# Entorno propio de la app: no comparte paquetes con el .venv del repo.
+.venv/
+
+# Frontend
+node_modules/
+dist/
+
+# Artefactos generados por la demo (PNG/MP4/logs)
+var/
+
+# Python
+__pycache__/
+*.py[cod]
