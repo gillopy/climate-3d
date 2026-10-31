@@ -15,7 +15,7 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -317,6 +317,20 @@ def _ventana_animacion(
         hasta = datetime.combine(fin + timedelta(days=1), time(0)) + _DESFASE_LOCAL
     else:
         hasta = datetime.combine(fin, time(h1)) + _DESFASE_LOCAL
+
+    # El ABI publica con retraso: pedir horas que todavia no existen solo llena
+    # el log de 404. Se recorta al ultimo multiplo de 10 ya cumplido.
+    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+    if hasta > ahora:
+        tope = ahora.replace(second=0, microsecond=0)
+        tope += timedelta(minutes=(10 - tope.minute % 10) % 10)
+        hasta = max(desde, tope)
+
+    if hasta <= desde:
+        raise ValueError(
+            "Esa ventana todavia no tiene datos: el satelite publica con retraso. "
+            "Proba con una fecha anterior a hoy."
+        )
     return desde, hasta
 
 

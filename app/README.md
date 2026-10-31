@@ -174,6 +174,11 @@ se leen los pósters.
 Cuidado con el peso: 144 slots de C13 son ~7 GB de `.nc`. La descarga saltea lo
 que ya está en disco, así que repetir una animación no vuelve a bajarla.
 
+**El ABI publica con retraso.** Si elegís el día de hoy, la ventana se recorta al
+último múltiplo de 10 minutos ya cumplido: pedir horas futuras solo llenaba el
+log de 404. Y si la descarga termina con código 1 por slots que no existen, el
+job **sigue** y renderiza lo que bajó — antes abortaba.
+
 ### GOES-16: fechas anteriores a 2025
 
 G16 fue el GOES-East operativo hasta 2025, así que las fechas viejas se piden con

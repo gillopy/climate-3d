@@ -39,7 +39,7 @@ TERMINALES = ("done", "error", "cancelled")
 
 # Subir esto invalida la cache: la firma tiene que representar la receta entera,
 # incluido como se dibuja (paleta, fondo, capas), no solo los parametros.
-RECETA_VERSION = 10
+RECETA_VERSION = 11
 
 # Reparto del progreso entre etapas. La descarga y el render son lo que pesa.
 _PESO = {"download": 0.4, "render": 0.5, "animate": 0.1}
@@ -404,16 +404,18 @@ class JobManager:
 
             codigo = await self._lanzar(job, paso, args, base, span, etiqueta)
 
-            if codigo != 0:
-                if paso.kind == "download":
-                    # El descargador devuelve 1 si algun slot no existe (huecos
-                    # normales en la grilla): se sigue con lo que bajo.
-                    self._log(
-                        job,
-                        f"la descarga cerro con codigo {codigo}; sigo con lo que hay",
-                        "warn",
-                    )
-                elif plan.descarga is not None and not descargado:
+            if codigo != 0 and paso.kind == "download":
+                # El descargador devuelve 1 si algun slot no existe (huecos de la
+                # grilla o horas que todavia no se publicaron). No es fatal: el
+                # render trabaja con lo que si bajo.
+                self._log(
+                    job,
+                    f"la descarga cerro con codigo {codigo}: sigo con lo que hay",
+                    "warn",
+                )
+                codigo = 0
+            elif codigo != 0:
+                if plan.descarga is not None and not descargado:
                     # Faltaban datos: se baja lo que pida la receta y se
                     # reintenta el render una sola vez.
                     self._log(job, "faltan datos para renderizar: descargo y reintento", "warn")
@@ -534,6 +536,7 @@ class JobManager:
         if job.cancelar.is_set():
             raise asyncio.CancelledError
         return codigo
+
 
 
 
