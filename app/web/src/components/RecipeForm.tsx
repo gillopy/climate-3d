@@ -38,9 +38,14 @@ export function RecipeForm({
   onMode,
   onSubmit,
 }: Props) {
-  const primeraFecha = dates?.dates.at(-1) ?? "";
   const ultimaFecha = dates?.dates.at(0) ?? "";
   const pideDescarga = product.params.some((spec) => spec.name === "descargar");
+  // Las fechas de disco son una pista, no un limite: cualquier fecha es valida
+  // y lo que falte se descarga.
+  const ayudaFecha =
+    dates && dates.source === "descubierto"
+      ? `${dates.dates.length} fechas ya en disco (${ultimaFecha} la ultima); cualquier otra se descarga`
+      : "sin datos locales: se descargan al generar";
 
   return (
     <form
@@ -80,19 +85,10 @@ export function RecipeForm({
         if (spec.kind === "date") {
           return (
             <div className="campo" key={spec.name}>
-              <Etiqueta
-                texto={spec.label}
-                ayuda={
-                  dates?.source === "demo"
-                    ? "calendario de demostracion: no hay salidas de este producto en disco"
-                    : "fechas con datos en disco"
-                }
-              />
+              <Etiqueta texto={spec.label} ayuda={ayudaFecha} />
               <input
                 type="date"
                 value={String(valor ?? spec.default)}
-                min={primeraFecha}
-                max={ultimaFecha || undefined}
                 onChange={(e) => onChange(spec.name, e.target.value)}
               />
             </div>
@@ -103,28 +99,17 @@ export function RecipeForm({
           const rango = (valor ?? spec.default) as RangoFechas;
           return (
             <div className="campo" key={spec.name}>
-              <Etiqueta
-                texto={spec.label}
-                ayuda={
-                  dates?.source === "demo"
-                    ? "calendario de demostracion: no hay salidas de este producto en disco"
-                    : "fechas con datos en disco"
-                }
-              />
+              <Etiqueta texto={spec.label} ayuda={ayudaFecha} />
               <div className="campo__rango">
                 <input
                   type="date"
                   value={rango.start}
-                  min={primeraFecha}
-                  max={ultimaFecha}
                   onChange={(e) => onChange(spec.name, { ...rango, start: e.target.value })}
                 />
                 <span className="campo__hasta">hasta</span>
                 <input
                   type="date"
                   value={rango.end}
-                  min={primeraFecha}
-                  max={ultimaFecha}
                   onChange={(e) => onChange(spec.name, { ...rango, end: e.target.value })}
                 />
               </div>

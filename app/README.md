@@ -5,6 +5,16 @@ paleta, resolución y si querés animación; el job corre los scripts de
 `descargar/`, `cuadros/` y `animar/` con el `.venv` del repo, y el progreso llega
 en vivo. No reemplaza nada: los scripts y el pipeline siguen siendo los mismos.
 
+Dos decisiones que definen el resultado:
+
+- **Cualquier fecha es válida.** Las fechas que ya están en disco son una pista,
+  no un límite. Si la ventana no tiene datos, la receta incluye la descarga y
+  trae exactamente los slots que el render va a pedir.
+- **La vista es la del satélite, no un recorte.** Por defecto se renderiza el
+  disco completo en la proyección nativa de ABI. Si pedís globo, se centra en el
+  **punto subsatelital** (75.2 W para GOES-East, 137.2 W para GOES-West, lat 0),
+  que es el centroide real de lo captado.
+
 ## Correr
 
 ```powershell
@@ -70,19 +80,46 @@ GET  /media/...
 
 | Producto | Descarga | Render | Animación |
 | --- | --- | --- | --- |
-| GOES (C13/C02/C04, G19/G18/G16) | `descargar_goes.py --sat --banda --desde --hasta --paso` | `cuadros_goes.py --sat --banda --desde --n --paso --px --paleta --globo --out --lote 1` | `armar.py --frames --fps --formato mp4 --salida` |
+| GOES (C13/C02/C04, G19/G18/G16) | `descargar_goes.py --sat --banda --desde --hasta --paso` | `cuadros_goes.py --sat --banda --desde --n --paso --px --paleta [--globo --centro LON 0] --out --lote 1` | `armar.py --frames --fps --formato mp4 --salida` |
 | MUR SST | `mur_sst.py --desde --hasta --paso --px --out` | `cuadros_mur.py --desde --hasta --paso --px --out` | idem |
 | Precipitación ECMWF | `precipitacion_ecmwf.py --modelo --fecha --ciclo --hasta-hora --paso` | `cuadros_precipitacion.py ... --px --fondo-globo --salidas` | idem |
 | Anomalía 2 m ECMWF | `anomalia_2t_ecmwf.py ...` | `cuadros_anomalia_2t.py ...` | idem |
 | Follaje PACE | `pace_landvi.py --desde --hasta` | `cuadros_follaje.py --desde --hasta --px --out` | idem |
 
+### Fechas y datos faltantes
+
+```
+ventana elegida
+   ├── hay .nc/esquirlos locales  → render directo (sin red)
+   ├── no hay nada               → descarga + render, siempre
+   ├── forzar descarga (toggle)  → descarga + render, aunque haya datos
+   └── render falla              → descarga de rescate + un reintento
+```
+
+El descargador de GOES devuelve 1 si algún slot no existe (huecos normales en la
+grilla). Eso **no** aborta el job: se registra como advertencia y se sigue con lo
+que bajó. Si aun así no hay con qué renderizar, el error dice qué pasó.
+
+### Vista y centro
+
+| Producto | Por defecto | Con globo 3D |
+| --- | --- | --- |
+| GOES | disco nativo, proyección ABI | centro en el punto subsatelital |
+| MUR, precipitación, anomalía, follaje | default del script del repo | igual |
+
+`cuadros_goes.py` centra en `-58 -23` (Paraguay) si no le pasás `--centro`. La app
+siempre le pasa el subsatelital cuando se pide globo, así que el resultado no
+depende de ese default.
+
 Decisiones que vienen de leer los scripts, no de suponer:
 
 - **Solo se muestran los controles que existen.** GOES expone `--paleta`; MUR no
   expone paleta, así que MUR no tiene selector de paleta.
-- **GOES arranca en el primer slot que hay en disco.** `cuadros_goes.py` asume
-  una grilla contigua de 10 minutos y revienta con `KeyError` si falta un slot,
-  así que la receta avanza solo mientras el siguiente slot exista.
+- **GOES arranca en el primer slot que hay en disco** cuando no se fuerza
+  descarga: `cuadros_goes.py` asume una grilla contigua de 10 minutos y revienta
+  con `KeyError` si falta un slot, así que la receta avanza solo mientras el
+  siguiente slot exista. Con descarga, en cambio, la receta manda (`--paso`
+  propio) y baja exactamente los slots que va a renderizar.
 - **Nada de 800 px.** La tipografía del póster se superpone por debajo de
   ~1400 px; el mínimo ofrecido es 1400.
 
@@ -134,6 +171,8 @@ Nunca se mezclan: la capa web no necesita `cartopy`, y el pipeline no necesita
   mucho tráfico de sincronización. Conviene moverlo fuera antes de crecer.
 - Progreso por líneas de log: en descargas largas la barra se queda quieta hasta
   que el script imprime. Es honesto, no inventado.
+- El archivo de cada fuente tiene retención: NOAA S3 conserva GOES unas semanas.
+  Una fecha demasiado vieja se descarga con errores y el job falla avisando.
 
 ## Próximo paso natural
 

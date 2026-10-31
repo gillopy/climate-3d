@@ -46,10 +46,11 @@ def _rango(dias_atras: int = 2) -> dict[str, str]:
 PRODUCTS: list[Product] = [
     Product(
         id="goes_c13",
-        name="GOES - disco en globo",
+        name="GOES - disco ABI",
         group="satelite",
         stage="descargar/descargar_goes.py + cuadros/cuadros_goes.py",
-        summary="Banda ABI sobre globo orthographic, con paleta y recorte de Sudamerica.",
+        summary="Banda ABI. Por defecto, el disco completo en la proyeccion nativa "
+        "en que lo capto el satelite; opcionalmente, globo centrado en el.",
         params=[
             ParamSpec(
                 name="satelite",
@@ -58,7 +59,7 @@ PRODUCTS: list[Product] = [
                 default="G19",
                 options=[
                     ParamOption(value="G19", label="GOES-East G19 (75.2 W)"),
-                    ParamOption(value="G18", label="GOES-West G18 (137 W)"),
+                    ParamOption(value="G18", label="GOES-West G18 (137.2 W)"),
                     ParamOption(value="G16", label="GOES-East G16 (retirado)"),
                 ],
                 help="define la carpeta de datos goes_<banda>_<sat>",
@@ -75,15 +76,21 @@ PRODUCTS: list[Product] = [
                 ],
             ),
             ParamSpec(name="paleta", label="Paleta", kind="select", default="clean_ir", options=_PALETAS),
-            ParamSpec(name="globo", label="Reproyectar a globo 3D", kind="toggle", default=True),
+            ParamSpec(
+                name="globo",
+                label="Reproyectar a globo 3D",
+                kind="toggle",
+                default=False,
+                help="apagado = disco nativo del satelite; encendido = globo centrado en su punto subsatelite",
+            ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
             ParamSpec(
                 name="descargar",
-                label="Bajar los .nc antes de renderizar",
+                label="Forzar descarga",
                 kind="toggle",
                 default=False,
-                help="necesita internet (NOAA S3); si no, usa lo que ya esta en disco",
+                help="si la fecha no tiene datos en disco se descarga igual; esto baja los .nc aunque ya existan",
             ),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),

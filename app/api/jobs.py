@@ -156,7 +156,7 @@ class JobManager:
                     "Sin eso no se puede ejecutar el pipeline."
                 )
             try:
-                job.plan = [p.label for p in planear(product_id, params, job.work)]
+                job.plan = [p.label for p in planear(product_id, params, job.work).pasos]
             except ValueError as exc:
                 raise ValueError(str(exc)) from exc
 
@@ -326,13 +326,14 @@ class JobManager:
 
     # --- modo real -------------------------------------------------------
     async def _real(self, job: Job) -> None:
-        pasos = planear(job.product_id, job.params, job.work)
+        plan = planear(job.product_id, job.params, job.work)
+        pasos = list(plan.pasos)
         if not pasos:
             raise RuntimeError("la receta no genero ningun paso")
 
         total_peso = sum(_PESO.get(p.kind, 0.2) for p in pasos)
         base = 0.0
-        frames: Path | None = None
+        descargado = any(p.kind == "download" for p in pasos)
 
         for numero, paso in enumerate(pasos, start=1):
             span = _PESO.get(paso.kind, 0.2) / total_peso
@@ -353,10 +354,48 @@ class JobManager:
                 args = list(paso.args)
 
             codigo = await self._lanzar(job, paso, args, base, span, etiqueta)
+
             if codigo != 0:
-                raise RuntimeError(
-                    f"`{paso.script}` salio con codigo {codigo}. Mira el log de arriba."
-                )
+                if paso.kind == "download":
+                    # El descargador devuelve 1 si algun slot no existe (huecos
+                    # normales en la grilla): se sigue con lo que bajo.
+                    self._log(
+                        job,
+                        f"la descarga cerro con codigo {codigo}; sigo con lo que hay",
+                        "warn",
+                    )
+                elif plan.descarga is not None and not descargado:
+                    # Faltaban datos: se baja lo que pida la receta y se
+                    # reintenta el render una sola vez.
+                    self._log(job, "faltan datos para renderizar: descargo y reintento", "warn")
+                    rescate = await self._lanzar(
+                        job,
+                        plan.descarga,
+                        list(plan.descarga.args),
+                        base,
+                        span * 0.5,
+                        "descarga de rescate",
+                    )
+                    descargado = True
+                    if rescate != 0:
+                        self._log(
+                            job,
+                            f"la descarga de rescate cerro con codigo {rescate}",
+                            "warn",
+                        )
+                    codigo = await self._lanzar(job, paso, args, base, span, etiqueta)
+
+                if codigo != 0:
+                    pista = (
+                        " Puede que esa fecha no exista en el archivo de la fuente."
+                        if descargado
+                        else ""
+                    )
+                    raise RuntimeError(
+                        f"`{paso.script}` salio con codigo {codigo}. "
+                        f"Mira el log de arriba.{pista}"
+                    )
+
             base += span
             self._progreso(job, base, f"{paso.label}: ok")
 
