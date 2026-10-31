@@ -20,9 +20,10 @@ const esVideo = (nombre: string) => nombre.toLowerCase().endsWith(".mp4");
 interface Props {
   job: Job | null;
   onCancel: () => void;
+  onReveal: () => void;
 }
 
-export function JobPanel({ job, onCancel }: Props) {
+export function JobPanel({ job, onCancel, onReveal }: Props) {
   const consola = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -121,9 +122,9 @@ export function JobPanel({ job, onCancel }: Props) {
       ) : null}
 
       <div className="panel__acciones">
-        <a className="boton" href={`/api/jobs/${job.id}`} target="_blank" rel="noreferrer">
-          Ver JSON
-        </a>
+        <button className="boton" type="button" onClick={onReveal}>
+          Abrir carpeta
+        </button>
         {activo ? (
           <button className="boton boton--peligro" type="button" onClick={onCancel}>
             Cancelar

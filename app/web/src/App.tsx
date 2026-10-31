@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { cancelJob, createJob, getCatalog, getDates, subscribeJob } from "./api";
+import {
+  cancelJob,
+  createJob,
+  getCatalog,
+  getDates,
+  revealJob,
+  subscribeJob,
+} from "./api";
 import { JobPanel } from "./components/JobPanel";
 import { RecipeForm } from "./components/RecipeForm";
 import type {
@@ -110,6 +117,15 @@ export default function App() {
     }
   }
 
+  async function revelar() {
+    if (!job) return;
+    try {
+      await revealJob(job.id);
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : "no se pudo abrir la carpeta");
+    }
+  }
+
   return (
     <div className="shell">
       <header className="cabecera">
@@ -188,7 +204,7 @@ export default function App() {
           )}
         </section>
 
-        <JobPanel job={job} onCancel={cancelar} />
+        <JobPanel job={job} onCancel={cancelar} onReveal={revelar} />
       </main>
     </div>
   );

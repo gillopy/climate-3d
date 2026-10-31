@@ -805,9 +805,175 @@ def _himawari(params: dict[str, Any], work: Path) -> Plan:
     return Plan(pasos=pasos, descarga=descarga)
 
 
+
+# --- GOES: una banda cruda con el diseno del color real ----------------
+def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
+    inicio, fin = _rango(params)
+    sat = str(params.get("satelite", "G19"))
+    banda = str(params.get("banda", "C13"))
+    px = _px(params, 2712)
+    forzar = _bool(params, "descargar")
+    animar = _bool(params, "animar")
+
+    disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
+    lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+    cenital = _slot_cenital(inicio, lon_sub)
+    ventana = _ventana_animacion(
+        inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+    )
+    desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
+
+    descarga = Step(
+        kind="download",
+        label=f"bajando {banda} de {sat} ({n} slot(s))",
+        script="descargar/descargar_goes.py",
+        args=[
+            "--sat", sat,
+            "--banda", banda,
+            "--desde", desde.isoformat(),
+            "--hasta", (desde + timedelta(minutes=paso * n)).isoformat(),
+            "--paso", str(paso),
+        ],
+        expected=max(1, math.ceil(n / 10)),
+    )
+
+    comunes = [
+        "--banda", banda,
+        "--sat", sat,
+        "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
+        "--n", str(n),
+        "--paso", str(paso),
+        "--px", str(px),
+        "--paleta", str(params.get("paleta", "clean_ir")),
+        # Globo completo centrado en el punto subsatelital, como el color real.
+        "--centro", f"{lon_sub:g}", "0",
+        "--recorte", "1.0",
+    ]
+    if animar and n > 1:
+        render_step = Step(
+            kind="render",
+            label=f"{n} cuadro(s) de {banda}",
+            script="prototipos/poster_goes_banda.py",
+            args=[*comunes, "--frames", str(work / "frames")],
+            expected=n,
+        )
+    else:
+        render_step = Step(
+            kind="render",
+            label=f"poster {banda} {px}px",
+            script="prototipos/poster_goes_banda.py",
+            args=[*comunes, "--out", str(work / f"{sat}_{banda}_{desde:%Y-%m-%dT%H%M}.png")],
+            expected=1,
+        )
+
+    pasos = [descarga, render_step] if (forzar or falta) else [render_step]
+    return Plan(pasos=pasos, descarga=descarga)
+
+
+
+# --- GEOCOLOR: color real de dia + IR y luces de noche -----------------
+def _geocolor(params: dict[str, Any], work: Path) -> Plan:
+    inicio, fin = _rango(params)
+    px = _px(params, 1400)
+    animar = _bool(params, "animar")
+    sat = str(params.get("satelite", "G19"))
+    lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+
+    cenital = _slot_cenital(inicio, lon_sub)
+    ventana = _ventana_animacion(
+        inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+    )
+    # GeoColor no tiene .nc por slot: el estado se mira en la carpeta de cuadros
+    # de la cache, que el descargador arma con el mismo nombre que el render.
+    desde, n, paso, _ = _plan_slots(set(), cenital, animar, ventana)
+
+    etiqueta = f"frames_geocolor_globo_{desde:%Y-%m-%dT%H%M}_{n}f_{px}px"
+    carpeta = work / etiqueta
+    falta = not (carpeta.is_dir() and next(carpeta.glob("crudo_*.jpg"), None) is not None)
+
+    comunes = [
+        "--globo",
+        "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
+        "--n", str(n),
+        "--paso", str(paso),
+        "--px", str(px),
+        "--out", str(work),
+    ]
+    descarga = Step(
+        kind="download",
+        label=f"bajando GeoColor ({n} cuadro(s))",
+        script="descargar/geocolor.py",
+        args=comunes,
+        expected=max(1, n),
+    )
+    render_step = Step(
+        kind="render",
+        label=f"renderizando {n} cuadro(s) de GeoColor",
+        script="cuadros/cuadros_geocolor.py",
+        args=[
+            *comunes,
+            # Globo completo centrado en el punto subsatelital y sin el borde
+            # de Paraguay, igual que el resto de los productos GOES.
+            "--centro", f"{lon_sub:g}", "0",
+            "--geojson", "",
+        ],
+        expected=n,
+    )
+
+    pasos = [descarga, render_step] if (_bool(params, "descargar") or falta) else [render_step]
+    return Plan(pasos=pasos, descarga=descarga)
+
+
+
+# --- VIIRS NOAA-20: true color diario de GIBS --------------------------
+def _truecolor_viirs(params: dict[str, Any], work: Path) -> Plan:
+    inicio, fin = _rango(params)
+    px = _px(params, 2000)
+    animar = _bool(params, "animar")
+    capa = str(params.get("capa", "VIIRS_NOAA20_CorrectedReflectance_TrueColor"))
+
+    # La capa es una composicion DIARIA: un cuadro por dia, sin horarios.
+    dias = max(1, (fin - inicio).days + 1)
+    n = min(dias, 31) if animar else 1
+    hasta = fin if animar else inicio
+
+    comunes = [
+        "--desde", inicio.isoformat(),
+        "--hasta", hasta.isoformat(),
+        "--paso", "1",
+        "--px", str(px),
+        "--capa", capa,
+        "--out", str(work),
+    ]
+    descarga = Step(
+        kind="download",
+        label=f"bajando true color NOAA-20 ({n} dia(s))",
+        script="descargar/truecolor.py",
+        args=comunes,
+        expected=n,
+    )
+    render_step = Step(
+        kind="render",
+        label=f"renderizando {n} cuadro(s) de NOAA-20",
+        script="cuadros/cuadros_truecolor.py",
+        args=[*comunes, "--geojson", ""],
+        expected=n,
+    )
+
+    etiqueta = f"frames_truecolor_viirs_noaa20_globo_{inicio:%Y-%m-%dT}0000_{n}f_{px}px"
+    carpeta = work / etiqueta
+    falta = not (carpeta.is_dir() and next(carpeta.glob("crudo_*.jpg"), None) is not None)
+
+    pasos = [descarga, render_step] if (_bool(params, "descargar") or falta) else [render_step]
+    return Plan(pasos=pasos, descarga=descarga)
+
+
 _CONSTRUCTORES = {
     "goes_c13": _goes,
     "goes_truecolor": _goes_truecolor,
+    "goes_banda": _goes_banda,
+    "geocolor": _geocolor,
+    "truecolor_viirs": _truecolor_viirs,
     "mur_sst": _mur,
     "mur_realista": _mur_realista,
     "precipitacion_ecmwf": _precipitacion,

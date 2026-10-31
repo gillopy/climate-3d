@@ -152,6 +152,28 @@ estilo, se vuelve a correr:
 app\.venv\Scripts\python.exe app\tools\previews.py
 ```
 
+### Productos de color
+
+Hay cuatro formas distintas de ver "color" y no son intercambiables:
+
+| Producto | Qué es | Fuente |
+| --- | --- | --- |
+| **Color real (3 bandas)** | compuesto C01+C02+C03 con la receta CIMSS | `.nc` del ABI |
+| **Banda cruda, estilo color real** | una banda ABI coloreada, con el encuadre limpio | `.nc` del ABI |
+| **GeoColor** | RGB ya mezclado: día real, IR y luces de noche | GIBS |
+| **NOAA-20 true color** | mosaico diario global de VIIRS | GIBS |
+
+GeoColor y NOAA-20 son capas de GIBS, no capturas instantáneas: GeoColor es un
+disco GOES con la mezcla día/noche ya hecha, y NOAA-20 es una **composición
+diaria** (un cuadro por día, sin horarios).
+
+### Abrir la carpeta del trabajo
+
+Cuando un job termina, el panel muestra **Abrir carpeta**: el servidor abre el
+explorador en la carpeta de la caché de ese job (`POST /api/jobs/{id}/reveal`).
+Solo abre la carpeta que el servidor calculó para ese job; no acepta rutas del
+cliente.
+
 ### La paleta GIBS y su escala
 
 La rampa `clean_ir` de `comun/paleta_gibs.py` es la de Worldview y **es correcta**:

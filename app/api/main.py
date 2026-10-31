@@ -6,6 +6,8 @@ del repo.
 """
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -120,6 +122,29 @@ def cancelar_job(job_id: str) -> JobSnapshot:
         raise HTTPException(status_code=404, detail="Job desconocido")
     gestor.cancelar(job_id)
     return job.snapshot()
+
+
+@app.post("/api/jobs/{job_id}/reveal")
+def revelar_carpeta(job_id: str) -> dict[str, str]:
+    """Abre el explorador en la carpeta del job.
+
+    Solo abre la carpeta que el servidor calculó para ese job: no acepta rutas
+    del cliente, así que no sirve para abrir cualquier cosa del disco.
+    """
+    job = gestor.obtener(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job desconocido")
+    destino = job.work
+    if not destino.is_dir():
+        raise HTTPException(status_code=409, detail="La carpeta todavia no existe")
+
+    if sys.platform == "win32":
+        subprocess.Popen(["explorer", str(destino)])
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(destino)])
+    else:
+        subprocess.Popen(["xdg-open", str(destino)])
+    return {"abierto": str(destino)}
 
 
 @app.get("/api/jobs/{job_id}/events")

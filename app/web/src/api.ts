@@ -56,6 +56,13 @@ export function cancelJob(jobId: string): Promise<Job> {
   );
 }
 
+/** Abre el explorador en la carpeta del job (lo hace el servidor). */
+export function revealJob(jobId: string): Promise<{ abierto: string }> {
+  return fetch(`/api/jobs/${jobId}/reveal`, { method: "POST" }).then((r) =>
+    leer<{ abierto: string }>(r),
+  );
+}
+
 export interface JobHandlers {
   onSnapshot?: (job: Job) => void;
   onLog?: (line: LogLine) => void;
