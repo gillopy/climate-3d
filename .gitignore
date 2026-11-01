@@ -11,6 +11,9 @@ venv/
 *.grib
 *.grib2
 
+# Datos satelitales crudos (Himawari AHI, se descargan y se procesan)
+AHI-L1b-FLDK/
+
 # Generated animations (heavy; regenerate with the scripts)
 *.gif
 
@@ -29,6 +32,12 @@ desktop.ini
 
 # Tooling local (skill registry / caches con rutas absolutas)
 .atl/
+.codegraph/
+
+# Agent skills y tooling local (no se publican)
+.agents/
+.codex/
+skills-lock.json
 
 # Internal workflow docs (local only, not published)
 odd/
@@ -40,6 +49,11 @@ odd/
 
 # Local scratch and tooling artifacts (never committed)
 .playwright-mcp/
+/previews-check.png
+/snapshot-*.png
+
+# Artefacto de la skill design-md analizando nuxt.com (referencia, no doc del proyecto)
+/app/nuxt.design.md
 
 # Reference images downloaded by hand: kept on disk, not part of the pipeline
 /d28crpyip6yh1.png
