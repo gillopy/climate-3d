@@ -36,6 +36,7 @@ FUENTES: dict[str, Path | None] = {
     "precipitacion_ecmwf": CACHE / "f17fd55f512a" / "poster_precip_ecmwf_2026-10-31_00z_fh144.png",
     "anomalia_2t": CACHE / "157996c077e8" / "poster_anom2t_ifs_2026-10-31_00z_fh012.png",
     "viento_250": GALERIA / "viento_250_globo_2026-10-20_18z_fh144.png",
+    "snapshot_paraguay": GALERIA / "snapshot_paraguay_2026-11-01T1500.png",
     "himawari": CACHE / "9a62988526ae" / "frames" / "cuadro_001.png",
     "follaje": SALIDAS / "frames_follaje_pace_globo_ortho3d_2026-08-07T0000_66f_1440px" / "cuadro_001.png",
 }

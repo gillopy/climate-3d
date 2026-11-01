@@ -505,8 +505,8 @@ code {
 
 .plate__frame {
   position: relative;
-  aspect-ratio: 16 / 9;
-  max-height: 30vh;
+  aspect-ratio: 4 / 3;
+  max-height: 38vh;
   display: flex;
   align-items: center;
   justify-content: center;

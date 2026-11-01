@@ -606,6 +606,49 @@ def _anomalia(params: dict[str, Any], work: Path) -> Plan:
     return _ecmwf_producto("anomalia_2t", params, work)
 
 
+# --- SNAPSHOT: una captura GeoColor recortada a Paraguay ----------------
+def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
+    inicio, _ = _rango(params)
+    hora = max(0, min(23, int(params.get("hora", 15) or 0)))
+    try:
+        minuto = max(0, min(59, int(params.get("minuto", 0) or 0)))
+    except (TypeError, ValueError):
+        minuto = 0
+    px = _px(params, 2000)
+    # El margen llega como porcentaje (0-20) y los scripts lo usan como fracción.
+    try:
+        margen = max(0.0, min(0.20, float(params.get("margen", 6)) / 100.0))
+    except (TypeError, ValueError):
+        margen = 0.06
+
+    comun = [
+        "--fecha", inicio.isoformat(),
+        "--hora", str(hora),
+        "--minuto", str(minuto),
+        "--px", str(px),
+        "--margen", f"{margen:g}",
+    ]
+    crudos = work / "crudos"
+    descarga = Step(
+        kind="download",
+        label="bajando la captura de GIBS",
+        script="descargar/snapshot_paraguay.py",
+        args=[*comun, "--out", str(crudos)],
+        expected=1,
+    )
+    args_render = [*comun, "--entrada", str(crudos), "--salidas", str(work)]
+    if not _bool(params, "borde"):
+        args_render.append("--sin-borde")
+    render_step = Step(
+        kind="render",
+        label="componiendo la captura",
+        script="cuadros/snapshot_paraguay.py",
+        args=args_render,
+        expected=1,
+    )
+    return Plan(pasos=[descarga, render_step], descarga=descarga)
+
+
 # --- VIENTO: 250 mb + extremos de MSLP ----------------------------------
 def _carpeta_viento(modelo: str, fecha: str, ciclo: str) -> str:
     """Carpeta de crudos: el IFS conserva el nombre viejo, GFS lleva el modelo."""
@@ -1099,6 +1142,7 @@ _CONSTRUCTORES = {
     "precipitacion_ecmwf": _precipitacion,
     "anomalia_2t": _anomalia,
     "viento_250": _viento_250,
+    "snapshot_paraguay": _snapshot_paraguay,
     "follaje": _follaje,
     "himawari": _himawari,
 }

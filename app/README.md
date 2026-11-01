@@ -207,6 +207,7 @@ GET  /media/...
 | Precipitación ECMWF | `precipitacion_ecmwf.py --modelo --fecha --ciclo --hasta-hora --paso 3` | `cuadros_precipitacion.py ... --px --fondo-globo --salidas` | `armar.py` |
 | Anomalía 2 m ECMWF | `anomalia_2t_ecmwf.py ... --paso 3` | `cuadros_anomalia_2t.py ...` | `armar.py` |
 | Viento 250 mb (IFS o GFS) | `viento_250_mslp.py --modelo --fecha --ciclo --hasta-hora --paso 3` | `cuadros_viento_250.py ... --modelo --px --fondo-globo --salidas` | `armar.py` |
+| Snapshot Paraguay (GeoColor) | `snapshot_paraguay.py --fecha --hora --minuto --px --margen --out` | `snapshot_paraguay.py --fecha --hora --entrada --salidas [--sin-borde]` | — |
 | Follaje PACE | `pace_landvi.py --desde --hasta` | `cuadros_follaje.py --desde --hasta --px --out` | `armar.py` |
 
 ### Fechas y datos faltantes
@@ -437,6 +438,23 @@ que no se ofrece.
 - `Animar` y `Bajar los crudos` arrancan **encendidos** en precip-itación, anomalía y
   viento: el pedido típico ya deja el MP4 y los crudos en disco. En satélite quedan
   apagados a propósito (una animación GOES son cientos de `.nc`).
+
+### Snapshot de Paraguay (una captura, no una animación)
+
+El producto `snapshot_paraguay` no arma serie ni globo: pide **una sola** imagen
+GeoColor (color real de día, IR y luces de noche) y la entrega recortada al país.
+
+- **La cobertura sale del GeoJSON** (`datos/paraguay_gadm.json`): se calcula la caja
+  que encierra al país y se agranda con el `margen` que elige el usuario. No hay
+  bbox escrito a mano.
+- El **contorno de Paraguay** se dibuja sobre la imagen a 2x y se reduce con LANCZOS,
+  así la línea queda fina y sin escalones. Se puede apagar con `contorno`; no hay
+  rótulos, fecha ni barra de color: la captura es la imagen.
+- Fuente: `wvs.earthdata.nasa.gov` (`REQUEST=GetSnapshot`, `LAYERS=GOES-East_ABI_GeoColor`).
+  GIBS devuelve el gránulo más cercano a la hora pedida, así que no hace falta
+  acertar el slot de 10 minutos.
+- El crudo baja a `<work>/crudos/` para que el visor no lo publique como si fuera
+  el resultado; el PNG final queda en la raíz del job.
 
 ### Posters sueltos
 

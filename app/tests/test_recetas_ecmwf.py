@@ -286,5 +286,76 @@ class ModeloGfs(unittest.TestCase):
                          ["cuadros/cuadros_viento_250.py"])
 
 
+class SnapshotParaguay(unittest.TestCase):
+    """La captura: cobertura desde el GeoJSON, un solo cuadro y sin rótulos."""
+
+    def test_la_caja_sale_del_geojson_y_agranda_con_margen(self):
+        from comun.paraguay import caja_geojson
+
+        ruta = RAIZ / "datos" / "paraguay_gadm.json"
+        o, s, e, n = caja_geojson(ruta, 0.0)
+        # Los extremos reales del país (GADM), sin margen.
+        self.assertAlmostEqual(o, -62.642, places=2)
+        self.assertAlmostEqual(e, -54.259, places=2)
+        self.assertAlmostEqual(s, -27.606, places=2)
+        self.assertAlmostEqual(n, -19.295, places=2)
+
+        om, sm, em, nm = caja_geojson(ruta, 0.06)
+        self.assertLess(om, o)
+        self.assertLess(sm, s)
+        self.assertGreater(em, e)
+        self.assertGreater(nm, n)
+
+    def test_el_nombre_del_crudo_y_de_la_captura_es_estable(self):
+        from comun.paraguay import nombre_captura, nombre_crudo
+        from datetime import datetime
+
+        t = datetime(2026, 11, 1, 15, 0)
+        self.assertEqual(nombre_crudo(t, 2000), "crudo_snapshot_20261101T1500_2000px.png")
+        self.assertEqual(nombre_captura(t, 2000),
+                         "snapshot_paraguay_2026-11-01T1500_2000px.png")
+
+    def test_esta_en_el_catalogo_con_un_solo_cuadro(self):
+        producto = catalog.get_product("snapshot_paraguay")
+        self.assertIsNotNone(producto)
+        assert producto is not None
+        nombres = [p.name for p in producto.params]
+        self.assertIn("hora", nombres)
+        self.assertIn("margen", nombres)
+        self.assertIn("borde", nombres)
+        # No es una animación: no ofrece "animar" ni "fps".
+        self.assertNotIn("animar", nombres)
+        self.assertNotIn("fps", nombres)
+
+    def test_el_plan_descarga_y_compone(self):
+        params = {"fecha": DIA.isoformat(), "hora": 15, "minuto": "30",
+                  "margen": 8, "resolucion": "2000", "borde": True}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            plan = recipes.planear("snapshot_paraguay", params, work)
+
+        self.assertEqual([paso.script for paso in plan.pasos],
+                         ["descargar/snapshot_paraguay.py",
+                          "cuadros/snapshot_paraguay.py"])
+        descarga, render = plan.pasos
+        self.assertEqual(descarga.args[descarga.args.index("--hora") + 1], "15")
+        self.assertEqual(descarga.args[descarga.args.index("--minuto") + 1], "30")
+        self.assertEqual(descarga.args[descarga.args.index("--margen") + 1], "0.08")
+        self.assertEqual(descarga.args[descarga.args.index("--px") + 1], "2000")
+        self.assertEqual(descarga.args[descarga.args.index("--out") + 1],
+                         str(work / "crudos"))
+        self.assertEqual(render.args[render.args.index("--entrada") + 1],
+                         str(work / "crudos"))
+        self.assertEqual(render.args[render.args.index("--salidas") + 1], str(work))
+        self.assertNotIn("--sin-borde", render.args)
+
+    def test_sin_borde_lo_pide_al_render(self):
+        params = {"fecha": DIA.isoformat(), "hora": 3, "borde": False}
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = recipes.planear("snapshot_paraguay", params, Path(tmp))
+        render = plan.pasos[-1]
+        self.assertIn("--sin-borde", render.args)
+
+
 if __name__ == "__main__":
     unittest.main()
