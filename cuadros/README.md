@@ -16,6 +16,7 @@ deja `cuadro_NNN.png` en `SALIDAS/frames_<etiqueta>/` y termina diciéndote qué
 | `cuadros_precipitacion.py` | `serie_tp_mm.npz` (o los `.grib2` / `--nc`) de `descargar/precipitacion_ecmwf.py` | Globo |
 | `cuadros_anomalia_2t.py` | `serie_anom_2t_c.npz` de `descargar/anomalia_2t_ecmwf.py` | Globo |
 | `cuadros_viento_250.py` | `serie_viento_250.npz` de `descargar/viento_250_mslp.py` | Globo |
+| `snapshot_paraguay.py` | `crudo_snapshot_<fecha>_<px>px.png` de `descargar/snapshot_paraguay.py` | Plano recortado al país |
 | `cuadros_follaje.py` | `.nc` diarios de LANDVI (`DATOS/pace_landvi/`) | Plano global |
 | `cuadros_follaje_globo.py` | `.nc` diarios de LANDVI (`DATOS/pace_landvi/`) | Globo |
 

@@ -17,6 +17,7 @@ conexión** a partir de lo que ya está descargado.
 | `precipitacion_ecmwf.py` | Precipitación total acumulada (`tp`) de IFS 0.25° / AIFS, por HTTP Range | ECMWF Open Data | `DATOS/crudos_precip_<modelo>_<fecha>_<ciclo>z/` (GRIB2 o `.npy` + `serie_tp_mm.npz`) |
 | `anomalia_2t_ecmwf.py` | Temperatura a 2 m (`2t`) del IFS 0.25° y su anomalía vs la climatología ERA5, por HTTP Range | ECMWF Open Data | `DATOS/crudos_anom2t_<modelo>_<fecha>_<ciclo>z/` (GRIB2 + `serie_anom_2t_c.npz`) |
 | `viento_250_mslp.py` | Viento en 250 mb (`u`, `v`) y presión a nivel del mar (`msl`) del IFS 0.25° o del GFS 0.25°, por HTTP Range | ECMWF Open Data / NOAA GFS (AWS) | `DATOS/crudos_viento250[_gfs]_<fecha>_<ciclo>z/` (GRIB2 + `serie_viento_250.npz`) |
+| `snapshot_paraguay.py` | Una captura GeoColor (GOES-19) recortada al país; la caja sale del GeoJSON de Paraguay | NASA GIBS (Worldview Snapshots) | `<out>/crudo_snapshot_<fecha>_<px>px.png` |
 | `goes_descarga.py` | *(módulo)* claves S3 y descarga | — | — |
 
 `DATOS` y `SALIDAS` salen de [`../comun/rutas.py`](../comun/rutas.py): se cambian con
