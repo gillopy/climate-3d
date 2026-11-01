@@ -62,7 +62,23 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 from rutas import DATOS  # noqa: E402
 
-BASE = "https://data.ecmwf.int/forecasts/{ymd}/{ciclo}z/ifs/0p25/oper"
+# Fuentes: ECMWF Open Data (JSONL `.index`) y GFS 0.25 de AWS Open Data (`.idx`).
+BASES = {
+    "ifs": "https://data.ecmwf.int/forecasts/{ymd}/{ciclo}z/ifs/0p25/oper",
+    "gfs": "https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.{ymd}/{ciclo}/atmos",
+}
+MODELOS = ("ifs", "gfs")
+ETIQUETAS = {
+    "ifs": "ECMWF IFS 0.25°",
+    "gfs": "GFS 0.25°",
+}
+
+# Nombre del parámetro en el índice de cada fuente. En el GRIB, el shortName de
+# PRMSL es `prmsl` (no `msl`): el decodificador acepta los dos.
+PARAMS_ECMWF = {"u": "u", "v": "v", "msl": "msl"}
+PARAMS_GFS = {"u": "UGRD", "v": "VGRD", "msl": "PRMSL"}
+NIVEL_GFS = "250 mb"
+NOMBRES_GRIB = {"u": ("u",), "v": ("v",), "msl": ("msl", "prmsl")}
 
 # Variables del producto: nombre del parámetro en el índice -> unidades esperadas.
 VARIABLES = ("u", "v", "msl")
@@ -112,10 +128,15 @@ def _sesion() -> requests.Session:
     return ses
 
 
-def url_archivo(ymd: str, ciclo: str, hora: int, extension: str) -> str:
-    """URL del `.index` (JSONL) o del `.grib2` del paso `hora`."""
-    nombre = f"{ymd}{ciclo}0000-{hora}h-oper-fc.{extension}"
-    return f"{BASE.format(ymd=ymd, ciclo=ciclo)}/{nombre}"
+def url_archivo(ymd: str, ciclo: str, hora: int, extension: str,
+                modelo: str = "ifs") -> str:
+    """URL del índice (`.index`/`.idx`) o del GRIB del paso `hora`."""
+    if modelo == "gfs":
+        sufijo = ".idx" if extension == "index" else ""
+        nombre = f"gfs.t{ciclo}z.pgrb2.0p25.f{hora:03d}{sufijo}"
+    else:
+        nombre = f"{ymd}{ciclo}0000-{hora}h-oper-fc.{extension}"
+    return f"{BASES[modelo].format(ymd=ymd, ciclo=ciclo)}/{nombre}"
 
 
 def pasos(hasta_hora: int, paso_hora: int) -> list[int]:
@@ -127,8 +148,48 @@ def pasos(hasta_hora: int, paso_hora: int) -> list[int]:
     return list(range(0, hasta_hora + 1, paso_hora))
 
 
-def _leer_indice(url: str) -> list[dict]:
-    """Entradas del `.index` (JSON Lines) del paso."""
+def _largo_remoto(url: str) -> int:
+    """Tamaño del GRIB remoto. El `.idx` de GFS no publica el largo del registro."""
+    r = _sesion().head(url, timeout=60, allow_redirects=True)
+    r.raise_for_status()
+    largo = r.headers.get("Content-Length")
+    if not largo:
+        raise ValueError(f"{url.rsplit('/', 1)[-1]}: sin Content-Length")
+    return int(largo)
+
+
+def _leer_indice_gfs(url: str) -> list[dict]:
+    """Entradas del `.idx` de GFS: `n:offset:d=fecha:PARAM:nivel:fcst:`.
+
+    El `.idx` no trae el largo de cada mensaje, así que se calcula con el offset
+    del siguiente; el último llega hasta el final del GRIB (HEAD Content-Length).
+    """
+    r = _sesion().get(url, timeout=120)
+    r.raise_for_status()
+    filas: list[dict] = []
+    for linea in r.text.splitlines():
+        partes = linea.split(":")
+        if len(partes) < 5:
+            continue
+        try:
+            offset = int(partes[1])
+        except ValueError:
+            continue
+        filas.append({"param": partes[3].strip(), "levelist": partes[4].strip(),
+                      "levtype": "", "_offset": offset})
+    if not filas:
+        return []
+    total = _largo_remoto(url[: -len(".idx")])
+    for i, fila in enumerate(filas):
+        fin = filas[i + 1]["_offset"] if i + 1 < len(filas) else total
+        fila["_length"] = fin - fila["_offset"]
+    return filas
+
+
+def _leer_indice(url: str, modelo: str = "ifs") -> list[dict]:
+    """Entradas del índice del paso, normalizadas para las dos fuentes."""
+    if modelo == "gfs":
+        return _leer_indice_gfs(url)
     r = _sesion().get(url, timeout=120)
     r.raise_for_status()
     entradas: list[dict] = []
@@ -143,12 +204,19 @@ def _leer_indice(url: str) -> list[dict]:
     return entradas
 
 
-def _entradas_var(entradas: list[dict], variable: str) -> list[dict]:
+def _entradas_var(entradas: list[dict], variable: str,
+                  modelo: str = "ifs") -> list[dict]:
     """Entradas del índice que corresponden a `variable`.
 
-    `u`/`v` viven en niveles de presión: hay que filtrar por `levtype="pl"` **y** por
-    `levelist`, que en el índice viene como string (`"250"`). `msl` es de superficie.
+    `u`/`v` viven en niveles de presión: hay que filtrar por nivel, que en el índice
+    de ECMWF viene como string (`"250"`) y en el de GFS como `250 mb`. `msl` es de
+    superficie (`msl` en ECMWF, `PRMSL` en GFS).
     """
+    if modelo == "gfs":
+        param = PARAMS_GFS[variable]
+        nivel = "mean sea level" if variable == "msl" else NIVEL_GFS
+        return [e for e in entradas
+                if e.get("param") == param and e.get("levelist") == nivel]
     if variable == "msl":
         return [e for e in entradas
                 if e.get("param") == "msl" and e.get("levtype") == "sfc"]
@@ -157,12 +225,13 @@ def _entradas_var(entradas: list[dict], variable: str) -> list[dict]:
             and str(e.get("levelist")) == NIVEL_VENTO]
 
 
-def rangos_paso(ymd: str, ciclo: str, hora: int) -> dict[str, tuple[int, int]]:
+def rangos_paso(ymd: str, ciclo: str, hora: int,
+                modelo: str = "ifs") -> dict[str, tuple[int, int]]:
     """`{variable: (offset, length)}` de los tres campos del paso `hora`."""
-    entradas = _leer_indice(url_archivo(ymd, ciclo, hora, "index"))
+    entradas = _leer_indice(url_archivo(ymd, ciclo, hora, "index", modelo), modelo)
     rangos: dict[str, tuple[int, int]] = {}
     for variable in VARIABLES:
-        candidatas = _entradas_var(entradas, variable)
+        candidatas = _entradas_var(entradas, variable, modelo)
         if not candidatas:
             raise LookupError(f"{ymd} {ciclo}z {hora}h: el índice no trae {variable} "
                               f"({'sfc' if variable == 'msl' else 'pl/' + NIVEL_VENTO})")
@@ -208,7 +277,8 @@ def _bajar_rango(url: str, offset: int, largo: int, reintentos: int = 4) -> byte
 
 
 def descargar_paso(ymd: str, ciclo: str, hora: int, idx: int, salida: Path,
-                   forzar: bool = False, reintentos: int = 4) -> tuple[list[Path], int]:
+                   forzar: bool = False, reintentos: int = 4,
+                   modelo: str = "ifs") -> tuple[list[Path], int]:
     """Baja `u`, `v` y `msl` del paso `hora`; devuelve `(rutas, reutilizados)`.
 
     Reanudable: si el mensaje ya existe con el tamaño exacto que publica el índice (y
@@ -221,7 +291,7 @@ def descargar_paso(ymd: str, ciclo: str, hora: int, idx: int, salida: Path,
         try:
             # El índice también se reintenta: es un GET chico, pero si se cae la red en
             # el medio de la corrida conviene reintentar este en vez de abortar.
-            rangos = rangos_paso(ymd, ciclo, hora)
+            rangos = rangos_paso(ymd, ciclo, hora, modelo)
             rutas: list[Path] = []
             reutilizados = 0
             for variable in VARIABLES:
@@ -231,8 +301,8 @@ def descargar_paso(ymd: str, ciclo: str, hora: int, idx: int, salida: Path,
                     reutilizados += 1
                     rutas.append(destino)
                     continue
-                contenido = _bajar_rango(url_archivo(ymd, ciclo, hora, "grib2"),
-                                         offset, largo)
+                contenido = _bajar_rango(
+                    url_archivo(ymd, ciclo, hora, "grib2", modelo), offset, largo)
                 tmp = destino.with_suffix(destino.suffix + ".parcial")
                 tmp.write_bytes(contenido)
                 # Escritura atómica: si el proceso se corta a mitad, no queda un GRIB
@@ -290,7 +360,7 @@ def _decodificar_gid(gid, variable: str, origen: str) -> tuple[np.ndarray, np.nd
                                                              np.ndarray]:
     """Decodifica un `gid` abierto y devuelve `(campo, lat, lon)` ya orientados."""
     nombre = str(eccodes.codes_get(gid, "shortName"))
-    if nombre != variable:
+    if nombre not in NOMBRES_GRIB[variable]:
         raise ValueError(f"{origen}: se esperaba {variable}, vino {nombre}")
     ni = int(eccodes.codes_get(gid, "Ni"))
     nj = int(eccodes.codes_get(gid, "Nj"))
@@ -409,6 +479,8 @@ def _reporte_final(serie_kt: np.ndarray, serie_msl: np.ndarray, horas: list[int]
 
 def _comando_extra(args) -> str:
     extras = []
+    if args.modelo != "ifs":
+        extras.append(f"--modelo {args.modelo}")
     if args.out:
         extras.append(f'--out "{args.out}"')
     return (" " + " ".join(extras)) if extras else ""
@@ -429,10 +501,12 @@ def _comando_render(args) -> str:
 
 
 def _dir_salida(args, ciclo: str) -> Path:
-    """Carpeta de crudos por defecto."""
+    """Carpeta de crudos por defecto: el IFS conserva el nombre viejo."""
     if args.out:
         return Path(args.out)
-    return DATOS / f"crudos_viento250_{args.fecha}_{ciclo}z"
+    if args.modelo == "ifs":
+        return DATOS / f"crudos_viento250_{args.fecha}_{ciclo}z"
+    return DATOS / f"crudos_viento250_{args.modelo}_{args.fecha}_{ciclo}z"
 
 
 def _npz_completo(cache: Path, horas: list[int]):
@@ -459,8 +533,10 @@ def _npz_completo(cache: Path, horas: list[int]):
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        description="Descarga `u`, `v` (250 mb) y `msl` de ECMWF IFS 0.25° por HTTP "
-                    "Range y deja una serie consolidada (m/s, hPa).")
+        description="Descarga `u`, `v` (250 mb) y `msl` de ECMWF IFS 0.25° o de GFS "
+                    "0.25° por HTTP Range y deja una serie consolidada (m/s, hPa).")
+    ap.add_argument("--modelo", choices=MODELOS, default="ifs",
+                    help="fuente del pronóstico: ifs (ECMWF) o gfs (NOAA)")
     ap.add_argument("--fecha", default=FECHA,
                     help=f"día UTC de la corrida, YYYY-MM-DD (por defecto {FECHA})")
     ap.add_argument("--ciclo", default=CICLO,
@@ -474,7 +550,7 @@ def main(argv=None) -> int:
     ap.add_argument("--forzar", action="store_true",
                     help="vuelve a bajar los pasos aunque ya estén completos")
     ap.add_argument("--out", help="carpeta de salida (por defecto, "
-                                  "DATOS/crudos_viento250_<fecha>_<ciclo>z)")
+                                  "DATOS/crudos_viento250[_<modelo>]_<fecha>_<ciclo>z)")
     args = ap.parse_args(argv)
 
     try:
@@ -507,9 +583,9 @@ def main(argv=None) -> int:
             print("Ahora renderizá con: " + _comando_render(args))
             return 0
 
-    print(f"Viento 250 mb + MSLP {args.fecha} {ciclo}z | {len(horas)} pasos "
-          f"({horas[0]}h..{horas[-1]}h cada {args.paso} h)")
-    print(f"fuente: {url_archivo(ymd, ciclo, horas[0], 'index')}")
+    print(f"Viento 250 mb + MSLP {ETIQUETAS[args.modelo]} | {args.fecha} {ciclo}z | "
+          f"{len(horas)} pasos ({horas[0]}h..{horas[-1]}h cada {args.paso} h)")
+    print(f"fuente: {url_archivo(ymd, ciclo, horas[0], 'index', args.modelo)}")
     print(f"crudos en {salida} | {args.hilos} hilos")
 
     inicio = time.time()
@@ -518,7 +594,7 @@ def main(argv=None) -> int:
     with ThreadPoolExecutor(max_workers=args.hilos) as pool:
         futuros = {
             pool.submit(descargar_paso, ymd, ciclo, h, i + 1, salida,
-                        args.forzar, 4): h
+                        args.forzar, 4, args.modelo): h
             for i, h in enumerate(horas)
         }
         hechos = 0
@@ -568,7 +644,8 @@ def main(argv=None) -> int:
         np.savez(f, u_ms=serie_u, v_ms=serie_v, msl_hpa=serie_msl,
                  lat=lat, lon=lon,
                  horas=np.asarray(horas, dtype=np.int32),
-                 fecha_init=f"{args.fecha}T{ciclo}:00Z")
+                 fecha_init=f"{args.fecha}T{ciclo}:00Z",
+                 modelo=args.modelo)
     tmp.replace(cache)
     print(f"\nSerie consolidada: {cache} ({serie_u.shape[0]}, {FILAS}, {COLUMNAS}) "
           f"float32 | horas {horas[0]}..{horas[-1]} cada {args.paso} h")

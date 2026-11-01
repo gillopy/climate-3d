@@ -16,7 +16,7 @@ conexión** a partir de lo que ya está descargado.
 | `sandwich.py` | Sandwich RGB (GOES-19): visible + IR realzado, dos JPEG por cuadro | NASA GIBS | `SALIDAS/frames_sandwich_globo_<...>/crudo_NNN_{vis,ir}.jpg` |
 | `precipitacion_ecmwf.py` | Precipitación total acumulada (`tp`) de IFS 0.25° / AIFS, por HTTP Range | ECMWF Open Data | `DATOS/crudos_precip_<modelo>_<fecha>_<ciclo>z/` (GRIB2 o `.npy` + `serie_tp_mm.npz`) |
 | `anomalia_2t_ecmwf.py` | Temperatura a 2 m (`2t`) del IFS 0.25° y su anomalía vs la climatología ERA5, por HTTP Range | ECMWF Open Data | `DATOS/crudos_anom2t_<modelo>_<fecha>_<ciclo>z/` (GRIB2 + `serie_anom_2t_c.npz`) |
-| `viento_250_mslp.py` | Viento en 250 mb (`u`, `v`) y presión a nivel del mar (`msl`) del IFS 0.25°, por HTTP Range | ECMWF Open Data | `DATOS/crudos_viento250_<fecha>_<ciclo>z/` (GRIB2 + `serie_viento_250.npz`) |
+| `viento_250_mslp.py` | Viento en 250 mb (`u`, `v`) y presión a nivel del mar (`msl`) del IFS 0.25° o del GFS 0.25°, por HTTP Range | ECMWF Open Data / NOAA GFS (AWS) | `DATOS/crudos_viento250[_gfs]_<fecha>_<ciclo>z/` (GRIB2 + `serie_viento_250.npz`) |
 | `goes_descarga.py` | *(módulo)* claves S3 y descarga | — | — |
 
 `DATOS` y `SALIDAS` salen de [`../comun/rutas.py`](../comun/rutas.py): se cambian con
@@ -354,9 +354,16 @@ vecinos), así que el paso del 31 de octubre al 1 de noviembre **no tiene salto*
 
 ## `viento_250_mslp.py`
 
-Baja el **viento en 250 mb** (`u` y `v`) y la **presión a nivel del mar** (`msl`) del **ECMWF
-IFS 0.25°** (`oper`). Los tres campos se piden **por HTTP Range** con los offsets del `.index`,
-igual que el resto de los productos ECMWF.
+Baja el **viento en 250 mb** (`u` y `v`) y la **presión a nivel del mar** (`msl`) de dos
+fuentes intercambiables:
+
+| `--modelo` | Fuente | Índice | Carpeta |
+| --- | --- | --- | --- |
+| `ifs` (default) | ECMWF IFS 0.25° (`oper`) | `.index` JSON Lines | `crudos_viento250_<fecha>_<ciclo>z` |
+| `gfs` | NOAA GFS 0.25° (AWS Open Data) | `.idx` de texto | `crudos_viento250_gfs_<fecha>_<ciclo>z` |
+
+Los tres campos se piden **por HTTP Range** en las dos fuentes: del `.index` de ECMWF y del
+`.idx` de GFS salen los offsets de cada mensaje.
 
 | Variable | Índice | Unidades | Uso |
 |---|---|---|---|
@@ -373,6 +380,7 @@ obtener nudos) y `msl` en **hPa** (`Pa / 100`).
 
 | Opción | Qué hace |
 |---|---|
+| `--modelo` | `ifs` (ECMWF) o `gfs` (NOAA) (por defecto `ifs`) |
 | `--fecha` | Día UTC de la corrida, `AAAA-MM-DD` (por defecto `2026-10-20`) |
 | `--ciclo` | Ciclo UTC de la corrida: `00`, `06`, `12` o `18` (por defecto `18`) |
 | `--hasta-hora` | Último paso de pronóstico en horas (por defecto `144`) |
@@ -391,6 +399,10 @@ obtener nudos) y `msl` en **hPa** (`Pa / 100`).
   (fecha **sin guiones**, ciclo con la `z` pegada).
 - **Ventana rodante de 4 días**: el ECMWF Open Data sólo conserva las corridas recientes.
 - Los pasos `12z` y `18z` publican hasta `144 h`.
+- **GFS**: el `.idx` no publica el largo de cada mensaje, así que sale del offset siguiente y, el
+  último, del `Content-Length` del GRIB (un `HEAD`). En el GRIB el shortName de la presión es
+  `prmsl` (el lector acepta `msl` y `prmsl`); la rejilla 0.25° es 1440×721 y se rota a
+  `-180..179.75` como el resto de las fuentes. GFS publica cada 3 h hasta 144 h.
 
 ---
 

@@ -86,8 +86,21 @@ RADIO = 58.0                           # grados al borde del disco (90 = hemisfe
 FONDO_GLOBO = "claro"
 CREDITO = "Graphic by @Gillo97"
 
-SUBTITULO = "ECMWF IFS 0.25° · 250 mb WIND SPEED (kt) & MSLP EXTREMA"
-FUENTE = "Source: ECMWF Open Data · IFS HRES 0.25° (oper)"
+# Rótulos y carpeta de crudos por fuente. El render es el mismo para las dos.
+FUENTES = {
+    "ifs": {
+        "etiqueta": "IFS 0.25°",
+        "subtitulo": "ECMWF IFS 0.25° · 250 mb WIND SPEED (kt) & MSLP EXTREMA",
+        "fuente": "Source: ECMWF Open Data · IFS HRES 0.25° (oper)",
+        "carpeta": "crudos_viento250_{fecha}_{ciclo}z",
+    },
+    "gfs": {
+        "etiqueta": "GFS 0.25°",
+        "subtitulo": "GFS 0.25° · 250 mb WIND SPEED (kt) & MSLP EXTREMA",
+        "fuente": "Source: NOAA GFS 0.25° · AWS Open Data",
+        "carpeta": "crudos_viento250_gfs_{fecha}_{ciclo}z",
+    },
+}
 
 # Rejilla del IFS 0.25°: 1440 x 721, de 90°N a 90°S y de 180°W a 179.75°E.
 FILAS, COLUMNAS = 721, 1440
@@ -269,10 +282,11 @@ def _pasos(hasta_hora: int, paso: int) -> list[int]:
 
 
 def _dir_crudos(args, ciclo: str) -> Path:
-    """Carpeta de entrada: `--crudos` > valor por defecto."""
+    """Carpeta de entrada: `--crudos` > valor por defecto (uno por modelo)."""
     if args.crudos:
         return Path(args.crudos)
-    return DATOS / f"crudos_viento250_{args.fecha}_{ciclo}z"
+    carpeta = FUENTES[args.modelo]["carpeta"].format(fecha=args.fecha, ciclo=ciclo)
+    return DATOS / carpeta
 
 
 def _dir_salidas(args) -> Path:
@@ -711,7 +725,7 @@ def render_globo(u_ms: np.ndarray, v_ms: np.ndarray, msl_hpa: np.ndarray,
              f"(FH +{hora:03d}h)",
              color=TXT, fontsize=13.5 * esc, fontweight="bold", ha="left", va="top",
              path_effects=halo, zorder=11)
-    fig.text(0.026, 0.912, SUBTITULO,
+    fig.text(0.026, 0.912, FUENTES[args.modelo]["subtitulo"],
              color=TXT_DIM, fontsize=11.5 * esc, fontweight="bold", ha="left", va="top",
              path_effects=halo, zorder=11)
     fig.text(0.983, 0.983, args.credito, color=TXT_DIM, fontsize=12 * esc,
@@ -745,7 +759,8 @@ def render_globo(u_ms: np.ndarray, v_ms: np.ndarray, msl_hpa: np.ndarray,
              fontsize=max(7.0, 9.8 * esc), fontweight="bold",
              ha="left", va="center", zorder=11)
 
-    fig.text(0.026, 0.012, FUENTE, color=TXT_DIM, fontsize=7.4 * esc,
+    fig.text(0.026, 0.012, FUENTES[args.modelo]["fuente"], color=TXT_DIM,
+             fontsize=7.4 * esc,
              ha="left", va="bottom")
     fig.text(0.980, 0.012,
              f"Valid {t_valid:%Y-%m-%d %H:%M} UTC · Max wind: {max_kt:.0f} kt",
@@ -780,6 +795,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Globo Orthographic del viento en 250 mb (kt) de ECMWF IFS 0.25° "
                     "con streamlines y extremos de MSLP (L/H).")
+    ap.add_argument("--modelo", choices=tuple(FUENTES), default="ifs",
+                    help="fuente del pronóstico: ifs (ECMWF) o gfs (NOAA)")
     ap.add_argument("--fecha", default=FECHA,
                     help=f"día UTC de la corrida, YYYY-MM-DD (por defecto {FECHA})")
     ap.add_argument("--ciclo", default=CICLO,
@@ -789,7 +806,7 @@ def main(argv=None) -> int:
     ap.add_argument("--paso", type=int, default=PASO_HORA,
                     help=f"horas entre pasos (por defecto {PASO_HORA})")
     ap.add_argument("--crudos", help="carpeta de crudos/serie de entrada (por defecto, "
-                                     "DATOS/crudos_viento250_<fecha>_<ciclo>z)")
+                                     "DATOS/crudos_viento250[_<modelo>]_<fecha>_<ciclo>z)")
     ap.add_argument("--px", type=int, default=PX,
                     help=f"lado del rectángulo donde se warpea el disco "
                          f"(por defecto {PX})")
@@ -822,7 +839,9 @@ def main(argv=None) -> int:
 
     salidas = _dir_salidas(args)
     salidas.mkdir(parents=True, exist_ok=True)
-    poster = salidas / f"poster_viento250_{args.fecha}_{ciclo}z_fh{args.hasta_hora:03d}.png"
+    sufijo_modelo = "" if args.modelo == "ifs" else f"_{args.modelo}"
+    poster = salidas / (f"poster_viento250{sufijo_modelo}_{args.fecha}_{ciclo}z_"
+                        f"fh{args.hasta_hora:03d}.png")
 
     u, v, msl, lat, lon, horas, fecha_init = cargar_serie(args, ciclo)
     indices, horas_pedidas = _seleccionar(horas, args.hasta_hora, args.paso)
@@ -846,7 +865,9 @@ def main(argv=None) -> int:
         return 0
 
     n = len(indices)
-    frames_dir = salidas / f"frames_{etiqueta_frames('viento_250', 'globo', t_init, n, args.px)}"
+    frames_dir = salidas / (
+        f"frames_{etiqueta_frames('viento_250' + sufijo_modelo, 'globo', t_init, n, args.px)}"
+    )
     frames_dir.mkdir(parents=True, exist_ok=True)
 
     # Si cambió el aspecto, los cuadros viejos quedaron obsoletos: se rehacen.
@@ -859,7 +880,7 @@ def main(argv=None) -> int:
         print("Cambiaron los parámetros de render -> se rehacen los cuadros")
     archivo_sello.write_text(sello, encoding="utf-8")
 
-    print(f"Viento 250 mb IFS 0.25° | {n} cuadros | "
+    print(f"Viento 250 mb {FUENTES[args.modelo]['etiqueta']} | {n} cuadros | "
           f"init {t_init:%Y-%m-%d %H:%M} UTC | "
           f"centro {args.centro[0]} {args.centro[1]} | radio {args.radio:g}° | "
           f"{args.px}x{args.px} px | frames en {frames_dir}")

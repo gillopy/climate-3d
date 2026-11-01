@@ -309,12 +309,16 @@ descarga.
 # Póster de cierre FH +144 h, sin secuencia
 .venv\Scripts\python.exe cuadros\cuadros_viento_250.py --fecha 2026-10-20 --ciclo 18 --hasta-hora 144 --paso 6 --solo-poster
 
-# Secuencia completa: 25 cuadros + póster a 2712 px
-.venv\Scripts\python.exe cuadros\cuadros_viento_250.py --fecha 2026-10-20 --ciclo 18 --hasta-hora 144 --paso 6
+# Secuencia completa: 49 cuadros (cada 3 h) + póster a 2712 px
+.venv\Scripts\python.exe cuadros\cuadros_viento_250.py --fecha 2026-10-20 --ciclo 18 --hasta-hora 144 --paso 3
+
+# Lo mismo pero con GFS como fuente
+.venv\Scripts\python.exe cuadros\cuadros_viento_250.py --modelo gfs --fecha 2026-11-01 --ciclo 00 --hasta-hora 144 --paso 3
 ```
 
 | Opción | Qué hace |
 |---|---|
+| `--modelo` | `ifs` (ECMWF) o `gfs` (NOAA): elige la carpeta de crudos y los rótulos (por defecto `ifs`) |
 | `--fecha` | Día UTC de la corrida, `AAAA-MM-DD` (por defecto `2026-10-20`) |
 | `--ciclo` | Ciclo UTC de la corrida: `00`, `06`, `12` o `18` (por defecto `18`) |
 | `--hasta-hora` / `--paso` | Último paso y horas entre pasos (por defecto `144` y `6`) |
@@ -326,7 +330,7 @@ descarga.
 | `--credito` | Crédito de la esquina superior |
 | `--solo-poster` | Renderiza sólo el póster estático del último paso |
 | `--forzar` | Vuelve a renderizar los cuadros aunque los PNG ya existan |
-| `--crudos` | Carpeta de entrada (por defecto, la que deja el descargador) |
+| `--crudos` | Carpeta de entrada (por defecto, la que deja el descargador para ese modelo) |
 | `--salidas` | Carpeta de salida (por defecto `comun.rutas.SALIDAS`) |
 
 Lee `serie_viento_250.npz`, que trae `u_ms`, `v_ms` y `msl_hpa` en la rejilla `721 x 1440`. La
