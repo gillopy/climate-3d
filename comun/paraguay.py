@@ -22,7 +22,12 @@ API = "https://wvs.earthdata.nasa.gov/api/v1/snapshot"
 #   truecolor  VIIRS NOAA-20 a 250 m, sólo de día: es la que trae detalle real.
 #   geocolor   GOES-19 ABI a ~2 km, día/noche; pedir más píxeles sólo la agranda.
 CAPAS = {
+    # True Color corregido: compuesto diario a 250 m, sólo de día.
     "truecolor": ("VIIRS_NOAA20_CorrectedReflectance_TrueColor", True),
+    "snpp": ("VIIRS_SNPP_CorrectedReflectance_TrueColor", True),
+    "aqua": ("MODIS_Aqua_CorrectedReflectance_TrueColor", True),
+    "terra": ("MODIS_Terra_CorrectedReflectance_TrueColor", True),
+    # GeoColor: día/noche, pero a ~2 km.
     "geocolor": ("GOES-East_ABI_GeoColor", False),
 }
 CAPA = "truecolor"
@@ -106,6 +111,44 @@ def caja_geojson(ruta: Path, margen: float = MARGEN) -> tuple[float, float, floa
     dx = (este - oeste) * margen
     dy = (norte - sur) * margen
     return (oeste - dx, sur - dy, este + dx, norte + dy)
+
+
+# Detalle real de cada capa, en metros por píxel (medido sobre este encuadre).
+# Por debajo de esto GIBS interpola: el archivo crece y la imagen no gana nada.
+MPP_NATIVO = {
+    "truecolor": 250,
+    "snpp": 250,
+    "aqua": 250,
+    "terra": 250,
+    "geocolor": 700,
+}
+
+# Tope de lado: 8000 px alcanza para 125 m/px sobre Paraguay sin comerse la RAM.
+LADO_MAX = 8000
+METROS_POR_GRADO = 111_320.0
+
+
+def px_para_mpp(caja, mpp: float, tope: int = LADO_MAX) -> int:
+    """Lado en píxeles para un detalle de `mpp` metros por píxel.
+
+    Se toma el lado mayor de la caja: así el encuadre entra completo en una imagen
+    cuadrada (el bbox de Paraguay es casi cuadrado). Es equirectangular, igual que
+    el pedido a GIBS (`CRS=EPSG:4326`).
+    """
+    if mpp <= 0:
+        raise SystemExit(f"--mpp debe ser positivo (recibí {mpp}).")
+    o, s, e, n = caja
+    lado_deg = max(e - o, n - s)
+    return int(min(tope, max(256, round(lado_deg * METROS_POR_GRADO / mpp))))
+
+
+def aviso_de_detalle(capa: str, mpp: float) -> str | None:
+    """Aviso cuando se pide más detalle del que la capa tiene."""
+    nativo = MPP_NATIVO.get(capa)
+    if nativo is None or mpp >= nativo:
+        return None
+    return (f"{capa} tiene ~{nativo} m/px: pedir {mpp:g} m/px sólo interpola "
+            f"(el archivo pesa más y no agrega detalle)")
 
 
 def nombre_crudo(capa: str, t: datetime, px: int) -> str:

@@ -35,8 +35,9 @@ from PIL import Image
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
-from paraguay import (CAPAS, CAPA, INTENTOS, MARGEN, caja_geojson,  # noqa: E402
-                     nombre_crudo, paso, techo, url_snapshot)
+from paraguay import (CAPAS, CAPA, INTENTOS, MARGEN, aviso_de_detalle,  # noqa: E402
+                     caja_geojson, nombre_crudo, paso, px_para_mpp, techo,
+                     url_snapshot)
 
 GEOJSON = RAIZ / "datos" / "paraguay_gadm.json"
 
@@ -152,8 +153,11 @@ def main(argv=None) -> int:
                     help=f"hora UTC 0-23 (por defecto {HORA})")
     ap.add_argument("--minuto", type=int, default=MINUTO,
                     help=f"minuto UTC 0-59 (por defecto {MINUTO})")
-    ap.add_argument("--px", type=int, default=PX,
+    ap.add_argument("--px", type=int, default=None,
                     help=f"lado de la captura en píxeles (por defecto {PX})")
+    ap.add_argument("--mpp", type=float,
+                    help="metros por píxel: calcula el lado según la caja "
+                         "(125, 250, 500...). Tiene prioridad sobre --px")
     ap.add_argument("--margen", type=float, default=MARGEN,
                     help=f"margen alrededor del país, fracción del lado "
                          f"(por defecto {MARGEN})")
@@ -177,12 +181,19 @@ def main(argv=None) -> int:
         raise SystemExit(f"--hora fuera de rango: {args.hora} (0-23).")
     if not 0 <= args.minuto <= 59:
         raise SystemExit(f"--minuto fuera de rango: {args.minuto} (0-59).")
-    if args.px < 256:
+    if args.px is not None and args.px < 256:
         raise SystemExit(f"--px demasiado chico: {args.px}.")
     if args.margen < 0:
         raise SystemExit(f"--margen debe ser >= 0 (recibí {args.margen}).")
 
     caja = caja_geojson(Path(args.geojson), args.margen)
+    if args.mpp:
+        args.px = px_para_mpp(caja, args.mpp)
+        aviso = aviso_de_detalle(args.capa, args.mpp)
+        if aviso:
+            print(f"  aviso: {aviso}")
+    elif not args.px:
+        args.px = PX
 
     if args.ultima or args.verificar:
         print(f"Buscando la última captura de {args.capa} disponible...")

@@ -339,16 +339,21 @@ class SnapshotParaguay(unittest.TestCase):
         self.assertIn("margen", nombres)
         self.assertIn("borde", nombres)
         capa = next(p for p in producto.params if p.name == "capa")
-        self.assertEqual({o.value for o in capa.options}, {"truecolor", "geocolor"})
-        resolucion = next(p for p in producto.params if p.name == "resolucion")
-        self.assertEqual(resolucion.default, "3600")
+        self.assertEqual(
+            {o.value for o in capa.options},
+            {"truecolor", "snpp", "aqua", "terra", "geocolor"},
+        )
+        detalle = next(p for p in producto.params if p.name == "detalle")
+        self.assertEqual(detalle.default, "250")
+        self.assertEqual({o.value for o in detalle.options},
+                         {"125", "250", "500", "1000", "2000"})
         # No es una animación: no ofrece "animar" ni "fps".
         self.assertNotIn("animar", nombres)
         self.assertNotIn("fps", nombres)
 
     def test_el_plan_descarga_y_compone(self):
         params = {"capa": "truecolor", "ultima": False, "fecha": DIA.isoformat(),
-                  "hora": 15, "minuto": "30", "margen": 8, "resolucion": "3200",
+                  "hora": 15, "minuto": "30", "margen": 8, "detalle": "250",
                   "borde": True}
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
@@ -361,7 +366,8 @@ class SnapshotParaguay(unittest.TestCase):
         self.assertEqual(descarga.args[descarga.args.index("--hora") + 1], "15")
         self.assertEqual(descarga.args[descarga.args.index("--minuto") + 1], "30")
         self.assertEqual(descarga.args[descarga.args.index("--margen") + 1], "0.08")
-        self.assertEqual(descarga.args[descarga.args.index("--px") + 1], "3200")
+        self.assertEqual(descarga.args[descarga.args.index("--mpp") + 1], "250")
+        self.assertNotIn("--px", descarga.args)
         self.assertEqual(descarga.args[descarga.args.index("--capa") + 1], "truecolor")
         self.assertEqual(descarga.args[descarga.args.index("--out") + 1],
                          str(work / "crudos"))
@@ -411,6 +417,27 @@ class SnapshotParaguay(unittest.TestCase):
             datetime(2026, 11, 1, 17, 40),
         )
         self.assertIsNone(ts_de_crudo("otra_cosa.png"))
+
+    def test_metros_por_pixel_calculan_el_lado(self):
+        from comun.paraguay import caja_geojson, px_para_mpp
+
+        caja = caja_geojson(RAIZ / "datos" / "paraguay_gadm.json", 0.06)
+        # ~9,4° de lado: a 250 m/px son ~4200 px; a 125 m/px, el doble.
+        a250 = px_para_mpp(caja, 250)
+        a125 = px_para_mpp(caja, 125)
+        self.assertGreater(a250, 3500)
+        self.assertLess(a250, 4500)
+        self.assertAlmostEqual(a125 / a250, 2, delta=0.1)
+        # El tope evita pedir un lado imposible.
+        self.assertEqual(px_para_mpp(caja, 10), 8000)
+
+    def test_avisa_cuando_el_detalle_supera_al_de_la_capa(self):
+        from comun.paraguay import aviso_de_detalle
+
+        self.assertIsNotNone(aviso_de_detalle("geocolor", 125))
+        self.assertIsNone(aviso_de_detalle("geocolor", 700))
+        self.assertIsNone(aviso_de_detalle("truecolor", 250))
+        self.assertIsNotNone(aviso_de_detalle("truecolor", 125))
 
 
 if __name__ == "__main__":

@@ -557,10 +557,13 @@ PRODUCTS: list[Product] = [
                 kind="select",
                 default="truecolor",
                 options=[
-                    ParamOption(value="truecolor", label="VIIRS 250 m (solo de dia)"),
-                    ParamOption(value="geocolor", label="GeoColor (dia y noche, ~2 km)"),
+                    ParamOption(value="truecolor", label="NOAA-20 / VIIRS (250 m)"),
+                    ParamOption(value="snpp", label="Suomi NPP / VIIRS (250 m)"),
+                    ParamOption(value="aqua", label="Aqua / MODIS (250 m)"),
+                    ParamOption(value="terra", label="Terra / MODIS (250 m)"),
+                    ParamOption(value="geocolor", label="GOES-19 GeoColor (dia y noche, ~2 km)"),
                 ],
-                help="GeoColor llega a 2 km: pedir mas pixeles solo la agranda",
+                help="los cuatro True Color son diarios y de 250 m; GeoColor llega a 2 km",
             ),
             ParamSpec(
                 name="ultima",
@@ -597,7 +600,17 @@ PRODUCTS: list[Product] = [
                 step=1,
                 help="aire alrededor del pais dentro del encuadre",
             ),
-            ParamSpec(name="resolucion", label="Resolucion", kind="select", default="3600", options=_RESOLUCIONES),
+            ParamSpec(
+                name="detalle",
+                label="Detalle (m/px)",
+                kind="select",
+                default="250",
+                options=[
+                    ParamOption(value=v, label=f"{v} m/px")
+                    for v in ("125", "250", "500", "1000", "2000")
+                ],
+                help="250 m/px es el detalle real de VIIRS; por debajo solo interpola",
+            ),
             ParamSpec(name="borde", label="Dibujar el contorno", kind="toggle", default=True),
         ],
     ),

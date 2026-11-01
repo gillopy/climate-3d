@@ -28,7 +28,7 @@ from PIL import Image, ImageDraw, ImageFont
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 from paraguay import (MARGEN, caja_geojson, nombre_captura,  # noqa: E402
-                     ts_de_crudo)
+                     px_para_mpp, ts_de_crudo)
 from rutas import SALIDAS  # noqa: E402
 
 GEOJSON = RAIZ / "datos" / "paraguay_gadm.json"
@@ -76,7 +76,8 @@ def dibujar_borde(imagen: Image.Image, caja, geojson: Path, lado: int,
                   color: str = BORDE_COLOR, ancho: float = BORDE_ANCHO,
                   sombra: bool = False) -> Image.Image:
     """Dibuja el contorno de Paraguay sobre la captura, con antialias."""
-    escala = 2
+    # A 2x un lado de 7600 px pide ~1 GB; arriba de 4000 se dibuja 1:1.
+    escala = 2 if lado <= 4000 else 1
     capa = Image.new("RGBA", (lado * escala, lado * escala), (0, 0, 0, 0))
     lapiz = ImageDraw.Draw(capa)
 
@@ -148,8 +149,10 @@ def main(argv=None) -> int:
                     help=f"minuto UTC 0-59 (por defecto {MINUTO})")
     ap.add_argument("--capa", default=CAPA,
                     help=f"capa del crudo: truecolor o geocolor (por defecto {CAPA})")
-    ap.add_argument("--px", type=int, default=PX,
+    ap.add_argument("--px", type=int, default=None,
                     help=f"lado de la captura en píxeles (por defecto {PX})")
+    ap.add_argument("--mpp", type=float,
+                    help="metros por píxel (el mismo que usó la descarga)")
     ap.add_argument("--margen", type=float, default=MARGEN,
                     help=f"margen alrededor del país (por defecto {MARGEN})")
     ap.add_argument("--geojson", default=str(GEOJSON),
@@ -179,6 +182,10 @@ def main(argv=None) -> int:
         raise SystemExit(f"--fecha inválida: {args.fecha!r} (se espera YYYY-MM-DD).")
     t = datetime(dia.year, dia.month, dia.day, args.hora, args.minuto)
     caja = caja_geojson(Path(args.geojson), args.margen)
+    if args.mpp:
+        args.px = px_para_mpp(caja, args.mpp)
+    elif not args.px:
+        args.px = PX
     salidas = Path(args.salidas or args.out or SALIDAS)
     salidas.mkdir(parents=True, exist_ok=True)
 

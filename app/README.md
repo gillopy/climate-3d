@@ -444,16 +444,33 @@ que no se ofrece.
 El producto `snapshot_paraguay` no arma serie ni globo: pide **una sola** imagen y
 la entrega recortada al país, sin rótulos ni barra de color.
 
-Dos capas, con una diferencia de detalle que conviene saber:
+Cinco fuentes, y conviene saber cuál da detalle de verdad:
 
-| Capa | Fuente | Resolución real | Cuándo |
+| `capa` | Sensor | Compuesto | Detalle real |
 | --- | --- | --- | --- |
-| `truecolor` (default) | VIIRS NOAA-20, compuesto diario | **250 m** | de día; a 3200 px pesa ~18-27 MB |
-| `geocolor` | GOES-19 ABI | **~2 km** | día y noche; pedir más px sólo la agranda |
+| `truecolor` (default) | NOAA-20 / VIIRS | diario | **250 m** |
+| `snpp` | Suomi NPP / VIIRS | diario | **250 m** |
+| `aqua` | Aqua / MODIS | diario | **250 m** |
+| `terra` | Terra / MODIS | diario | **250 m** |
+| `geocolor` | GOES-19 ABI | cada 10 min | **~700 m** |
 
-Medido sobre el mismo encuadre: a 1400 px GeoColor da nitidez 692; a 2800 px, 365, y
-a 5600 px, 328 — o sea, **más píxeles no agregan detalle**, sólo interpolan. VIIRS a
-3200 px da 3856 (5,6×) y 27 MB de crudo. Por eso el default es VIIRS y 3200 px.
+El control no es "píxeles" sino **metros por píxel** (125, 250, 500, 1000, 2000), como
+en EOSDIS: el lado se calcula solo a partir de la caja del GeoJSON. Medido sobre este
+encuadre (9,4° de lado):
+
+| Pedido | GeoColor | VIIRS 250 m |
+| --- | --- | --- |
+| 1400 px | nitidez 352 · 2,7 MB | 1194 · 4,8 MB |
+| 3600 px | 272 · 3,3 MB | **1195** · 28,8 MB |
+| 6930×6888 | 253 · 4,5 MB | 1160 · 38,7 MB |
+
+O sea: en GeoColor **más píxeles empeoran** la imagen (se interpola); en VIIRS a 3600
+px ya está el detalle nativo y de ahí para arriba sólo crece el archivo. Por eso el
+default es VIIRS con **250 m/px** (~4200 px, 17-20 MB) y el script avisa cuando se
+pide más detalle del que la capa tiene.
+
+Aun así, el control llega a **125 m/px** (el mismo del diálogo de Worldview): genera
+~7600 px y un PNG de 40-50 MB, con el detalle real de 250 m interpolado.
 
 - **La cobertura sale del GeoJSON** (`datos/paraguay_gadm.json`): se calcula la caja
   que encierra al país y se agranda con el `margen` que elige el usuario. No hay

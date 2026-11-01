@@ -611,6 +611,14 @@ def _anomalia(params: dict[str, Any], work: Path) -> Plan:
 
 
 # --- SNAPSHOT: una captura GeoColor recortada a Paraguay ----------------
+# Las capas v?lidas viven en comun/paraguay.py; si no se puede importar (raro),
+# se cae a la lista literal para no romper el pedido.
+try:
+    from comun.paraguay import CAPAS as _CAPAS_SNAPSHOT
+except Exception:  # pragma: no cover
+    _CAPAS_SNAPSHOT = {k: None for k in ("truecolor", "snpp", "aqua", "terra",
+                                         "geocolor")}
+
 def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
     inicio, _ = _rango(params)
     hora = max(0, min(23, int(params.get("hora", 15) or 0)))
@@ -619,21 +627,28 @@ def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
     except (TypeError, ValueError):
         minuto = 0
     capa = str(params.get("capa", "truecolor"))
-    if capa not in ("truecolor", "geocolor"):
+    if capa not in _CAPAS_SNAPSHOT:
         capa = "truecolor"
     px = _px(params, 3600, tope=4000)
+    try:
+        mpp = float(params.get("detalle")) if params.get("detalle") else 0.0
+    except (TypeError, ValueError):
+        mpp = 0.0
     # El margen llega como porcentaje (0-20) y los scripts lo usan como fracción.
     try:
         margen = max(0.0, min(0.20, float(params.get("margen", 6)) / 100.0))
     except (TypeError, ValueError):
         margen = 0.06
 
+    # El tamaño se pide en metros por píxel (como EOSDIS) o, si no hay, en píxeles:
+    # los dos scripts resuelven el mismo lado a partir de la caja del GeoJSON.
+    tamano = ["--mpp", f"{mpp:g}"] if mpp > 0 else ["--px", str(px)]
     comun = [
         "--capa", capa,
         "--fecha", inicio.isoformat(),
         "--hora", str(hora),
         "--minuto", str(minuto),
-        "--px", str(px),
+        *tamano,
         "--margen", f"{margen:g}",
     ]
     # Con "última disponible" la fecha la resuelve GIBS: los dos scripts reciben
