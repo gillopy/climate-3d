@@ -27,7 +27,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
-from paraguay import MARGEN, caja_geojson, nombre_captura  # noqa: E402
+from paraguay import (MARGEN, caja_geojson, nombre_captura,  # noqa: E402
+                     ts_de_crudo)
 from rutas import SALIDAS  # noqa: E402
 
 GEOJSON = RAIZ / "datos" / "paraguay_gadm.json"
@@ -35,9 +36,11 @@ GEOJSON = RAIZ / "datos" / "paraguay_gadm.json"
 FECHA = "2026-11-01"
 HORA = 15
 MINUTO = 0
-PX = 2000
-BORDE_COLOR = "#ffffff"
-BORDE_ANCHO = 1.0
+PX = 3600
+CAPA = "truecolor"
+# El contorno va en negro; el grosor automático crece con el lado de la captura.
+BORDE_COLOR = "#000000"
+BORDE_ANCHO = 0.0                      # 0 = automático (1,6 px por cada 1600 px de lado)
 SOMBRA_ANCHO = 2.4
 SOMBRA_ALFA = 55
 
@@ -71,7 +74,7 @@ def _a_pixel(lon: float, lat: float, caja, lado: int, escala: int) -> tuple[floa
 
 def dibujar_borde(imagen: Image.Image, caja, geojson: Path, lado: int,
                   color: str = BORDE_COLOR, ancho: float = BORDE_ANCHO,
-                  sombra: bool = True) -> Image.Image:
+                  sombra: bool = False) -> Image.Image:
     """Dibuja el contorno de Paraguay sobre la captura, con antialias."""
     escala = 2
     capa = Image.new("RGBA", (lado * escala, lado * escala), (0, 0, 0, 0))
@@ -82,7 +85,8 @@ def dibujar_borde(imagen: Image.Image, caja, geojson: Path, lado: int,
     for feature in datos.get("features", []):
         anillos.extend(_anillos(feature.get("geometry", {})))
 
-    trazo = max(1, round(ancho * escala))
+    grosor = ancho if ancho > 0 else max(1.6, lado / 1400)
+    trazo = max(1, round(grosor * escala))
     for anillo in anillos:
         puntos = [_a_pixel(lon, lat, caja, lado, escala) for lon, lat in anillo]
         if len(puntos) < 3:
@@ -120,14 +124,14 @@ def _credito(imagen: Image.Image, texto: str, lado: int) -> Image.Image:
 
 def componer(crudo: Path, caja, geojson: Path, lado: int, borde: bool = True,
              color: str = BORDE_COLOR, ancho: float = BORDE_ANCHO,
-             credito: str = "") -> Image.Image:
+             sombra: bool = False, credito: str = "") -> Image.Image:
     with Image.open(crudo) as origen:
         imagen = origen.convert("RGB")
     if imagen.size != (lado, lado):
         raise SystemExit(f"{crudo.name}: {imagen.size[0]}x{imagen.size[1]}, "
                          f"se esperaba {lado}x{lado}. Revisá --px/margen.")
     if borde:
-        imagen = dibujar_borde(imagen, caja, geojson, lado, color, ancho)
+        imagen = dibujar_borde(imagen, caja, geojson, lado, color, ancho, sombra)
     if credito:
         imagen = _credito(imagen, credito, lado)
     return imagen
@@ -142,6 +146,8 @@ def main(argv=None) -> int:
                     help=f"hora UTC 0-23 (por defecto {HORA})")
     ap.add_argument("--minuto", type=int, default=MINUTO,
                     help=f"minuto UTC 0-59 (por defecto {MINUTO})")
+    ap.add_argument("--capa", default=CAPA,
+                    help=f"capa del crudo: truecolor o geocolor (por defecto {CAPA})")
     ap.add_argument("--px", type=int, default=PX,
                     help=f"lado de la captura en píxeles (por defecto {PX})")
     ap.add_argument("--margen", type=float, default=MARGEN,
@@ -152,12 +158,16 @@ def main(argv=None) -> int:
                                        "(por defecto, la de salida)")
     ap.add_argument("--crudo", help="PNG crudo de GIBS (por defecto, el que deja "
                                     "descargar/snapshot_paraguay.py)")
+    ap.add_argument("--ultima", action="store_true",
+                    help="el instante sale del nombre del crudo (última disponible)")
     ap.add_argument("--sin-borde", action="store_true",
                     help="no dibujar el contorno del país")
     ap.add_argument("--borde-color", default=BORDE_COLOR,
                     help=f"color del contorno (por defecto {BORDE_COLOR})")
     ap.add_argument("--borde-ancho", type=float, default=BORDE_ANCHO,
-                    help=f"grosor del contorno en px (por defecto {BORDE_ANCHO})")
+                    help="grosor del contorno en px; 0 = automático según el lado")
+    ap.add_argument("--sombra", action="store_true",
+                    help="filo oscuro debajo del contorno (para líneas claras)")
     ap.add_argument("--credito", default="", help="texto de crédito (opcional)")
     ap.add_argument("--salidas", help="carpeta de salida (por defecto comun.rutas.SALIDAS)")
     ap.add_argument("--out", help="alias de --salidas")
@@ -176,7 +186,8 @@ def main(argv=None) -> int:
         crudo = Path(args.crudo)
     else:
         entrada = Path(args.entrada) if args.entrada else salidas
-        candidatos = sorted(entrada.glob(f"crudo_snapshot_*_{args.px}px.png"))
+        candidatos = sorted(
+            entrada.glob(f"crudo_snapshot_{args.capa}_*_{args.px}px.png"))
         if not candidatos:
             raise SystemExit(
                 f"No hay crudos en {entrada}. Corré primero:\n"
@@ -185,11 +196,19 @@ def main(argv=None) -> int:
                 f"--out \"{entrada}\"")
         crudo = candidatos[-1]
 
+    if getattr(args, "ultima", False):
+        # Sin --ultima el instante es el que pidió el usuario; con --ultima manda
+        # el nombre del crudo, que es el gránulo que GIBS realmente tenía.
+        del_crudo = ts_de_crudo(crudo.name)
+        if del_crudo is not None:
+            t = del_crudo
+
     imagen = componer(crudo, caja, Path(args.geojson), args.px,
                       borde=not args.sin_borde, color=args.borde_color,
-                      ancho=args.borde_ancho, credito=args.credito)
+                      ancho=args.borde_ancho, sombra=args.sombra,
+                      credito=args.credito)
 
-    destino = salidas / nombre_captura(t, args.px)
+    destino = salidas / nombre_captura(args.capa, t, args.px)
     tmp = destino.with_suffix(".png.parcial")
     imagen.save(tmp, format="PNG")
     tmp.replace(destino)

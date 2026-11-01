@@ -29,7 +29,8 @@ _PALETAS = [
 # Una sola escala de resoluciones para todos los productos: el numero solo.
 # 2712 es el nativo del disco de GOES y el techo que aceptan los scripts.
 _RESOLUCIONES = [
-    ParamOption(value=v, label=v) for v in ("1400", "1800", "2000", "2400", "2712")
+    ParamOption(value=v, label=v)
+    for v in ("1400", "1800", "2000", "2400", "2712", "3200", "4000")
 ]
 
 _FONDO = [
@@ -544,12 +545,30 @@ PRODUCTS: list[Product] = [
     ),
     Product(
         id="snapshot_paraguay",
-        name="Snapshot - Paraguay (GeoColor)",
+        name="Snapshot - Paraguay",
         group="satelite",
         stage="descargar/snapshot_paraguay.py + cuadros/snapshot_paraguay.py",
-        summary="Una sola captura GeoColor (color real de dia, IR y luces de noche) "
-        "recortada a los bordes de Paraguay, sin rotulos.",
+        summary="Una sola captura recortada a los bordes de Paraguay, sin rotulos. "
+        "VIIRS a 250 m de dia, o GeoColor de dia y noche.",
         params=[
+            ParamSpec(
+                name="capa",
+                label="Capa",
+                kind="select",
+                default="truecolor",
+                options=[
+                    ParamOption(value="truecolor", label="VIIRS 250 m (solo de dia)"),
+                    ParamOption(value="geocolor", label="GeoColor (dia y noche, ~2 km)"),
+                ],
+                help="GeoColor llega a 2 km: pedir mas pixeles solo la agranda",
+            ),
+            ParamSpec(
+                name="ultima",
+                label="Ultima disponible",
+                kind="toggle",
+                default=True,
+                help="resuelve el granulo mas nuevo; ignora fecha, hora y minuto",
+            ),
             ParamSpec(name="fecha", label="Fecha de la captura", kind="date", default=date.today().isoformat()),
             ParamSpec(
                 name="hora",
@@ -578,7 +597,7 @@ PRODUCTS: list[Product] = [
                 step=1,
                 help="aire alrededor del pais dentro del encuadre",
             ),
-            ParamSpec(name="resolucion", label="Resolucion", kind="select", default="2000", options=_RESOLUCIONES),
+            ParamSpec(name="resolucion", label="Resolucion", kind="select", default="3600", options=_RESOLUCIONES),
             ParamSpec(name="borde", label="Dibujar el contorno", kind="toggle", default=True),
         ],
     ),

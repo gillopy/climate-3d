@@ -207,7 +207,7 @@ GET  /media/...
 | Precipitación ECMWF | `precipitacion_ecmwf.py --modelo --fecha --ciclo --hasta-hora --paso 3` | `cuadros_precipitacion.py ... --px --fondo-globo --salidas` | `armar.py` |
 | Anomalía 2 m ECMWF | `anomalia_2t_ecmwf.py ... --paso 3` | `cuadros_anomalia_2t.py ...` | `armar.py` |
 | Viento 250 mb (IFS o GFS) | `viento_250_mslp.py --modelo --fecha --ciclo --hasta-hora --paso 3` | `cuadros_viento_250.py ... --modelo --px --fondo-globo --salidas` | `armar.py` |
-| Snapshot Paraguay (GeoColor) | `snapshot_paraguay.py --fecha --hora --minuto --px --margen --out` | `snapshot_paraguay.py --fecha --hora --entrada --salidas [--sin-borde]` | — |
+| Snapshot Paraguay | `snapshot_paraguay.py --capa --fecha --hora --minuto --px --margen --out` | `snapshot_paraguay.py --capa --fecha --entrada --salidas [--sin-borde]` | — |
 | Follaje PACE | `pace_landvi.py --desde --hasta` | `cuadros_follaje.py --desde --hasta --px --out` | `armar.py` |
 
 ### Fechas y datos faltantes
@@ -441,20 +441,39 @@ que no se ofrece.
 
 ### Snapshot de Paraguay (una captura, no una animación)
 
-El producto `snapshot_paraguay` no arma serie ni globo: pide **una sola** imagen
-GeoColor (color real de día, IR y luces de noche) y la entrega recortada al país.
+El producto `snapshot_paraguay` no arma serie ni globo: pide **una sola** imagen y
+la entrega recortada al país, sin rótulos ni barra de color.
+
+Dos capas, con una diferencia de detalle que conviene saber:
+
+| Capa | Fuente | Resolución real | Cuándo |
+| --- | --- | --- | --- |
+| `truecolor` (default) | VIIRS NOAA-20, compuesto diario | **250 m** | de día; a 3200 px pesa ~18-27 MB |
+| `geocolor` | GOES-19 ABI | **~2 km** | día y noche; pedir más px sólo la agranda |
+
+Medido sobre el mismo encuadre: a 1400 px GeoColor da nitidez 692; a 2800 px, 365, y
+a 5600 px, 328 — o sea, **más píxeles no agregan detalle**, sólo interpolan. VIIRS a
+3200 px da 3856 (5,6×) y 27 MB de crudo. Por eso el default es VIIRS y 3200 px.
 
 - **La cobertura sale del GeoJSON** (`datos/paraguay_gadm.json`): se calcula la caja
   que encierra al país y se agranda con el `margen` que elige el usuario. No hay
   bbox escrito a mano.
-- El **contorno de Paraguay** se dibuja sobre la imagen a 2x y se reduce con LANCZOS,
-  así la línea queda fina y sin escalones. Se puede apagar con `contorno`; no hay
-  rótulos, fecha ni barra de color: la captura es la imagen.
-- Fuente: `wvs.earthdata.nasa.gov` (`REQUEST=GetSnapshot`, `LAYERS=GOES-East_ABI_GeoColor`).
-  GIBS devuelve el gránulo más cercano a la hora pedida, así que no hace falta
-  acertar el slot de 10 minutos.
+- El **contorno de Paraguay** se dibuja en negro sobre la imagen, a 2x y reducido con
+  LANCZOS (si no, a 3600 px queda escalonado). El grosor es automático: ~2 px a 3200.
+  Se puede apagar o cambiar con `--borde-ancho`.
+- Fuente: `wvs.earthdata.nasa.gov` (`REQUEST=GetSnapshot`). Las capas diarias piden
+  `TIME=AAAA-MM-DD`; GeoColor pide el instante ISO y GIBS devuelve el gránulo más
+  cercano, así que no hace falta acertar el slot de 10 minutos.
+- **Última disponible (default)**: el instante no se adivina. El descargador sondea
+  miniaturas de 320 px hacia atrás —10 min por paso en GeoColor, 1 día en VIIRS—
+  hasta encontrar un gránulo real. La trampa que hay que conocer: cuando el `TIME`
+  no existe, GIBS responde **200 con un PNG de 0,7 KB totalmente negro**, no un 404.
+  Por eso la sonda mira los píxeles y no el código HTTP.
+- Si elegís la hora a mano y no hay gránulo, el job **falla con la última disponible
+  y el comando exacto**, en vez de dejar una imagen negra. `--verificar` informa la
+  última sin descargar nada.
 - El crudo baja a `<work>/crudos/` para que el visor no lo publique como si fuera
-  el resultado; el PNG final queda en la raíz del job.
+  el resultado; el PNG final queda en la raíz del job (con la hora real en el nombre).
 
 ### Posters sueltos
 

@@ -91,9 +91,13 @@ def _rango(params: dict[str, Any]) -> tuple[date, date]:
     return inicio, fin
 
 
-def _px(params: dict[str, Any], por_defecto: int = 1400) -> int:
+def _px(params: dict[str, Any], por_defecto: int = 1400, tope: int = 2712) -> int:
+    """Resoluci?n pedida, acotada al techo del producto.
+
+    El globo no pasa de 2712 px (el disco nativo); la captura plana s? admite m?s.
+    """
     try:
-        return max(400, min(int(params.get("resolucion", por_defecto)), 2712))
+        return max(400, min(int(params.get("resolucion", por_defecto)), tope))
     except (TypeError, ValueError):
         return por_defecto
 
@@ -614,7 +618,10 @@ def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
         minuto = max(0, min(59, int(params.get("minuto", 0) or 0)))
     except (TypeError, ValueError):
         minuto = 0
-    px = _px(params, 2000)
+    capa = str(params.get("capa", "truecolor"))
+    if capa not in ("truecolor", "geocolor"):
+        capa = "truecolor"
+    px = _px(params, 3600, tope=4000)
     # El margen llega como porcentaje (0-20) y los scripts lo usan como fracción.
     try:
         margen = max(0.0, min(0.20, float(params.get("margen", 6)) / 100.0))
@@ -622,12 +629,17 @@ def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
         margen = 0.06
 
     comun = [
+        "--capa", capa,
         "--fecha", inicio.isoformat(),
         "--hora", str(hora),
         "--minuto", str(minuto),
         "--px", str(px),
         "--margen", f"{margen:g}",
     ]
+    # Con "última disponible" la fecha la resuelve GIBS: los dos scripts reciben
+    # --ultima y el compositor toma el instante del nombre del crudo.
+    if _bool(params, "ultima"):
+        comun.append("--ultima")
     crudos = work / "crudos"
     descarga = Step(
         kind="download",

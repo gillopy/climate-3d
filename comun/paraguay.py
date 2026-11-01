@@ -10,10 +10,76 @@ un margen para que el contorno no toque el borde de la imagen.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from pathlib import Path
 
 MARGEN = 0.06                          # 6 % del lado, por defecto
+
+API = "https://wvs.earthdata.nasa.gov/api/v1/snapshot"
+
+# Capas disponibles: (id de GIBS, es un compuesto diario).
+#   truecolor  VIIRS NOAA-20 a 250 m, sólo de día: es la que trae detalle real.
+#   geocolor   GOES-19 ABI a ~2 km, día/noche; pedir más píxeles sólo la agranda.
+CAPAS = {
+    "truecolor": ("VIIRS_NOAA20_CorrectedReflectance_TrueColor", True),
+    "geocolor": ("GOES-East_ABI_GeoColor", False),
+}
+CAPA = "truecolor"
+
+# Cada cuánto publica: GeoColor cada 10 minutos; VIIRS arma un compuesto por día.
+PASOS = {
+    "truecolor": timedelta(days=1),
+    "geocolor": timedelta(minutes=10),
+}
+# Cuánto se puede retroceder buscando el último gránulo publicado.
+INTENTOS = {
+    "truecolor": 7,        # una semana de días
+    "geocolor": 36,        # 6 horas de slots de 10 minutos
+}
+
+
+def paso(capa: str) -> timedelta:
+    """Intervalo entre gránulos de la capa."""
+    return PASOS.get(capa, timedelta(minutes=10))
+
+
+def techo(capa: str, ahora: datetime) -> datetime:
+    """Último instante posible: ahora (UTC, sin segundos) alineado al intervalo."""
+    base = ahora.replace(second=0, microsecond=0)
+    intervalo = paso(capa)
+    if intervalo < timedelta(days=1):
+        minutos = int(intervalo.total_seconds() // 60)
+        return base.replace(minute=base.minute - base.minute % minutos)
+    return base.replace(hour=0, minute=0)
+
+
+_RE_CRUDO = re.compile(r"crudo_snapshot_[a-z]+_(\d{8}T\d{4})_\d+px\.png$")
+
+
+def ts_de_crudo(nombre: str) -> datetime | None:
+    """Instante que codifica el nombre del crudo (`..._20261101T1750_3200px.png`)."""
+    match = _RE_CRUDO.search(nombre)
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(1), "%Y%m%dT%H%M")
+    except ValueError:
+        return None
+
+
+def url_snapshot(t: datetime, caja, px: int, capa: str = CAPA) -> str:
+    """URL del snapshot para el instante `t`.
+
+    Las capas diarias (VIIRS) esperan `TIME=AAAA-MM-DD`; las del satélite
+    geoestacionario, el instante completo en ISO 8601.
+    """
+    o, s, e, n = caja
+    capa_gibs, diaria = CAPAS[capa]
+    momento = t.strftime("%Y-%m-%d") if diaria else t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return (f"{API}?REQUEST=GetSnapshot&TIME={momento}"
+            f"&BBOX={s},{o},{n},{e}&CRS=EPSG:4326"
+            f"&LAYERS={capa_gibs}&FORMAT=image/png&WIDTH={px}&HEIGHT={px}")
 
 
 def puntos(objeto):
@@ -42,11 +108,14 @@ def caja_geojson(ruta: Path, margen: float = MARGEN) -> tuple[float, float, floa
     return (oeste - dx, sur - dy, este + dx, norte + dy)
 
 
-def nombre_crudo(t: datetime, px: int) -> str:
-    """Nombre fijo del crudo: descarga y composición lo calculan igual."""
-    return f"crudo_snapshot_{t:%Y%m%dT%H%M}_{px}px.png"
+def nombre_crudo(capa: str, t: datetime, px: int) -> str:
+    """Nombre fijo del crudo: descarga y composición lo calculan igual.
+
+    Lleva la capa y el instante: dos capas del mismo día no se pisan.
+    """
+    return f"crudo_snapshot_{capa}_{t:%Y%m%dT%H%M}_{px}px.png"
 
 
-def nombre_captura(t: datetime, px: int) -> str:
+def nombre_captura(capa: str, t: datetime, px: int) -> str:
     """Nombre de la captura final."""
-    return f"snapshot_paraguay_{t:%Y-%m-%dT%H%M}_{px}px.png"
+    return f"snapshot_paraguay_{capa}_{t:%Y-%m-%dT%H%M}_{px}px.png"
