@@ -22,13 +22,17 @@ from typing import Any
 RAIZ_REPO = Path(__file__).resolve().parents[2]
 PYTHON_REPO = RAIZ_REPO / ".venv" / "Scripts" / "python.exe"
 
-# Tabla de productos ECMWF en data.ecmwf.int (copiada del propio descargador).
+# Tabla de fuentes de pronóstico (copiada del propio descargador).
 _BASE_ECMWF = "https://data.ecmwf.int/forecasts/{ymd}/{ciclo}z/{ruta}/{ymd}{ciclo}0000-{paso}.index"
+# GFS 0.25° en AWS Open Data: un `.idx` de texto por paso (offsets en bytes).
+_BASE_GFS = ("https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.{ymd}/{ciclo}/atmos/"
+             "gfs.t{ciclo}z.pgrb2.0p25.f{hora:03d}.idx")
 _RUTA_ECMWF = {
     "ifs": "ifs/0p25/oper",
     "aifs-single": "aifs-single/0p25/oper",
     "aifs-ens": "aifs-ens/0p25/enfo",
 }
+MODELOS = (*_RUTA_ECMWF, "gfs")
 PRODUCTOS_ECMWF = ("precipitacion_ecmwf", "anomalia_2t", "viento_250")
 
 # ECMWF Open Data no publica una grilla uniforme de pasos (verificado contra el
@@ -113,6 +117,8 @@ def _paso_ecmwf(modelo: str, hora: int) -> str:
 
 def _url_indice(modelo: str, dia: date, ciclo: str, hora: int) -> str:
     ymd = dia.strftime("%Y%m%d")
+    if modelo == "gfs":
+        return _BASE_GFS.format(ymd=ymd, ciclo=ciclo, hora=hora)
     return _BASE_ECMWF.format(
         ymd=ymd,
         ciclo=ciclo,
@@ -136,11 +142,13 @@ def _publicado(modelo: str, dia: date, ciclo: str, hora: int) -> bool:
 def _paso_horas_ecmwf(modelo: str, horizonte: int) -> int:
     """Horas entre pasos que esa corrida publica de verdad.
 
-    Los AIFS publican cada 6 h de punta a punta; el IFS determinístico publica
-    cada 3 h sólo hasta las 144 h y cada 6 h de ahí en adelante.
+    Los AIFS publican cada 6 h de punta a punta. El IFS y el GFS publican cada
+    3 h hasta las 144 h; el IFS pasa a 6 h de ahí en adelante.
     """
-    if modelo != "ifs":
+    if modelo in ("aifs-single", "aifs-ens"):
         return 6
+    if modelo == "gfs":
+        return 3
     return 3 if horizonte <= _PASO_3H_HASTA else 6
 
 
@@ -173,7 +181,7 @@ def resolver_corrida(params: dict[str, Any]) -> tuple[dict[str, Any], str | None
     404 en todos los pasos; esta funcion encuentra la ultima que si existe.
     """
     modelo = str(params.get("modelo", "ifs"))
-    if modelo not in _RUTA_ECMWF:
+    if modelo not in MODELOS:
         return params, None
 
     pedida = _a_fecha(params.get("fecha"), date.today())
@@ -599,25 +607,36 @@ def _anomalia(params: dict[str, Any], work: Path) -> Plan:
 
 
 # --- VIENTO: 250 mb + extremos de MSLP ----------------------------------
-def _crudos_viento_existen(fecha: str, ciclo: str, horizonte: int, paso: int) -> bool:
+def _carpeta_viento(modelo: str, fecha: str, ciclo: str) -> str:
+    """Carpeta de crudos: el IFS conserva el nombre viejo, GFS lleva el modelo."""
+    if modelo == "ifs":
+        return f"crudos_viento250_{fecha}_{ciclo}z"
+    return f"crudos_viento250_{modelo}_{fecha}_{ciclo}z"
+
+
+def _crudos_viento_existen(modelo: str, fecha: str, ciclo: str, horizonte: int,
+                           paso: int) -> bool:
     """Si los crudos de viento cubren el horizonte que el render va a leer."""
     from .catalog import data_root  # import local: evita el ciclo
 
-    carpeta = data_root() / f"crudos_viento250_{fecha}_{ciclo}z"
-    return _crudo_final(carpeta, horizonte, paso, ".grib2").is_file()
+    carpeta = data_root() / _carpeta_viento(modelo, fecha, ciclo)
+    # El viento guarda un GRIB por variable: el ?ltimo paso es el de `u`.
+    return _crudo_final(carpeta, horizonte, paso, "_u.grib2").is_file()
 
 
 def _viento_250(params: dict[str, Any], work: Path) -> Plan:
     inicio, _ = _rango(params)
-    corrida = str(params.get("corrida", "18")).zfill(2)
+    modelo = str(params.get("modelo", "ifs"))
+    corrida = str(params.get("corrida", "00")).zfill(2)
     horizonte = int(params.get("horizonte", 144) or 144)
     px = _px(params, 1400)
     fondo = str(params.get("fondo", "oscuro"))
-    # Los dos scripts del repo (PASO_HORA = 6) y la referencia van cada 6 h.
-    paso_horas = 6
+    # IFS y GFS publican cada 3 h hasta 144 h: la animación queda fluida.
+    paso_horas = _paso_horas_ecmwf(modelo, horizonte)
     cuadros = len(range(0, horizonte + 1, paso_horas))
 
     comunes = [
+        "--modelo", modelo,
         "--fecha", inicio.isoformat(),
         "--ciclo", corrida,
         "--hasta-hora", str(horizonte),
@@ -625,7 +644,7 @@ def _viento_250(params: dict[str, Any], work: Path) -> Plan:
     ]
     descarga = Step(
         kind="download",
-        label="bajando el viento en 250 mb de ifs",
+        label=f"bajando el viento en 250 mb de {modelo}",
         script="descargar/viento_250_mslp.py",
         args=comunes,
         expected=cuadros,
@@ -644,8 +663,8 @@ def _viento_250(params: dict[str, Any], work: Path) -> Plan:
     )
     pasos = [descarga, render_step] if (
         _bool(params, "descargar")
-        or not _crudos_viento_existen(inicio.isoformat(), corrida, horizonte,
-                                      paso_horas)
+        or not _crudos_viento_existen(modelo, inicio.isoformat(), corrida,
+                                      horizonte, paso_horas)
     ) else [render_step]
     return Plan(pasos=pasos, descarga=descarga)
 

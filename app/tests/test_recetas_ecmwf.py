@@ -157,7 +157,7 @@ class ProductoViento(unittest.TestCase):
                                    "cuadros/cuadros_viento_250.py"])
 
         descarga, render = plan.pasos
-        self.assertEqual(descarga.args[descarga.args.index("--paso") + 1], "6")
+        self.assertEqual(descarga.args[descarga.args.index("--paso") + 1], "3")
         self.assertEqual(descarga.args[descarga.args.index("--hasta-hora") + 1], "144")
         self.assertEqual(render.args[render.args.index("--fondo-globo") + 1], "oscuro")
         self.assertEqual(render.args[render.args.index("--px") + 1], "2712")
@@ -177,8 +177,8 @@ class ProductoViento(unittest.TestCase):
             work = Path(tmp)
             crudos = work / "crudos_viento250_2026-10-20_18z"
             crudos.mkdir(parents=True)
-            # 0..144 h cada 6 h: el último paso es el 25 de la grilla.
-            (crudos / "crudo_025_fh144.grib2").write_bytes(b"x")
+            # 0..144 h cada 3 h: el último paso es el 49 de la grilla.
+            (crudos / "crudo_049_fh144_u.grib2").write_bytes(b"x")
             with mock.patch.object(catalog, "data_root", return_value=work):
                 plan = recipes.planear("viento_250", params, work)
         self.assertEqual([paso.script for paso in plan.pasos],
@@ -192,7 +192,7 @@ class ProductoViento(unittest.TestCase):
             work = Path(tmp)
             crudos = work / "crudos_viento250_2026-10-20_18z"
             crudos.mkdir(parents=True)
-            (crudos / "crudo_001_fh000.grib2").write_bytes(b"x")
+            (crudos / "crudo_001_fh000_u.grib2").write_bytes(b"x")
             with mock.patch.object(catalog, "data_root", return_value=work):
                 plan = recipes.planear("viento_250", params, work)
         self.assertEqual(len(plan.pasos), 2)
@@ -205,6 +205,85 @@ class ProductoViento(unittest.TestCase):
             with mock.patch.object(catalog, "data_root", return_value=work):
                 plan = recipes.planear("viento_250", params, work)
         self.assertEqual(plan.pasos[-1].script, "animar/armar.py")
+
+
+class CatalogoDeLaApp(unittest.TestCase):
+    """S1, S2, S3, S5, S6 y S7: el esquema que ve la interfaz."""
+
+    def _spec(self, product_id: str, nombre: str):
+        producto = catalog.get_product(product_id)
+        assert producto is not None, product_id
+        return next(p for p in producto.params if p.name == nombre)
+
+    def test_precipitacion_y_anomalia_no_pasan_de_144_h(self):
+        for product_id in ("precipitacion_ecmwf", "anomalia_2t", "viento_250"):
+            horizonte = self._spec(product_id, "horizonte")
+            self.assertEqual(horizonte.max, 144, product_id)
+            self.assertEqual(horizonte.default, 144, product_id)
+
+    def test_ciclo_por_defecto_en_00(self):
+        for product_id in ("precipitacion_ecmwf", "anomalia_2t", "viento_250"):
+            self.assertEqual(self._spec(product_id, "corrida").default, "00", product_id)
+
+    def test_resoluciones_estandar_en_todos(self):
+        esperadas = ["1400", "1800", "2000", "2400", "2712"]
+        for producto in catalog.PRODUCTS:
+            specs = [p for p in producto.params if p.name == "resolucion"]
+            if not specs:
+                continue
+            opciones = specs[0].options
+            self.assertEqual([o.value for o in opciones], esperadas, producto.id)
+            # S5: el rótulo es el número solo, sin "poster" ni "nativo".
+            self.assertEqual([o.label for o in opciones], esperadas, producto.id)
+
+    def test_animar_y_descargar_arrancan_activos(self):
+        for product_id in ("precipitacion_ecmwf", "anomalia_2t", "viento_250"):
+            self.assertIs(self._spec(product_id, "animar").default, True, product_id)
+            self.assertIs(self._spec(product_id, "descargar").default, True, product_id)
+
+    def test_viento_ofrece_ifs_y_gfs(self):
+        modelos = {o.value for o in self._spec("viento_250", "modelo").options}
+        self.assertEqual(modelos, {"ifs", "gfs"})
+
+
+class ModeloGfs(unittest.TestCase):
+    """S8: GFS como fuente del viento en 250 mb."""
+
+    def test_gfs_usa_pasos_de_3_horas(self):
+        self.assertEqual(recipes._paso_horas_ecmwf("gfs", 144), 3)
+
+    def test_la_url_del_indice_apunta_al_bucket_de_gfs(self):
+        url = recipes._url_indice("gfs", DIA, "00", 144)
+        self.assertEqual(
+            url,
+            "https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.20261020/00/atmos/"
+            "gfs.t00z.pgrb2.0p25.f144.idx",
+        )
+
+    def test_el_plan_pasa_el_modelo_y_la_carpeta(self):
+        params = {"modelo": "gfs", "fecha": DIA.isoformat(), "corrida": "00",
+                  "horizonte": 144}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            with mock.patch.object(catalog, "data_root", return_value=work):
+                plan = recipes.planear("viento_250", params, work)
+        descarga = plan.descarga
+        assert descarga is not None
+        self.assertEqual(descarga.args[descarga.args.index("--modelo") + 1], "gfs")
+        self.assertEqual(descarga.args[descarga.args.index("--paso") + 1], "3")
+
+    def test_los_crudos_de_gfs_viven_en_su_propia_carpeta(self):
+        params = {"modelo": "gfs", "fecha": DIA.isoformat(), "corrida": "00",
+                  "horizonte": 144}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            crudos = work / "crudos_viento250_gfs_2026-10-20_00z"
+            crudos.mkdir(parents=True)
+            (crudos / "crudo_049_fh144_u.grib2").write_bytes(b"x")
+            with mock.patch.object(catalog, "data_root", return_value=work):
+                plan = recipes.planear("viento_250", params, work)
+        self.assertEqual([paso.script for paso in plan.pasos],
+                         ["cuadros/cuadros_viento_250.py"])
 
 
 if __name__ == "__main__":

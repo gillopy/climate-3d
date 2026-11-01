@@ -206,7 +206,7 @@ GET  /media/...
 | MUR SST poster realista | `mur_sst.py ...` | `poster_mur_realista.py --crudo --px --paleta [--trend] --out` | — |
 | Precipitación ECMWF | `precipitacion_ecmwf.py --modelo --fecha --ciclo --hasta-hora --paso 3` | `cuadros_precipitacion.py ... --px --fondo-globo --salidas` | `armar.py` |
 | Anomalía 2 m ECMWF | `anomalia_2t_ecmwf.py ... --paso 3` | `cuadros_anomalia_2t.py ...` | `armar.py` |
-| Viento 250 mb ECMWF | `viento_250_mslp.py --fecha --ciclo --hasta-hora --paso 6` | `cuadros_viento_250.py ... --px --fondo-globo --salidas` | `armar.py` |
+| Viento 250 mb (IFS o GFS) | `viento_250_mslp.py --modelo --fecha --ciclo --hasta-hora --paso 3` | `cuadros_viento_250.py ... --modelo --px --fondo-globo --salidas` | `armar.py` |
 | Follaje PACE | `pace_landvi.py --desde --hasta` | `cuadros_follaje.py --desde --hasta --px --out` | `armar.py` |
 
 ### Fechas y datos faltantes
@@ -422,10 +422,21 @@ La app sigue la grilla que la corrida publica **de verdad**; pedir otra cosa da
 | --- | --- |
 | IFS `00z` / `12z` | 0–144 h cada 3 h, 150–360 h cada 6 h |
 | IFS `06z` / `18z` | 0–144 h cada 3 h |
+| GFS (0.25°) | 0–144 h cada 3 h |
 | AIFS (`aifs-single`, `aifs-ens`) | 0–360 h cada 6 h |
 
-Con horizonte 144 h son 49 cuadros; con 240 h, 41 (cada 6 h, porque 147 h no
-existe). El viento en 250 mb va siempre cada 6 h y llega hasta 144 h.
+Los tres productos de la app (precipitación, anomalía y viento) topean en **144 h** y
+van **cada 3 h**: 49 cuadros. Por encima de 144 h ECMWF sólo publica cada 6 h, así
+que no se ofrece.
+
+### Resoluciones y valores por defecto
+
+- Una sola escala para todos los productos: **1400, 1800, 2000, 2400 y 2712** (el
+  número solo; la interfaz no agrega "poster" ni "nativo").
+- Ciclo por defecto **`00z`** en los productos de modelo.
+- `Animar` y `Bajar los crudos` arrancan **encendidos** en precip-itación, anomalía y
+  viento: el pedido típico ya deja el MP4 y los crudos en disco. En satélite quedan
+  apagados a propósito (una animación GOES son cientos de `.nc`).
 
 ### Posters sueltos
 

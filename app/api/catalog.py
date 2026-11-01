@@ -26,10 +26,10 @@ _PALETAS = [
     ParamOption(value="inferno", label="inferno"),
 ]
 
+# Una sola escala de resoluciones para todos los productos: el numero solo.
+# 2712 es el nativo del disco de GOES y el techo que aceptan los scripts.
 _RESOLUCIONES = [
-    ParamOption(value="1400", label="1400 px (poster)"),
-    ParamOption(value="2000", label="2000 px"),
-    ParamOption(value="2712", label="2712 px (nativo del disco)"),
+    ParamOption(value=v, label=v) for v in ("1400", "1800", "2000", "2400", "2712")
 ]
 
 _FONDO = [
@@ -292,11 +292,7 @@ PRODUCTS: list[Product] = [
                 label="Resolucion",
                 kind="select",
                 default="1400",
-                options=[
-                    ParamOption(value="800", label="800 px"),
-                    ParamOption(value="1400", label="1400 px"),
-                    ParamOption(value="2048", label="2048 px"),
-                ],
+                options=_RESOLUCIONES,
             ),
             ParamSpec(
                 name="descargar",
@@ -343,11 +339,7 @@ PRODUCTS: list[Product] = [
                 label="Resolucion",
                 kind="select",
                 default="2000",
-                options=[
-                    ParamOption(value="1400", label="1400 px"),
-                    ParamOption(value="2000", label="2000 px"),
-                    ParamOption(value="2711", label="2711 px (poster)"),
-                ],
+                options=_RESOLUCIONES,
             ),
             ParamSpec(
                 name="descargar",
@@ -379,11 +371,7 @@ PRODUCTS: list[Product] = [
                 label="Resolucion",
                 kind="select",
                 default="1400",
-                options=[
-                    ParamOption(value="1200", label="1200 px"),
-                    ParamOption(value="2000", label="2000 px"),
-                    ParamOption(value="2712", label="2712 px"),
-                ],
+                options=_RESOLUCIONES,
             ),
             ParamSpec(name="descargar", label="Bajar los cuadros de GIBS", kind="toggle", default=False),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
@@ -404,11 +392,7 @@ PRODUCTS: list[Product] = [
                 label="Resolucion",
                 kind="select",
                 default="2000",
-                options=[
-                    ParamOption(value="1400", label="1400 px"),
-                    ParamOption(value="2000", label="2000 px"),
-                    ParamOption(value="2711", label="2711 px (poster)"),
-                ],
+                options=_RESOLUCIONES,
             ),
             ParamSpec(
                 name="paleta",
@@ -456,11 +440,20 @@ PRODUCTS: list[Product] = [
                 default="00",
                 options=[ParamOption(value=v, label=f"{v}z") for v in ("00", "06", "12", "18")],
             ),
-            ParamSpec(name="horizonte", label="Horizonte (h)", kind="slider", default=144, min=6, max=240, step=6),
+            ParamSpec(
+                name="horizonte",
+                label="Horizonte (h)",
+                kind="slider",
+                default=144,
+                min=6,
+                max=144,
+                step=6,
+                help="los pasos de 3 h llegan hasta 144 h",
+            ),
             ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="claro", options=_FONDO),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
-            ParamSpec(name="descargar", label="Bajar los crudos de ECMWF", kind="toggle", default=False),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="descargar", label="Bajar los crudos de ECMWF", kind="toggle", default=True),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
@@ -486,31 +479,7 @@ PRODUCTS: list[Product] = [
                 name="corrida",
                 label="Ciclo",
                 kind="select",
-                default="12",
-                options=[ParamOption(value=v, label=f"{v}z") for v in ("00", "06", "12", "18")],
-            ),
-            ParamSpec(name="horizonte", label="Horizonte (h)", kind="slider", default=144, min=6, max=240, step=6),
-            ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="claro", options=_FONDO),
-            ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
-            ParamSpec(name="descargar", label="Bajar los crudos de ECMWF", kind="toggle", default=False),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
-            ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
-        ],
-    ),
-    Product(
-        id="viento_250",
-        name="ECMWF - viento en 250 mb",
-        group="modelo",
-        stage="descargar/viento_250_mslp.py + cuadros/cuadros_viento_250.py",
-        summary="Velocidad del viento en 250 mb (kt) con streamlines y extremos "
-        "de presion a nivel del mar sobre globo.",
-        params=[
-            ParamSpec(name="fecha", label="Fecha de la corrida", kind="date", default=date.today().isoformat()),
-            ParamSpec(
-                name="corrida",
-                label="Ciclo",
-                kind="select",
-                default="18",
+                default="00",
                 options=[ParamOption(value=v, label=f"{v}z") for v in ("00", "06", "12", "18")],
             ),
             ParamSpec(
@@ -521,12 +490,55 @@ PRODUCTS: list[Product] = [
                 min=6,
                 max=144,
                 step=6,
-                help="los ciclos 06z y 18z publican hasta 144 h",
+                help="los pasos de 3 h llegan hasta 144 h",
+            ),
+            ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="claro", options=_FONDO),
+            ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
+            ParamSpec(name="descargar", label="Bajar los crudos de ECMWF", kind="toggle", default=True),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
+            ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
+        ],
+    ),
+    Product(
+        id="viento_250",
+        name="Viento en 250 mb",
+        group="modelo",
+        stage="descargar/viento_250_mslp.py + cuadros/cuadros_viento_250.py",
+        summary="Velocidad del viento en 250 mb (kt) con streamlines y extremos "
+        "de presion a nivel del mar sobre globo.",
+        params=[
+            ParamSpec(
+                name="modelo",
+                label="Modelo",
+                kind="select",
+                default="ifs",
+                options=[
+                    ParamOption(value="ifs", label="ECMWF IFS 0.25"),
+                    ParamOption(value="gfs", label="GFS 0.25 (NOAA)"),
+                ],
+            ),
+            ParamSpec(name="fecha", label="Fecha de la corrida", kind="date", default=date.today().isoformat()),
+            ParamSpec(
+                name="corrida",
+                label="Ciclo",
+                kind="select",
+                default="00",
+                options=[ParamOption(value=v, label=f"{v}z") for v in ("00", "06", "12", "18")],
+            ),
+            ParamSpec(
+                name="horizonte",
+                label="Horizonte (h)",
+                kind="slider",
+                default=144,
+                min=6,
+                max=144,
+                step=6,
+                help="los pasos de 3 h llegan hasta 144 h",
             ),
             ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="oscuro", options=_FONDO),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
-            ParamSpec(name="descargar", label="Bajar los crudos de ECMWF", kind="toggle", default=False),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="descargar", label="Bajar los crudos", kind="toggle", default=True),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
