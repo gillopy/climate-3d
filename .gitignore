@@ -46,3 +46,6 @@ odd/
 /earthdata_login.png
 /chlorophyll_pace_20250630_lrg.jpg
 /fallfoliagephenology_pace_20261004_lrg.jpg
+
+# Artefactos de la skill de diseno (mocks y capturas de revision)
+.impeccable/

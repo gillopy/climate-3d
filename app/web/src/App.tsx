@@ -126,66 +126,117 @@ export default function App() {
     }
   }
 
+  const listo = catalogo?.repo_ready === true;
+  const conDatos = catalogo?.data_root_exists === true;
+  // Agrupa por nombre conservando el orden en que el catalogo los presenta.
+  const grupos: { nombre: string; items: Product[] }[] = [];
+  const porGrupo = new Map<string, Product[]>();
+  for (const item of catalogo?.products ?? []) {
+    const lista = porGrupo.get(item.group);
+    if (lista) {
+      lista.push(item);
+    } else {
+      const nueva = [item];
+      porGrupo.set(item.group, nueva);
+      grupos.push({ nombre: item.group, items: nueva });
+    }
+  }
+
   return (
     <div className="shell">
-      <header className="cabecera">
-        <div className="marca">
-          <span className="marca__punto" />
-          <div>
-            <h1>Climate 3D</h1>
-            <p>consola interactiva</p>
-          </div>
+      <header className="topbar">
+        <div className="brand">
+          <h1>Climate 3D</h1>
+          <span className="brand__sub">consola de render</span>
         </div>
-        <div className="pills">
-          <span className="pill">
-            {catalogo ? `${catalogo.products.length} productos` : "cargando..."}
+        <div className="health">
+          <span className="health__item health__item--count">
+            {catalogo ? `${catalogo.products.length} productos` : "leyendo catalogo"}
           </span>
           <span
-            className={`pill ${catalogo?.repo_ready ? "pill--ok" : "pill--warn"}`}
+            className={`health__item ${
+              listo ? "health__item--ok" : "health__item--warn"
+            }`}
             title={catalogo?.repo_python ?? ""}
           >
-            {catalogo?.repo_ready ? "pipeline listo" : "sin .venv del repo"}
+            <span className="health__swatch" aria-hidden="true" />
+            {listo ? "pipeline listo" : "sin .venv del repo"}
           </span>
           <span
-            className={`pill ${catalogo?.data_root_exists ? "pill--ok" : "pill--warn"}`}
+            className={`health__item ${
+              conDatos ? "health__item--ok" : "health__item--warn"
+            }`}
             title={catalogo?.data_root ?? ""}
           >
-            {catalogo?.data_root_exists ? "datos en disco" : "sin datos locales"}
+            <span className="health__swatch" aria-hidden="true" />
+            {conDatos ? "datos en disco" : "sin datos locales"}
           </span>
         </div>
       </header>
 
-      {error ? <div className="banner">{error}</div> : null}
+      {error ? (
+        <p className="notice" role="alert">
+          <strong>Aviso</strong>
+          {error}
+        </p>
+      ) : null}
 
-      <main className="grilla">
-        <nav className="productos">
-          <h2>Productos</h2>
-          {(catalogo?.products ?? []).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`producto${producto?.id === item.id ? " producto--activo" : ""}`}
-              onClick={() => elegir(item)}
-            >
-              {item.preview ? (
-                <img
-                  className="producto__preview"
-                  src={item.preview}
-                  alt=""
-                  loading="lazy"
-                />
-              ) : null}
-              <span className="producto__grupo">{item.group}</span>
-              <span className="producto__nombre">{item.name}</span>
-              <span className="producto__resumen">{item.summary}</span>
-            </button>
-          ))}
+      <main className="layout">
+        <section className="rail" aria-label="Productos disponibles">
+          <div className="rail__head">
+            <h2 className="rail__title" id="productos-titulo">
+              Productos
+            </h2>
+            <span className="rail__count">
+              {catalogo ? String(catalogo.products.length).padStart(2, "0") : "—"}
+            </span>
+          </div>
+          <ul className="catalog" aria-labelledby="productos-titulo">
+            {grupos.map((grupo) => (
+              <li key={grupo.nombre} className="catalog__grupo">
+                <p className="catalog__grupo-nombre" id={`grupo-${grupo.nombre}`}>
+                  {grupo.nombre}
+                </p>
+                <ul className="catalog__lista" aria-labelledby={`grupo-${grupo.nombre}`}>
+                  {grupo.items.map((item) => {
+                    const activo = producto?.id === item.id;
+                    return (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          className="catalog__item"
+                          aria-current={activo ? "true" : undefined}
+                          onClick={() => elegir(item)}
+                        >
+                          {item.preview ? (
+                            <img
+                              className="catalog__thumb"
+                              src={item.preview}
+                              alt=""
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="catalog__thumb" aria-hidden="true" />
+                          )}
+                          <span className="catalog__body">
+                            <span className="catalog__name">{item.name}</span>
+                            <span className="catalog__desc">{item.summary}</span>
+                          </span>
+                          <span className="catalog__mark" aria-hidden="true" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
+            ))}
+          </ul>
           {catalogo === null && !error ? (
-            <p className="tenue">Leyendo el catalogo...</p>
+            <p className="rail__empty">Leyendo el catalogo…</p>
           ) : null}
-        </nav>
+        </section>
 
-        <section className="centro">
+        <section className="work" aria-label="Receta del producto">
           {producto ? (
             <RecipeForm
               product={producto}
@@ -200,7 +251,7 @@ export default function App() {
               onSubmit={generar}
             />
           ) : (
-            <p className="tenue">Elegi un producto para empezar.</p>
+            <p className="rail__empty">Elegi un producto para empezar.</p>
           )}
         </section>
 
