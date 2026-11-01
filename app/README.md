@@ -15,27 +15,148 @@ Dos decisiones que definen el resultado:
   **punto subsatelital** (75.2 W para GOES-East, 137.2 W para GOES-West, lat 0),
   que es el centroide real de lo captado.
 
-## Correr
+## Cómo correrlo
+
+Todo se corre en PowerShell **desde la raíz del repo** (`climate 3d\`), salvo
+donde se aclare otra carpeta. No hace falta activar ningún entorno virtual: se
+llama al `python.exe` del entorno directo, así que la política de ejecución de
+PowerShell no molesta.
+
+### 1. Qué necesitás
+
+| Cosa | Versión | Para qué |
+| --- | --- | --- |
+| Python | 3.11 o superior (probado con 3.14.2) | el backend |
+| Node.js + npm | Node 20.19 o superior (probado con 24.15.0) | compilar el frontend |
+| `.venv` de la raíz | — | los renders: los scripts del pipeline corren ahí |
+| carpeta de datos | — | los `.nc` / `.npz` ya descargados |
+
+Comprobalo en dos segundos:
 
 ```powershell
-# 1) dependencias de la app, en SU propio entorno
+python --version
+node --version
+npm --version
+Test-Path .venv\Scripts\python.exe
+```
+
+Si `python` no existe, usá `py` en su lugar (`py -3.14 -m venv ...`). Si
+`Test-Path` devuelve `False`, falta el entorno del pipeline: ver "Problemas
+comunes".
+
+### 2. Instalación (una sola vez)
+
+```powershell
+# backend: entorno propio de la app, separado del pipeline
 python -m venv app\.venv
+app\.venv\Scripts\python.exe -m pip install --upgrade pip
 app\.venv\Scripts\python.exe -m pip install -r app\requirements.txt
 
-# 2) frontend (una vez)
+# frontend: se compila una vez y el backend lo sirve
 cd app\web
 npm install
 npm run build
-
-# 3) servidor: un solo puerto para API + UI
-cd app
-.venv\Scripts\python.exe -m uvicorn api.main:app --port 8000
+cd ..\..
 ```
 
-Abrí `http://127.0.0.1:8000`.
+Son **dos entornos separados y no se mezclan**: `app\.venv` es de la app
+(`fastapi`, `uvicorn`, `numpy`, `pillow`, `psutil`) y `.venv` (raíz) es el del
+pipeline (`cartopy`, `xarray`, etc.). Si arrancás el servidor con el Python
+equivocado vas a ver `No module named uvicorn`.
 
-Para desarrollo del frontend, en otra terminal: `cd app\web; npm run dev`
-(`http://localhost:5173` con proxy a `:8000`).
+### 3. Arrancar
+
+Un solo comando, desde la raíz del repo:
+
+```powershell
+app\.venv\Scripts\python.exe -m uvicorn api.main:app --app-dir app --port 8000
+```
+
+Esa terminal queda ocupada: **es el servidor**. Dejala abierta y abrí:
+
+**http://127.0.0.1:8000**
+
+Un solo puerto sirve la API y la UI. Para cortarlo: `Ctrl+C` en esa terminal.
+
+### 4. Confirmar que arrancó bien
+
+`http://127.0.0.1:8000/api/health` tiene que devolver algo así:
+
+```json
+{"ok": true, "productos": 12, "data_root": "D:\\Users\\guill\\dataset era5",
+ "data_root_exists": true, "repo_ready": true, "repo_python": "...\\.venv\\Scripts\\python.exe"}
+```
+
+Y en la UI, arriba a la derecha, los tres indicadores:
+
+| Indicador | Significa |
+| --- | --- |
+| `12 productos` | el catálogo cargó |
+| `pipeline listo` | encontró el `.venv` de la raíz |
+| `datos en disco` | encontró la carpeta de datos |
+
+Si alguno falta, está en la tabla de abajo.
+
+### 5. Tocar el frontend (modo desarrollo)
+
+Dos terminales:
+
+```powershell
+# terminal 1 - backend
+app\.venv\Scripts\python.exe -m uvicorn api.main:app --app-dir app --port 8000
+
+# terminal 2 - frontend con recarga en caliente
+cd app\web
+npm run dev
+```
+
+Abrí **http://localhost:5173** (con `127.0.0.1:5173` no responde: Vite escucha en
+`localhost`). El proxy manda `/api` y `/media` al `:8000`, así que los cambios de
+React se ven al instante sin recompilar.
+
+Cuando termines de tocar código, volvé al modo de un solo puerto:
+
+```powershell
+cd app\web
+npm run build
+```
+
+### 6. Puerto y carpeta de datos
+
+Otro puerto (la UI va con el mismo, no hay nada más que tocar):
+
+```powershell
+app\.venv\Scripts\python.exe -m uvicorn api.main:app --app-dir app --port 8001
+```
+
+Otra carpeta de datos (por defecto `D:\Users\guill\dataset era5`):
+
+```powershell
+$env:CLIMATE3D_DATOS = "E:\mis datos"
+```
+
+Esa variable vive en la terminal actual: al cerrarla se pierde. Para dejarla
+fija, `setx CLIMATE3D_DATOS "E:\mis datos"` y abrí una terminal nueva.
+
+### 7. Problemas comunes
+
+| Síntoma | Causa | Solución |
+| --- | --- | --- |
+| `No module named uvicorn` | arrancaste con el Python de la raíz (`.venv\...`) en vez del de la app | usá `app\.venv\Scripts\python.exe` |
+| `[Errno 10048] error while attempting to bind ... :8000` | el puerto ya está ocupado por otra instancia | cerrá la otra terminal o usá `--port 8001` |
+| La página dice "Falta el build del frontend" | no corriste `npm run build` | `cd app\web; npm run build` |
+| Indicador `pipeline listo` apagado / `repo_ready: false` | falta el `.venv` de la raíz | `python -m venv .venv` y `.venv\Scripts\python.exe -m pip install -r requirements.txt` (es pesado) |
+| Indicador `datos en disco` apagado / `data_root_exists: false` | la carpeta de datos no está en la ruta por defecto | `$env:CLIMATE3D_DATOS = "<ruta>"` y reiniciá el server |
+| `npm install` falla | Node demasiado viejo para Vite 7 | instalá Node 20.19+ |
+| `npm` no se reconoce | falta Node.js | instalá Node.js LTS y abrí una terminal nueva |
+| En modo dev, `127.0.0.1:5173` no abre | Vite escucha en `localhost` | usá `http://localhost:5173` |
+| Un job falla con 404/403 al descargar | sin red o sin credenciales (NOAA S3, NASA Earthdata, CDS) | pedí fechas que ya estén en disco, o configurá las credenciales |
+
+Para ver qué proceso tiene tomado el puerto:
+
+```powershell
+Get-NetTCPConnection -LocalPort 8000 -State Listen | Select-Object OwningProcess
+```
 
 ## Cómo funciona
 
@@ -85,6 +206,7 @@ GET  /media/...
 | MUR SST poster realista | `mur_sst.py ...` | `poster_mur_realista.py --crudo --px --paleta [--trend] --out` | — |
 | Precipitación ECMWF | `precipitacion_ecmwf.py --modelo --fecha --ciclo --hasta-hora --paso 3` | `cuadros_precipitacion.py ... --px --fondo-globo --salidas` | `armar.py` |
 | Anomalía 2 m ECMWF | `anomalia_2t_ecmwf.py ... --paso 3` | `cuadros_anomalia_2t.py ...` | `armar.py` |
+| Viento 250 mb ECMWF | `viento_250_mslp.py --fecha --ciclo --hasta-hora --paso 6` | `cuadros_viento_250.py ... --px --fondo-globo --salidas` | `armar.py` |
 | Follaje PACE | `pace_landvi.py --desde --hasta` | `cuadros_follaje.py --desde --hasta --px --out` | `armar.py` |
 
 ### Fechas y datos faltantes
@@ -293,8 +415,17 @@ El default de `cuadros_goes.py` y de `poster_goes_truecolor.py` es `-58 -23` /
 
 ### Paso temporal en ECMWF
 
-Los cuadros van **cada 3 h**, igual que el `PASO_HORA = 3` de los scripts del
-repo. Con horizonte 144 h son 49 cuadros, no 25.
+La app sigue la grilla que la corrida publica **de verdad**; pedir otra cosa da
+404 en los pasos que faltan y el job muere con "faltan los pasos":
+
+| Corrida | Pasos |
+| --- | --- |
+| IFS `00z` / `12z` | 0–144 h cada 3 h, 150–360 h cada 6 h |
+| IFS `06z` / `18z` | 0–144 h cada 3 h |
+| AIFS (`aifs-single`, `aifs-ens`) | 0–360 h cada 6 h |
+
+Con horizonte 144 h son 49 cuadros; con 240 h, 41 (cada 6 h, porque 147 h no
+existe). El viento en 250 mb va siempre cada 6 h y llega hasta 144 h.
 
 ### Posters sueltos
 

@@ -1,0 +1,211 @@
+"""Pruebas de la cadencia de pasos de ECMWF y del producto de viento en 250 mb.
+
+ECMWF Open Data no publica una grilla uniforme de pasos (verificado contra el
+portal el 2026-11-01):
+
+    IFS 00/12z    0-144 h cada 3 h, 150-360 h cada 6 h   (147 h no existe)
+    IFS 06/18z    0-144 h cada 3 h
+    AIFS          0-360 h cada 6 h                        (3 h no existe)
+
+Pedir pasos de 3 h por encima de 144 h (147, 153, ...) devuelve 404 y el job
+muere con "faltan los pasos". Estas pruebas fijan la regla sin tocar la red.
+
+    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+"""
+from __future__ import annotations
+
+import sys
+import tempfile
+import unittest
+from datetime import date
+from pathlib import Path
+from unittest import mock
+
+RAIZ = Path(__file__).resolve().parents[2]
+if str(RAIZ) not in sys.path:
+    sys.path.insert(0, str(RAIZ))
+
+from app.api import catalog, recipes  # noqa: E402
+
+DIA = date(2026, 10, 20)
+
+
+class CadenciaDePasos(unittest.TestCase):
+    """`_paso_horas_ecmwf`: horas entre pasos que la corrida publica de verdad."""
+
+    def test_ifs_hasta_144_usa_pasos_de_3_horas(self):
+        self.assertEqual(recipes._paso_horas_ecmwf("ifs", 144), 3)
+        self.assertEqual(recipes._paso_horas_ecmwf("ifs", 96), 3)
+
+    def test_ifs_mas_alla_de_144_usa_pasos_de_6_horas(self):
+        self.assertEqual(recipes._paso_horas_ecmwf("ifs", 150), 6)
+        self.assertEqual(recipes._paso_horas_ecmwf("ifs", 240), 6)
+
+    def test_aifs_usa_6_horas_siempre(self):
+        for modelo in ("aifs-single", "aifs-ens"):
+            self.assertEqual(recipes._paso_horas_ecmwf(modelo, 24), 6)
+            self.assertEqual(recipes._paso_horas_ecmwf(modelo, 144), 6)
+            self.assertEqual(recipes._paso_horas_ecmwf(modelo, 360), 6)
+
+
+class HorizontePublicado(unittest.TestCase):
+    """`_horizonte_disponible` alinea el horizonte a la grilla de pasos real."""
+
+    def _falso_publicado(self, publicados: set[int]):
+        return lambda modelo, dia, ciclo, hora: hora in publicados
+
+    def test_encuentra_el_horizonte_pedido_si_esta_publicado(self):
+        with mock.patch.object(recipes, "_publicado",
+                               side_effect=self._falso_publicado({0, 144, 240})):
+            self.assertEqual(recipes._horizonte_disponible("ifs", DIA, "00", 240, 6), 240)
+
+    def test_baja_al_ultimo_paso_publicado_de_la_misma_grilla(self):
+        # 18z publica hasta 144 h; se pide 240 -> se recorta a 144.
+        publicados = set(range(0, 145, 6))
+        with mock.patch.object(recipes, "_publicado",
+                               side_effect=self._falso_publicado(publicados)):
+            self.assertEqual(recipes._horizonte_disponible("ifs", DIA, "18", 240, 6), 144)
+
+    def test_horizonte_no_alineado_no_pierde_la_corrida(self):
+        # Un 145 pedido a mano no existe en la grilla; 144 sí.
+        publicados = set(range(0, 145, 3))
+        with mock.patch.object(recipes, "_publicado",
+                               side_effect=self._falso_publicado(publicados)):
+            self.assertEqual(recipes._horizonte_disponible("ifs", DIA, "00", 145, 3), 144)
+
+    def test_sin_ningun_paso_publicado_devuelve_cero(self):
+        with mock.patch.object(recipes, "_publicado",
+                               side_effect=self._falso_publicado(set())):
+            self.assertEqual(recipes._horizonte_disponible("ifs", DIA, "00", 144, 3), 0)
+
+
+class UrlDelIndice(unittest.TestCase):
+    """El sufijo del `.index` no debe confundirse con la grilla de pasos."""
+
+    def test_la_url_usa_el_sufijo_del_paso(self):
+        url = recipes._url_indice("ifs", DIA, "00", 144)
+        self.assertTrue(url.endswith("/20261020000000-144h-oper-fc.index"), url)
+
+
+class PlanPrecipitacion(unittest.TestCase):
+    """El plan real no debe volver a pedir pasos de 3 h más allá de 144 h."""
+
+    def _plan(self, horizonte: int, modelo: str = "ifs") -> recipes.Plan:
+        with tempfile.TemporaryDirectory() as tmp:
+            return recipes._ecmwf_producto(
+                "precipitacion",
+                {"fecha": DIA.isoformat(), "corrida": "00", "modelo": modelo,
+                 "horizonte": horizonte},
+                Path(tmp),
+            )
+
+    def test_horizonte_144_conserva_los_3_h(self):
+        plan = self._plan(144)
+        descarga = plan.descarga
+        assert descarga is not None
+        self.assertEqual(descarga.args[descarga.args.index("--paso") + 1], "3")
+
+    def test_horizonte_240_usa_6_h(self):
+        plan = self._plan(240)
+        descarga = plan.descarga
+        assert descarga is not None
+        self.assertEqual(descarga.args[descarga.args.index("--paso") + 1], "6")
+
+    def test_ningun_paso_pedido_cae_fuera_de_la_grilla_publicada(self):
+        plan = self._plan(240)
+        descarga = plan.descarga
+        assert descarga is not None
+        paso = int(descarga.args[descarga.args.index("--paso") + 1])
+        hasta = int(descarga.args[descarga.args.index("--hasta-hora") + 1])
+        pedidos = range(0, hasta + 1, paso)
+        fuera = [h for h in pedidos if h > 144 and h % 6 != 0]
+        self.assertEqual(fuera, [])
+
+    def test_aifs_no_pide_pasos_de_3_h(self):
+        plan = self._plan(144, modelo="aifs-single")
+        descarga = plan.descarga
+        assert descarga is not None
+        self.assertEqual(descarga.args[descarga.args.index("--paso") + 1], "6")
+
+
+class ProductoViento(unittest.TestCase):
+    """El flujo de viento en 250 mb ya existe en el repo: se expone en la app."""
+
+    def test_esta_en_el_catalogo(self):
+        producto = catalog.get_product("viento_250")
+        self.assertIsNotNone(producto)
+        assert producto is not None
+        horizonte = next(p for p in producto.params if p.name == "horizonte")
+        self.assertEqual(horizonte.max, 144)
+        self.assertEqual(horizonte.default, 144)
+
+    def test_plan_usa_los_scripts_del_repo(self):
+        params = {
+            "fecha": DIA.isoformat(),
+            "corrida": "18",
+            "horizonte": 144,
+            "fondo": "oscuro",
+            "resolucion": "2712",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            with mock.patch.object(catalog, "data_root", return_value=work):
+                plan = recipes.planear("viento_250", params, work)
+
+        scripts = [paso.script for paso in plan.pasos]
+        self.assertEqual(scripts, ["descargar/viento_250_mslp.py",
+                                   "cuadros/cuadros_viento_250.py"])
+
+        descarga, render = plan.pasos
+        self.assertEqual(descarga.args[descarga.args.index("--paso") + 1], "6")
+        self.assertEqual(descarga.args[descarga.args.index("--hasta-hora") + 1], "144")
+        self.assertEqual(render.args[render.args.index("--fondo-globo") + 1], "oscuro")
+        self.assertEqual(render.args[render.args.index("--px") + 1], "2712")
+        self.assertEqual(render.args[render.args.index("--salidas") + 1], str(work))
+
+    def test_sin_crudos_el_plan_descarga(self):
+        params = {"fecha": DIA.isoformat(), "corrida": "18", "horizonte": 144}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            with mock.patch.object(catalog, "data_root", return_value=work):
+                plan = recipes.planear("viento_250", params, work)
+        self.assertEqual(len(plan.pasos), 2)
+
+    def test_con_crudos_el_plan_solo_renderiza(self):
+        params = {"fecha": DIA.isoformat(), "corrida": "18", "horizonte": 144}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            crudos = work / "crudos_viento250_2026-10-20_18z"
+            crudos.mkdir(parents=True)
+            # 0..144 h cada 6 h: el último paso es el 25 de la grilla.
+            (crudos / "crudo_025_fh144.grib2").write_bytes(b"x")
+            with mock.patch.object(catalog, "data_root", return_value=work):
+                plan = recipes.planear("viento_250", params, work)
+        self.assertEqual([paso.script for paso in plan.pasos],
+                         ["cuadros/cuadros_viento_250.py"])
+
+    def test_un_horizonte_nuevo_vuelve_a_descargar(self):
+        # En disco sólo hay crudos hasta 96 h; pedir 144 h no puede saltarse la
+        # descarga (antes bastaba con que la carpeta tuviera algo).
+        params = {"fecha": DIA.isoformat(), "corrida": "18", "horizonte": 144}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            crudos = work / "crudos_viento250_2026-10-20_18z"
+            crudos.mkdir(parents=True)
+            (crudos / "crudo_001_fh000.grib2").write_bytes(b"x")
+            with mock.patch.object(catalog, "data_root", return_value=work):
+                plan = recipes.planear("viento_250", params, work)
+        self.assertEqual(len(plan.pasos), 2)
+
+    def test_animar_agrega_el_paso_de_animacion(self):
+        params = {"fecha": DIA.isoformat(), "corrida": "18", "horizonte": 144,
+                  "animar": True, "fps": 12}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            with mock.patch.object(catalog, "data_root", return_value=work):
+                plan = recipes.planear("viento_250", params, work)
+        self.assertEqual(plan.pasos[-1].script, "animar/armar.py")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -498,6 +498,39 @@ PRODUCTS: list[Product] = [
         ],
     ),
     Product(
+        id="viento_250",
+        name="ECMWF - viento en 250 mb",
+        group="modelo",
+        stage="descargar/viento_250_mslp.py + cuadros/cuadros_viento_250.py",
+        summary="Velocidad del viento en 250 mb (kt) con streamlines y extremos "
+        "de presion a nivel del mar sobre globo.",
+        params=[
+            ParamSpec(name="fecha", label="Fecha de la corrida", kind="date", default=date.today().isoformat()),
+            ParamSpec(
+                name="corrida",
+                label="Ciclo",
+                kind="select",
+                default="18",
+                options=[ParamOption(value=v, label=f"{v}z") for v in ("00", "06", "12", "18")],
+            ),
+            ParamSpec(
+                name="horizonte",
+                label="Horizonte (h)",
+                kind="slider",
+                default=144,
+                min=6,
+                max=144,
+                step=6,
+                help="los ciclos 06z y 18z publican hasta 144 h",
+            ),
+            ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="oscuro", options=_FONDO),
+            ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
+            ParamSpec(name="descargar", label="Bajar los crudos de ECMWF", kind="toggle", default=False),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
+        ],
+    ),
+    Product(
         id="himawari",
         name="Himawari-9 - disco completo (B13)",
         group="satelite",
@@ -669,6 +702,7 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
             "mur_realista": "frames_mur",
             "precipitacion_ecmwf": "frames_precipitacion",
             "anomalia_2t": "frames_anomalia",
+            "viento_250": "frames_viento_250",
             "follaje": "frames_follaje",
         }.get(product.id, "")
         if prefijo:

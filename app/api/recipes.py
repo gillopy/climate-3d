@@ -29,7 +29,16 @@ _RUTA_ECMWF = {
     "aifs-single": "aifs-single/0p25/oper",
     "aifs-ens": "aifs-ens/0p25/enfo",
 }
-PRODUCTOS_ECMWF = ("precipitacion_ecmwf", "anomalia_2t")
+PRODUCTOS_ECMWF = ("precipitacion_ecmwf", "anomalia_2t", "viento_250")
+
+# ECMWF Open Data no publica una grilla uniforme de pasos (verificado contra el
+# portal):
+#   IFS 00/12z   0-144 h cada 3 h, 150-360 h cada 6 h
+#   IFS 06/18z   0-144 h cada 3 h
+#   AIFS         0-360 h cada 6 h
+# Pedir 3 h por encima de 144 (147, 153, ...) devuelve 404 y el job muere con
+# "faltan los pasos". Igual con los AIFS, que no publican pasos de 3 h.
+_PASO_3H_HASTA = 144
 
 
 class SinRed(Exception):
@@ -124,18 +133,35 @@ def _publicado(modelo: str, dia: date, ciclo: str, hora: int) -> bool:
         raise SinRed(str(exc)) from exc
 
 
-def _horizonte_disponible(modelo: str, dia: date, ciclo: str, horizonte: int) -> int:
-    """El horizonte pedido, recortado a lo que la corrida publica de verdad."""
-    if _publicado(modelo, dia, ciclo, horizonte):
-        return horizonte
-    # Baja de a 6 h: los modelos publican de forma progresiva y los 404 en
-    # cadena del descargador son justamente esto.
-    for intento in range(1, 21):
-        candidato = horizonte - intento * 6
+def _paso_horas_ecmwf(modelo: str, horizonte: int) -> int:
+    """Horas entre pasos que esa corrida publica de verdad.
+
+    Los AIFS publican cada 6 h de punta a punta; el IFS determinístico publica
+    cada 3 h sólo hasta las 144 h y cada 6 h de ahí en adelante.
+    """
+    if modelo != "ifs":
+        return 6
+    return 3 if horizonte <= _PASO_3H_HASTA else 6
+
+
+def _horizonte_disponible(
+    modelo: str, dia: date, ciclo: str, horizonte: int, paso: int
+) -> int:
+    """El horizonte pedido, recortado a lo que la corrida publica de verdad.
+
+    El recorte se mueve sobre la misma grilla de `paso` que después pide el
+    descargador, así nunca devuelve un horizonte que no calce con los pasos.
+    Antes bajaba de a 6 h fijo: un 145 h con pasos de 3 h probaba 139, 133...
+    (ninguno múltiplo de 3) y terminaba en 0.
+    """
+    candidato = horizonte - horizonte % paso
+    # Tope de sondas: 360 h cada 6 h son 60 pasos, el horizonte más largo.
+    for _ in range(60):
         if candidato <= 0:
             break
         if _publicado(modelo, dia, ciclo, candidato):
             return candidato
+        candidato -= paso
     return 0
 
 
@@ -190,7 +216,11 @@ def resolver_corrida(params: dict[str, Any]) -> tuple[dict[str, Any], str | None
             "Proba otra fecha o ciclo."
         )
 
-    disponible = _horizonte_disponible(modelo, elegida, ciclo, horizonte)
+    # Se sonda con la grilla que corresponde al horizonte pedido. Si el recorte
+    # baja a 144 h o menos, el plan vuelve a elegir 3 h y sigue calzando.
+    disponible = _horizonte_disponible(
+        modelo, elegida, ciclo, horizonte, _paso_horas_ecmwf(modelo, horizonte)
+    )
     if disponible <= 0:
         raise ValueError(
             f"La corrida {elegida} {ciclo}z de {modelo} no publica ningun paso. "
@@ -478,8 +508,24 @@ def _mur(params: dict[str, Any], work: Path) -> Plan:
 
 
 # --- ECMWF: precipitacion y anomalia ------------------------------------
-def _crudos_existen(producto: str, modelo: str, fecha: str, ciclo: str) -> bool:
-    """Si ya estan los crudos que el render de ECMWF va a leer."""
+def _crudo_final(carpeta: Path, horizonte: int, paso: int, sufijo: str) -> Path:
+    """Crudo del último paso pedido (`crudo_NNN_fhHHH.<ext>`).
+
+    Los descargadores numeran los pasos desde 1, así que el índice sale de la
+    posición del último paso en la grilla. Mirar sólo el último archivo es la
+    forma barata de saber si la carpeta cubre de verdad el horizonte pedido.
+    """
+    return carpeta / f"crudo_{horizonte // paso + 1:03d}_fh{horizonte:03d}{sufijo}"
+
+
+def _crudos_existen(
+    producto: str, modelo: str, fecha: str, ciclo: str, horizonte: int, paso: int
+) -> bool:
+    """Si los crudos ya cubren el horizonte que el render de ECMWF va a leer.
+
+    Antes alcanzaba con que la carpeta tuviera algo: pedir 240 h cuando en disco
+    había 144 h dejaba un render condenado a fallar por pasos faltantes.
+    """
     from .catalog import data_root  # import local: evita el ciclo
 
     nombre = "ecmwf" if modelo == "ifs" else modelo
@@ -488,7 +534,8 @@ def _crudos_existen(producto: str, modelo: str, fecha: str, ciclo: str) -> bool:
         if producto == "precipitacion"
         else data_root() / f"crudos_anom2t_{modelo}_{fecha}_{ciclo}z"
     )
-    return carpeta.is_dir() and any(carpeta.iterdir())
+    sufijo = ".npy" if (producto == "precipitacion" and modelo == "aifs-ens") else ".grib2"
+    return _crudo_final(carpeta, horizonte, paso, sufijo).is_file()
 
 
 def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
@@ -498,9 +545,10 @@ def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
     horizonte = int(params.get("horizonte", 144) or 144)
     px = _px(params, 1400)
     fondo = str(params.get("fondo", "oscuro"))
-    # El descargador y los cuadros del repo trabajan cada 3 h (PASO_HORA = 3).
-    paso_horas = 3
-    n = max(2, min(horizonte // paso_horas + 2, 81))
+    # ECMWF publica 3 h hasta 144 h y 6 h de ahí en adelante; los AIFS, cada 6 h
+    # siempre. Los dos scripts del repo piden exactamente la misma grilla.
+    paso_horas = _paso_horas_ecmwf(modelo, horizonte)
+    cuadros = len(range(0, horizonte + 1, paso_horas))
 
     comunes = [
         "--modelo", modelo,
@@ -520,11 +568,11 @@ def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
         label=f"bajando {producto} de {modelo}",
         script=descarga_script,
         args=comunes,
-        expected=n,
+        expected=cuadros,
     )
     render_step = Step(
         kind="render",
-        label=f"renderizando {n} cuadros",
+        label=f"renderizando {cuadros} cuadros",
         script=render_script,
         args=[
             *comunes,
@@ -532,11 +580,12 @@ def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
             "--fondo-globo", fondo,
             "--salidas", str(work),
         ],
-        expected=n,
+        expected=cuadros + 1,  # el póster de cierre imprime una línea más
     )
     pasos = [descarga, render_step] if (
         _bool(params, "descargar")
-        or not _crudos_existen(producto, modelo, inicio.isoformat(), corrida)
+        or not _crudos_existen(producto, modelo, inicio.isoformat(), corrida,
+                               horizonte, paso_horas)
     ) else [render_step]
     return Plan(pasos=pasos, descarga=descarga)
 
@@ -547,6 +596,58 @@ def _precipitacion(params: dict[str, Any], work: Path) -> Plan:
 
 def _anomalia(params: dict[str, Any], work: Path) -> Plan:
     return _ecmwf_producto("anomalia_2t", params, work)
+
+
+# --- VIENTO: 250 mb + extremos de MSLP ----------------------------------
+def _crudos_viento_existen(fecha: str, ciclo: str, horizonte: int, paso: int) -> bool:
+    """Si los crudos de viento cubren el horizonte que el render va a leer."""
+    from .catalog import data_root  # import local: evita el ciclo
+
+    carpeta = data_root() / f"crudos_viento250_{fecha}_{ciclo}z"
+    return _crudo_final(carpeta, horizonte, paso, ".grib2").is_file()
+
+
+def _viento_250(params: dict[str, Any], work: Path) -> Plan:
+    inicio, _ = _rango(params)
+    corrida = str(params.get("corrida", "18")).zfill(2)
+    horizonte = int(params.get("horizonte", 144) or 144)
+    px = _px(params, 1400)
+    fondo = str(params.get("fondo", "oscuro"))
+    # Los dos scripts del repo (PASO_HORA = 6) y la referencia van cada 6 h.
+    paso_horas = 6
+    cuadros = len(range(0, horizonte + 1, paso_horas))
+
+    comunes = [
+        "--fecha", inicio.isoformat(),
+        "--ciclo", corrida,
+        "--hasta-hora", str(horizonte),
+        "--paso", str(paso_horas),
+    ]
+    descarga = Step(
+        kind="download",
+        label="bajando el viento en 250 mb de ifs",
+        script="descargar/viento_250_mslp.py",
+        args=comunes,
+        expected=cuadros,
+    )
+    render_step = Step(
+        kind="render",
+        label=f"renderizando {cuadros} cuadros de viento",
+        script="cuadros/cuadros_viento_250.py",
+        args=[
+            *comunes,
+            "--px", str(px),
+            "--fondo-globo", fondo,
+            "--salidas", str(work),
+        ],
+        expected=cuadros + 1,  # el póster de cierre imprime una línea más
+    )
+    pasos = [descarga, render_step] if (
+        _bool(params, "descargar")
+        or not _crudos_viento_existen(inicio.isoformat(), corrida, horizonte,
+                                      paso_horas)
+    ) else [render_step]
+    return Plan(pasos=pasos, descarga=descarga)
 
 
 # --- FOLLAJE: PACE LANDVI ----------------------------------------------
@@ -978,6 +1079,7 @@ _CONSTRUCTORES = {
     "mur_realista": _mur_realista,
     "precipitacion_ecmwf": _precipitacion,
     "anomalia_2t": _anomalia,
+    "viento_250": _viento_250,
     "follaje": _follaje,
     "himawari": _himawari,
 }
