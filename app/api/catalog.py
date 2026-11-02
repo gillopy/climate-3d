@@ -18,12 +18,34 @@ RAIZ_REPO = Path(__file__).resolve().parents[2]
 
 _PALETAS = [
     ParamOption(value="clean_ir", label="clean_ir - Clean Infrared (GIBS)"),
-    ParamOption(value="ir_realce", label="ir_realce - IR con realce"),
     ParamOption(value="termico", label="termico - gris termico"),
     ParamOption(value="gris", label="gris - reflectancia"),
     ParamOption(value="anomalia", label="anomalia - paleta de anomalia"),
     ParamOption(value="magma", label="magma"),
     ParamOption(value="inferno", label="inferno"),
+    ParamOption(value="turbo", label="turbo"),
+]
+
+# Las 16 bandas del ABI, con la lectura que les da NOAA STAR. Sirve para armar
+# un producto por banda sin inventar escalas: la longitud de onda manda el tipo
+# de dato (reflectancia en C01-C06, temperatura de brillo en C07-C16).
+_BANDAS_ABI = [
+    ParamOption(value="C01", label="C01 - 0.47 um (visible azul)"),
+    ParamOption(value="C02", label="C02 - 0.64 um (visible rojo)"),
+    ParamOption(value="C03", label="C03 - 0.86 um (veggie)"),
+    ParamOption(value="C04", label="C04 - 1.37 um (cirrus)"),
+    ParamOption(value="C05", label="C05 - 1.61 um (nieve y hielo)"),
+    ParamOption(value="C06", label="C06 - 2.25 um (particula de nube)"),
+    ParamOption(value="C07", label="C07 - 3.90 um (IR onda corta)"),
+    ParamOption(value="C08", label="C08 - 6.19 um (vapor de agua alto)"),
+    ParamOption(value="C09", label="C09 - 6.95 um (vapor de agua medio)"),
+    ParamOption(value="C10", label="C10 - 7.34 um (vapor de agua bajo)"),
+    ParamOption(value="C11", label="C11 - 8.50 um (fase de tope de nube)"),
+    ParamOption(value="C12", label="C12 - 9.61 um (ozono)"),
+    ParamOption(value="C13", label="C13 - 10.35 um (IR ventana limpia)"),
+    ParamOption(value="C14", label="C14 - 11.20 um (IR onda larga)"),
+    ParamOption(value="C15", label="C15 - 12.30 um (IR onda larga sucia)"),
+    ParamOption(value="C16", label="C16 - 13.30 um (CO2 onda larga)"),
 ]
 
 # Una sola escala de resoluciones para todos los productos: el numero solo.
@@ -222,11 +244,8 @@ PRODUCTS: list[Product] = [
                 label="Banda",
                 kind="select",
                 default="C13",
-                options=[
-                    ParamOption(value="C13", label="C13 - 10.3 um (IR limpio)"),
-                    ParamOption(value="C02", label="C02 - 0.64 um (visible)"),
-                    ParamOption(value="C04", label="C04 - 1.38 um (cirrus)"),
-                ],
+                options=_BANDAS_ABI,
+                help="C01-C06 son reflectancia (visible e infrarrojo cercano); C07-C16, temperatura de brillo",
             ),
             ParamSpec(
                 name="paleta",
@@ -234,7 +253,7 @@ PRODUCTS: list[Product] = [
                 kind="select",
                 default="clean_ir",
                 options=_PALETAS,
-                help="clean_ir usa la escala fija de GIBS (-92.1 a 56.9 C)",
+                help="clean_ir usa la escala fija de GIBS (-92.1 a 56.9 C); para reflectancia conviene gris",
             ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="2712", options=_RESOLUCIONES),
@@ -572,7 +591,13 @@ PRODUCTS: list[Product] = [
                 default=True,
                 help="resuelve el granulo mas nuevo; ignora fecha, hora y minuto",
             ),
-            ParamSpec(name="fecha", label="Fecha de la captura", kind="date", default=date.today().isoformat()),
+            ParamSpec(
+                name="fecha",
+                label="Fecha de la captura",
+                kind="date",
+                default=date.today().isoformat(),
+                enabled_when={"ultima": False},
+            ),
             ParamSpec(
                 name="hora",
                 label="Hora UTC",
@@ -582,6 +607,7 @@ PRODUCTS: list[Product] = [
                 max=23,
                 step=1,
                 help="15z es el mediodia en Paraguay; de noche se ve el IR",
+                enabled_when={"ultima": False},
             ),
             ParamSpec(
                 name="minuto",
@@ -589,6 +615,7 @@ PRODUCTS: list[Product] = [
                 kind="select",
                 default="00",
                 options=[ParamOption(value=f"{m:02d}", label=f"{m:02d}") for m in range(0, 60, 10)],
+                enabled_when={"ultima": False},
             ),
             ParamSpec(
                 name="margen",

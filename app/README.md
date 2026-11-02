@@ -201,6 +201,7 @@ GET  /media/...
 | Producto | Descarga | Render | Animación |
 | --- | --- | --- | --- |
 | GOES IR (C13, G19/G18/G16) | `descargar_goes.py --sat --banda C13 --desde --hasta --paso` | `cuadros_c13_ir.py --desde --n --paso --px --centro LON 0 --radio 90 --datos --out --frames --lote 1` | `armar.py --frames --fps --formato mp4 --salida` |
+| GOES banda ABI (C01-C16) | `descargar_goes.py --sat --banda --desde --hasta --paso` | `poster_goes_banda.py --banda --sat --desde --n --paso --px --paleta --centro --recorte` | `armar.py` sobre `--frames` |
 | GOES color real (C01+C02+C03) | `truecolor_goes.py --desde --n --paso --sat` | `poster_goes_truecolor.py --centro LON 0 --px --out` o `poster_goes_disco.py --px --out` | `armar.py` sobre la serie |
 | MUR SST (globo oscuro) | `mur_sst.py --desde --hasta --paso --px --out` | `cuadros_mur.py --desde --hasta --paso --px --out` | `armar.py` |
 | MUR SST poster realista | `mur_sst.py ...` | `poster_mur_realista.py --crudo --px --paleta [--trend] --out` | — |
@@ -282,7 +283,7 @@ Hay cuatro formas distintas de ver "color" y no son intercambiables:
 | Producto | Qué es | Fuente |
 | --- | --- | --- |
 | **Color real (3 bandas)** | compuesto C01+C02+C03 con la receta CIMSS | `.nc` del ABI |
-| **Banda cruda, estilo color real** | una banda ABI coloreada, con el encuadre limpio | `.nc` del ABI |
+| **Banda cruda, estilo color real** | una banda ABI coloreada, con el encuadre limpio; las 16 del ABI | `.nc` del ABI |
 | **GeoColor** | RGB ya mezclado: día real, IR y luces de noche | GIBS |
 | **NOAA-20 true color** | mosaico diario global de VIIRS | GIBS |
 
@@ -515,7 +516,7 @@ existente cambia:
 
 | Script | Flag | Default (comportamiento previo) |
 | --- | --- | --- |
-| `cuadros/cuadros_c13_ir.py` | `--paleta`, `--geojson` | `ir_realce`, Paraguay |
+| `cuadros/cuadros_c13_ir.py` | `--paleta`, `--geojson` | `clean_ir`, Paraguay |
 | `prototipos/poster_goes_truecolor.py` | `--fondo`, `--lineas` | `claro`, líneas activas |
 | `prototipos/poster_mur_realista.py` | `--rios` | sin ríos |
 
@@ -526,7 +527,10 @@ reusan aunque la receta ya no sea la misma.
 Decisiones que vienen de leer los scripts, no de suponer:
 
 - **Solo se muestran los controles que existen.** GOES expone `--paleta`; MUR no
-  expone paleta, así que MUR no tiene selector de paleta.
+expone paleta, así que MUR no tiene selector de paleta.
+- **Un control puede depender de otro.** `enabled_when` en el `ParamSpec` apaga un campo
+mientras otro no valga lo esperado: en Snapshot, encender `ultima` deja en gris `fecha`,
+`hora` y `minuto`, porque la última captura los ignora.
 - **GOES arranca en el primer slot que hay en disco** cuando no se fuerza
   descarga: `cuadros_goes.py` asume una grilla contigua de 10 minutos y revienta
   con `KeyError` si falta un slot, así que la receta avanza solo mientras el

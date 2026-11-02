@@ -5,7 +5,7 @@ los pósteres y las animaciones.
 
 - [`FLUJOS.md`](./FLUJOS.md) — el catálogo de todos los flujos: descarga, póster,
   cuadros, animación y qué se verificó.
-- `portada.png` — el póster de disco completo (GOES-East C13, paleta `ir_realce`)
+- `portada.png` — el póster de disco completo (GOES-East C13, paleta `clean_ir`)
   que ilustra el README.
 - `galeria/` — el resto de los PNG: pósteres de disco, vistas regionales, el globo
   centrado en Paraguay y las anomalías de temperatura de ERA5.

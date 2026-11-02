@@ -73,7 +73,7 @@ pósteres; todos funcionan sin conexión.
 
 ```powershell
 # Disco completo con la rampa de IR
-.venv\Scripts\python.exe prototipos\poster_goes.py --paleta ir_realce
+.venv\Scripts\python.exe prototipos\poster_goes.py --paleta clean_ir
 
 # El globo centrado en Paraguay
 .venv\Scripts\python.exe prototipos\vista_paraguay.py
@@ -95,7 +95,7 @@ cuadros en un solo proceso agota la memoria de una máquina chica.
 ```powershell
 # Globo centrado en Paraguay, 432 cuadros a 720 px (el caso de la guía)
 .venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 `
-    --n 432 --px 720 --globo --centro -73 -18 --paleta ir_realce
+    --n 432 --px 720 --globo --centro -73 -18 --paleta clean_ir
 
 # Prueba rápida antes de largar en serio
 .venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 --n 4 --px 480 --globo
@@ -109,7 +109,7 @@ cuadros en un solo proceso agota la memoria de una máquina chica.
 | `--globo` | Reprojecta a Orthographic (aspecto "planeta") |
 | `--centro LON LAT` / `--zona py` | Dónde centrar el globo |
 | `--geojson` | Borde destacado (ej. `datos\paraguay_gadm.json`) |
-| `--paleta` | `ir_realce`, `termico`, `anomalia`, `gris`, `magma`, … |
+| `--paleta` | `clean_ir`, `termico`, `anomalia`, `gris`, `magma`, … |
 | `--vmin` / `--vmax` | Escala fija (por defecto, percentiles del primer cuadro) |
 | `--lote` | Cuadros por proceso (bajalo si te falta RAM: `--lote 12`) |
 
@@ -179,10 +179,10 @@ otra ventana o resolución.
 .venv\Scripts\python.exe descargar\descargar_goes.py --sat G19 --banda C13 --desde 2026-10-02 --hasta 2026-10-05
 
 # 2) Mirar un cuadro fijo
-.venv\Scripts\python.exe prototipos\poster_goes.py --paleta ir_realce
+.venv\Scripts\python.exe prototipos\poster_goes.py --paleta clean_ir
 
 # 3) Renderizar 432 cuadros (globo Paraguay, 720 px)
-.venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 --n 432 --px 720 --globo --centro -73 -18 --paleta ir_realce
+.venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 --n 432 --px 720 --globo --centro -73 -18 --paleta clean_ir
 
 # 4) Armar el MP4
 .venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_G19_2026-10-02T0000_432f_720px"

@@ -31,7 +31,7 @@ cuadros, un solo proceso agota la RAM de una máquina chica.
 ```powershell
 # Globo centrado en Paraguay, 432 cuadros a 720 px
 .venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 `
-    --n 432 --px 720 --globo --centro -73 -18 --paleta ir_realce
+    --n 432 --px 720 --globo --centro -73 -18 --paleta clean_ir
 
 # Disco completo
 .venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G18 --banda C04 --desde 2026-10-03 --n 144 --px 1200
@@ -45,7 +45,7 @@ cuadros, un solo proceso agota la RAM de una máquina chica.
 | `--globo` | Reprojecta a Orthographic (aspecto "planeta") |
 | `--centro LON LAT` / `--zona` | Dónde centrar el globo |
 | `--geojson` | Borde destacado |
-| `--paleta` | `ir_realce`, `termico`, `anomalia`, `gris`, `magma`, … |
+| `--paleta` | `clean_ir`, `termico`, `anomalia`, `gris`, `magma`, … |
 | `--vmin` / `--vmax` | Escala fija (por defecto, percentiles del primer cuadro) |
 | `--lote` | Cuadros por proceso (bajalo si te falta RAM) |
 | `--datos` | Carpeta de los `.nc` |
@@ -164,9 +164,9 @@ NOAA-20 (cuyo barrido cubre la separación orbital) es la capa limpia.
 El **Sandwich RGB** mezcla **dos imágenes** en vez de combinar tres bandas: el fondo visible
 aporta la morfología del tope nuboso y el IR realzado su temperatura. La composición es
 `alpha · visible + (1 - alpha) · IR_realzado`, con el IR pasado por una rampa de color
-(frío → rojo/naranja/amarillo/verde/cian) de la misma familia que
-`poster_goes.IR_REALCE_COLORS`. `componer` arma la mezcla y recién después se reproyecta al
-globo con el mismo warp a mano que el resto.
+(frío → rojo/naranja/amarillo/verde/cian) definida en el propio script.
+`componer` arma la mezcla y recién después se reproyecta al globo con el mismo warp a mano
+que el resto.
 
 Es siempre **globo** (no hay modo plano) y **sub-diario**: la línea de tiempo lleva hora,
 como GeoColor. El sello de render incluye el `alpha`: cambiar la mezcla descarta los PNG
@@ -387,7 +387,7 @@ pastilla oscura, aro exterior, viñeta hacia el limbo y marca de agua al medio d
 | `--lote` | Cuadros por proceso (cada lote corre en su propio proceso) |
 | `--solo-poster` / `--forzar` | Sólo el póster del último cuadro / rehacer PNG existentes |
 
-- Usa la paleta `ir_realce` de [`../prototipos/poster_goes.py`](../prototipos/poster_goes.py);
+- Usa la paleta `clean_ir` de [`../prototipos/poster_goes.py`](../prototipos/poster_goes.py);
   para la rampa oficial de Worldview está `clean_ir` (ver `cuadros_himawari_ir.py`).
 - Los cuadros van a `frames_G19_C13_<AAAA-MM-DDTHHMM>_<N>f_<PX>px/`, listos para
   `animar/armar.py`.

@@ -441,6 +441,34 @@ class SnapshotParaguay(unittest.TestCase):
         self.assertIsNotNone(aviso_de_detalle("truecolor", 125))
 
 
+class BandasYControles(unittest.TestCase):
+    """Las 16 bandas ABI y los controles que dependen de otro parametro."""
+
+    def test_goes_banda_ofrece_las_16_bandas(self):
+        producto = catalog.get_product("goes_banda")
+        banda = next(p for p in producto.params if p.name == "banda")
+
+        self.assertEqual(len(banda.options), 16)
+        self.assertEqual(banda.options[0].value, "C01")
+        self.assertEqual(banda.options[-1].value, "C16")
+        self.assertEqual(banda.default, "C13")
+
+    def test_no_queda_la_paleta_ir_realce(self):
+        valores = {opcion.value for opcion in catalog._PALETAS}
+
+        self.assertNotIn("ir_realce", valores)
+        self.assertIn("clean_ir", valores)
+
+    def test_la_ultima_apaga_los_controles_de_horario(self):
+        producto = catalog.get_product("snapshot_paraguay")
+        campos = {p.name: p for p in producto.params}
+
+        for nombre in ("fecha", "hora", "minuto"):
+            self.assertEqual(campos[nombre].enabled_when, {"ultima": False})
+        self.assertIsNone(campos["ultima"].enabled_when)
+        self.assertIsNone(campos["detalle"].enabled_when)
+
+
 class ColaEHistorial(unittest.TestCase):
     """La lista de corridas: cola, historial y lo que sobrevive al reinicio."""
 

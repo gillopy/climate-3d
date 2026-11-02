@@ -318,11 +318,11 @@ sin `xarray`.
 .venv\Scripts\python.exe descargar\descargar_goes.py --sat G19 --banda C13 --desde 2026-10-02 --hasta 2026-10-05
 
 # 2) Un póster fijo de disco completo
-.venv\Scripts\python.exe prototipos\poster_goes.py --paleta ir_realce
+.venv\Scripts\python.exe prototipos\poster_goes.py --paleta clean_ir
 
 # 3) Renderizar los cuadros de la animación (globo centrado en Paraguay, 432 a 720 px)
 .venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 `
-    --n 432 --px 720 --globo --centro -73 -18 --paleta ir_realce
+    --n 432 --px 720 --globo --centro -73 -18 --paleta clean_ir
 
 # 4) Armar el MP4
 .venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_G19_2026-10-02T0000_432f_720px" --fps 12.5
@@ -368,8 +368,8 @@ una vista regional se leen igual:
   leer.
 - El **contorno de Paraguay** se dibuja negro y fino (0.8 pt), sutil sobre el mapa. Se activa
   con `--geojson` y se apaga con `--sin-borde`.
-- **Paletas**: `ir_realce` (IR con color en los topes fríos), `termico`, `anomalia`, `gris`,
-  `magma`, `inferno`, `turbo`.
+- **Paletas**: `clean_ir` (la de GIBS, escala fija), `termico`, `anomalia`, `gris`, `magma`,
+  `inferno`, `turbo`.
 
 En las animaciones los rótulos escalan **sub-linealmente** con la resolución: si escalaran
 linealmente, a 2048 px el título se comería el cuadro.

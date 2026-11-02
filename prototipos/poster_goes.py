@@ -54,8 +54,6 @@ import matplotlib.patheffects as patheffects
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
-from matplotlib.colors import LinearSegmentedColormap
-
 # Bootstrap de imports: `estilo` y `rutas` viven en comun/.
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
@@ -66,23 +64,11 @@ from rutas import DATOS, SALIDAS  # noqa: E402
 sys.path.insert(0, str(RAIZ / 'comun'))
 from paleta_gibs import CMAP_GIBS_CLEAN_IR as CMAP_GIBS_CLEAN_IR  # noqa: E402
 
-# Rampa IR con realce (estilo la referencia del usuario): colores para los topes
-# fríos (nubes) y gris para el fondo cálido. Ojo con el orden: la posición 0 es
-# el vmin (lo más frío) y la 1 el vmax (lo más cálido).
-IR_REALCE_COLORS = [
-    (0.00, "#ff2020"), (0.08, "#e00000"), (0.14, "#ff8000"),
-    (0.20, "#f0f000"), (0.26, "#00e000"), (0.32, "#00c8ff"),
-    (0.38, "#0050ff"), (0.45, "#0a2a8f"),
-    (0.55, "#b0b0b0"), (0.70, "#8c8c8c"), (1.00, "#5a5a5a"),
-]
-IR_REALCE_CMAP = LinearSegmentedColormap.from_list("ir_realce", IR_REALCE_COLORS)
-
 # Paletas disponibles: la del póster de anomalías y las clásicas de satélite.
 PALETTES = {
     "gris": "Greys_r",       # reflectancia: 0 = negro (espacio/mar), 1 = blanco (nubes)
     "termico": "Greys",      # IR: frío (nube alta) = blanco, cálido (superficie) = negro
     "anomalia": ANOM_CMAP,   # la muestreada de la imagen de referencia
-    "ir_realce": IR_REALCE_CMAP,  # IR con realce de color en los topes fríos
     "clean_ir": CMAP_GIBS_CLEAN_IR,  # Clean Infrared de NASA Worldview/GIBS (default para ABI C13)
     "magma": "magma",
     "inferno": "inferno",
@@ -91,7 +77,7 @@ PALETTES = {
 # Paleta por defecto según el tipo de variable: reflectancia vs temperatura de brillo.
 def default_palette(unit_label):
     """Gris invertido para temperatura (frío = blanco); gris normal para reflectancia."""
-    return "ir_realce" if unit_label == "°C" else "gris"
+    return "termico" if unit_label == "°C" else "gris"
 
 
 # Zonas predefinidas: (oeste, este, sur, norte) en grados lon/lat.

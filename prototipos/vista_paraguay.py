@@ -1,7 +1,7 @@
 """Cuadro fijo del globo G19 C13 centrado en Paraguay (vista giro7).
 
 Reproduce el encuadre aprobado: Orthographic con centro en lon -73, lat -18,
-paleta IR con realce, borde de Paraguay (GADM) y sin grilla ni recortes.
+paleta clean_ir, borde de Paraguay (GADM) y sin grilla ni recortes.
 
 Uso (desde la carpeta del proyecto):
 
@@ -40,7 +40,7 @@ DATOS_D = DATOS / "goes_c13_g19"
 SALIDAS_D = SALIDAS
 CENTRO_LON, CENTRO_LAT = -73.0, -18.0
 GEOJSON = str(RAIZ / "datos" / "paraguay_gadm.json")
-PALETA = "ir_realce"
+PALETA = "clean_ir"
 CREDITO = "Graphic by @Gillo97"
 BORDE_COLOR, BORDE_ANCHO = "#000000", 0.8   # borde de Paraguay: negro y sutil
 

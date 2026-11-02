@@ -676,6 +676,17 @@ code {
   padding-top: 2px;
 }
 
+/* Control apagado por otro parametro: sigue a la vista, pero no se toca. */
+.field--off {
+  opacity: 0.42;
+}
+
+.field--off select,
+.field--off input,
+.field--off .switch {
+  cursor: not-allowed;
+}
+
 .field__label {
   display: flex;
   align-items: baseline;

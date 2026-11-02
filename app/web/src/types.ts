@@ -17,6 +17,8 @@ export interface ParamSpec {
   min: number | null;
   max: number | null;
   step: number | null;
+  /** Se habilita solo cuando otro parametro tiene este valor. */
+  enabled_when: Record<string, unknown> | null;
 }
 
 export interface Product {

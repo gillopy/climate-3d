@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
+from matplotlib import colormaps
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
@@ -44,8 +45,14 @@ TERMICAS = {"C07", "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15", "C16"
 
 
 def _lut(paleta: str) -> np.ndarray:
-    """256 colores de la paleta, para indexar sin alocar float por píxel."""
+    """256 colores de la paleta, para indexar sin alocar float por píxel.
+
+    `PALETTES` mezcla colormaps armadas (clean_ir, anomalia) con nombres de
+    matplotlib (gris, magma...): acá se resuelven los dos casos.
+    """
     cmap = PALETTES[paleta]
+    if isinstance(cmap, str):
+        cmap = colormaps[cmap]
     return (np.asarray(cmap(np.linspace(0.0, 1.0, 256)))[:, :3] * 255.0).astype(np.uint8)
 
 

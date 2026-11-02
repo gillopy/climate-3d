@@ -126,15 +126,23 @@ export function RecipeForm({
             const valor = params[spec.name];
             const id = `campo-${spec.name}`;
             const ayudaId = spec.help ? `ayuda-${spec.name}` : undefined;
+            // Un control puede depender de otro: "ultima" apaga fecha/hora/minuto.
+            const habilitado = spec.enabled_when
+              ? Object.entries(spec.enabled_when).every(
+                  ([clave, esperado]) => params[clave] === esperado,
+                )
+              : true;
+            const clase = habilitado ? "field" : "field field--off";
 
             if (spec.kind === "select") {
               return (
-                <div className="field" key={spec.name}>
+                <div className={clase} key={spec.name}>
                   <Etiqueta spec={spec} valor={valor} htmlFor={id} />
                   <select
                     id={id}
                     value={String(valor ?? spec.default)}
                     aria-describedby={ayudaId}
+                    disabled={!habilitado}
                     onChange={(e) => onChange(spec.name, e.target.value)}
                   >
                     {spec.options.map((opcion) => (
@@ -154,12 +162,13 @@ export function RecipeForm({
 
             if (spec.kind === "date") {
               return (
-                <div className="field" key={spec.name}>
+                <div className={clase} key={spec.name}>
                   <Etiqueta spec={spec} valor={valor} htmlFor={id} />
                   <input
                     id={id}
                     type="date"
                     value={String(valor ?? spec.default)}
+                    disabled={!habilitado}
                     onChange={(e) => onChange(spec.name, e.target.value)}
                   />
                   <span className="field__help">{ayudaFecha}</span>
@@ -170,13 +179,17 @@ export function RecipeForm({
             if (spec.kind === "date-range") {
               const rango = (valor ?? spec.default) as RangoFechas;
               return (
-                <div className="field field--wide" key={spec.name}>
+                <div
+                  className={habilitado ? "field field--wide" : "field field--wide field--off"}
+                  key={spec.name}
+                >
                   <Etiqueta spec={spec} valor={valor} />
                   <div className="field__range">
                     <input
                       type="date"
                       value={rango.start}
                       aria-label={`${spec.label}: desde`}
+                      disabled={!habilitado}
                       onChange={(e) =>
                         onChange(spec.name, { ...rango, start: e.target.value })
                       }
@@ -186,6 +199,7 @@ export function RecipeForm({
                       type="date"
                       value={rango.end}
                       aria-label={`${spec.label}: hasta`}
+                      disabled={!habilitado}
                       onChange={(e) =>
                         onChange(spec.name, { ...rango, end: e.target.value })
                       }
@@ -198,7 +212,12 @@ export function RecipeForm({
 
             if (spec.kind === "toggle") {
               return (
-                <div className="field field--toggle" key={spec.name}>
+                <div
+                  className={
+                    habilitado ? "field field--toggle" : "field field--toggle field--off"
+                  }
+                  key={spec.name}
+                >
                   <span className="field__label">
                     {spec.label}
                     {spec.help ? (
@@ -211,6 +230,7 @@ export function RecipeForm({
                     aria-checked={Boolean(valor)}
                     aria-label={spec.label}
                     className="switch"
+                    disabled={!habilitado}
                     onClick={() => onChange(spec.name, !valor)}
                   >
                     <span />
@@ -221,7 +241,7 @@ export function RecipeForm({
 
             const numero = Number(valor ?? spec.default);
             return (
-              <div className="field" key={spec.name}>
+              <div className={clase} key={spec.name}>
                 <Etiqueta spec={spec} valor={valor} htmlFor={id} />
                 <input
                   id={id}
@@ -231,6 +251,7 @@ export function RecipeForm({
                   max={spec.max ?? 100}
                   step={spec.step ?? 1}
                   aria-describedby={ayudaId}
+                  disabled={!habilitado}
                   onChange={(e) => onChange(spec.name, Number(e.target.value))}
                 />
                 {spec.help ? (

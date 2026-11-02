@@ -37,7 +37,7 @@ Comparten la misma estructura de 7 celdas de código:
 |---|---|
 | `T0`, `N_FRAMES`, `PASO_MIN` | Ventana de tiempo (10 min por slot) |
 | `SAT`, `BANDA` | `"G19"`/`"C13"` (IR), `"G18"`/`"C04"` (cirrus) |
-| `PALETA` | `ir_realce`, `termico`, `anomalia`, … (definidas en [`../poster_goes.py`](../poster_goes.py)) |
+| `PALETA` | `clean_ir`, `termico`, `anomalia`, … (definidas en [`../poster_goes.py`](../poster_goes.py)) |
 | `VMIN`, `VMAX` | Escala fija; `None` = percentiles automáticos del primer cuadro |
 | `CENTRO_LON`, `CENTRO_LAT` | Giro del globo (solo en `animacion_globo_g19`) |
 | `GEOJSON` | Borde destacado a dibujar |

@@ -89,11 +89,11 @@ El infrarrojo limpio (10.3 µm) del GOES-East. Es el flujo base del repo.
 .venv\Scripts\python.exe descargar\descargar_goes.py --sat G19 --banda C13 --desde 2026-10-02 --hasta 2026-10-05
 
 # 2) Un cuadro fijo para revisar
-.venv\Scripts\python.exe prototipos\poster_goes.py --paleta ir_realce
+.venv\Scripts\python.exe prototipos\poster_goes.py --paleta clean_ir
 
 # 3) La animación (globo centrado en Paraguay)
 .venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 `
-    --n 432 --px 720 --globo --centro -73 -18 --paleta ir_realce
+    --n 432 --px 720 --globo --centro -73 -18 --paleta clean_ir
 
 # 4) El MP4
 .venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_G19_2026-10-02T0000_432f_720px" --fps 12.5

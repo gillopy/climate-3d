@@ -12,7 +12,7 @@ Uso (desde la raíz del proyecto):
     # Globo centrado en Paraguay, 432 cuadros a 720 px (dataset G19 C13 completo)
     .venv\\Scripts\\python.exe cuadros\\cuadros_goes.py --sat G19 --banda C13 ^
         --desde 2026-10-02 --n 432 --px 720 --globo --centro -73 -18 ^
-        --geojson datos\\paraguay_gadm.json --paleta ir_realce
+        --geojson datos\\paraguay_gadm.json --paleta clean_ir
 
     # Disco completo
     .venv\\Scripts\\python.exe cuadros\\cuadros_goes.py --sat G18 --banda C04 --desde 2026-10-03 --n 144 --px 1200
@@ -98,7 +98,7 @@ def main(argv=None):
                          "reduce la memoria y el tiempo del render a cambio de un "
                          "ligerísimo suavizado; el lienzo sigue siendo --px")
     ap.add_argument("--dpi", type=int, default=140, help="dpi del render")
-    ap.add_argument("--paleta", default="ir_realce", choices=sorted(PALETTES),
+    ap.add_argument("--paleta", default="clean_ir", choices=sorted(PALETTES),
                     help="paleta de color")
     ap.add_argument("--globo", action="store_true", help="reproyectar a Orthographic")
     ap.add_argument("--centro", nargs=2, type=float, metavar=("LON", "LAT"),

@@ -35,6 +35,11 @@ class ParamSpec(BaseModel):
     min: float | None = None
     max: float | None = None
     step: float | None = None
+    enabled_when: dict[str, Any] | None = Field(
+        default=None,
+        description="El control solo se habilita cuando otro parametro vale esto "
+        "(por ejemplo, la fecha cuando 'ultima' esta apagado).",
+    )
 
 
 class Product(BaseModel):

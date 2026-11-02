@@ -55,7 +55,7 @@ brillo (`units "K"`) → **°C**.
 
 | Opción | Qué hace |
 |---|---|
-| `--paleta` | `ir_realce`, `termico`, `anomalia`, `gris`, `magma`, `inferno`, `turbo` |
+| `--paleta` | `clean_ir`, `termico`, `anomalia`, `gris`, `magma`, `inferno`, `turbo` |
 | `--globo` | Reprojecta a Orthographic |
 | `--zona` | Encuadre predefinido: `py`, `br`, `sa`, `conus`, `caribe` |
 | `--extent O E S N` | Caja lon/lat explícita |
@@ -65,7 +65,7 @@ brillo (`units "K"`) → **°C**.
 | `--size` / `--dpi` | Tamaño del render |
 
 ```powershell
-.venv\Scripts\python.exe prototipos\poster_goes.py --paleta ir_realce
+.venv\Scripts\python.exe prototipos\poster_goes.py --paleta clean_ir
 .venv\Scripts\python.exe prototipos\poster_goes.py --globo --zona sa
 .venv\Scripts\python.exe prototipos\poster_goes.py --zona py --paleta anomalia
 ```
@@ -75,7 +75,7 @@ brillo (`units "K"`) → **°C**.
 ## `vista_paraguay.py`
 
 Cuadro fijo (PNG) del globo centrado en Paraguay, con el encuadre aprobado: Orthographic
-girado a `lon −73, lat −18`, paleta `ir_realce`, borde de Paraguay (GADM) y sin grilla.
+girado a `lon −73, lat −18`, paleta `clean_ir`, borde de Paraguay (GADM) y sin grilla.
 
 ```powershell
 .venv\Scripts\python.exe prototipos\vista_paraguay.py

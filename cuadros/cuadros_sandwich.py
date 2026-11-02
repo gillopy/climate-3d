@@ -9,7 +9,7 @@ comando de descarga.
 El Sandwich **no es un RGB de tres bandas**: mezcla dos imágenes. La fórmula (validada con
 prototipo e inspección visual) es `salida = alpha · visible + (1 - alpha) · IR_realzado`,
 con el IR pasado por una rampa de color (frío -> rojo/naranja/amarillo/verde/cian) de la
-misma familia que `poster_goes.IR_REALCE_COLORS`. Sirve para monitorear convección
+rampa IR cl?sica del repo. Sirve para monitorear convección
 profunda: el visible aporta la **morfología** del tope nuboso y el IR, su **temperatura**.
 Es un producto **sólo diurno** (el visible necesita sol), por eso la serie son los tramos
 diurnos de cada día (`serie_diurna`, de `comun/series.py`).
@@ -55,7 +55,7 @@ BBOX_GLOBO = (-160.0, -80.0, 15.0, 80.0)        # oeste, sur, este, norte
 GLOBO_LON, GLOBO_LAT = -58.0, -23.0
 
 # Rampa del IR realzado: posición 0 = lo más frío (tope de convección), 1 = lo más cálido.
-# Misma familia que `poster_goes.IR_REALCE_COLORS`, coherente con el resto del repo.
+# Misma rampa IR cl?sica que el resto del repo.
 RAMPA_IR = [
     (0.00, (255, 32, 32)), (0.08, (224, 0, 0)), (0.14, (255, 128, 0)),
     (0.20, (240, 240, 0)), (0.26, (0, 224, 0)), (0.32, (0, 200, 255)),

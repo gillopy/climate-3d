@@ -40,7 +40,7 @@ sys.path.insert(0, str(RAIZ / "descargar"))
 sys.path.insert(0, str(RAIZ / "prototipos"))
 from goes_lectura import PATRON, cargar  # noqa: E402
 from goes_descarga import clave_de  # noqa: E402
-from poster_goes import IR_REALCE_CMAP, PALETTES  # noqa: E402
+from poster_goes import PALETTES  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
 from estilo import BG, TXT, TXT_DIM  # noqa: E402
 
@@ -142,7 +142,7 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
     # El campo viene en proyección geostacionaria: `pcolormesh` lo reproyecta al
     # Orthographic del eje (no hace falta warp previo ni scipy).
     mesh = ax.pcolormesh(x, y, campo, transform=proj,
-                         cmap=PALETTES.get(args.paleta, IR_REALCE_CMAP),
+                         cmap=PALETTES[args.paleta],
                          vmin=vmin, vmax=vmax, shading="auto", zorder=2)
 
     try:
@@ -325,8 +325,8 @@ def main(argv=None) -> int:
     ap.add_argument("--credito", default=CREDITO, help="crédito de la esquina")
     ap.add_argument("--vmin", type=float, default=VMIN, help="mínimo de la escala (°C)")
     ap.add_argument("--vmax", type=float, default=VMAX, help="máximo de la escala (°C)")
-    ap.add_argument("--paleta", default="ir_realce", choices=sorted(PALETTES),
-                    help="paleta de color (default: ir_realce, la histórica)")
+    ap.add_argument("--paleta", default="clean_ir", choices=sorted(PALETTES),
+                    help="paleta de color (default: clean_ir, la de GIBS)")
     ap.add_argument("--geojson", default=BORDE_SA,
                     help="contorno destacado (GeoJSON); vacío = sin borde, p. ej. --geojson \"\"")
     ap.add_argument("--tope", type=int, default=2712,
