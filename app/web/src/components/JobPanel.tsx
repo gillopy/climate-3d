@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { Job } from "../types";
+import type { Job, JobSummary } from "../types";
 
 const ETIQUETAS: Record<Job["status"], string> = {
   queued: "en cola",
@@ -14,11 +14,20 @@ function peso(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
+/** "2026-11-02T03:04:05+00:00" -> "02/11 03:04" (UTC, igual que la consola). */
+function cuando(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)} ${iso.slice(11, 16)}`;
+}
+
 const esGif = (nombre: string) => nombre.toLowerCase().endsWith(".gif");
 const esVideo = (nombre: string) => nombre.toLowerCase().endsWith(".mp4");
+const enMarcha = (estado: Job["status"]) =>
+  estado === "queued" || estado === "running";
 
 interface Props {
   job: Job | null;
+  corridas: JobSummary[];
+  onSelect: (jobId: string) => void;
   onCancel: () => void;
   onReveal: () => void;
 }
@@ -43,11 +52,15 @@ function Clave() {
         <span className="key__mark key__mark--error" aria-hidden="true" />
         error: mira el log de arriba
       </div>
+      <div className="key__row">
+        <span className="key__mark key__mark--cancelled" aria-hidden="true" />
+        cancelado: no llego al disco
+      </div>
     </div>
   );
 }
 
-export function JobPanel({ job, onCancel, onReveal }: Props) {
+export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props) {
   const consola = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,7 +69,7 @@ export function JobPanel({ job, onCancel, onReveal }: Props) {
     }
   }, [job?.logs.length]);
 
-  if (!job) {
+  if (corridas.length === 0) {
     return (
       <aside className="job" aria-label="Corrida">
         <div className="job__inner">
@@ -84,106 +97,170 @@ export function JobPanel({ job, onCancel, onReveal }: Props) {
     );
   }
 
-  const activo = job.status === "queued" || job.status === "running";
-  const imagenes = job.artifacts.filter((a) => a.kind === "image");
-  const videos = job.artifacts.filter((a) => a.kind === "video");
-  const porcentaje = Math.round(job.progress * 100);
+  const activas = corridas.filter((corrida) => enMarcha(corrida.status)).length;
+  const imagenes = job?.artifacts.filter((a) => a.kind === "image") ?? [];
+  const videos = job?.artifacts.filter((a) => a.kind === "video") ?? [];
+  const porcentaje = Math.round((job?.progress ?? 0) * 100);
   const traza =
-    job.status === "done"
+    job?.status === "done"
       ? "trace--done"
-      : job.status === "error"
+      : job?.status === "error"
         ? "trace--error"
         : "";
 
   return (
-    <aside className="job" aria-label="Corrida">
-      <div className="job__inner">
-        <div className="job__head">
-          <h2 className="job__title">Corrida</h2>
-          <span className={`stamp stamp--${job.status}`}>{ETIQUETAS[job.status]}</span>
+    <aside className="job" aria-label="Corridas">
+      <section className="runbook" aria-labelledby="corridas-titulo">
+        <div className="runbook__head">
+          <h2 className="rail__title" id="corridas-titulo">
+            Corridas
+          </h2>
+          <span className="runbook__facts">
+            {activas > 0 ? (
+              <span className="runbook__live">{activas} en curso</span>
+            ) : null}
+            <span className="rail__count">
+              {String(corridas.length).padStart(2, "0")}
+            </span>
+          </span>
         </div>
-
-        <div>
-          <p className="job__product">{job.product_name}</p>
-          <code className="job__id">{job.id}</code>
-        </div>
-
-        <div className={`trace ${traza}`}>
-          <div
-            className="trace__track"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={porcentaje}
-            aria-label="Progreso de la corrida"
-          >
-            <div className="trace__fill" style={{ width: `${porcentaje}%` }} />
-          </div>
-          <div className="trace__meta">
-            <span className="trace__stage">{job.stage}</span>
-            <span className="trace__pct">{porcentaje}%</span>
-          </div>
-        </div>
-
-        {job.plan.length > 0 ? (
-          <ol className="plan">
-            {job.plan.map((paso, indice) => (
-              <li key={indice}>{paso}</li>
-            ))}
-          </ol>
-        ) : null}
-
-        {job.error ? <p className="job__error">{job.error}</p> : null}
-
-        <div className="console" ref={consola} aria-label="Registro de la corrida">
-          {job.logs.map((linea, indice) => (
-            <div className={`console__line console__line--${linea.level}`} key={indice}>
-              <span className="console__time">{linea.at.slice(11, 19)}</span>
-              <span>{linea.text}</span>
-            </div>
-          ))}
-        </div>
-
-        {imagenes.length > 0 || videos.length > 0 ? (
-          <div className="artifacts">
-            {imagenes.map((arte) => (
-              <figure key={arte.name} className="artifact">
-                <img src={arte.url} alt={arte.name} loading="lazy" />
-                <figcaption>
-                  <span>{arte.name}</span>
-                  <span className="artifact__size">{peso(arte.bytes)}</span>
-                </figcaption>
-              </figure>
-            ))}
-            {videos.map((arte) => (
-              <figure key={arte.name} className="artifact">
-                {esVideo(arte.name) ? (
-                  <video src={arte.url} controls loop muted playsInline />
-                ) : (
-                  <img src={arte.url} alt={arte.name} loading="lazy" />
-                )}
-                <figcaption>
-                  <span>{arte.name}</span>
-                  <span className="artifact__size">
-                    {esGif(arte.name) ? "animo " : ""}
-                    {peso(arte.bytes)}
+        <ul className="runbook__list">
+          {corridas.map((corrida) => {
+            const activa = job?.id === corrida.id;
+            return (
+              <li key={corrida.id}>
+                <button
+                  type="button"
+                  className="run"
+                  aria-current={activa ? "true" : undefined}
+                  title={`${corrida.product_name} · ${corrida.stage}`}
+                  onClick={() => onSelect(corrida.id)}
+                >
+                  <span
+                    className={`key__mark key__mark--${corrida.status}`}
+                    aria-hidden="true"
+                  />
+                  <span className="run__body">
+                    <span className="run__name">{corrida.product_name}</span>
+                    <span className="run__meta">
+                      <span className="run__when">
+                        {cuando(corrida.created_at)}
+                      </span>
+                      <span className="run__stage">{corrida.stage}</span>
+                    </span>
                   </span>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        ) : null}
+                  {enMarcha(corrida.status) ? (
+                    <span className="run__pct">
+                      {Math.round(corrida.progress * 100)}%
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
-        <div className="job__actions">
-          <button className="btn" type="button" onClick={onReveal}>
-            Abrir carpeta
-          </button>
-          {activo ? (
-            <button className="btn btn--warm" type="button" onClick={onCancel}>
-              Cancelar
-            </button>
-          ) : null}
-        </div>
+      <div className="job__inner">
+        {job ? (
+          <>
+            <div className="job__head">
+              <h2 className="job__title">Corrida</h2>
+              <span className={`stamp stamp--${job.status}`}>
+                {ETIQUETAS[job.status]}
+              </span>
+            </div>
+
+            <div>
+              <p className="job__product">{job.product_name}</p>
+              <code className="job__id">
+                {job.id} · {cuando(job.created_at)}
+              </code>
+            </div>
+
+            <div className={`trace ${traza}`}>
+              <div
+                className="trace__track"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={porcentaje}
+                aria-label="Progreso de la corrida"
+              >
+                <div className="trace__fill" style={{ width: `${porcentaje}%` }} />
+              </div>
+              <div className="trace__meta">
+                <span className="trace__stage">{job.stage}</span>
+                <span className="trace__pct">{porcentaje}%</span>
+              </div>
+            </div>
+
+            {job.plan.length > 0 ? (
+              <ol className="plan">
+                {job.plan.map((paso, indice) => (
+                  <li key={indice}>{paso}</li>
+                ))}
+              </ol>
+            ) : null}
+
+            {job.error ? <p className="job__error">{job.error}</p> : null}
+
+            <div className="console" ref={consola} aria-label="Registro de la corrida">
+              {job.logs.map((linea, indice) => (
+                <div
+                  className={`console__line console__line--${linea.level}`}
+                  key={indice}
+                >
+                  <span className="console__time">{linea.at.slice(11, 19)}</span>
+                  <span>{linea.text}</span>
+                </div>
+              ))}
+            </div>
+
+            {imagenes.length > 0 || videos.length > 0 ? (
+              <div className="artifacts">
+                {imagenes.map((arte) => (
+                  <figure key={arte.name} className="artifact">
+                    <img src={arte.url} alt={arte.name} loading="lazy" />
+                    <figcaption>
+                      <span>{arte.name}</span>
+                      <span className="artifact__size">{peso(arte.bytes)}</span>
+                    </figcaption>
+                  </figure>
+                ))}
+                {videos.map((arte) => (
+                  <figure key={arte.name} className="artifact">
+                    {esVideo(arte.name) ? (
+                      <video src={arte.url} controls loop muted playsInline />
+                    ) : (
+                      <img src={arte.url} alt={arte.name} loading="lazy" />
+                    )}
+                    <figcaption>
+                      <span>{arte.name}</span>
+                      <span className="artifact__size">
+                        {esGif(arte.name) ? "animo " : ""}
+                        {peso(arte.bytes)}
+                      </span>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="job__actions">
+              <button className="btn" type="button" onClick={onReveal}>
+                Abrir carpeta
+              </button>
+              {enMarcha(job.status) ? (
+                <button className="btn btn--warm" type="button" onClick={onCancel}>
+                  Cancelar
+                </button>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <p className="runbook__wait">Leyendo la corrida…</p>
+        )}
       </div>
     </aside>
   );

@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   cancelJob,
   createJob,
   getCatalog,
   getDates,
+  getJob,
+  getJobs,
   revealJob,
   subscribeJob,
 } from "./api";
@@ -13,9 +15,13 @@ import type {
   CatalogResponse,
   DatesResponse,
   Job,
+  JobSummary,
   Params,
   Product,
 } from "./types";
+
+const EN_MARCHA = (estado: JobSummary["status"]) =>
+  estado === "queued" || estado === "running";
 
 function valoresIniciales(producto: Product): Params {
   const salida: Params = {};
@@ -30,13 +36,32 @@ export default function App() {
   const [producto, setProducto] = useState<Product | null>(null);
   const [params, setParams] = useState<Params>({});
   const [fechas, setFechas] = useState<DatesResponse | null>(null);
-  const [job, setJob] = useState<Job | null>(null);
+
+  // La cola y el historial viven aparte del detalle: la lista se refresca por
+  // sondeo (y es liviana), el detalle se pide completo una sola vez y despues
+  // lo mantiene vivo el stream.
+  const [corridas, setCorridas] = useState<JobSummary[]>([]);
+  const [detalle, setDetalle] = useState<Job | null>(null);
+  const [activa, setActiva] = useState<string | null>(null);
+  // Relanzar la misma receta reusa el id del job: esto fuerza la resuscripcion.
+  const [reintento, setReintento] = useState(0);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const corte = useRef<(() => void) | null>(null);
 
   const satelite = typeof params.satelite === "string" ? params.satelite : "";
   const banda = typeof params.banda === "string" ? params.banda : "";
+
+  const refrescarCorridas = useCallback(async () => {
+    try {
+      setCorridas(await getJobs());
+    } catch {
+      // El sondeo no discute: si falla, se reintenta en el proximo tic.
+    }
+  }, []);
+
+  useEffect(() => {
+    void refrescarCorridas();
+  }, [refrescarCorridas]);
 
   useEffect(() => {
     getCatalog()
@@ -47,8 +72,6 @@ export default function App() {
       .catch((exc: unknown) => {
         setError(exc instanceof Error ? exc.message : "no se pudo leer el catalogo");
       });
-
-    return () => corte.current?.();
     // Un solo fetch al montar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -70,10 +93,87 @@ export default function App() {
     };
   }, [producto, satelite, banda]);
 
+  // Con historial y sin seleccion, se abre la corrida mas nueva.
+  useEffect(() => {
+    if (activa && corridas.some((corrida) => corrida.id === activa)) return;
+    if (corridas.length > 0) setActiva(corridas[0].id);
+  }, [corridas, activa]);
+
+  // Mientras haya algo en cola o corriendo, la lista se refresca sola.
+  const enMarcha = corridas.some((corrida) => EN_MARCHA(corrida.status));
+  useEffect(() => {
+    if (!enMarcha) return;
+    const tic = window.setInterval(() => void refrescarCorridas(), 2500);
+    return () => window.clearInterval(tic);
+  }, [enMarcha, refrescarCorridas]);
+
+  // La corrida elegida: snapshot completo una vez y despues lo mantiene el stream.
+  useEffect(() => {
+    if (!activa) {
+      setDetalle(null);
+      return;
+    }
+    let vigente = true;
+    let llegado = false;
+
+    getJob(activa)
+      .then((job) => {
+        // El stream manda: si ya llego su snapshot, este no lo pisa.
+        if (vigente && !llegado) setDetalle(job);
+      })
+      .catch((exc: unknown) => {
+        if (vigente) {
+          setError(exc instanceof Error ? exc.message : "no se pudo leer la corrida");
+        }
+      });
+
+    const corte = subscribeJob(activa, {
+      onSnapshot: (job) => {
+        llegado = true;
+        if (vigente) setDetalle(job);
+      },
+      onLog: (linea) =>
+        setDetalle((previo) =>
+          previo && previo.id === activa
+            ? { ...previo, logs: [...previo.logs, linea] }
+            : previo,
+        ),
+      onProgress: (progress, stage) =>
+        setDetalle((previo) =>
+          previo && previo.id === activa ? { ...previo, progress, stage } : previo,
+        ),
+      onArtifact: (artefacto) =>
+        setDetalle((previo) => {
+          if (!previo || previo.id !== activa) return previo;
+          if (previo.artifacts.some((arte) => arte.url === artefacto.url)) {
+            return previo;
+          }
+          return { ...previo, artifacts: [...previo.artifacts, artefacto] };
+        }),
+      onFinal: () => void refrescarCorridas(),
+      onFallo: (mensaje) => {
+        if (vigente) setError(mensaje);
+      },
+    });
+
+    return () => {
+      vigente = false;
+      corte();
+    };
+  }, [activa, reintento, refrescarCorridas]);
+
+  // Solo se muestra el detalle de la corrida elegida: mientras llega, el panel
+  // no muestra la anterior como si fuera la nueva.
+  const actual = detalle && detalle.id === activa ? detalle : null;
+
   function elegir(siguiente: Product) {
     setProducto(siguiente);
     setParams(valoresIniciales(siguiente));
     setError(null);
+  }
+
+  function elegirCorrida(id: string) {
+    setActiva(id);
   }
 
   async function generar() {
@@ -82,24 +182,11 @@ export default function App() {
     setError(null);
     try {
       const nuevo = await createJob(producto.id, params);
-      setJob(nuevo);
-
-      // Un pedido viejo no debe seguir escribiendo en el panel nuevo.
-      corte.current?.();
-      corte.current = subscribeJob(nuevo.id, {
-        onSnapshot: (actual) => setJob(actual),
-        onLog: (linea) =>
-          setJob((previo) =>
-            previo ? { ...previo, logs: [...previo.logs, linea] } : previo,
-          ),
-        onProgress: (progress, stage) =>
-          setJob((previo) => (previo ? { ...previo, progress, stage } : previo)),
-        onArtifact: (artefacto) =>
-          setJob((previo) =>
-            previo ? { ...previo, artifacts: [...previo.artifacts, artefacto] } : previo,
-          ),
-        onFallo: (mensaje) => setError(mensaje),
-      });
+      setDetalle(nuevo);
+      setActiva(nuevo.id);
+      // Misma receta = mismo id de job: hay que volver a suscribirse igual.
+      setReintento((numero) => numero + 1);
+      void refrescarCorridas();
     } catch (exc: unknown) {
       setError(exc instanceof Error ? exc.message : "no se pudo crear el job");
     } finally {
@@ -108,19 +195,20 @@ export default function App() {
   }
 
   async function cancelar() {
-    if (!job) return;
+    if (!actual) return;
     try {
-      const actualizado = await cancelJob(job.id);
-      setJob(actualizado);
+      const actualizado = await cancelJob(actual.id);
+      setDetalle(actualizado);
+      void refrescarCorridas();
     } catch (exc: unknown) {
       setError(exc instanceof Error ? exc.message : "no se pudo cancelar");
     }
   }
 
   async function revelar() {
-    if (!job) return;
+    if (!actual) return;
     try {
-      await revealJob(job.id);
+      await revealJob(actual.id);
     } catch (exc: unknown) {
       setError(exc instanceof Error ? exc.message : "no se pudo abrir la carpeta");
     }
@@ -255,7 +343,13 @@ export default function App() {
           )}
         </section>
 
-        <JobPanel job={job} onCancel={cancelar} onReveal={revelar} />
+        <JobPanel
+          job={actual}
+          corridas={corridas}
+          onSelect={elegirCorrida}
+          onCancel={cancelar}
+          onReveal={revelar}
+        />
       </main>
     </div>
   );

@@ -33,9 +33,14 @@ from .recipes import (
     python_repo,
     resolver_corrida,
 )
-from .schemas import Artifact, JobSnapshot, LogLine
+from .schemas import Artifact, JobSnapshot, JobSummary, LogLine
 
 TERMINALES = ("done", "error", "cancelled")
+
+# Una linea por corrida terminada. Es lo que hace que la lista de corridas
+# sobreviva a un reinicio de la API: la cache de renders ya estaba en disco, el
+# registro de que existieron no.
+HISTORIAL = "historial.jsonl"
 
 # Subir esto invalida la cache: la firma tiene que representar la receta entera,
 # incluido como se dibuja (paleta, fondo, capas), no solo los parametros.
@@ -126,6 +131,22 @@ class Job:
             error=self.error,
         )
 
+    def resumen(self) -> JobSummary:
+        """Fila liviana para el listado de corridas."""
+        return JobSummary(
+            id=self.id,
+            product_id=self.product_id,
+            product_name=self.product_name,
+            mode=self.mode,  # type: ignore[arg-type]
+            status=self.status,  # type: ignore[arg-type]
+            progress=round(self.progress, 4),
+            stage=self.stage,
+            created_at=self.created_at,
+            started_at=self.started_at,
+            finished_at=self.finished_at,
+            error=self.error,
+        )
+
 
 class JobManager:
     def __init__(self, media_root: Path, max_historial: int = 40) -> None:
@@ -135,6 +156,7 @@ class JobManager:
         # Un solo worker: los pedidos se encolan en vez de pelearse la maquina.
         self._un_slot = asyncio.Semaphore(1)
         self._tareas: set[asyncio.Task] = set()
+        self._cargar_historial()
 
     # --- API publica -----------------------------------------------------
     def crear(self, product_id: str, params: dict[str, Any]) -> Job:
@@ -183,6 +205,10 @@ class JobManager:
     def listar(self) -> list[Job]:
         return sorted(self.jobs.values(), key=lambda j: j.created_at, reverse=True)
 
+    def listar_resumen(self) -> list[JobSummary]:
+        """Listado liviano: en cola, en curso y las que ya terminaron."""
+        return [job.resumen() for job in self.listar()]
+
     def cancelar(self, job_id: str) -> bool:
         job = self.jobs.get(job_id)
         if job is None or job.status in TERMINALES:
@@ -198,6 +224,7 @@ class JobManager:
             job.status = "cancelled"
             job.stage = "cancelado antes de arrancar"
             job.finished_at = _ahora()
+            self._guardar(job)
             self._emitir(job, {"type": "cancelled"})
         else:
             job.stage = "cancelando..."
@@ -224,13 +251,134 @@ class JobManager:
         finally:
             job.subs.discard(cola)
 
+    # --- historial -------------------------------------------------------
+    def _cargar_historial(self) -> None:
+        """Relee las corridas terminadas de la sesion anterior."""
+        archivo = self.media_root / HISTORIAL
+        if not archivo.is_file():
+            return
+        try:
+            lineas = archivo.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return
+
+        vistas: dict[str, Job] = {}
+        for linea in lineas:
+            if not linea.strip():
+                continue
+            try:
+                job = self._desde_historial(json.loads(linea))
+            except (TypeError, ValueError, KeyError):
+                continue  # una linea rota no se lleva puesto el resto
+            if job is not None:
+                vistas[job.id] = job  # la ultima linea de un id es la mas fresca
+
+        recientes = sorted(vistas.values(), key=lambda j: j.created_at)[-self.max_historial :]
+        for job in recientes:
+            self.jobs[job.id] = job
+        if len(vistas) > self.max_historial:
+            self._reescribir_historial()
+
+    def _desde_historial(self, dato: Any) -> Job | None:
+        if not isinstance(dato, dict):
+            return None
+        crudo = dato.get("job")
+        relativa = dato.get("dir")
+        if not isinstance(crudo, dict) or not isinstance(relativa, str):
+            return None
+        carpeta = (self.media_root / relativa).resolve()
+        try:
+            carpeta.relative_to(self.media_root.resolve())
+        except ValueError:
+            return None  # el archivo no puede sacarnos de media/
+
+        snap = JobSnapshot.model_validate(crudo)
+        if snap.status not in TERMINALES:
+            return None
+        # Si alguien limpio la cache, la corrida queda como registro pero sin
+        # placas rotas.
+        existe = carpeta.is_dir()
+        artefactos = [
+            artefacto
+            for artefacto in snap.artifacts
+            if existe and self._archivo(artefacto.url).is_file()
+        ]
+        return Job(
+            id=snap.id,
+            product_id=snap.product_id,
+            product_name=snap.product_name,
+            params=snap.params,
+            mode=snap.mode,
+            status=snap.status,
+            progress=snap.progress,
+            stage=snap.stage,
+            created_at=snap.created_at,
+            started_at=snap.started_at,
+            finished_at=snap.finished_at,
+            logs=list(snap.logs),
+            artifacts=artefactos,
+            plan=list(snap.plan),
+            error=snap.error,
+            dir=carpeta,
+        )
+
+    def _archivo(self, url: str) -> Path:
+        """`/media/cache/<firma>/x.png` -> ruta real dentro de media."""
+        prefijo = "/media/"
+        relativa = url[len(prefijo) :] if url.startswith(prefijo) else url.lstrip("/")
+        return (self.media_root / relativa).resolve()
+
+    def _guardar(self, job: Job) -> None:
+        """Anota una corrida terminada: el listado tiene que sobrevivir al reinicio."""
+        if job.dir is None or job.status not in TERMINALES:
+            return
+        try:
+            relativa = job.dir.relative_to(self.media_root).as_posix()
+        except ValueError:
+            return
+        linea = json.dumps(
+            {"job": job.snapshot().model_dump(), "dir": relativa},
+            ensure_ascii=False,
+        )
+        try:
+            with (self.media_root / HISTORIAL).open("a", encoding="utf-8") as archivo:
+                archivo.write(linea + "\n")
+        except OSError:
+            pass  # la lista en memoria sigue viva; el disco es solo el seguro
+
+    def _reescribir_historial(self) -> None:
+        """Deja en disco solo las corridas que la lista conserva."""
+        lineas: list[str] = []
+        for job in sorted(self.jobs.values(), key=lambda j: j.created_at):
+            if job.dir is None or job.status not in TERMINALES:
+                continue
+            try:
+                relativa = job.dir.relative_to(self.media_root).as_posix()
+            except ValueError:
+                continue
+            lineas.append(
+                json.dumps(
+                    {"job": job.snapshot().model_dump(), "dir": relativa},
+                    ensure_ascii=False,
+                )
+            )
+        try:
+            (self.media_root / HISTORIAL).write_text(
+                "".join(f"{linea}\n" for linea in lineas), encoding="utf-8"
+            )
+        except OSError:
+            pass
+
     # --- interno ---------------------------------------------------------
     def _podar(self) -> None:
         """Olvida jobs viejos de la lista. Nunca borra la cache de renders."""
         if len(self.jobs) <= self.max_historial:
             return
+        sobran = len(self.jobs) - self.max_historial
+        # `listar()` viene de la mas nueva a la mas vieja: las que sobran son las
+        # del final. Nunca se poda una que todavia corre.
         terminados = [j for j in self.listar() if j.status in TERMINALES]
-        for viejo in terminados[: max(0, len(self.jobs) - self.max_historial)]:
+        for viejo in terminados[max(0, len(terminados) - sobran) :]:
             self.jobs.pop(viejo.id, None)
 
     def _emitir(self, job: Job, evento: dict[str, Any]) -> None:
@@ -340,6 +488,7 @@ class JobManager:
                 self._emitir(job, {"type": "error", "error": job.error})
             finally:
                 job.proc = None
+                self._guardar(job)
 
     # --- modo real -------------------------------------------------------
     async def _resolver_corrida(self, job: Job) -> None:

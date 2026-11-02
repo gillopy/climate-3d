@@ -257,7 +257,12 @@ code {
   background: var(--ink);
 }
 
+/* La corrida se parte en dos: el listado queda fijo arriba y el detalle
+   scrollea abajo. Asi la cola no se va de pantalla nunca. */
 .job {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-left: 1px solid var(--line);
   background: var(--ink);
 }
@@ -281,12 +286,14 @@ code {
 
 .rail::-webkit-scrollbar,
 .job::-webkit-scrollbar,
+.job__inner::-webkit-scrollbar,
 .work::-webkit-scrollbar {
   width: 10px;
 }
 
 .rail::-webkit-scrollbar-thumb,
 .job::-webkit-scrollbar-thumb,
+.job__inner::-webkit-scrollbar-thumb,
 .work::-webkit-scrollbar-thumb {
   background: var(--line);
   border: 3px solid var(--ink);
@@ -881,12 +888,163 @@ input[type="range"] {
   opacity: 0.75;
 }
 
+/* --- Corridas: la cola y el historial -------------------------------- */
+.runbook {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+  background: var(--ink);
+}
+
+.runbook__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px var(--pad) 10px;
+}
+
+.runbook__facts {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.runbook__live {
+  font-family: var(--narrow);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7ba5ec;
+}
+
+.runbook__live::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  background: currentColor;
+  transform: translateY(-1px);
+}
+
+.runbook__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 6px;
+  max-height: 248px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.runbook__list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.runbook__list::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+}
+
+/* Fila de corrida. La marca de estado es la misma de la clave: un vocabulario. */
+.run {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 8px var(--pad) 9px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.run:hover {
+  background: var(--ink-2);
+}
+
+.run[aria-current="true"] {
+  background: var(--ink-3);
+  border-left-color: var(--front);
+}
+
+.run__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.run__name {
+  font-family: var(--narrow);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run__meta {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--narrow);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.run__when {
+  flex: 0 0 auto;
+}
+
+.run__stage {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run__stage::before {
+  content: "\00b7  ";
+}
+
+.run__pct {
+  font-family: var(--narrow);
+  font-size: 11px;
+  font-weight: 600;
+  color: #7ba5ec;
+  font-variant-numeric: tabular-nums;
+}
+
+.runbook__wait {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
 /* --- Panel de la corrida --------------------------------------------- */
 .job__inner {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 20px var(--pad) 26px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
 
 .job__head {
@@ -1268,6 +1426,16 @@ input[type="range"] {
   background: rgba(224, 121, 111, 0.18);
 }
 
+.key__mark--cancelled {
+  color: var(--text-dim);
+  background-image: repeating-linear-gradient(
+    45deg,
+    currentColor 0 1px,
+    transparent 1px 5px
+  );
+  opacity: 0.7;
+}
+
 .flow {
   border-top: 1px solid var(--line-soft);
   padding-top: 14px;
@@ -1347,6 +1515,15 @@ input[type="range"] {
     border: 0;
     border-bottom: 1px solid var(--line);
     max-height: none;
+    overflow: visible;
+  }
+
+  /* Sin columna propia no hay scrollport propio: todo crece con la pagina. */
+  .job {
+    display: block;
+  }
+
+  .job__inner {
     overflow: visible;
   }
 

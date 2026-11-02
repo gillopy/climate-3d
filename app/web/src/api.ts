@@ -3,6 +3,7 @@ import type {
   CatalogResponse,
   DatesResponse,
   Job,
+  JobSummary,
   LogLine,
   Params,
 } from "./types";
@@ -38,8 +39,14 @@ export function getDates(
   );
 }
 
-export function getJobs(): Promise<Job[]> {
-  return fetch("/api/jobs").then((r) => leer<Job[]>(r));
+/** Cola + historial, sin logs ni artefactos: se refresca por sondeo. */
+export function getJobs(): Promise<JobSummary[]> {
+  return fetch("/api/jobs").then((r) => leer<JobSummary[]>(r));
+}
+
+/** Detalle completo de una corrida (log, plan, artefactos). */
+export function getJob(jobId: string): Promise<Job> {
+  return fetch(`/api/jobs/${jobId}`).then((r) => leer<Job>(r));
 }
 
 export function createJob(productId: string, params: Params): Promise<Job> {

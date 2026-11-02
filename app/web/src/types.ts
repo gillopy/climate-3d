@@ -59,6 +59,21 @@ export interface LogLine {
   text: string;
 }
 
+/** Fila del listado de corridas: lo justo para dibujar la cola y el historial. */
+export interface JobSummary {
+  id: string;
+  product_id: string;
+  product_name: string;
+  mode: RunMode;
+  status: JobStatus;
+  progress: number;
+  stage: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  error: string | null;
+}
+
 export interface Job {
   id: string;
   product_id: string;

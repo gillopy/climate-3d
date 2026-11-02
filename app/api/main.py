@@ -25,7 +25,13 @@ from .catalog import (
 )
 from .jobs import JobManager
 from .recipes import python_repo, repo_listo
-from .schemas import CatalogResponse, DatesResponse, JobSnapshot, RecipeRequest
+from .schemas import (
+    CatalogResponse,
+    DatesResponse,
+    JobSnapshot,
+    JobSummary,
+    RecipeRequest,
+)
 
 RAIZ_APP = Path(__file__).resolve().parents[1]
 MEDIA = RAIZ_APP / "var" / "media"
@@ -102,9 +108,10 @@ async def crear_job(receta: RecipeRequest) -> JobSnapshot:
     return job.snapshot()
 
 
-@app.get("/api/jobs", response_model=list[JobSnapshot])
-def listar_jobs() -> list[JobSnapshot]:
-    return [job.snapshot() for job in gestor.listar()]
+@app.get("/api/jobs", response_model=list[JobSummary])
+def listar_jobs() -> list[JobSummary]:
+    """Cola + historial. Liviano a proposito: la UI lo refresca cada pocos segundos."""
+    return gestor.listar_resumen()
 
 
 @app.get("/api/jobs/{job_id}", response_model=JobSnapshot)

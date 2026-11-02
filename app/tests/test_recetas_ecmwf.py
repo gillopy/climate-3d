@@ -25,7 +25,8 @@ RAIZ = Path(__file__).resolve().parents[2]
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
-from app.api import catalog, recipes  # noqa: E402
+from app.api import catalog, jobs as api_jobs, recipes  # noqa: E402
+from app.api.schemas import Artifact, LogLine  # noqa: E402
 
 DIA = date(2026, 10, 20)
 
@@ -438,6 +439,101 @@ class SnapshotParaguay(unittest.TestCase):
         self.assertIsNone(aviso_de_detalle("geocolor", 700))
         self.assertIsNone(aviso_de_detalle("truecolor", 250))
         self.assertIsNotNone(aviso_de_detalle("truecolor", 125))
+
+
+class ColaEHistorial(unittest.TestCase):
+    """La lista de corridas: cola, historial y lo que sobrevive al reinicio."""
+
+    def setUp(self):
+        self.temporal = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporal.cleanup)
+        self.media = Path(self.temporal.name)
+
+    def _job(self, ident, *, estado="done", creado="2026-11-01T10:00:00+00:00"):
+        return api_jobs.Job(
+            id=ident,
+            product_id="demo",
+            product_name="Demo",
+            params={},
+            mode="real",
+            status=estado,
+            created_at=creado,
+            dir=self.media / "cache" / ident,
+        )
+
+    def test_el_listado_va_de_lo_mas_nuevo_a_lo_mas_viejo(self):
+        gestor = api_jobs.JobManager(self.media)
+        gestor.jobs["viejo"] = self._job("viejo", creado="2026-11-01T08:00:00+00:00")
+        gestor.jobs["nuevo"] = self._job("nuevo", creado="2026-11-01T09:00:00+00:00")
+
+        self.assertEqual([f.id for f in gestor.listar_resumen()], ["nuevo", "viejo"])
+
+    def test_el_resumen_no_arrastra_el_log(self):
+        job = self._job("a")
+        job.logs.append(LogLine(at="2026-11-01T10:00:00+00:00", text="hola"))
+
+        resumen = job.resumen()
+
+        self.assertEqual(resumen.id, "a")
+        self.assertFalse(hasattr(resumen, "logs"))
+        self.assertFalse(hasattr(resumen, "artifacts"))
+
+    def test_un_reinicio_relee_las_corridas_terminadas(self):
+        gestor = api_jobs.JobManager(self.media)
+        job = self._job("a")
+        job.dir.mkdir(parents=True)
+        gestor.jobs["a"] = job
+        gestor._guardar(job)
+
+        otro = api_jobs.JobManager(self.media)  # simula el reinicio de la API
+
+        self.assertEqual([f.id for f in otro.listar_resumen()], ["a"])
+        self.assertEqual(otro.obtener("a").status, "done")
+
+    def test_una_corrida_que_sigue_en_cola_no_se_guarda(self):
+        gestor = api_jobs.JobManager(self.media)
+
+        gestor._guardar(self._job("a", estado="running"))
+
+        self.assertFalse((self.media / api_jobs.HISTORIAL).exists())
+
+    def test_al_releer_no_muestra_placas_borradas(self):
+        gestor = api_jobs.JobManager(self.media)
+        job = self._job("a")
+        job.dir.mkdir(parents=True)
+        (job.dir / "ok.png").write_bytes(b"png")
+        job.artifacts = [
+            Artifact(name="ok.png", url="/media/cache/a/ok.png", kind="image", bytes=3),
+            Artifact(name="ido.png", url="/media/cache/a/ido.png", kind="image", bytes=3),
+        ]
+        gestor._guardar(job)
+
+        otro = api_jobs.JobManager(self.media)
+
+        detalle = otro.obtener("a")
+        self.assertIsNotNone(detalle)
+        self.assertEqual([a.name for a in detalle.artifacts], ["ok.png"])
+
+    def test_una_linea_rota_no_se_lleva_el_historial(self):
+        (self.media / api_jobs.HISTORIAL).write_text(
+            'no es json\n{"job": 1}\n', encoding="utf-8"
+        )
+
+        gestor = api_jobs.JobManager(self.media)
+
+        self.assertEqual(gestor.listar_resumen(), [])
+
+    def test_podar_olvida_las_mas_viejas_y_no_las_mas_nuevas(self):
+        gestor = api_jobs.JobManager(self.media, max_historial=2)
+        for hora in ("08", "09", "10"):
+            ident = f"j{hora}"
+            gestor.jobs[ident] = self._job(
+                ident, creado=f"2026-11-01T{hora}:00:00+00:00"
+            )
+
+        gestor._podar()
+
+        self.assertEqual(set(gestor.jobs), {"j09", "j10"})
 
 
 if __name__ == "__main__":

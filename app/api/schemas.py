@@ -108,3 +108,23 @@ class JobSnapshot(BaseModel):
     artifacts: list[Artifact] = Field(default_factory=list)
     plan: list[str] = Field(default_factory=list)
     error: str | None = None
+
+
+class JobSummary(BaseModel):
+    """Una fila del listado de corridas.
+
+    El listado se refresca cada pocos segundos: no puede arrastrar el log ni los
+    artefactos de cada job. El detalle completo se pide por id.
+    """
+
+    id: str
+    product_id: str
+    product_name: str
+    mode: RunMode
+    status: JobStatus
+    progress: float
+    stage: str
+    created_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    error: str | None = None
