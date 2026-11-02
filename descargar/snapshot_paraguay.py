@@ -35,9 +35,9 @@ from PIL import Image
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
-from paraguay import (CAPAS, CAPA, INTENTOS, MARGEN, aviso_de_detalle,  # noqa: E402
-                     caja_geojson, nombre_crudo, paso, px_para_mpp, techo,
-                     url_snapshot)
+from paraguay import (CAPAS, CAPA, MARGEN, aviso_de_detalle,  # noqa: E402
+                     caja_geojson, intentos, nombre_crudo, paso, px_para_mpp,
+                     techo, url_snapshot)
 
 GEOJSON = RAIZ / "datos" / "paraguay_gadm.json"
 
@@ -80,7 +80,8 @@ def ultima_disponible(capa: str, caja, px: int, desde: datetime | None = None,
     ahora = desde or datetime.now(timezone.utc).replace(tzinfo=None)
     t = techo(capa, ahora)
     intervalo = paso(capa)
-    for intento in range(1, INTENTOS[capa] + 1):
+    limite = intentos(capa)
+    for intento in range(1, limite + 1):
         try:
             datos = _pedir(t, caja, px, capa, timeout=60)
         except Exception as exc:
@@ -96,7 +97,7 @@ def ultima_disponible(capa: str, caja, px: int, desde: datetime | None = None,
     etiqueta = "días" if intervalo.days else "slots"
     raise SystemExit(
         f"No encontré ningún gránulo de {capa} en los últimos "
-        f"{INTENTOS[capa]} {etiqueta} desde {ahora:%Y-%m-%d %H:%M} UTC."
+        f"{limite} {etiqueta} desde {ahora:%Y-%m-%d %H:%M} UTC."
     )
 
 

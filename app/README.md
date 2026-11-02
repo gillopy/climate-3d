@@ -483,10 +483,12 @@ Aun así, el control llega a **125 m/px** (el mismo del diálogo de Worldview): 
   `TIME=AAAA-MM-DD`; GeoColor pide el instante ISO y GIBS devuelve el gránulo más
   cercano, así que no hace falta acertar el slot de 10 minutos.
 - **Última disponible (default)**: el instante no se adivina. El descargador sondea
-  miniaturas de 320 px hacia atrás —10 min por paso en GeoColor, 1 día en VIIRS—
-  hasta encontrar un gránulo real. La trampa que hay que conocer: cuando el `TIME`
-  no existe, GIBS responde **200 con un PNG de 0,7 KB totalmente negro**, no un 404.
-  Por eso la sonda mira los píxeles y no el código HTTP.
+  miniaturas de 320 px hacia atrás —10 min por paso en GeoColor, 1 día en las capas
+  diarias (los cuatro True Color de VIIRS/MODIS)— hasta encontrar un gránulo real. La
+  cadencia y el tope de la sonda salen del tipo de capa en `comun/paraguay.py`, no de
+  una tabla aparte: agregar una capa a `CAPAS` alcanza. La trampa que hay que conocer:
+  cuando el `TIME` no existe, GIBS responde **200 con un PNG de 0,7 KB totalmente
+  negro**, no un 404. Por eso la sonda mira los píxeles y no el código HTTP.
 - Si elegís la hora a mano y no hay gránulo, el job **falla con la última disponible
   y el comando exacto**, en vez de dejar una imagen negra. `--verificar` informa la
   última sin descargar nada.
@@ -530,7 +532,12 @@ Decisiones que vienen de leer los scripts, no de suponer:
 expone paleta, así que MUR no tiene selector de paleta.
 - **Un control puede depender de otro.** `enabled_when` en el `ParamSpec` apaga un campo
 mientras otro no valga lo esperado: en Snapshot, encender `ultima` deja en gris `fecha`,
-`hora` y `minuto`, porque la última captura los ignora.
+`hora` y `minuto`, porque la última captura los ignora. Lo mismo con el switch
+`snapshot` de los demás productos: apaga `animar`, `fps` y el horario.
+- **Snapshot en cualquier producto.** El switch pide **un solo cuadro**: en GOES es el
+  slot de siempre (el cenital), en los productos de GIBS el último día de la ventana y
+  en los modelos sólo dos crudos (0 h y el horizonte) con `--solo-poster`. Nunca arma
+  video, aunque `animar` haya quedado encendido.
 - **GOES arranca en el primer slot que hay en disco** cuando no se fuerza
   descarga: `cuadros_goes.py` asume una grilla contigua de 10 minutos y revienta
   con `KeyError` si falta un slot, así que la receta avanza solo mientras el

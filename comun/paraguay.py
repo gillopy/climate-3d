@@ -32,21 +32,30 @@ CAPAS = {
 }
 CAPA = "truecolor"
 
-# Cada cuánto publica: GeoColor cada 10 minutos; VIIRS arma un compuesto por día.
-PASOS = {
-    "truecolor": timedelta(days=1),
-    "geocolor": timedelta(minutes=10),
-}
-# Cuánto se puede retroceder buscando el último gránulo publicado.
-INTENTOS = {
-    "truecolor": 7,        # una semana de días
-    "geocolor": 36,        # 6 horas de slots de 10 minutos
-}
+# Cada cuánto publica: los compuestos diarios (VIIRS, MODIS) arman uno por día;
+# las capas del geoestacionario (GeoColor), cada 10 minutos.
+PASO_DIARIO = timedelta(days=1)
+PASO_SLOT = timedelta(minutes=10)
+# Cuánto se puede retroceder buscando el último gránulo publicado: una semana de
+# días o 6 horas de slots. Sale del tipo de capa y no de una tabla aparte: si se
+# agrega una capa a CAPAS, ya hereda la cadencia correcta.
+INTENTOS_DIARIA = 8
+INTENTOS_SLOT = 36
+
+
+def es_diaria(capa: str) -> bool:
+    """True si la capa es un compuesto diario (TIME=AAAA-MM-DD)."""
+    return CAPAS[capa][1]
 
 
 def paso(capa: str) -> timedelta:
     """Intervalo entre gránulos de la capa."""
-    return PASOS.get(capa, timedelta(minutes=10))
+    return PASO_DIARIO if es_diaria(capa) else PASO_SLOT
+
+
+def intentos(capa: str) -> int:
+    """Cuántos gránulos hacia atrás se sondean buscando el último."""
+    return INTENTOS_DIARIA if es_diaria(capa) else INTENTOS_SLOT
 
 
 def techo(capa: str, ahora: datetime) -> datetime:

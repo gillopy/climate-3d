@@ -469,6 +469,63 @@ class BandasYControles(unittest.TestCase):
         self.assertIsNone(campos["detalle"].enabled_when)
 
 
+class SnapshotDeUnCuadro(unittest.TestCase):
+    """El switch de snapshot: un solo cuadro, sin serie ni animación."""
+
+    def test_todos_los_productos_lo_ofrecen_menos_el_de_snapshot(self):
+        for producto in catalog.PRODUCTS:
+            nombres = {p.name for p in producto.params}
+            if producto.id == "snapshot_paraguay":
+                self.assertNotIn("snapshot", nombres)
+            else:
+                self.assertIn("snapshot", nombres, producto.id)
+
+    def test_con_snapshot_no_se_agrega_la_animacion(self):
+        plan = recipes.planear(
+            "goes_banda",
+            {"animar": True, "snapshot": True, "satelite": "G19", "banda": "C13"},
+            Path("x"),
+        )
+
+        self.assertNotIn("animar/armar.py", [p.script for p in plan.pasos])
+
+    def test_el_modelo_baja_dos_horas_y_renderiza_solo_el_poster(self):
+        plan = recipes.planear(
+            "precipitacion_ecmwf",
+            {"snapshot": True, "modelo": "ifs", "horizonte": 48, "corrida": "00"},
+            Path("x"),
+        )
+
+        descarga, render = plan.pasos
+        paso = descarga.args[descarga.args.index("--paso") + 1]
+        self.assertEqual(paso, "48")            # 0 y 48: dos crudos, no 17
+        self.assertIn("--solo-poster", render.args)
+
+    def test_snapshot_de_dias_se_queda_con_el_ultimo(self):
+        plan = recipes.planear(
+            "mur_sst",
+            {
+                "snapshot": True,
+                "descargar": True,
+                "ventana": {"start": "2026-10-01", "end": "2026-10-10"},
+            },
+            Path("x"),
+        )
+
+        descarga = plan.pasos[0]
+        desde = descarga.args[descarga.args.index("--desde") + 1]
+        hasta = descarga.args[descarga.args.index("--hasta") + 1]
+        self.assertEqual(desde, "2026-10-10")
+        self.assertEqual(hasta, "2026-10-10")
+
+    def test_los_controles_de_animacion_se_apagan_con_snapshot(self):
+        producto = catalog.get_product("goes_c13")
+
+        for spec in producto.params:
+            if spec.name in ("animar", "fps", "hora_desde", "hora_hasta"):
+                self.assertEqual(spec.enabled_when, {"snapshot": False}, spec.name)
+
+
 class ColaEHistorial(unittest.TestCase):
     """La lista de corridas: cola, historial y lo que sobrevive al reinicio."""
 

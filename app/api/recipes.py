@@ -113,6 +113,21 @@ def _bool(params: dict[str, Any], clave: str) -> bool:
     return bool(params.get(clave, False))
 
 
+def _snapshot(params: dict[str, Any]) -> bool:
+    """True si el pedido quiere un solo cuadro: sin serie y sin animación.
+
+    No toca los scripts: cada receta recorta el pedido a un cuadro con las
+    mismas banderas que ya usa (un slot, un día, un paso).
+    """
+    return _bool(params, "snapshot")
+
+
+def _rango_de_la_corrida(params: dict[str, Any]) -> tuple[date, date]:
+    """Rango efectivo de días: con snapshot se queda con el último pedido."""
+    inicio, fin = _rango(params)
+    return (fin, fin) if _snapshot(params) else (inicio, fin)
+
+
 # --- disponibilidad de corridas ECMWF -----------------------------------
 def _paso_ecmwf(modelo: str, hora: int) -> str:
     """Sufijo del paso, igual que `_sufijo()` del descargador del repo."""
@@ -261,7 +276,11 @@ def planear(product_id: str, params: dict[str, Any], work: Path) -> Plan:
     if constructor is None:
         raise ValueError(f"Producto sin receta real: {product_id}")
     plan = constructor(params, work)
-    if _bool(params, "animar") and not any(p.kind == "animate" for p in plan.pasos):
+    if (
+        _bool(params, "animar")
+        and not _snapshot(params)   # un snapshot nunca arma video
+        and not any(p.kind == "animate" for p in plan.pasos)
+    ):
         plan.pasos.append(_animar(params, work))
     return plan
 
@@ -431,7 +450,10 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
     )
     desde, n, paso, falta = _plan_slots(
-        set(disponibles), cenital, _bool(params, "animar"), ventana
+        set(disponibles),
+        cenital,
+        _bool(params, "animar") and not _snapshot(params),
+        ventana,
     )
 
     # `descargar_goes.py` recorre [desde, hasta) en pasos de `paso` minutos.
@@ -489,7 +511,7 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
 
 # --- MUR: SST descargada ya renderizada por GIBS ------------------------
 def _mur(params: dict[str, Any], work: Path) -> Plan:
-    inicio, fin = _rango(params)
+    inicio, fin = _rango_de_la_corrida(params)
     dias = max(1, (fin - inicio).days + 1)
     paso = max(1, int(math.ceil(dias / 8)))
     px = _px(params, 1200)
@@ -559,7 +581,10 @@ def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
     fondo = str(params.get("fondo", "oscuro"))
     # ECMWF publica 3 h hasta 144 h y 6 h de ahí en adelante; los AIFS, cada 6 h
     # siempre. Los dos scripts del repo piden exactamente la misma grilla.
-    paso_horas = _paso_horas_ecmwf(modelo, horizonte)
+    # Con snapshot se piden sólo dos horas (0 y el horizonte) y se renderiza el
+    # póster del último: un mapa en vez de la serie entera.
+    snap = _snapshot(params)
+    paso_horas = max(1, horizonte) if snap else _paso_horas_ecmwf(modelo, horizonte)
     cuadros = len(range(0, horizonte + 1, paso_horas))
 
     comunes = [
@@ -591,11 +616,13 @@ def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
             "--px", str(px),
             "--fondo-globo", fondo,
             "--salidas", str(work),
+            *(["--solo-poster"] if snap else []),
         ],
         expected=cuadros + 1,  # el póster de cierre imprime una línea más
     )
     pasos = [descarga, render_step] if (
-        _bool(params, "descargar")
+        snap  # el póster lee los crudos 001/002 del pedido recortado
+        or _bool(params, "descargar")
         or not _crudos_existen(producto, modelo, inicio.isoformat(), corrida,
                                horizonte, paso_horas)
     ) else [render_step]
@@ -702,7 +729,9 @@ def _viento_250(params: dict[str, Any], work: Path) -> Plan:
     px = _px(params, 1400)
     fondo = str(params.get("fondo", "oscuro"))
     # IFS y GFS publican cada 3 h hasta 144 h: la animación queda fluida.
-    paso_horas = _paso_horas_ecmwf(modelo, horizonte)
+    # Con snapshot se piden 0 y el horizonte nada más, y se renderiza el último.
+    snap = _snapshot(params)
+    paso_horas = max(1, horizonte) if snap else _paso_horas_ecmwf(modelo, horizonte)
     cuadros = len(range(0, horizonte + 1, paso_horas))
 
     comunes = [
@@ -728,11 +757,13 @@ def _viento_250(params: dict[str, Any], work: Path) -> Plan:
             "--px", str(px),
             "--fondo-globo", fondo,
             "--salidas", str(work),
+            *(["--solo-poster"] if snap else []),
         ],
         expected=cuadros + 1,  # el póster de cierre imprime una línea más
     )
     pasos = [descarga, render_step] if (
-        _bool(params, "descargar")
+        snap  # el póster lee los crudos 001/002 del pedido recortado
+        or _bool(params, "descargar")
         or not _crudos_viento_existen(modelo, inicio.isoformat(), corrida,
                                       horizonte, paso_horas)
     ) else [render_step]
@@ -741,7 +772,7 @@ def _viento_250(params: dict[str, Any], work: Path) -> Plan:
 
 # --- FOLLAJE: PACE LANDVI ----------------------------------------------
 def _follaje(params: dict[str, Any], work: Path) -> Plan:
-    inicio, fin = _rango(params)
+    inicio, fin = _rango_de_la_corrida(params)
     px = _px(params, 1400)
     n = max(1, (fin - inicio).days + 1)
 
@@ -775,7 +806,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
     sat = str(params.get("satelite", "G19"))
     px = _px(params, 2400)
     forzar = _bool(params, "descargar")
-    animar = _bool(params, "animar")
+    animar = _bool(params, "animar") and not _snapshot(params)
     disco = str(params.get("encuadre", "globo")) == "disco"
 
     # C02 es la banda pesada (~410 MB): si esta, el slot existe.
@@ -869,7 +900,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
 
 # --- MUR: poster realista ----------------------------------------------
 def _mur_realista(params: dict[str, Any], work: Path) -> Plan:
-    inicio, fin = _rango(params)
+    inicio, fin = _rango_de_la_corrida(params)
     dias = max(1, (fin - inicio).days + 1)
     paso = max(1, int(math.ceil(dias / 12)))
     px = _px(params, 2000)
@@ -947,7 +978,7 @@ def _himawari(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
     px = _px(params, 1400)
     forzar = _bool(params, "descargar")
-    animar = _bool(params, "animar")
+    animar = _bool(params, "animar") and not _snapshot(params)
 
     disponibles = [s for s in _slots_himawari() if inicio <= s.date() <= fin]
     cenital = _slot_cenital(inicio, _LON_SUBSAT["H09"])
@@ -1003,7 +1034,7 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
     banda = str(params.get("banda", "C13"))
     px = _px(params, 2712)
     forzar = _bool(params, "descargar")
-    animar = _bool(params, "animar")
+    animar = _bool(params, "animar") and not _snapshot(params)
 
     disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
@@ -1065,7 +1096,7 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
 def _geocolor(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
     px = _px(params, 1400)
-    animar = _bool(params, "animar")
+    animar = _bool(params, "animar") and not _snapshot(params)
     sat = str(params.get("satelite", "G19"))
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
 
@@ -1117,9 +1148,9 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
 
 # --- VIIRS NOAA-20: true color diario de GIBS --------------------------
 def _truecolor_viirs(params: dict[str, Any], work: Path) -> Plan:
-    inicio, fin = _rango(params)
+    inicio, fin = _rango_de_la_corrida(params)
     px = _px(params, 2000)
-    animar = _bool(params, "animar")
+    animar = _bool(params, "animar") and not _snapshot(params)
     capa = str(params.get("capa", "VIIRS_NOAA20_CorrectedReflectance_TrueColor"))
 
     # La capa es una composicion DIARIA: un cuadro por dia, sin horarios.

@@ -711,6 +711,33 @@ PRODUCTS: list[Product] = [
     ),
 ]
 
+def _con_snapshot(producto: Product) -> Product:
+    """Suma el switch de snapshot y apaga lo que no aplica cuando está prendido.
+
+    Se aplica al final: cada producto declara sus controles y acá se agrega el
+    corte transversal, sin repetir la misma regla trece veces. El producto de
+    Snapshot ya es una sola captura, así que no lo lleva.
+    """
+    if producto.id == "snapshot_paraguay":
+        return producto
+    for spec in producto.params:
+        if spec.name in ("animar", "fps", "hora_desde", "hora_hasta"):
+            spec.enabled_when = {"snapshot": False}
+    producto.params.insert(
+        0,
+        ParamSpec(
+            name="snapshot",
+            label="Snapshot",
+            kind="toggle",
+            default=False,
+            help="un solo cuadro: no arma serie ni animación, y usa el cuadro de siempre",
+        ),
+    )
+    return producto
+
+
+PRODUCTS = [_con_snapshot(p) for p in PRODUCTS]
+
 _BY_ID = {p.id: p for p in PRODUCTS}
 
 
