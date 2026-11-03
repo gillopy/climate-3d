@@ -42,6 +42,17 @@ class ParamSpec(BaseModel):
     )
 
 
+class PreviewVariant(BaseModel):
+    """Muestra alternativa: se elige cuando los parametros coinciden.
+
+    Sirve para que la placa muestre el render real de la opcion elegida
+    (satelite, paleta, modelo, encuadre...) en vez de una sola imagen fija.
+    """
+
+    url: str
+    when: dict[str, Any] = Field(default_factory=dict)
+
+
 class Product(BaseModel):
     """Un flujo del repo expuesto como producto interactivo."""
 
@@ -54,6 +65,10 @@ class Product(BaseModel):
     preview: str | None = Field(
         default=None,
         description="WebP de muestra generado con el pipeline real, servido en /previews.",
+    )
+    previews: list[PreviewVariant] = Field(
+        default_factory=list,
+        description="Muestras por combinacion de parametros, de la mas especifica a la mas general.",
     )
     command_ready: bool = Field(
         default=False,

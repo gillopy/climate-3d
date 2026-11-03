@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from .recipes import repo_listo
-from .schemas import ParamOption, ParamSpec, Product
+from .schemas import ParamOption, ParamSpec, PreviewVariant, Product
 
 RAIZ_REPO = Path(__file__).resolve().parents[2]
 
@@ -555,7 +555,7 @@ PRODUCTS: list[Product] = [
                 step=6,
                 help="los pasos de 3 h llegan hasta 144 h",
             ),
-            ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="oscuro", options=_FONDO),
+            ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="claro", options=_FONDO),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
             ParamSpec(name="descargar", label="Bajar los crudos", kind="toggle", default=True),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
@@ -697,6 +697,16 @@ PRODUCTS: list[Product] = [
         summary="Indice de vegetacion de PACE sobre fondo de poster, ventana por dias.",
         params=[
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango(20)),
+            ParamSpec(
+                name="proyeccion",
+                label="Proyeccion",
+                kind="select",
+                default="plano",
+                options=[
+                    ParamOption(value="plano", label="Plano (Robinson)"),
+                    ParamOption(value="globo", label="Globo (Orthographic)"),
+                ],
+            ),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
             ParamSpec(
                 name="descargar",
@@ -745,6 +755,43 @@ def get_product(product_id: str) -> Product | None:
     return _BY_ID.get(product_id)
 
 
+# Muestras por variante: el nombre del archivo es el contrato.
+#   previews/<producto>--<valor1>--<valor2>.webp
+# Los valores siguen el orden de esta tabla y se comparan con los parametros que
+# manda el formulario. Sin variante para la seleccion actual, se cae al sample.
+_VARIANTES = {
+    "goes_c13": ("satelite",),
+    "goes_banda": ("satelite", "paleta"),
+    "goes_truecolor": ("satelite", "encuadre", "limbo"),
+    "geocolor": ("satelite",),
+    "precipitacion_ecmwf": ("modelo",),
+    "anomalia_2t": ("modelo",),
+    "viento_250": ("modelo",),
+    "follaje": ("proyeccion",),
+}
+
+
+def _muestras(producto: Product, carpeta: Path) -> list[PreviewVariant]:
+    """Variantes que existen en disco para este producto."""
+    campos = _VARIANTES.get(producto.id)
+    if not campos:
+        return []
+    variantes: list[PreviewVariant] = []
+    for archivo in carpeta.glob(f"{producto.id}--*.webp"):
+        valores = archivo.stem.split("--")[1:]
+        if len(valores) != len(campos):
+            continue
+        variantes.append(
+            PreviewVariant(
+                url=f"/previews/{archivo.name}",
+                when=dict(zip(campos, valores)),
+            )
+        )
+    # La más específica primero: {satélite, paleta} gana sobre {satélite}.
+    variantes.sort(key=lambda v: (-len(v.when), v.url))
+    return variantes
+
+
 def productos_disponibles() -> list[Product]:
     """Marca cada producto segun si el entorno real esta listo y si hay muestra."""
     listo = repo_listo()
@@ -757,6 +804,7 @@ def productos_disponibles() -> list[Product]:
                 update={
                     "command_ready": listo,
                     "preview": f"/previews/{producto.id}.webp" if webp.is_file() else None,
+                    "previews": _muestras(producto, muestras),
                 }
             )
         )

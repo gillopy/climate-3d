@@ -53,6 +53,16 @@ export function RecipeForm({
 }: Props) {
   const pideDescarga = product.params.some((spec) => spec.name === "descargar");
   const ultimaFecha = dates?.dates.at(0) ?? "";
+  // La placa muestra el render de la opcion elegida: satelite, paleta, modelo...
+  const variante = product.previews.find((muestra) =>
+    Object.entries(muestra.when).every(
+      ([clave, esperado]) => params[clave] === esperado,
+    ),
+  );
+  const muestra = variante?.url ?? product.preview;
+  const detalleMuestra = variante
+    ? Object.values(variante.when).join(" · ")
+    : "";
   const ayudaFecha =
     dates && dates.source === "descubierto"
       ? `${dates.dates.length} ${
@@ -77,14 +87,14 @@ export function RecipeForm({
         </div>
       </div>
 
-      {product.preview ? (
+      {muestra ? (
         <figure className="plate">
           <div className="plate__frame">
-            <img src={product.preview} alt={`Resultado de ${product.name}`} />
+            <img src={muestra} alt={`Resultado de ${product.name}`} />
           </div>
           <figcaption className="plate__cap">
             <span>salida real de este producto</span>
-            <span>{product.id}</span>
+            <span>{detalleMuestra ? `${product.id} · ${detalleMuestra}` : product.id}</span>
           </figcaption>
         </figure>
       ) : (

@@ -775,6 +775,9 @@ def _follaje(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango_de_la_corrida(params)
     px = _px(params, 1400)
     n = max(1, (fin - inicio).days + 1)
+    # Dos vestuarios para la misma data: mapa plano (Robinson) o globo realista.
+    globo = str(params.get("proyeccion", "plano")) == "globo"
+    script = "cuadros/cuadros_follaje_globo.py" if globo else "cuadros/cuadros_follaje.py"
 
     descarga = Step(
         kind="download",
@@ -785,8 +788,8 @@ def _follaje(params: dict[str, Any], work: Path) -> Plan:
     )
     render_step = Step(
         kind="render",
-        label="renderizando el follaje",
-        script="cuadros/cuadros_follaje.py",
+        label=f"renderizando el follaje ({'globo' if globo else 'plano'})",
+        script=script,
         args=[
             "--desde", inicio.isoformat(),
             "--hasta", fin.isoformat(),

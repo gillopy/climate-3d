@@ -21,6 +21,11 @@ export interface ParamSpec {
   enabled_when: Record<string, unknown> | null;
 }
 
+export interface PreviewVariant {
+  url: string;
+  when: Record<string, unknown>;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -29,6 +34,7 @@ export interface Product {
   summary: string;
   params: ParamSpec[];
   preview: string | null;
+  previews: PreviewVariant[];
   command_ready: boolean;
   command: string[] | null;
 }

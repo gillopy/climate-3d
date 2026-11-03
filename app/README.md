@@ -534,6 +534,10 @@ expone paleta, así que MUR no tiene selector de paleta.
 mientras otro no valga lo esperado: en Snapshot, encender `ultima` deja en gris `fecha`,
 `hora` y `minuto`, porque la última captura los ignora. Lo mismo con el switch
 `snapshot` de los demás productos: apaga `animar`, `fps` y el horario.
+- **La placa muestra la opci?n elegida.** El cat?logo publica muestras por variante
+  (`previews/<producto>--<valores>.webp`) y el formulario elige la que coincide con los
+  par?metros: cambiar el sat?lite, la paleta, el modelo o la proyecci?n cambia el render
+  de la placa. Sin variante para esa combinaci?n, cae a la muestra por defecto.
 - **Snapshot en cualquier producto.** El switch pide **un solo cuadro**: en GOES es el
   slot de siempre (el cenital), en los productos de GIBS el último día de la ventana y
   en los modelos sólo dos crudos (0 h y el horizonte) con `--solo-poster`. Nunca arma
