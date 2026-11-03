@@ -74,9 +74,10 @@ no para decorar encabezados.
   resumen, marca de 8 px. Agrupado por `grupo` con un rótulo en versalitas. Selección: fila más
   clara + miniatura y marca en azul. Hover: un escalón de tinta. En ≤1080 px se convierte en
   cinta horizontal de 196 px por ficha.
-- **Hoja**: cabecera con título y la receta técnica en mono; **placa** de borde a borde con
-  marco de 16:9 y marcas de registro en las esquinas; **ficha** de cuatro celdas con filetes
-  verticales (grupo, datos en disco, última fecha, origen); campos; pie con la acción.
+- **Hoja**: cabecera con título y la receta técnica en mono; **placa** de borde a borde que
+  sigue al render —alto propio, sin marco fijo ni franjas negras, imagen centrada con borde de
+  1 px y marcas de registro en las esquinas—; **ficha** de cuatro celdas con filetes verticales
+  (grupo, datos en disco, última fecha, origen); campos; pie con la acción.
 - **Campos**: rótulo en versalitas + control nativo. Sin cajas envolventes. Selects y fechas
   sobre papel blanco con borde de 1 px y radio de 6 px; foco con anillo azul de 2 px.
 - **Interruptor**: cuadrado de 46×24 con perilla cuadrada; encendido = lavado azul + perilla
