@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import shutil
 import sys
 import time
 from datetime import date, datetime, timezone
@@ -38,6 +39,14 @@ sys.path.insert(0, str(RAIZ / "comun"))
 from paraguay import (CAPAS, CAPA, MARGEN, aviso_de_detalle,  # noqa: E402
                      caja_geojson, intentos, nombre_crudo, paso, px_para_mpp,
                      techo, url_snapshot)
+from rutas import DATOS  # noqa: E402
+
+# El renderizador de GIBS se cuelga de vez en cuando: 25 s por pedido y, si no
+# contesta tres veces seguidas, se corta con un mensaje claro en vez de dejar el
+# job esperando media hora.
+TIMEOUT = 25
+FALLOS_DE_RED = 3
+RESPALDO = DATOS / "_snapshot"
 
 GEOJSON = RAIZ / "datos" / "paraguay_gadm.json"
 
@@ -63,11 +72,26 @@ def valida(datos: bytes) -> bool:
     return not bool((pixeles.max(axis=2) < 8).all())
 
 
-def _pedir(t: datetime, caja, px: int, capa: str, timeout: int = 90) -> bytes:
+def _pedir(t: datetime, caja, px: int, capa: str, timeout: int = TIMEOUT) -> bytes:
     r = requests.get(url_snapshot(t, caja, px, capa), timeout=timeout,
                      headers={"User-Agent": "climate3d/1.0"})
     r.raise_for_status()
     return r.content
+
+
+def _respaldo(capa: str, px: int) -> Path:
+    """Última captura buena de esta capa y este tamaño."""
+    return RESPALDO / f"ultima_{capa}_{px}px.png"
+
+
+def _guardar_respaldo(origen: Path, capa: str, px: int) -> None:
+    """Guarda el plan B: si GIBS se cae, la próxima corrida tiene de dónde tirar."""
+    try:
+        destino = _respaldo(capa, px)
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(origen, destino)
+    except OSError:
+        pass
 
 
 def ultima_disponible(capa: str, caja, px: int, desde: datetime | None = None,
@@ -81,9 +105,22 @@ def ultima_disponible(capa: str, caja, px: int, desde: datetime | None = None,
     t = techo(capa, ahora)
     intervalo = paso(capa)
     limite = intentos(capa)
+    fallos = 0
     for intento in range(1, limite + 1):
         try:
-            datos = _pedir(t, caja, px, capa, timeout=60)
+            datos = _pedir(t, caja, px, capa)
+            fallos = 0          # contesta: el servicio está vivo, sólo falta el gránulo
+        except requests.RequestException as exc:
+            fallos += 1
+            if verbose:
+                print(f"    sonda {t:%Y-%m-%d %H:%M}: {exc}", flush=True)
+            if fallos >= FALLOS_DE_RED:
+                raise SystemExit(
+                    f"GIBS no responde ({type(exc).__name__}: {exc}).\n"
+                    "No es la fecha: el servicio de NASA está caído o saturado. "
+                    "Probá más tarde."
+                ) from exc
+            datos = b""
         except Exception as exc:
             if verbose:
                 print(f"    sonda {t:%Y-%m-%d %H:%M}: {exc}", flush=True)
@@ -107,7 +144,7 @@ def _formato(capa: str) -> str:
 
 
 def descargar(t: datetime, caja, px: int, destino: Path, capa: str = CAPA,
-              reintentos: int = 4) -> Path:
+              reintentos: int = 3) -> Path:
     """Baja la captura a `destino`; si ya está, la reutiliza (reanudable)."""
     if destino.exists() and destino.stat().st_size > 5_000:
         return destino
@@ -116,7 +153,7 @@ def descargar(t: datetime, caja, px: int, destino: Path, capa: str = CAPA,
     espera = 2.0
     for intento in range(1, reintentos + 1):
         try:
-            r = requests.get(url, timeout=120, headers={"User-Agent": "climate3d/1.0"})
+            r = requests.get(url, timeout=TIMEOUT, headers={"User-Agent": "climate3d/1.0"})
             r.raise_for_status()
             if len(r.content) < 5_000:
                 raise ValueError(f"respuesta demasiado chica ({len(r.content)} B)")
@@ -138,6 +175,14 @@ def descargar(t: datetime, caja, px: int, destino: Path, capa: str = CAPA,
             return destino
         except Exception as exc:                       # red o corte del servicio
             if intento == reintentos:
+                # Plan B: si GIBS no contesta y hay una captura buena guardada,
+                # se usa esa (el log dice de dónde salió).
+                respaldo = _respaldo(capa, px)
+                if isinstance(exc, requests.RequestException) and respaldo.is_file():
+                    print(f"  aviso: GIBS no responde ({exc}); reuso la última "
+                          f"captura buena ({respaldo.name})", flush=True)
+                    shutil.copy2(respaldo, destino)
+                    return destino
                 raise
             print(f"    reintento {intento}/{reintentos - 1} ({exc})", flush=True)
             time.sleep(espera)
@@ -215,6 +260,7 @@ def main(argv=None) -> int:
 
     inicio = time.time()
     ruta = descargar(t, caja, args.px, destino, args.capa)
+    _guardar_respaldo(ruta, args.capa, args.px)
     print(f"listo: {ruta} ({ruta.stat().st_size / 1024:.0f} KB, "
           f"{time.time() - inicio:.1f}s)")
     print("Ahora componé con: "

@@ -17,7 +17,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from unittest import mock
 
@@ -517,6 +517,13 @@ class SnapshotDeUnCuadro(unittest.TestCase):
         hasta = descarga.args[descarga.args.index("--hasta") + 1]
         self.assertEqual(desde, "2026-10-10")
         self.assertEqual(hasta, "2026-10-10")
+
+    def test_follaje_elige_el_render_segun_la_proyeccion(self):
+        plano = recipes.planear("follaje", {"proyeccion": "plano"}, Path("x"))
+        globo = recipes.planear("follaje", {"proyeccion": "globo"}, Path("x"))
+
+        self.assertEqual(plano.pasos[-1].script, "cuadros/cuadros_follaje.py")
+        self.assertEqual(globo.pasos[-1].script, "cuadros/cuadros_follaje_globo.py")
 
     def test_los_controles_de_animacion_se_apagan_con_snapshot(self):
         producto = catalog.get_product("goes_c13")

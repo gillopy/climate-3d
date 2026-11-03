@@ -350,7 +350,16 @@ def _hora_cenital(lon: float) -> time:
 
 
 def _slot_cenital(dia: date, lon: float) -> datetime:
-    return datetime.combine(dia, _hora_cenital(lon))
+    """Cénit de ese día, nunca en el futuro.
+
+    Si se pide hoy y la hora central todavía no pasó, se usa el mismo horario del
+    día anterior: pedir un slot que aún no existe devuelve una imagen negra.
+    """
+    slot = datetime.combine(dia, _hora_cenital(lon))
+    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+    while slot > ahora:
+        slot -= timedelta(days=1)
+    return slot
 
 
 # Que tan lejos del cenit se acepta un slot que ya esta en disco. Con 10 min de
@@ -1125,9 +1134,11 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
     ]
     descarga = Step(
         kind="download",
-        label=f"bajando GeoColor ({n} cuadro(s))",
+        label=f"bajando GeoColor de {sat} ({n} cuadro(s))",
         script="descargar/geocolor.py",
-        args=comunes,
+        # Cada satélite tiene su capa (East/West): el render no la necesita, la
+        # descarga sí. Sin esto, G18 bajaba la imagen de GOES-East.
+        args=["--sat", sat, *comunes],
         expected=max(1, n),
     )
     render_step = Step(

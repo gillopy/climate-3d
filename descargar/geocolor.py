@@ -24,6 +24,7 @@ Uso (desde la raíz del proyecto):
 from __future__ import annotations
 
 import argparse
+import io
 import sys
 import threading
 import time
@@ -31,14 +32,26 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import numpy as np
 import requests
+from PIL import Image
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 from rutas import SALIDAS  # noqa: E402
 
 API = "https://wvs.earthdata.nasa.gov/api/v1/snapshot"
-CAPA = "GOES-East_ABI_GeoColor"
+
+# Cada satélite tiene su capa ya mezclada por NOAA/CIRA: el producto es el mismo,
+# la fuente cambia. Antes se pedía siempre la de GOES-East aunque se eligiera G18.
+CAPAS = {
+    "G19": "GOES-East_ABI_GeoColor",
+    "G16": "GOES-East_ABI_GeoColor",
+    "G18": "GOES-West_ABI_GeoColor",
+}
+CAPA = CAPAS["G19"]
+# El renderizador de GIBS puede colgarse: mejor cortar a los 30 s que esperar 90.
+TIMEOUT = 30
 
 # Sudamérica + Caribe: Paraguay entra cómodo y el terminador barre el dominio entero.
 BBOX = (-85.0, -40.0, -35.0, 15.0)      # oeste, sur, este, norte
@@ -53,13 +66,13 @@ PASO_MIN = 10
 PX = 480
 
 
-def url_cuadro(t: datetime, bbox, ancho: int, alto: int) -> str:
+def url_cuadro(t: datetime, bbox, ancho: int, alto: int, capa: str = CAPA) -> str:
     """URL del snapshot para el instante `t` (se pide en JPEG: pesa menos que PNG)."""
     momento = t.strftime("%Y-%m-%dT%H:%M:%SZ")
     o, s, e, n = bbox
     return (f"{API}?REQUEST=GetSnapshot&TIME={momento}"
             f"&BBOX={s},{o},{n},{e}&CRS=EPSG:4326"
-            f"&LAYERS={CAPA}&FORMAT=image/jpeg&WIDTH={ancho}&HEIGHT={alto}")
+            f"&LAYERS={capa}&FORMAT=image/jpeg&WIDTH={ancho}&HEIGHT={alto}")
 
 
 # Una sesión por hilo: reutiliza la conexión TLS entre pedidos. Abrir una conexión nueva
@@ -80,20 +93,37 @@ def _sesion() -> requests.Session:
     return ses
 
 
+def valida(datos: bytes) -> bool:
+    """True si la respuesta trae imagen de verdad.
+
+    GIBS contesta `200` con una imagen negra cuando el instante no tiene gránulo
+    o cuando el servicio está a medio recuperar. Mirar sólo el status y el peso
+    deja cuadros negros que después el render publica como si fueran buenos.
+    """
+    if len(datos) < 5_000:
+        return False
+    try:
+        with Image.open(io.BytesIO(datos)) as imagen:
+            pixeles = np.asarray(imagen.convert("RGB"), dtype=np.uint8)
+    except Exception:
+        return False
+    return int(pixeles.max()) > 8
+
+
 def descargar_cuadro(t: datetime, bbox, ancho: int, alto: int, destino: Path,
-                     reintentos: int = 4) -> Path:
+                     capa: str = CAPA, reintentos: int = 3) -> Path:
     """Baja el cuadro a `destino`; lo reutiliza si ya está (reanudable)."""
     if destino.exists() and destino.stat().st_size > 5_000:
         return destino
     destino.parent.mkdir(parents=True, exist_ok=True)
-    url = url_cuadro(t, bbox, ancho, alto)
+    url = url_cuadro(t, bbox, ancho, alto, capa)
     espera = 2.0
     for intento in range(1, reintentos + 1):
         try:
-            r = _sesion().get(url, timeout=90)
+            r = _sesion().get(url, timeout=TIMEOUT)
             r.raise_for_status()
-            if len(r.content) < 5_000:
-                raise ValueError(f"respuesta demasiado chica ({len(r.content)} B)")
+            if not valida(r.content):
+                raise ValueError(f"cuadro sin dato ({len(r.content)} B)")
             tmp = destino.with_suffix(destino.suffix + ".parcial")
             tmp.write_bytes(r.content)
             tmp.replace(destino)
@@ -131,8 +161,15 @@ def main(argv=None) -> int:
     ap.add_argument("--hilos", type=int, default=16,
                     help="descargas simultáneas (por defecto 16, para saturar el enlace; "
                          "bajalo si el servicio devuelve 429)")
+    ap.add_argument("--sat", default="G19",
+                    help="satélite: G19/G16 = GOES-East, G18 = GOES-West (por defecto G19)")
     ap.add_argument("--out", help="carpeta de salida (por defecto, comun.rutas.SALIDAS)")
     args = ap.parse_args(argv)
+
+    sat = args.sat.upper()
+    if sat not in CAPAS:
+        raise SystemExit(f"--sat inválido: {args.sat} (se espera G16, G18 o G19).")
+    capa = CAPAS[sat]
 
     if args.bbox is None:
         args.bbox = list(BBOX_GLOBO if args.globo else BBOX)
@@ -152,8 +189,9 @@ def main(argv=None) -> int:
     frames_dir = salida / f"frames_{etiqueta}"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"GeoColor {vista} | {args.n} cuadros desde {t0:%Y-%m-%d %H:%M} UTC | "
-          f"paso {args.paso} min | origen {src_px}x{src_alto} px")
+    print(f"GeoColor {vista} | {sat} ({capa}) | {args.n} cuadros desde "
+          f"{t0:%Y-%m-%d %H:%M} UTC | paso {args.paso} min | "
+          f"origen {src_px}x{src_alto} px")
     print(f"caja {o},{s},{e},{n} | frames en {frames_dir}")
 
     tiempos = [t0 + timedelta(minutes=args.paso * i) for i in range(args.n)]
@@ -166,7 +204,7 @@ def main(argv=None) -> int:
     with ThreadPoolExecutor(max_workers=args.hilos) as pool:
         futuros = {
             pool.submit(descargar_cuadro, t, (o, s, e, n), src_px, src_alto,
-                        frames_dir / f"crudo_{i:03d}.jpg"): (i, t)
+                        frames_dir / f"crudo_{i:03d}.jpg", capa): (i, t)
             for i, t in enumerate(tiempos, 1)
         }
         for fut in as_completed(futuros):
