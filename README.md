@@ -162,7 +162,7 @@ dato. Los scripts son [`descargar/sandwich.py`](./descargar/sandwich.py) y
 
 ### Dust, Air Mass y Fire Temperature (GOES-19): tres RGB oficiales en globo
 
-![Dust RGB de GOES-19, 4 de noviembre de 2026, 18:50 UTC](docs/galeria/goes_dust_globo_G19_2026-11-04T1850.png)
+![Dust RGB de GOES-19, 4 de noviembre de 2026, 20:10 UTC](docs/galeria/goes_dust_globo_G19_2026-11-04T2010.png)
 
 Tres productos RGB del ABI, cada uno con **su propia receta** (bandas, rango y gamma del
 quick guide de NOAA) y su propia lectura del color. No comparten la rampa de C13: un RGB
