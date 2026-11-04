@@ -496,6 +496,35 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px):
 
     plt.rcParams.update({"font.family": ["Segoe UI", "DejaVu Sans"]})
     ancho_in, alto_in, dpi, gx, gy, gw, gh = _geometria(px, args.dpi)
+
+    if getattr(args, "limpio", False):
+        # Modo "captura limpia": sin halo, sin sombreado de borde y sin rótulos.
+        # El recorte entra de borde a borde y sólo queda la imagen (y el contorno).
+        fig = plt.figure(figsize=(px / dpi, px / dpi), dpi=dpi)
+        fig.patch.set_facecolor(WHITE)
+        ax = fig.add_axes([0, 0, 1, 1])
+        ax.set_xlim(-1.0, 1.0)
+        ax.set_ylim(-1.0, 1.0)
+        ax.set_aspect("equal")
+        ax.set_axis_off()
+        ax.set_facecolor("none")
+        ax.imshow(disco, origin="upper", extent=[-1, 1, -1, 1],
+                  interpolation="lanczos", zorder=2)
+        centro = tuple(args.centro)
+        if args.borde:
+            poly = _lineas_geojson(args.borde)
+            if poly:
+                segs = [
+                    np.column_stack(_orto_directo(
+                        np.asarray(s)[:, 0], np.asarray(s)[:, 1], centro, escala))
+                    for s in poly
+                ]
+                ax.add_collection(LineCollection(segs, colors="#10161b", linewidths=2.4,
+                                                 alpha=0.45, zorder=7))
+                ax.add_collection(LineCollection(segs, colors="#ffffff", linewidths=1.0,
+                                                 alpha=0.95, zorder=8))
+        return fig
+
     fig = plt.figure(figsize=(ancho_in, alto_in), dpi=dpi)
     fig.patch.set_facecolor(WHITE)
 
@@ -629,6 +658,8 @@ def main(argv=None) -> int:
                          "pasÃ¡ --borde \"\" para sacarlo")
     ap.add_argument("--fronteras", action=argparse.BooleanOptionalAction, default=True,
                     help="lÃ­mites polÃ­ticos punteados (por defecto, sÃ­)")
+    ap.add_argument("--limpio", action="store_true",
+                    help="captura limpia: sin titulos, creditos, halo ni sombreado de borde")
     ap.add_argument("--out", help="PNG de salida (por defecto, en comun.rutas.SALIDAS)")
     ap.add_argument("--fondo", choices=["claro", "oscuro"], default="claro",
                     help="fondo del poster (por defecto, claro)")

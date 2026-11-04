@@ -158,6 +158,8 @@ def main(argv=None) -> int:
     ap.add_argument("--titulo", default=None, help="título del póster")
     ap.add_argument("--fuente", default=None, help="línea de fuente al pie")
     ap.add_argument("--credito", default="Graphic by @Gillo97")
+    ap.add_argument("--limpio", action="store_true",
+                    help="captura limpia: sin títulos, créditos, halo ni sombreado de borde")
     ap.add_argument("--fondo", choices=["claro", "oscuro"], default="oscuro")
     ap.add_argument("--lineas", action=argparse.BooleanOptionalAction, default=False,
                     help="retícula y costas (por defecto, no)")

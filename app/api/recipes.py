@@ -419,15 +419,18 @@ def _encuadre_paraguay(params: dict[str, Any], modo: str) -> list[str]:
     comun = RAIZ_REPO / "comun"
     if str(comun) not in sys.path:
         sys.path.insert(0, str(comun))
-    from paraguay import encuadre
+    from paraguay import GOES_SIN_HORIZONTE, encuadre
 
     caja = encuadre(_margen_paraguay(params))
     if modo == "radio":
         return ["--centro", f"{caja['lon']:g}", f"{caja['lat']:g}",
                 "--radio", f"{caja['radio']:g}"]
     if modo == "recorte":
+        # `radio_visible` usa escala = sin_h * recorte; despejamos el recorte que
+        # deja el borde del cuadro exactamente a `radio` grados del centro.
+        recorte = math.sin(math.radians(caja["radio"])) / GOES_SIN_HORIZONTE
         return ["--centro", f"{caja['lon']:g}", f"{caja['lat']:g}",
-                "--recorte", f"{caja['radio'] / 90.0:g}"]
+                "--recorte", f"{recorte:g}"]
     if modo == "bbox":
         return ["--bbox", f"{caja['oeste']:g}", f"{caja['sur']:g}",
                 f"{caja['este']:g}", f"{caja['norte']:g}"]
@@ -678,6 +681,7 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         "--paleta", str(params.get("paleta", "clean_ir")),
         "--geojson", _borde_paraguay(params),
         *marco,
+        *(["--limpio"] if _bool(params, "paraguay") else []),
         "--datos", str(datos_dir),
         "--out", str(work),
         "--frames", str(work / "frames"),
@@ -1077,6 +1081,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                     "--px", str(px),
                     "--fondo", "oscuro",
                     "--no-lineas", "--no-fronteras", "--borde", _borde_paraguay(params),
+                    *(["--limpio"] if _bool(params, "paraguay") else []),
                     *centro,
                     "--n", str(n),
                     "--paso", str(paso),
@@ -1095,6 +1100,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                     "--px", str(px),
                     "--fondo", "oscuro",
                     "--no-lineas", "--no-fronteras", "--borde", _borde_paraguay(params),
+                    *(["--limpio"] if _bool(params, "paraguay") else []),
                     *centro,
                     "--out", str(work / f"truecolor_{desde:%Y-%m-%dT%H%M}.png"),
                 ],
@@ -1300,6 +1306,7 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
         # Globo completo centrado en el punto subsatelital, o Paraguay.
         *marco,
         "--borde", _borde_paraguay(params),
+        *(["--limpio"] if _bool(params, "paraguay") else []),
     ]
     if animar and n > 1:
         render_step = Step(
@@ -1396,6 +1403,7 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
             # Paraguay sobre la caja recortada.
             *([] if py else ["--centro", f"{lon_sub:g}", "0"]),
             "--geojson", _borde_paraguay(params),
+            *(["--sin-fecha"] if py else []),
         ],
         expected=n,
     )
@@ -1550,6 +1558,7 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
         # Globo completo centrado en el punto subsatelital, o Paraguay.
         *marco,
         "--borde", _borde_paraguay(params),
+        *(["--limpio"] if _bool(params, "paraguay") else []),
     ]
     if animar and n > 1:
         render_step = Step(

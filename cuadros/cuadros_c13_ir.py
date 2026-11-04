@@ -122,7 +122,8 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
     fig = plt.figure(figsize=(lado_fig, lado_fig), dpi=args.dpi)
     fig.patch.set_facecolor(BG)
 
-    ax = fig.add_axes([0.014, 0.014, 0.972, 0.972],
+    ax = fig.add_axes([0.0, 0.0, 1.0, 1.0] if getattr(args, "limpio", False)
+                      else [0.014, 0.014, 0.972, 0.972],
                       projection=ccrs.Orthographic(central_longitude=lon0,
                                                    central_latitude=lat0))
     ax.set_facecolor(BG)
@@ -147,15 +148,27 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
                          cmap=PALETTES[args.paleta],
                          vmin=vmin, vmax=vmax, shading="auto", zorder=2)
 
-    try:
-        ax.add_feature(cfeature.COASTLINE.with_scale("110m"), linewidth=0.5,
-                       edgecolor="#0b0b0b", zorder=4)
-        ax.add_feature(cfeature.BORDERS.with_scale("110m"), linewidth=0.35,
-                       edgecolor="#0b0b0b", linestyle=":", zorder=4)
-    except Exception as exc:
-        print(f"AVISO: costas/fronteras omitidas ({exc})")
+    if not getattr(args, "limpio", False):
+        try:
+            ax.add_feature(cfeature.COASTLINE.with_scale("110m"), linewidth=0.5,
+                           edgecolor="#0b0b0b", zorder=4)
+            ax.add_feature(cfeature.BORDERS.with_scale("110m"), linewidth=0.35,
+                           edgecolor="#0b0b0b", linestyle=":", zorder=4)
+        except Exception as exc:
+            print(f"AVISO: costas/fronteras omitidas ({exc})")
     if args.geojson:
         _borde_geojson(ax, args.geojson, "#ffffff", ESPESOR_BORDE_PY)
+
+    if getattr(args, "limpio", False):
+        # Captura limpia: sólo el dato (y el contorno), sin leyenda ni rótulos.
+        parcial = destino.with_suffix(".png.parcial")
+        fig.savefig(parcial, format="png", facecolor=BG)
+        ax.cla()
+        plt.close(fig)
+        del fig, ax, mesh
+        gc.collect()
+        parcial.replace(destino)
+        return destino
 
     # --------------------------------------------------------------- vestuario
     # Estructura de tres líneas como los ECMWF: título (mes y año), fecha/hora del
@@ -341,6 +354,8 @@ def main(argv=None) -> int:
                     help="paleta de color (default: clean_ir, la de GIBS)")
     ap.add_argument("--geojson", default=BORDE_SA,
                     help="contorno destacado (GeoJSON); vacío = sin borde, p. ej. --geojson \"\"")
+    ap.add_argument("--limpio", action="store_true",
+                    help="captura limpia: sin titulos, leyenda, creditos ni costas")
     ap.add_argument("--tope", type=int, default=2712,
                     help="resolución del campo leído del .nc (default: igual a --px)")
     ap.add_argument("--datos", help="carpeta de los .nc (default: la del satélite/banda)")

@@ -124,6 +124,13 @@ class RecetasParaguay(unittest.TestCase):
             self.assertIn("--radio", args, pid)
             self.assertLess(float(args[args.index("--radio") + 1]), 10.0, pid)
 
+    def test_paraguay_pide_captura_limpia(self):
+        for pid in ("goes_c13", "goes_banda", "goes_dust", "goes_truecolor"):
+            self.assertIn("--limpio", self._render(pid).args, pid)
+
+    def test_geocolor_pide_sin_fecha(self):
+        self.assertIn("--sin-fecha", self._render("geocolor").args)
+
     def test_himawari_no_tiene_la_seccion(self):
         nombres = {s.name for s in catalog.get_product("himawari").params}
         self.assertNotIn("paraguay", nombres)

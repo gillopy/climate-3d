@@ -19,6 +19,11 @@ MARGEN = 0.06                          # 6 % del lado, por defecto
 #: GeoJSON con el contorno del país (cobertura y borde de los encuadres).
 GEOJSON = Path(__file__).resolve().parents[1] / "datos" / "paraguay_gadm.json"
 
+#: sqrt(1 - (R/(R+h))^2) para GOES (h = 35 786 km). Los pósteres orthographic
+#: usan `escala = sin_h * recorte`, así que el `recorte` que corresponde a un
+#: radio de `r` grados es `sin(r) / sin_h`, no `r / 90`.
+GOES_SIN_HORIZONTE = 0.9885
+
 API = "https://wvs.earthdata.nasa.gov/api/v1/snapshot"
 
 # Capas disponibles: (id de GIBS, es un compuesto diario).
