@@ -184,6 +184,24 @@ en [`comun/rgb_goes.py`](./comun/rgb_goes.py).
 > **Ojo con Fire Temperature**: usa las bandas visibles/near-IR, así que de noche las
 > nubes vienen negras. Es un producto diurno para incendios, no un IR de 24 h.
 
+### "Solo Paraguay" y "Últimos datos": dos controles transversales
+
+Todos los productos que miran la Tierra (salvo el Snapshot, que ya es Paraguay; el MUR,
+que es SST oceánica; y el follaje, que usa otro globo) tienen dos controles que no
+dependen del producto:
+
+- **Solo Paraguay**: encuadra la captura o la animación en las coordenadas del país, con
+  el **margen** que elijas (0-20 %). GeoColor lo resuelve como mapa plano cuadrado; los
+  GOES y los modelos, como un zoom del globo; los pósteres de una banda o RGB, con el
+  contorno del país dibujado. Himawari, MUR y follaje no la tienen.
+- **Últimos datos**: ignora la ventana de fechas y resuelve los N cuadros más nuevos
+  publicados. En los GOES la cadencia es de 10 min y la lista es la misma para todos
+  (10, 12, 24, 36, 48, 60). GeoColor se resuelve contra GIBS (que contesta una imagen
+  negra cuando el slot no existe) y Himawari contra el bucket de NOAA.
+
+El encuadre se calcula en [`comun/paraguay.py`](./comun/paraguay.py) y el margen se
+traduce a `--radio` (grados) o `--recorte` (fracción del hemisferio) según el render.
+
 ### Himawari-9 AHI B13 (Clean Infrared): el ciclón del mar Filipino
 
 ![Clean Infrared de Himawari-9, 21 de octubre de 2026, 20:20 (UTC-4)](docs/galeria/himawari_b13_globo_2026-10-21T2020.png)

@@ -381,6 +381,22 @@ Un solo par de scripts para tres modelos (`ifs`, `aifs-ens`, `aifs-single`).
 
 ---
 
+## Encuadre "Solo Paraguay" y "Últimos datos"
+
+Dos controles transversales de la app, no de un script suelto:
+
+- **Solo Paraguay**: la app calcula la caja del país con el margen elegido
+  (`comun/paraguay.encuadre`) y la traduce al flag de cada render: `--radio` en
+  grados para los que usan cartopy (`cuadros_c13_ir.py`, modelos), `--recorte`
+  como fracción de 90° para los pósteres orthographic (`poster_goes_banda.py`,
+  `poster_goes_rgb.py`, `poster_goes_truecolor.py`) y `--bbox` para GeoColor
+  (mapa plano). El contorno se dibuja con el GeoJSON de Paraguay (`--geojson` o
+  `--borde`). Himawari, MUR y follaje no la tienen.
+- **Últimos datos**: ignora la ventana y resuelve los N slots nuevos. Los GOES
+  usan NOAA S3 (`goes_reciente`), GeoColor valida miniaturas contra GIBS
+  (`comun/geocolor_reciente.py`) e Himawari lista el bucket de NOAA
+  (`comun/himawari_reciente.py`).
+
 ## Reglas de oro
 
 1. **No pises una corrida**: el nombre de frames incluye inicio, cantidad y px;
