@@ -469,6 +469,44 @@ class BandasYControles(unittest.TestCase):
         self.assertIsNone(campos["detalle"].enabled_when)
 
 
+class ControlesDeTiempo(unittest.TestCase):
+    """Hora y minuto como desplegables, y fecha sola donde alcanza con fecha."""
+
+    def test_la_hora_del_snapshot_es_un_desplegable(self):
+        producto = catalog.get_product("snapshot_paraguay")
+        hora = next(p for p in producto.params if p.name == "hora")
+
+        self.assertEqual(hora.kind, "hour")
+        self.assertEqual((hora.min, hora.max, hora.step), (0, 23, 1))
+
+    def test_el_minuto_sigue_siendo_una_lista_de_diez(self):
+        producto = catalog.get_product("snapshot_paraguay")
+        minuto = next(p for p in producto.params if p.name == "minuto")
+
+        self.assertEqual(minuto.kind, "select")
+        self.assertEqual(
+            [opcion.value for opcion in minuto.options],
+            [f"{m:02d}" for m in range(0, 60, 10)],
+        )
+
+    def test_las_horas_del_rango_son_desplegables(self):
+        for ident in ("goes_c13", "goes_truecolor", "goes_banda", "geocolor", "himawari"):
+            producto = catalog.get_product(ident)
+            assert producto is not None
+            for nombre in ("hora_desde", "hora_hasta"):
+                spec = next(p for p in producto.params if p.name == nombre)
+                self.assertEqual(spec.kind, "hour", f"{ident}.{nombre}")
+
+    def test_los_modelos_piden_fecha_sola(self):
+        for ident in ("precipitacion_ecmwf", "anomalia_2t", "viento_250"):
+            producto = catalog.get_product(ident)
+            assert producto is not None
+            nombres = {p.name for p in producto.params}
+            self.assertIn("fecha", nombres, ident)
+            self.assertNotIn("hora", nombres, ident)
+            self.assertNotIn("minuto", nombres, ident)
+
+
 class SnapshotDeUnCuadro(unittest.TestCase):
     """El switch de snapshot: un solo cuadro, sin serie ni animación."""
 

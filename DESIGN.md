@@ -78,8 +78,31 @@ no para decorar encabezados.
   sigue al render —alto propio, sin marco fijo ni franjas negras, imagen centrada con borde de
   1 px y marcas de registro en las esquinas—; **ficha** de cuatro celdas con filetes verticales
   (grupo, datos en disco, última fecha, origen); campos; pie con la acción.
-- **Campos**: rótulo en versalitas + control nativo. Sin cajas envolventes. Selects y fechas
-  sobre papel blanco con borde de 1 px y radio de 6 px; foco con anillo azul de 2 px.
+- **Formulario**: siempre dos tramos, sea cual sea el producto. Primero las opciones —snapshot,
+  satélite, capa, banda, paleta, encuadre, modelo, proyección, fondo, resolución, descargas,
+  animación—; después un corte con la leyenda **"Fecha y hora"** y, en el mismo orden para
+  todos, `última disponible`, fecha o ventana, hora, minuto, corrida y horizonte. El tramo de
+  tiempo es el último de la hoja.
+- **Campos**: rótulo en versalitas + control. Sin cajas envolventes. Los controles viven sobre
+  papel blanco con borde de 1 px y radio de 6 px; foco con anillo azul de 2 px.
+- **Desplegable** (`select`): control cerrado con el valor y un chevron de 5 px; la lista se abre
+  debajo, pegada al control, con sombra suave, alto máximo de 232 px y scroll propio. Opción
+  activa = lavado azul; opción elegida = marca cuadrada azul a la derecha. Mantiene el contrato
+  `combobox`/`listbox`: flechas, Home/End, Enter y Escape. Es la única superficie que se
+  superpone a la hoja, y lo hace por encima del pie pegajoso.
+- **Ventana temporal**: tarjeta siempre visible. Arriba el rótulo y el conteo de días; abajo los
+  dos extremos como botones —`1 NOV 2026 → 2 NOV 2026`, cada uno con el icono de calendario— y
+  un pie con el rango en cifras y la leyenda. Cada botón despliega **su propio** calendario en un
+  panel flotante que se cierra al elegir o al tocar afuera, y que se abre hacia arriba cuando no
+  hay lugar abajo. El comienzo manda: si se elige un día posterior al final, la ventana se achica
+  a ese día; el final nunca mueve el comienzo y su calendario deshabilita los días anteriores.
+  En fecha única hay un solo botón con el mismo comportamiento.
+- **Calendario**: grilla de 7 columnas que arranca el lunes, celdas cuadradas de ~45 px, mes con
+  navegación de 1 mes (entre el rango con datos —o doce meses atrás— y el mes en curso). Dentro
+  del rango: lavado azul; extremos: azul pleno; **fuera del rango o en el futuro: gris apagado**.
+  Los días anteriores al comienzo del rango y los futuros quedan deshabilitados; el resto se
+  puede clickear para extender el rango. Punto de 3 px cuando la fecha ya está en disco; hoy
+  lleva un filete en la celda. En modo fecha única no hay gris: todo día pasado es candidato.
 - **Interruptor**: cuadrado de 46×24 con perilla cuadrada; encendido = lavado azul + perilla
   azul. No es una píldora: la píldora está reservada a etiquetas pequeñas.
 - **Acción primaria**: azul pleno, versalitas de Archivo Narrow, radio de 12 px, ancho mínimo
@@ -89,8 +112,10 @@ no para decorar encabezados.
   según el estado final. Transición de 400 ms `cubic-bezier(.16,.84,.28,1)`.
 - **Sello de estado**: etiqueta con doble borde, versalitas muy espaciadas y rotación de
   `-2.5°`. Aparece con un golpe de 220 ms (`scale 1.18 → 1`) sólo en estados terminales.
-- **Consola**: bloque sobre tinta más oscura, mono de 11 px, `white-space: pre` con scroll
-  propio; hora en gris azulado, advertencia en ámbar, error en rojo.
+- **Consola**: bloque sobre tinta más oscura, mono de 11 px, alto fijo de 232 px con scroll
+  propio y las rutas largas envueltas (`pre-wrap`), nunca cortadas de costado; hora en gris
+  azulado, advertencia en ámbar, error en rojo. Es un bloque que no se encoge: cuando la corrida
+  suma artefactos, scrollea el panel, no la consola.
 - **Placas de salida**: imágenes y videos con pie en mono y peso en bytes.
 
 ## 5. Retícula y ritmo
@@ -120,6 +145,10 @@ Todo lo demás cambia en 120–140 ms. Con `prefers-reduced-motion` los tres se 
 - Contraste AA: texto principal 14:1 sobre la hoja y 13:1 sobre la mesa; secundarios ≥4.8:1.
 - Foco visible con anillo azul de 2 px y `outline-offset` de 2 px en todo control.
 - Cada campo tiene `label` asociada por `for`/`id` y `aria-describedby` para la ayuda.
+- El desplegable expone `role="combobox"`, `aria-expanded` y `aria-activedescendant`; el foco
+  nunca sale del control cerrado y Escape cierra la lista sin mover el formulario.
+- El calendario es una grilla de botones con `aria-label` completo ("4 de noviembre de 2026"),
+  `aria-pressed` en los extremos y `disabled` en los días futuros.
 - El progreso es `role="progressbar"` con `aria-valuenow`, `aria-valuemin` y `aria-valuemax`.
 - El interruptor es `role="switch"` con `aria-checked` y nombre accesible.
 - Selección de texto y `caret` en azul de frente; scrollbars finas por superficie.

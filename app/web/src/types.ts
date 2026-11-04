@@ -1,4 +1,10 @@
-export type ParamKind = "select" | "date-range" | "date" | "toggle" | "slider";
+export type ParamKind =
+  | "select"
+  | "date-range"
+  | "date"
+  | "toggle"
+  | "slider"
+  | "hour";
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type RunMode = "preview" | "real";
 

@@ -107,7 +107,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora_desde",
                 label="Desde (hora local UTC-3)",
-                kind="slider",
+                kind="hour",
                 default=0,
                 min=0,
                 max=23,
@@ -117,7 +117,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora_hasta",
                 label="Hasta (hora local UTC-3)",
-                kind="slider",
+                kind="hour",
                 default=24,
                 min=1,
                 max=24,
@@ -199,7 +199,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora_desde",
                 label="Desde (hora local UTC-3)",
-                kind="slider",
+                kind="hour",
                 default=0,
                 min=0,
                 max=23,
@@ -209,7 +209,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora_hasta",
                 label="Hasta (hora local UTC-3)",
-                kind="slider",
+                kind="hour",
                 default=24,
                 min=1,
                 max=24,
@@ -267,7 +267,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora_desde",
                 label="Desde (hora local UTC-3)",
-                kind="slider",
+                kind="hour",
                 default=0,
                 min=0,
                 max=23,
@@ -277,7 +277,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora_hasta",
                 label="Hasta (hora local UTC-3)",
-                kind="slider",
+                kind="hour",
                 default=24,
                 min=1,
                 max=24,
@@ -324,7 +324,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora_desde",
                 label="Desde (hora local UTC-3)",
-                kind="slider",
+                kind="hour",
                 default=0,
                 min=0,
                 max=23,
@@ -334,7 +334,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora_hasta",
                 label="Hasta (hora local UTC-3)",
-                kind="slider",
+                kind="hour",
                 default=24,
                 min=1,
                 max=24,
@@ -601,7 +601,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora",
                 label="Hora UTC",
-                kind="slider",
+                kind="hour",
                 default=15,
                 min=0,
                 max=23,
@@ -668,7 +668,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora_desde",
                 label="Desde (hora local UTC-3)",
-                kind="slider",
+                kind="hour",
                 default=0,
                 min=0,
                 max=23,
@@ -678,7 +678,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(
                 name="hora_hasta",
                 label="Hasta (hora local UTC-3)",
-                kind="slider",
+                kind="hour",
                 default=24,
                 min=1,
                 max=24,

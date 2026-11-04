@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-ParamKind = Literal["select", "date-range", "date", "toggle", "slider"]
+ParamKind = Literal["select", "date-range", "date", "toggle", "slider", "hour"]
 JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
 RunMode = Literal["preview", "real"]
 

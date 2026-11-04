@@ -1,4 +1,26 @@
-import type { DatesResponse, Params, Product, RangoFechas } from "../types";
+import type {
+  DatesResponse,
+  Params,
+  ParamSpec,
+  Product,
+  RangoFechas,
+} from "../types";
+import { Select } from "./controls/Select";
+import { FechaUnica, VentanaTemporal } from "./controls/Window";
+
+// La fecha y la hora van siempre al final del formulario y en este orden, sea
+// cual sea el producto: primero se eligen las opciones, después el momento.
+const ORDEN_TIEMPO = [
+  "ultima",
+  "ventana",
+  "fecha",
+  "hora",
+  "minuto",
+  "hora_desde",
+  "hora_hasta",
+  "corrida",
+  "horizonte",
+];
 
 interface Props {
   product: Product;
@@ -11,12 +33,32 @@ interface Props {
   onSubmit: () => void;
 }
 
+/** Las horas del rango, como desplegable: se elige de una lista, no se arrastra. */
+function opcionesHora(spec: ParamSpec) {
+  const desde = Math.ceil(spec.min ?? 0);
+  const hasta = Math.floor(spec.max ?? 23);
+  const paso = Math.max(1, Math.floor(spec.step ?? 1));
+  const salida = [];
+  for (let hora = desde; hora <= hasta; hora += paso) {
+    salida.push({
+      value: String(hora),
+      label: `${String(hora).padStart(2, "0")}:00`,
+    });
+  }
+  return salida;
+}
+
+function numeroDe(valor: Params[string], porDefecto: unknown): number {
+  const numero = Number(valor ?? porDefecto);
+  return Number.isFinite(numero) ? numero : 0;
+}
+
 function Etiqueta({
   spec,
   valor,
   htmlFor,
 }: {
-  spec: Product["params"][number];
+  spec: ParamSpec;
   valor: Params[string];
   htmlFor?: string;
 }) {
@@ -53,6 +95,10 @@ export function RecipeForm({
 }: Props) {
   const pideDescarga = product.params.some((spec) => spec.name === "descargar");
   const ultimaFecha = dates?.dates.at(0) ?? "";
+  // Solo cuando el disco tiene las fechas: con el calendario demo no se marca.
+  const disponibles = new Set(
+    dates?.source === "descubierto" ? dates.dates : [],
+  );
   // La placa muestra el render de la opcion elegida: satelite, paleta, modelo...
   const variante = product.previews.find((muestra) =>
     Object.entries(muestra.when).every(
@@ -69,6 +115,157 @@ export function RecipeForm({
           dates.dates.length === 1 ? "fecha" : "fechas"
         } en disco · la ultima es ${ultimaFecha}`
       : "sin datos locales: se descargan al generar";
+
+  // Primero las opciones del producto (satelite, capa, paleta, modelo...) y al
+  // final, siempre en el mismo orden, la fecha y la hora.
+  const opciones = product.params.filter((spec) => !ORDEN_TIEMPO.includes(spec.name));
+  const tiempo = product.params
+    .filter((spec) => ORDEN_TIEMPO.includes(spec.name))
+    .sort(
+      (uno, otro) => ORDEN_TIEMPO.indexOf(uno.name) - ORDEN_TIEMPO.indexOf(otro.name),
+    );
+
+  const campo = (spec: ParamSpec) => {
+    const valor = params[spec.name];
+    const id = `campo-${spec.name}`;
+    const ayudaId = spec.help ? `ayuda-${spec.name}` : undefined;
+    // Un control puede depender de otro: "ultima" apaga fecha/hora/minuto.
+    const habilitado = spec.enabled_when
+      ? Object.entries(spec.enabled_when).every(
+          ([clave, esperado]) => params[clave] === esperado,
+        )
+      : true;
+    const clase = habilitado ? "field" : "field field--off";
+
+    if (spec.kind === "select") {
+      return (
+        <div className={clase} key={spec.name}>
+          <Etiqueta spec={spec} valor={valor} htmlFor={id} />
+          <Select
+            id={id}
+            value={String(valor ?? spec.default)}
+            options={spec.options}
+            disabled={!habilitado}
+            describedBy={ayudaId}
+            onChange={(elegido) => onChange(spec.name, elegido)}
+          />
+          {spec.help ? (
+            <span className="field__help" id={ayudaId}>
+              {spec.help}
+            </span>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (spec.kind === "hour") {
+      return (
+        <div className={clase} key={spec.name}>
+          <Etiqueta spec={spec} valor={valor} htmlFor={id} />
+          <Select
+            id={id}
+            value={String(numeroDe(valor, spec.default))}
+            options={opcionesHora(spec)}
+            disabled={!habilitado}
+            describedBy={ayudaId}
+            onChange={(elegido) => onChange(spec.name, Number(elegido))}
+          />
+          {spec.help ? (
+            <span className="field__help" id={ayudaId}>
+              {spec.help}
+            </span>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (spec.kind === "date") {
+      return (
+        <div
+          className={habilitado ? "field field--wide" : "field field--wide field--off"}
+          key={`${product.id}-${spec.name}`}
+        >
+          <FechaUnica
+            label={spec.label}
+            value={String(valor ?? spec.default)}
+            disponibles={disponibles}
+            disabled={!habilitado}
+            onChange={(iso) => onChange(spec.name, iso)}
+          />
+          <span className="field__help">{ayudaFecha}</span>
+        </div>
+      );
+    }
+
+    if (spec.kind === "date-range") {
+      const rango = (valor ?? spec.default) as RangoFechas;
+      return (
+        <div
+          className={habilitado ? "field field--wide" : "field field--wide field--off"}
+          key={`${product.id}-${spec.name}`}
+        >
+          <VentanaTemporal
+            label={spec.label}
+            value={rango}
+            disponibles={disponibles}
+            disabled={!habilitado}
+            onChange={(siguiente) => onChange(spec.name, siguiente)}
+          />
+          <span className="field__help">{ayudaFecha}</span>
+        </div>
+      );
+    }
+
+    if (spec.kind === "toggle") {
+      return (
+        <div
+          className={
+            habilitado ? "field field--toggle" : "field field--toggle field--off"
+          }
+          key={spec.name}
+        >
+          <span className="field__label">
+            {spec.label}
+            {spec.help ? <span className="field__help">{spec.help}</span> : null}
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={Boolean(valor)}
+            aria-label={spec.label}
+            className="switch"
+            disabled={!habilitado}
+            onClick={() => onChange(spec.name, !valor)}
+          >
+            <span />
+          </button>
+        </div>
+      );
+    }
+
+    const numero = Number(valor ?? spec.default);
+    return (
+      <div className={clase} key={spec.name}>
+        <Etiqueta spec={spec} valor={valor} htmlFor={id} />
+        <input
+          id={id}
+          type="range"
+          value={numero}
+          min={spec.min ?? 0}
+          max={spec.max ?? 100}
+          step={spec.step ?? 1}
+          aria-describedby={ayudaId}
+          disabled={!habilitado}
+          onChange={(e) => onChange(spec.name, Number(e.target.value))}
+        />
+        {spec.help ? (
+          <span className="field__help" id={ayudaId}>
+            {spec.help}
+          </span>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <form
@@ -132,146 +329,15 @@ export function RecipeForm({
 
       <div className="sheet__body">
         <div className="fields">
-          {product.params.map((spec) => {
-            const valor = params[spec.name];
-            const id = `campo-${spec.name}`;
-            const ayudaId = spec.help ? `ayuda-${spec.name}` : undefined;
-            // Un control puede depender de otro: "ultima" apaga fecha/hora/minuto.
-            const habilitado = spec.enabled_when
-              ? Object.entries(spec.enabled_when).every(
-                  ([clave, esperado]) => params[clave] === esperado,
-                )
-              : true;
-            const clase = habilitado ? "field" : "field field--off";
+          {opciones.map(campo)}
 
-            if (spec.kind === "select") {
-              return (
-                <div className={clase} key={spec.name}>
-                  <Etiqueta spec={spec} valor={valor} htmlFor={id} />
-                  <select
-                    id={id}
-                    value={String(valor ?? spec.default)}
-                    aria-describedby={ayudaId}
-                    disabled={!habilitado}
-                    onChange={(e) => onChange(spec.name, e.target.value)}
-                  >
-                    {spec.options.map((opcion) => (
-                      <option key={opcion.value} value={opcion.value}>
-                        {opcion.label}
-                      </option>
-                    ))}
-                  </select>
-                  {spec.help ? (
-                    <span className="field__help" id={ayudaId}>
-                      {spec.help}
-                    </span>
-                  ) : null}
-                </div>
-              );
-            }
+          {tiempo.length > 0 ? (
+            <p className="fields__sec" key="sec-tiempo">
+              <span>Fecha y hora</span>
+            </p>
+          ) : null}
 
-            if (spec.kind === "date") {
-              return (
-                <div className={clase} key={spec.name}>
-                  <Etiqueta spec={spec} valor={valor} htmlFor={id} />
-                  <input
-                    id={id}
-                    type="date"
-                    value={String(valor ?? spec.default)}
-                    disabled={!habilitado}
-                    onChange={(e) => onChange(spec.name, e.target.value)}
-                  />
-                  <span className="field__help">{ayudaFecha}</span>
-                </div>
-              );
-            }
-
-            if (spec.kind === "date-range") {
-              const rango = (valor ?? spec.default) as RangoFechas;
-              return (
-                <div
-                  className={habilitado ? "field field--wide" : "field field--wide field--off"}
-                  key={spec.name}
-                >
-                  <Etiqueta spec={spec} valor={valor} />
-                  <div className="field__range">
-                    <input
-                      type="date"
-                      value={rango.start}
-                      aria-label={`${spec.label}: desde`}
-                      disabled={!habilitado}
-                      onChange={(e) =>
-                        onChange(spec.name, { ...rango, start: e.target.value })
-                      }
-                    />
-                    <span>hasta</span>
-                    <input
-                      type="date"
-                      value={rango.end}
-                      aria-label={`${spec.label}: hasta`}
-                      disabled={!habilitado}
-                      onChange={(e) =>
-                        onChange(spec.name, { ...rango, end: e.target.value })
-                      }
-                    />
-                  </div>
-                  <span className="field__help">{ayudaFecha}</span>
-                </div>
-              );
-            }
-
-            if (spec.kind === "toggle") {
-              return (
-                <div
-                  className={
-                    habilitado ? "field field--toggle" : "field field--toggle field--off"
-                  }
-                  key={spec.name}
-                >
-                  <span className="field__label">
-                    {spec.label}
-                    {spec.help ? (
-                      <span className="field__help">{spec.help}</span>
-                    ) : null}
-                  </span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={Boolean(valor)}
-                    aria-label={spec.label}
-                    className="switch"
-                    disabled={!habilitado}
-                    onClick={() => onChange(spec.name, !valor)}
-                  >
-                    <span />
-                  </button>
-                </div>
-              );
-            }
-
-            const numero = Number(valor ?? spec.default);
-            return (
-              <div className={clase} key={spec.name}>
-                <Etiqueta spec={spec} valor={valor} htmlFor={id} />
-                <input
-                  id={id}
-                  type="range"
-                  value={numero}
-                  min={spec.min ?? 0}
-                  max={spec.max ?? 100}
-                  step={spec.step ?? 1}
-                  aria-describedby={ayudaId}
-                  disabled={!habilitado}
-                  onChange={(e) => onChange(spec.name, Number(e.target.value))}
-                />
-                {spec.help ? (
-                  <span className="field__help" id={ayudaId}>
-                    {spec.help}
-                  </span>
-                ) : null}
-              </div>
-            );
-          })}
+          {tiempo.map(campo)}
         </div>
       </div>
 
