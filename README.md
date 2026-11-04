@@ -193,7 +193,8 @@ dependen del producto:
 - **Solo Paraguay**: encuadra la captura o la animación en las coordenadas del país, con
   el **margen** que elijas (0-20 %). GeoColor lo resuelve como mapa plano cuadrado; los
   GOES y los modelos, como un zoom del globo; los pósteres de una banda o RGB, con el
-  contorno del país dibujado. Himawari, MUR y follaje no la tienen.
+  contorno del país dibujado y en **captura limpia**: sin títulos, créditos, halo ni
+  sombreado de borde. Himawari, MUR y follaje no la tienen.
 - **Últimos datos**: ignora la ventana de fechas y resuelve los N cuadros más nuevos
   publicados. En los GOES la cadencia es de 10 min y la lista es la misma para todos
   (10, 12, 24, 36, 48, 60). GeoColor se resuelve contra GIBS (que contesta una imagen
