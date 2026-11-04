@@ -768,6 +768,7 @@ _VARIANTES = {
     "anomalia_2t": ("modelo",),
     "viento_250": ("modelo",),
     "follaje": ("proyeccion",),
+    "snapshot_paraguay": ("capa",),
 }
 
 
