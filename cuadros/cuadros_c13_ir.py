@@ -17,6 +17,7 @@ siguiente.
 
 Uso (desde la raíz del proyecto):
 
+    .venv\\Scripts\\python.exe cuadros\\cuadros_c13_ir.py --ultimos 24
     .venv\\Scripts\\python.exe cuadros\\cuadros_c13_ir.py --desde 2026-10-19T00:00 --n 388
     .venv\\Scripts\\python.exe cuadros\\cuadros_c13_ir.py --solo-poster --desde 2026-10-21T16:00
     .venv\\Scripts\\python.exe cuadros\\cuadros_c13_ir.py --help   # no toca la red
@@ -40,6 +41,7 @@ sys.path.insert(0, str(RAIZ / "descargar"))
 sys.path.insert(0, str(RAIZ / "prototipos"))
 from goes_lectura import PATRON, cargar  # noqa: E402
 from goes_descarga import clave_de  # noqa: E402
+from goes_reciente import ultimos_de  # noqa: E402
 from poster_goes import PALETTES  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
 from estilo import BG, TXT, TXT_DIM  # noqa: E402
@@ -49,8 +51,8 @@ TITULO = "G19 GOES-EAST · BRIGHTNESS TEMPERATURE · BAND 13 (10.3 µm)"
 BORDE_SA = str(RAIZ / "datos" / "paraguay_gadm.json")
 ESPESOR_BORDE_PY = 0.9
 
-DESDE = "2026-10-19T00:00"
-N = 388
+DESDE = None                       # None = los últimos N cuadros del disco
+N = 24
 PASO_MIN = 10
 PX = 2712
 DPI = 140
@@ -295,6 +297,12 @@ def _sello_render(args) -> str:
     return hashlib.sha256(json.dumps(datos, sort_keys=True).encode()).hexdigest()[:16]
 
 
+def _instantes(sl_map: dict) -> list[datetime]:
+    """Todos los instantes con `.nc` local, en orden cronológico."""
+    return sorted(datetime.combine(d, datetime.min.time()).replace(hour=h, minute=m)
+                  for (d, h, m) in sl_map)
+
+
 def _slots(datos: Path, t0: datetime, n: int, paso: int) -> list[datetime]:
     """Instantes con `.nc` local, en orden (la numeración de los cuadros es corrida)."""
     sl_map = slot_map(datos)
@@ -313,8 +321,12 @@ def main(argv=None) -> int:
                     "formato de póster de los productos ECMWF.")
     ap.add_argument("--sat", default=SAT,
                     help=f"satélite, p. ej. G16 o G19 (por defecto {SAT})")
-    ap.add_argument("--desde", default=DESDE, help="primer cuadro, UTC")
+    ap.add_argument("--desde", default=DESDE,
+                    help="primer cuadro, UTC (por defecto, los últimos N del disco)")
     ap.add_argument("--n", type=int, default=N, help="cantidad de cuadros")
+    ap.add_argument("--ultimos", type=int, default=0, metavar="N",
+                    help="renderiza los N cuadros más nuevos con .nc en disco "
+                         "(ignora --desde)")
     ap.add_argument("--paso", type=int, default=PASO_MIN, help="minutos entre cuadros")
     ap.add_argument("--px", type=int, default=PX, help="lado del cuadro en píxeles")
     ap.add_argument("--dpi", type=int, default=DPI, help="dpi del render")
@@ -347,7 +359,6 @@ def main(argv=None) -> int:
     if not (0.0 < args.radio <= 90.0):
         raise SystemExit(f"--radio debe estar en (0, 90] (recibí {args.radio}).")
 
-    t0 = datetime.fromisoformat(args.desde)
     datos = Path(args.datos) if args.datos else carpeta_datos(args.sat)
     if not datos.exists():
         raise SystemExit(f"No existe {datos}. Bajá los .nc con "
@@ -356,7 +367,15 @@ def main(argv=None) -> int:
     if not sl_map:
         raise SystemExit(f"No hay .nc en {datos}.")
 
-    slots = _slots(datos, t0, args.n, args.paso)
+    if args.ultimos:
+        slots = ultimos_de(_instantes(sl_map), args.ultimos)
+    else:
+        # Sin --desde también son "los últimos N": el default deja de mirar una
+        # fecha vieja y toma lo que ya está en disco.
+        desde = (datetime.fromisoformat(args.desde) if args.desde
+                 else max(_instantes(sl_map))
+                 - timedelta(minutes=args.paso * (args.n - 1)))
+        slots = _slots(datos, desde, args.n, args.paso)
     if not slots:
         raise SystemExit("Ninguno de los slots pedidos tiene .nc local.")
 

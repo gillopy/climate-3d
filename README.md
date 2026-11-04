@@ -314,15 +314,15 @@ sin `xarray`.
 ## Primeros pasos
 
 ```powershell
-# 1) Bajar un dataset (GOES-East C13, 3 días)
-.venv\Scripts\python.exe descargar\descargar_goes.py --sat G19 --banda C13 --desde 2026-10-02 --hasta 2026-10-05
+# 1) Bajar los cuadros más nuevos (o sin flags: las últimas 24 h UTC)
+.venv\Scripts\python.exe descargar\descargar_goes.py --ultimos 10
 
 # 2) Un póster fijo de disco completo
 .venv\Scripts\python.exe prototipos\poster_goes.py --paleta clean_ir
 
-# 3) Renderizar los cuadros de la animación (globo centrado en Paraguay, 432 a 720 px)
-.venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 `
-    --n 432 --px 720 --globo --centro -73 -18 --paleta clean_ir
+# 3) Renderizar esos cuadros de la animación (globo centrado en Paraguay, 720 px)
+.venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --ultimos 10 `
+    --px 720 --globo --centro -73 -18 --paleta clean_ir
 
 # 4) Armar el MP4
 .venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_G19_2026-10-02T0000_432f_720px" --fps 12.5

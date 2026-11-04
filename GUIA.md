@@ -43,10 +43,17 @@ La clave es la carpeta destino: `goes_<banda>_<sat>` (ej. `goes_c13_g19`).
 ## 2. Descargar el dataset
 
 `descargar/descargar_goes.py` baja los `.nc` desde el bucket público de NOAA S3 y **saltea los
-que ya tenés**.
+que ya tenés**. Sin flags baja las **últimas 24 h UTC**, hasta el último cuadro ya publicado
+(el satélite publica con ~20 min de retraso).
 
 ```powershell
-# GOES-East C13 (infrarrojo) del 2 al 5 de octubre de 2026 (≈ 432 cuadros, ~10 GB)
+# Los 10 cuadros más nuevos (≈ 5 GB): el camino corto para "quiero lo de ahora"
+.venv\Scripts\python.exe descargar\descargar_goes.py --ultimos 10
+
+# Últimas 24 h (144 cuadros, ~3,5 GB) — es el default
+.venv\Scripts\python.exe descargar\descargar_goes.py
+
+# Un rango explícito: GOES-East C13 del 2 al 5 de octubre de 2026 (≈ 432 cuadros, ~10 GB)
 .venv\Scripts\python.exe descargar\descargar_goes.py --sat G19 --banda C13 --desde 2026-10-02 --hasta 2026-10-05
 
 # Ver la ayuda (NO toca la red)
@@ -57,12 +64,15 @@ que ya tenés**.
 |---|---|
 | `--sat` | Satélite (`G19`, `G18`, …) |
 | `--banda` | Banda (`C13`, `C04`, …) |
-| `--desde` / `--hasta` | Rango UTC (`AAAA-MM-DD` o `AAAA-MM-DDTHH:MM`) |
+| `--ultimos N` | Los `N` cuadros más nuevos publicados; ignora `--desde`/`--hasta` |
+| `--desde` / `--hasta` | Rango UTC (`AAAA-MM-DD` o `AAAA-MM-DDTHH:MM`). Si falta uno, se completa con 24 h o con el último publicado |
 | `--paso` | Minutos entre cuadros (por defecto 10; la cadencia real de ABI) |
 | `--out` | Carpeta destino (por defecto, `goes_<banda>_<sat>`) |
 
+- **Todo en UTC.** El dataset crudo viene en UTC y las horas que elegís también lo son;
+  Paraguay es UTC-3 (12 UTC = 09:00 local).
 - La cadencia real de ABI es de **10 minutos** (modo 6). 24 h = 144 cuadros; 3 días = 432.
-- Es una descarga larga (~10 GB) y **reanudable**: si la cortás, volvé a correrla y sigue.
+- Es una descarga larga y **reanudable**: si la cortás, volvé a correrla y sigue.
 
 ---
 
@@ -175,14 +185,14 @@ otra ventana o resolución.
 ## 7. Chuleta
 
 ```powershell
-# 1) Descargar (GOES-East C13, 3 días)
-.venv\Scripts\python.exe descargar\descargar_goes.py --sat G19 --banda C13 --desde 2026-10-02 --hasta 2026-10-05
+# 1) Descargar los 10 cuadros más nuevos (o sin flags: las últimas 24 h)
+.venv\Scripts\python.exe descargar\descargar_goes.py --ultimos 10
 
 # 2) Mirar un cuadro fijo
 .venv\Scripts\python.exe prototipos\poster_goes.py --paleta clean_ir
 
-# 3) Renderizar 432 cuadros (globo Paraguay, 720 px)
-.venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --desde 2026-10-02 --n 432 --px 720 --globo --centro -73 -18 --paleta clean_ir
+# 3) Renderizar esos 10 cuadros (globo Paraguay, 720 px)
+.venv\Scripts\python.exe cuadros\cuadros_goes.py --sat G19 --banda C13 --ultimos 10 --px 720 --globo --centro -73 -18 --paleta clean_ir
 
 # 4) Armar el MP4
 .venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_G19_2026-10-02T0000_432f_720px"

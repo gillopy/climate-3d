@@ -39,11 +39,11 @@ function dosDigitos(numero: number) {
   return String(numero).padStart(2, "0");
 }
 
-/** Fecha de hoy en el huso de la máquina, que es el que usa el input local. */
-export function hoyLocal(): string {
+/** Fecha de hoy en UTC: es el huso de todo el pipeline (Paraguay es UTC-3). */
+export function hoyUTC(): string {
   const ahora = new Date();
-  return `${ahora.getFullYear()}-${dosDigitos(ahora.getMonth() + 1)}-${dosDigitos(
-    ahora.getDate(),
+  return `${ahora.getUTCFullYear()}-${dosDigitos(ahora.getUTCMonth() + 1)}-${dosDigitos(
+    ahora.getUTCDate(),
   )}`;
 }
 
@@ -121,7 +121,7 @@ export function Calendario({
   disabled,
   onElegir,
 }: Props) {
-  const hoy = hoyLocal();
+  const hoy = hoyUTC();
   const tope = mesDe(hoy) as string;
   // Se navega entre el primer dato (o un año atrás) y el mes en curso.
   const piso = useMemo(() => {

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import re
+import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -77,7 +78,7 @@ def _a_fecha(valor: Any, por_defecto: date) -> date:
 
 def _rango(params: dict[str, Any]) -> tuple[date, date]:
     """Rango elegido por el usuario, ordenado y acotado a 60 dias."""
-    hoy = date.today()
+    hoy = datetime.now(timezone.utc).date()
     bruto = params.get("ventana") or params.get("fecha") or {}
     if isinstance(bruto, str):
         unico = _a_fecha(bruto, hoy)
@@ -111,6 +112,50 @@ def _fps(params: dict[str, Any]) -> str:
 
 def _bool(params: dict[str, Any], clave: str) -> bool:
     return bool(params.get(clave, False))
+
+
+#: Cuántos cuadros ofrece "Últimos datos". Es la lista cerrada de la UI.
+CUADROS_ULTIMOS = (10, 12, 24, 36, 48, 60)
+
+
+def _ultimos(params: dict[str, Any]) -> int:
+    """Cuántos cuadros recientes se pidieron (0 = usar la ventana de fechas)."""
+    if not _bool(params, "ultimos") or _snapshot(params):
+        return 0
+    try:
+        n = int(params.get("ultimos_n", 24))
+    except (TypeError, ValueError):
+        return 24
+    # La UI manda un valor de la lista; igual se acota al más cercano.
+    return min(CUADROS_ULTIMOS, key=lambda valor: abs(valor - n))
+
+
+def _ultimos_goes(sat: str, banda: str, n: int) -> list[datetime]:
+    """Los `n` slots más nuevos publicados en NOAA S3 (una consulta por hora).
+
+    Si no hay red, se cae a los últimos `n` que ya estén en disco: el job puede
+    renderizar y la descarga avisa con su error en el log. Sin red y sin disco no
+    hay nada que mostrar, y el pedido falla con un mensaje claro.
+    """
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from goes_reciente import ultimos_slots
+
+    try:
+        slots = ultimos_slots(sat, banda, n)
+    except Exception:  # noqa: BLE001 - offline: molesta más un job muerto que un fallback
+        slots = []
+    if slots:
+        return slots
+
+    locales = _slots_goes(sat, banda)
+    if locales:
+        return locales[-n:]
+    raise ValueError(
+        f"No hay datos de {sat} {banda}: NOAA S3 no respondió y el disco está vacío. "
+        "Revisá la conexión y volvé a intentar."
+    )
 
 
 def _snapshot(params: dict[str, Any]) -> bool:
@@ -276,8 +321,15 @@ def planear(product_id: str, params: dict[str, Any], work: Path) -> Plan:
     if constructor is None:
         raise ValueError(f"Producto sin receta real: {product_id}")
     plan = constructor(params, work)
+    # Cada "Generar" vuelve a consultar el origen: los descargadores son
+    # reanudables (saltean lo que ya está en disco) y un fallo de red no es
+    # fatal (jobs.py sigue con lo cacheado y lo avisa en el log).
+    if plan.descarga is not None and not any(p.kind == "download" for p in plan.pasos):
+        plan.pasos.insert(0, plan.descarga)
+    # "Últimos datos" siempre es una serie: no depende del switch "Animar".
+    quiere_animar = _bool(params, "animar") or _ultimos(params) > 0
     if (
-        _bool(params, "animar")
+        quiere_animar
         and not _snapshot(params)   # un snapshot nunca arma video
         and not any(p.kind == "animate" for p in plan.pasos)
     ):
@@ -366,10 +418,45 @@ def _slot_cenital(dia: date, lon: float) -> datetime:
 # cadencia, media hora cubre el horario sin caer en la noche.
 _TOLERANCIA_CENIT = timedelta(minutes=30)
 
-# Los horarios se eligen en hora local (UTC-3), que es como se leen los posters.
-_DESFASE_LOCAL = timedelta(hours=3)
+# Los horarios se eligen en **UTC**, igual que el dataset crudo y que la hora de
+# los cuadros. Paraguay es UTC-3: la etiqueta de la UI muestra el equivalente.
 _PASO_SLOT = 10  # minutos entre cuadros: la cadencia real del ABI
 _MAX_CUADROS = 288  # 2 dias a 10 min: tope para no disparar 10 GB sin querer
+# El ABI (y GIBS) publican con retraso: no se piden slots que todavía no salieron.
+_MARGEN_PUBLICACION = timedelta(minutes=20)
+
+
+def _piso_slot(t: datetime, paso: int = _PASO_SLOT) -> datetime:
+    return t.replace(second=0, microsecond=0, minute=t.minute - t.minute % paso)
+
+
+#: Hora UTC que propone el formulario para un snapshot (mediodía en Paraguay).
+_HORA_SNAPSHOT = 15
+
+
+def _slot_pedido(params: dict[str, Any], dia: date) -> datetime:
+    """Instante exacto del snapshot: la hora y el minuto que eligió el usuario.
+
+    Es UTC, como todo el resto. El minuto se redondea al múltiplo de 10 (la
+    cadencia del ABI) y un cuadro que todavía no se publicó se rechaza con un
+    mensaje claro en vez de bajar un 404.
+    """
+    try:
+        hora = max(0, min(23, int(params.get("hora", _HORA_SNAPSHOT) or 0)))
+        minuto = int(params.get("minuto", 0) or 0)
+    except (TypeError, ValueError):
+        hora, minuto = _HORA_SNAPSHOT, 0
+    minuto = max(0, min(59, minuto)) // _PASO_SLOT * _PASO_SLOT
+    slot = datetime.combine(dia, time(hora, minuto))
+
+    tope = _piso_slot(datetime.now(timezone.utc).replace(tzinfo=None) - _MARGEN_PUBLICACION)
+    if slot > tope:
+        raise ValueError(
+            f"El cuadro {slot:%Y-%m-%d %H:%M} UTC todavía no está publicado: el "
+            f"satélite publica con ~{int(_MARGEN_PUBLICACION.total_seconds() // 60)} min "
+            "de retraso. Elegí una hora anterior."
+        )
+    return slot
 
 
 def _ventana_animacion(
@@ -378,28 +465,26 @@ def _ventana_animacion(
     hora_desde: Any,
     hora_hasta: Any,
 ) -> tuple[datetime, datetime]:
-    """Rango UTC que cubre las horas locales elegidas, en el primer y ultimo dia."""
+    """Rango UTC que cubre las horas UTC elegidas, en el primer y último día."""
     h0 = max(0, min(23, int(hora_desde)))
     h1 = max(h0 + 1, min(24, int(hora_hasta)))
-    desde = datetime.combine(inicio, time(h0)) + _DESFASE_LOCAL
+    desde = datetime.combine(inicio, time(h0))
     if h1 >= 24:
-        # Cerrar el dia: medianoche local del dia siguiente.
-        hasta = datetime.combine(fin + timedelta(days=1), time(0)) + _DESFASE_LOCAL
+        # Cerrar el día: medianoche UTC del día siguiente.
+        hasta = datetime.combine(fin + timedelta(days=1), time(0))
     else:
-        hasta = datetime.combine(fin, time(h1)) + _DESFASE_LOCAL
+        hasta = datetime.combine(fin, time(h1))
 
-    # El ABI publica con retraso: pedir horas que todavia no existen solo llena
-    # el log de 404. Se recorta al ultimo multiplo de 10 ya cumplido.
-    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
-    if hasta > ahora:
-        tope = ahora.replace(second=0, microsecond=0)
-        tope += timedelta(minutes=(10 - tope.minute % 10) % 10)
+    # El ABI publica con retraso: pedir horas que todavía no existen sólo llena
+    # el log de 404. Se recorta al último múltiplo de 10 ya publicado.
+    tope = _piso_slot(datetime.now(timezone.utc).replace(tzinfo=None) - _MARGEN_PUBLICACION)
+    if hasta > tope:
         hasta = max(desde, tope)
 
     if hasta <= desde:
         raise ValueError(
-            "Esa ventana todavia no tiene datos: el satelite publica con retraso. "
-            "Proba con una fecha anterior a hoy."
+            "Esa ventana todavía no tiene datos: el satélite publica con ~20 min "
+            "de retraso. Probá con una fecha anterior a hoy."
         )
     return desde, hasta
 
@@ -446,29 +531,39 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
     sat = str(params.get("satelite", "G19"))
     banda = "C13"
     px = _px(params)
-    forzar = _bool(params, "descargar")
 
     from .catalog import data_root  # import local: evita el ciclo
 
     datos_dir = data_root() / f"goes_c13_{sat.lower()}"
-    disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
+    n_ultimos = _ultimos(params)
 
-    lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
-    cenital = _slot_cenital(inicio, lon_sub)
-    ventana = _ventana_animacion(
-        inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
-    )
-    desde, n, paso, falta = _plan_slots(
-        set(disponibles),
-        cenital,
-        _bool(params, "animar") and not _snapshot(params),
-        ventana,
-    )
+    if n_ultimos:
+        # "Últimos datos": la ventana de fechas no manda. Se resuelve el tramo
+        # más nuevo publicado y siempre se baja.
+        disponibles_slots = _ultimos_goes(sat, banda, n_ultimos)
+        desde, n, paso, falta = disponibles_slots[0], len(disponibles_slots), _PASO_SLOT, True
+    elif _snapshot(params):
+        # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
+        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+    else:
+        disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
+        lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+        cenital = _slot_cenital(inicio, lon_sub)
+        ventana = _ventana_animacion(
+            inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+        )
+        desde, n, paso, falta = _plan_slots(
+            set(disponibles),
+            cenital,
+            _bool(params, "animar") and not _snapshot(params),
+            ventana,
+        )
 
     # `descargar_goes.py` recorre [desde, hasta) en pasos de `paso` minutos.
     descarga = Step(
         kind="download",
-        label=f"bajando {banda} de {sat} ({n} slot(s))",
+        label=(f"bajando los últimos {n} slots de {banda} ({sat})"
+               if n_ultimos else f"bajando {banda} de {sat} ({n} slot(s))"),
         script="descargar/descargar_goes.py",
         args=[
             "--sat", sat,
@@ -514,7 +609,7 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
     )
 
     # Si el slot del cenit no esta en disco, se baja: no se renderiza la noche.
-    pasos = [descarga, render_step] if (forzar or falta) else [render_step]
+    pasos = [descarga, render_step]  # el origen se consulta en cada corrida
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -546,7 +641,7 @@ def _mur(params: dict[str, Any], work: Path) -> Plan:
         args=[*comunes, "--out", str(work)],
         expected=n,
     )
-    pasos = [descarga, render_step] if _bool(params, "descargar") else [render_step]
+    pasos = [descarga, render_step]  # el origen se consulta siempre
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -629,12 +724,9 @@ def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
         ],
         expected=cuadros + 1,  # el póster de cierre imprime una línea más
     )
-    pasos = [descarga, render_step] if (
-        snap  # el póster lee los crudos 001/002 del pedido recortado
-        or _bool(params, "descargar")
-        or not _crudos_existen(producto, modelo, inicio.isoformat(), corrida,
-                               horizonte, paso_horas)
-    ) else [render_step]
+    # El origen se consulta en cada corrida; el snapshot igual necesita sus
+    # propios crudos (001/002 del pedido recortado).
+    pasos = [descarga, render_step]
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -770,12 +862,9 @@ def _viento_250(params: dict[str, Any], work: Path) -> Plan:
         ],
         expected=cuadros + 1,  # el póster de cierre imprime una línea más
     )
-    pasos = [descarga, render_step] if (
-        snap  # el póster lee los crudos 001/002 del pedido recortado
-        or _bool(params, "descargar")
-        or not _crudos_viento_existen(modelo, inicio.isoformat(), corrida,
-                                      horizonte, paso_horas)
-    ) else [render_step]
+    # El origen se consulta en cada corrida; el snapshot igual necesita sus
+    # propios crudos (001/002 del pedido recortado).
+    pasos = [descarga, render_step]
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -808,7 +897,7 @@ def _follaje(params: dict[str, Any], work: Path) -> Plan:
         ],
         expected=n,
     )
-    pasos = [descarga, render_step] if _bool(params, "descargar") else [render_step]
+    pasos = [descarga, render_step]  # el origen se consulta siempre
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -817,19 +906,21 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
     sat = str(params.get("satelite", "G19"))
     px = _px(params, 2400)
-    forzar = _bool(params, "descargar")
     animar = _bool(params, "animar") and not _snapshot(params)
     disco = str(params.get("encuadre", "globo")) == "disco"
 
     # C02 es la banda pesada (~410 MB): si esta, el slot existe.
-    disponibles = [s for s in _slots_goes(sat, "C02") if inicio <= s.date() <= fin]
-
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
-    cenital = _slot_cenital(inicio, lon_sub)
-    ventana = _ventana_animacion(
-        inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
-    )
-    desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
+    if _snapshot(params):
+        # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
+        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+    else:
+        disponibles = [s for s in _slots_goes(sat, "C02") if inicio <= s.date() <= fin]
+        cenital = _slot_cenital(inicio, lon_sub)
+        ventana = _ventana_animacion(
+            inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+        )
+        desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
 
     slot = desde.strftime("%Y-%m-%dT%H:%M")
     descarga = Step(
@@ -906,7 +997,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                 expected=1,
             )
 
-    pasos = [descarga, render_step] if (forzar or falta) else [render_step]
+    pasos = [descarga, render_step]  # el origen se consulta en cada corrida
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -951,7 +1042,7 @@ def _mur_realista(params: dict[str, Any], work: Path) -> Plan:
     )
     # Sin crudos en la cache no hay poster: la descarga no es opcional.
     hay_crudos = any(work.rglob("crudo_*.jpg"))
-    pasos = [descarga, render_step] if (_bool(params, "descargar") or not hay_crudos) else [render_step]
+    pasos = [descarga, render_step]  # el origen se consulta siempre
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -989,15 +1080,18 @@ def _slots_himawari() -> list[datetime]:
 def _himawari(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
     px = _px(params, 1400)
-    forzar = _bool(params, "descargar")
     animar = _bool(params, "animar") and not _snapshot(params)
 
-    disponibles = [s for s in _slots_himawari() if inicio <= s.date() <= fin]
-    cenital = _slot_cenital(inicio, _LON_SUBSAT["H09"])
-    ventana = _ventana_animacion(
-        inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
-    )
-    desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
+    if _snapshot(params):
+        # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
+        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+    else:
+        disponibles = [s for s in _slots_himawari() if inicio <= s.date() <= fin]
+        cenital = _slot_cenital(inicio, _LON_SUBSAT["H09"])
+        ventana = _ventana_animacion(
+            inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+        )
+        desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
 
     descarga = Step(
         kind="download",
@@ -1034,7 +1128,7 @@ def _himawari(params: dict[str, Any], work: Path) -> Plan:
         expected=n,
     )
 
-    pasos = [descarga, render_step] if (forzar or falta) else [render_step]
+    pasos = [descarga, render_step]  # el origen se consulta en cada corrida
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -1045,20 +1139,30 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
     sat = str(params.get("satelite", "G19"))
     banda = str(params.get("banda", "C13"))
     px = _px(params, 2712)
-    forzar = _bool(params, "descargar")
-    animar = _bool(params, "animar") and not _snapshot(params)
+    n_ultimos = _ultimos(params)
+    animar = bool(n_ultimos) or (_bool(params, "animar") and not _snapshot(params))
 
-    disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
+    if n_ultimos:
+        # "Últimos datos": la ventana de fechas no manda y siempre se baja.
+        slots_nuevos = _ultimos_goes(sat, banda, n_ultimos)
+        desde, n, paso, falta = slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True
+    elif _snapshot(params):
+        # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
+        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+    else:
+        disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
+        lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+        cenital = _slot_cenital(inicio, lon_sub)
+        ventana = _ventana_animacion(
+            inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+        )
+        desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
+
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
-    cenital = _slot_cenital(inicio, lon_sub)
-    ventana = _ventana_animacion(
-        inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
-    )
-    desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
-
     descarga = Step(
         kind="download",
-        label=f"bajando {banda} de {sat} ({n} slot(s))",
+        label=(f"bajando los últimos {n} slots de {banda} ({sat})"
+               if n_ultimos else f"bajando {banda} de {sat} ({n} slot(s))"),
         script="descargar/descargar_goes.py",
         args=[
             "--sat", sat,
@@ -1099,7 +1203,7 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
             expected=1,
         )
 
-    pasos = [descarga, render_step] if (forzar or falta) else [render_step]
+    pasos = [descarga, render_step]  # el origen se consulta en cada corrida
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -1113,12 +1217,16 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
 
     cenital = _slot_cenital(inicio, lon_sub)
-    ventana = _ventana_animacion(
-        inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
-    )
-    # GeoColor no tiene .nc por slot: el estado se mira en la carpeta de cuadros
-    # de la cache, que el descargador arma con el mismo nombre que el render.
-    desde, n, paso, _ = _plan_slots(set(), cenital, animar, ventana)
+    if _snapshot(params):
+        # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
+        desde, n, paso = _slot_pedido(params, fin), 1, _PASO_SLOT
+    else:
+        ventana = _ventana_animacion(
+            inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+        )
+        # GeoColor no tiene .nc por slot: el estado se mira en la carpeta de cuadros
+        # de la cache, que el descargador arma con el mismo nombre que el render.
+        desde, n, paso, _ = _plan_slots(set(), cenital, animar, ventana)
 
     etiqueta = f"frames_geocolor_globo_{sat}_{desde:%Y-%m-%dT%H%M}_{n}f_{px}px"
     carpeta = work / etiqueta
@@ -1158,7 +1266,7 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
         expected=n,
     )
 
-    pasos = [descarga, render_step] if (_bool(params, "descargar") or falta) else [render_step]
+    pasos = [descarga, render_step]  # el origen se consulta siempre
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -1202,7 +1310,7 @@ def _truecolor_viirs(params: dict[str, Any], work: Path) -> Plan:
     carpeta = work / etiqueta
     falta = not (carpeta.is_dir() and next(carpeta.glob("crudo_*.jpg"), None) is not None)
 
-    pasos = [descarga, render_step] if (_bool(params, "descargar") or falta) else [render_step]
+    pasos = [descarga, render_step]  # el origen se consulta siempre
     return Plan(pasos=pasos, descarga=descarga)
 
 

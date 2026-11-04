@@ -12,6 +12,8 @@ import { FechaUnica, VentanaTemporal } from "./controls/Window";
 // cual sea el producto: primero se eligen las opciones, después el momento.
 const ORDEN_TIEMPO = [
   "ultima",
+  "ultimos",
+  "ultimos_n",
   "ventana",
   "fecha",
   "hora",
@@ -333,7 +335,7 @@ export function RecipeForm({
 
           {tiempo.length > 0 ? (
             <p className="fields__sec" key="sec-tiempo">
-              <span>Fecha y hora</span>
+              <span>Fecha y hora (UTC)</span>
             </p>
           ) : null}
 

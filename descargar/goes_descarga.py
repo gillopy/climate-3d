@@ -10,7 +10,6 @@ La lectura y el recorte del archivo quedan en `comun/goes_lectura.py` (sin red).
 """
 from __future__ import annotations
 
-import re
 import sys
 import urllib.request
 from datetime import datetime
@@ -21,6 +20,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 
 from goes_lectura import PATRON, ruta_local  # noqa: E402
+from goes_reciente import listar_hora  # noqa: E402
 
 # Caché de listados S3 por (satélite, hora): una sola consulta por hora.
 _POR_HORA: dict = {}
@@ -31,11 +31,7 @@ def claves_de_la_hora(sat: str, t) -> list[str]:
     hora = t.replace(minute=0, second=0, microsecond=0)
     clave_cache = (sat, hora)
     if clave_cache not in _POR_HORA:
-        pref = (f"ABI-L2-CMIPF/{hora.year}/{int(hora.strftime('%j')):03d}/"
-                f"{hora.hour:02d}/")
-        url = f"https://noaa-goes{sat[1:]}.s3.amazonaws.com/?list-type=2&prefix={pref}"
-        xml = urllib.request.urlopen(url, timeout=120).read().decode()
-        _POR_HORA[clave_cache] = re.findall(r"<Key>([^<]+)</Key>", xml)
+        _POR_HORA[clave_cache] = listar_hora(sat, hora, timeout=120)
     return _POR_HORA[clave_cache]
 
 

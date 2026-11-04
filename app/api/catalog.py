@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .recipes import repo_listo
@@ -61,9 +61,78 @@ _FONDO = [
 ]
 
 
-def _rango(dias_atras: int = 2) -> dict[str, str]:
-    fin = date.today() - timedelta(days=dias_atras)
+def _rango(dias_atras: int = 0) -> dict[str, str]:
+    """Ventana por defecto: ayer y hoy en UTC (el dataset crudo viene en UTC)."""
+    fin = datetime.now(timezone.utc).date() - timedelta(days=dias_atras)
     return {"start": (fin - timedelta(days=1)).isoformat(), "end": fin.isoformat()}
+
+
+#: Lista cerrada de "últimos N cuadros": la UI no inventa otros valores.
+CUADROS_ULTIMOS = (10, 12, 24, 36, 48, 60)
+
+_AYUDA_HORA_UTC = ("hora UTC, igual que el dataset crudo; Paraguay es UTC-3 "
+                   "(12 UTC = 09:00 local)")
+
+
+def _params_cuadro() -> list[ParamSpec]:
+    """Hora y minuto UTC del cuadro exacto: sólo tienen sentido con Snapshot.
+
+    "Snapshot" ya no es "el cuadro de siempre": con estos dos controles se elige
+    cualquier slot de 10 minutos (15:40 UTC, por ejemplo) y se renderiza ése.
+    """
+    return [
+        ParamSpec(
+            name="hora",
+            label="Hora del cuadro (UTC)",
+            kind="hour",
+            default=15,          # mediodía en Paraguay; igual que el snapshot de GIBS
+            min=0,
+            max=23,
+            step=1,
+            help=_AYUDA_HORA_UTC,
+            enabled_when={"snapshot": True},
+        ),
+        ParamSpec(
+            name="minuto",
+            label="Minuto",
+            kind="select",
+            default="00",
+            options=[
+                ParamOption(value=f"{m:02d}", label=f"{m:02d}")
+                for m in range(0, 60, 10)
+            ],
+            help="los slots del ABI caen cada 10 minutos",
+            enabled_when={"snapshot": True},
+        ),
+    ]
+
+
+def _params_ultimos() -> list[ParamSpec]:
+    """Switch "Últimos datos" + selector de cuántos cuadros.
+
+    Se arma por producto (no se comparte el objeto) porque `_con_snapshot`
+    ajusta `enabled_when` en cada instancia.
+    """
+    return [
+        ParamSpec(
+            name="ultimos",
+            label="Últimos datos",
+            kind="toggle",
+            default=False,
+            help="ignora la ventana de fechas: baja y anima los cuadros más nuevos publicados",
+        ),
+        ParamSpec(
+            name="ultimos_n",
+            label="Cuántos cuadros",
+            kind="select",
+            default="24",
+            options=[
+                ParamOption(value=str(n), label=f"{n} cuadros")
+                for n in CUADROS_ULTIMOS
+            ],
+            enabled_when={"ultimos": True},
+        ),
+    ]
 
 
 PRODUCTS: list[Product] = [
@@ -87,7 +156,10 @@ PRODUCTS: list[Product] = [
                 ],
                 help="define la carpeta de datos goes_c13_<sat>",
             ),
-            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
+                      default=_rango(), enabled_when={"ultimos": False}),
+            *_params_ultimos(),
+            *_params_cuadro(),
             ParamSpec(
                 name="paleta",
                 label="Paleta",
@@ -98,33 +170,29 @@ PRODUCTS: list[Product] = [
             ),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
             ParamSpec(
-                name="descargar",
-                label="Forzar descarga",
-                kind="toggle",
-                default=False,
-                help="si la fecha no tiene datos en disco se descarga igual; esto baja los .nc aunque ya existan",
-            ),
-            ParamSpec(
                 name="hora_desde",
-                label="Desde (hora local UTC-3)",
+                label="Desde (UTC)",
                 kind="hour",
                 default=0,
                 min=0,
                 max=23,
                 step=1,
-                help="solo al animar: 0 a 24 son los 144 cuadros del dia, cada 10 min",
+                help=_AYUDA_HORA_UTC,
+                enabled_when={"ultimos": False},
             ),
             ParamSpec(
                 name="hora_hasta",
-                label="Hasta (hora local UTC-3)",
+                label="Hasta (UTC)",
                 kind="hour",
                 default=24,
                 min=1,
                 max=24,
                 step=1,
-                help="fin exclusivo: 24 cierra el dia completo",
+                help="fin exclusivo: 24 cierra el día UTC completo",
+                enabled_when={"ultimos": False},
             ),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
+                      enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
@@ -181,6 +249,7 @@ PRODUCTS: list[Product] = [
                 help="el suavizado limpia el moteado del limbo pero borronea las nubes",
             ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
+            *_params_cuadro(),
             ParamSpec(
                 name="resolucion",
                 label="Resolucion",
@@ -190,31 +259,24 @@ PRODUCTS: list[Product] = [
                 help="2712 px es la resolucion del disco nativo: por debajo se pierde detalle",
             ),
             ParamSpec(
-                name="descargar",
-                label="Forzar descarga",
-                kind="toggle",
-                default=False,
-                help="cada slot son tres bandas (~500 MB); sin forzar usa lo que ya esta en disco",
-            ),
-            ParamSpec(
                 name="hora_desde",
-                label="Desde (hora local UTC-3)",
+                label="Desde (UTC)",
                 kind="hour",
                 default=0,
                 min=0,
                 max=23,
                 step=1,
-                help="solo al animar: 0 a 24 son los 144 cuadros del dia, cada 10 min",
+                help=_AYUDA_HORA_UTC,
             ),
             ParamSpec(
                 name="hora_hasta",
-                label="Hasta (hora local UTC-3)",
+                label="Hasta (UTC)",
                 kind="hour",
                 default=24,
                 min=1,
                 max=24,
                 step=1,
-                help="fin exclusivo: 24 cierra el dia completo",
+                help="fin exclusivo: 24 cierra el día UTC completo",
             ),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=8, min=4, max=30, step=2),
@@ -255,36 +317,35 @@ PRODUCTS: list[Product] = [
                 options=_PALETAS,
                 help="clean_ir usa la escala fija de GIBS (-92.1 a 56.9 C); para reflectancia conviene gris",
             ),
-            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
+                      default=_rango(), enabled_when={"ultimos": False}),
+            *_params_ultimos(),
+            *_params_cuadro(),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="2712", options=_RESOLUCIONES),
             ParamSpec(
-                name="descargar",
-                label="Forzar descarga",
-                kind="toggle",
-                default=False,
-                help="si la fecha no tiene datos en disco se descarga igual",
-            ),
-            ParamSpec(
                 name="hora_desde",
-                label="Desde (hora local UTC-3)",
+                label="Desde (UTC)",
                 kind="hour",
                 default=0,
                 min=0,
                 max=23,
                 step=1,
-                help="solo al animar: 0 a 24 son los 144 cuadros del dia, cada 10 min",
+                help=_AYUDA_HORA_UTC,
+                enabled_when={"ultimos": False},
             ),
             ParamSpec(
                 name="hora_hasta",
-                label="Hasta (hora local UTC-3)",
+                label="Hasta (UTC)",
                 kind="hour",
                 default=24,
                 min=1,
                 max=24,
                 step=1,
-                help="fin exclusivo: 24 cierra el dia completo",
+                help="fin exclusivo: 24 cierra el día UTC completo",
+                enabled_when={"ultimos": False},
             ),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
+                      enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
@@ -307,6 +368,7 @@ PRODUCTS: list[Product] = [
                 ],
             ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
+            *_params_cuadro(),
             ParamSpec(
                 name="resolucion",
                 label="Resolucion",
@@ -315,31 +377,24 @@ PRODUCTS: list[Product] = [
                 options=_RESOLUCIONES,
             ),
             ParamSpec(
-                name="descargar",
-                label="Forzar descarga",
-                kind="toggle",
-                default=False,
-                help="baja los cuadros de GIBS aunque ya esten en cache",
-            ),
-            ParamSpec(
                 name="hora_desde",
-                label="Desde (hora local UTC-3)",
+                label="Desde (UTC)",
                 kind="hour",
                 default=0,
                 min=0,
                 max=23,
                 step=1,
-                help="solo al animar: 0 a 24 son los 144 cuadros del dia, cada 10 min",
+                help=_AYUDA_HORA_UTC,
             ),
             ParamSpec(
                 name="hora_hasta",
-                label="Hasta (hora local UTC-3)",
+                label="Hasta (UTC)",
                 kind="hour",
                 default=24,
                 min=1,
                 max=24,
                 step=1,
-                help="fin exclusivo: 24 cierra el dia completo",
+                help="fin exclusivo: 24 cierra el día UTC completo",
             ),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=8, min=4, max=30, step=2),
@@ -360,13 +415,6 @@ PRODUCTS: list[Product] = [
                 kind="select",
                 default="2000",
                 options=_RESOLUCIONES,
-            ),
-            ParamSpec(
-                name="descargar",
-                label="Forzar descarga",
-                kind="toggle",
-                default=False,
-                help="baja los mosaicos de GIBS aunque ya esten en cache",
             ),
             ParamSpec(
                 name="animar",
@@ -393,7 +441,6 @@ PRODUCTS: list[Product] = [
                 default="1400",
                 options=_RESOLUCIONES,
             ),
-            ParamSpec(name="descargar", label="Bajar los cuadros de GIBS", kind="toggle", default=False),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
@@ -425,13 +472,6 @@ PRODUCTS: list[Product] = [
                 ],
             ),
             ParamSpec(name="trend", label="Mostrar tendencia", kind="toggle", default=False),
-            ParamSpec(
-                name="descargar",
-                label="Forzar descarga",
-                kind="toggle",
-                default=False,
-                help="baja la serie semanal de GIBS si no esta en cache",
-            ),
         ],
     ),
     Product(
@@ -472,7 +512,6 @@ PRODUCTS: list[Product] = [
             ),
             ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="claro", options=_FONDO),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
-            ParamSpec(name="descargar", label="Bajar los crudos de ECMWF", kind="toggle", default=True),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
@@ -514,7 +553,6 @@ PRODUCTS: list[Product] = [
             ),
             ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="claro", options=_FONDO),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
-            ParamSpec(name="descargar", label="Bajar los crudos de ECMWF", kind="toggle", default=True),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
@@ -557,7 +595,6 @@ PRODUCTS: list[Product] = [
             ),
             ParamSpec(name="fondo", label="Fondo del globo", kind="select", default="claro", options=_FONDO),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
-            ParamSpec(name="descargar", label="Bajar los crudos", kind="toggle", default=True),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
@@ -650,6 +687,7 @@ PRODUCTS: list[Product] = [
         "subsatelital (140.7 E): la vista del satelite, sin recorte regional.",
         params=[
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
+            *_params_cuadro(),
             ParamSpec(
                 name="resolucion",
                 label="Resolucion",
@@ -659,31 +697,24 @@ PRODUCTS: list[Product] = [
                 help="2712 px es el default del script; por debajo el titulo se superpone",
             ),
             ParamSpec(
-                name="descargar",
-                label="Forzar descarga",
-                kind="toggle",
-                default=False,
-                help="baja los HSD de JMA y los decodifica a .npz (uno por slot)",
-            ),
-            ParamSpec(
                 name="hora_desde",
-                label="Desde (hora local UTC-3)",
+                label="Desde (UTC)",
                 kind="hour",
                 default=0,
                 min=0,
                 max=23,
                 step=1,
-                help="solo al animar: 0 a 24 son los 144 cuadros del dia, cada 10 min",
+                help=_AYUDA_HORA_UTC,
             ),
             ParamSpec(
                 name="hora_hasta",
-                label="Hasta (hora local UTC-3)",
+                label="Hasta (UTC)",
                 kind="hour",
                 default=24,
                 min=1,
                 max=24,
                 step=1,
-                help="fin exclusivo: 24 cierra el dia completo",
+                help="fin exclusivo: 24 cierra el día UTC completo",
             ),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
@@ -708,13 +739,6 @@ PRODUCTS: list[Product] = [
                 ],
             ),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
-            ParamSpec(
-                name="descargar",
-                label="Bajar LANDVI (Earthdata)",
-                kind="toggle",
-                default=False,
-                help="necesita credenciales de NASA Earthdata configuradas",
-            ),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
@@ -731,8 +755,10 @@ def _con_snapshot(producto: Product) -> Product:
     if producto.id == "snapshot_paraguay":
         return producto
     for spec in producto.params:
-        if spec.name in ("animar", "fps", "hora_desde", "hora_hasta"):
-            spec.enabled_when = {"snapshot": False}
+        if spec.name in ("animar", "fps", "hora_desde", "hora_hasta",
+                         "ultimos", "ultimos_n"):
+            # Se suma la condición, no se pisa: "últimos" ya trae la suya.
+            spec.enabled_when = {**(spec.enabled_when or {}), "snapshot": False}
     producto.params.insert(
         0,
         ParamSpec(

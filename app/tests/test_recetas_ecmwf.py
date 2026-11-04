@@ -172,7 +172,8 @@ class ProductoViento(unittest.TestCase):
                 plan = recipes.planear("viento_250", params, work)
         self.assertEqual(len(plan.pasos), 2)
 
-    def test_con_crudos_el_plan_solo_renderiza(self):
+    def test_con_crudos_el_plan_igual_refresca(self):
+        # S6: cada "Generar" consulta el origen, aunque los crudos ya estén.
         params = {"fecha": DIA.isoformat(), "corrida": "18", "horizonte": 144}
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
@@ -182,8 +183,10 @@ class ProductoViento(unittest.TestCase):
             (crudos / "crudo_049_fh144_u.grib2").write_bytes(b"x")
             with mock.patch.object(catalog, "data_root", return_value=work):
                 plan = recipes.planear("viento_250", params, work)
+        self.assertEqual([paso.kind for paso in plan.pasos], ["download", "render"])
         self.assertEqual([paso.script for paso in plan.pasos],
-                         ["cuadros/cuadros_viento_250.py"])
+                         ["descargar/viento_250_mslp.py",
+                          "cuadros/cuadros_viento_250.py"])
 
     def test_un_horizonte_nuevo_vuelve_a_descargar(self):
         # En disco sólo hay crudos hasta 96 h; pedir 144 h no puede saltarse la
@@ -237,10 +240,15 @@ class CatalogoDeLaApp(unittest.TestCase):
             # S5: el rótulo es el número solo, sin "poster" ni "nativo".
             self.assertEqual([o.label for o in opciones], esperadas, producto.id)
 
-    def test_animar_y_descargar_arrancan_activos(self):
+    def test_animar_arranca_activo(self):
         for product_id in ("precipitacion_ecmwf", "anomalia_2t", "viento_250"):
             self.assertIs(self._spec(product_id, "animar").default, True, product_id)
-            self.assertIs(self._spec(product_id, "descargar").default, True, product_id)
+
+    def test_no_queda_switch_de_descarga(self):
+        # Cada "Generar" consulta el origen: el switch no tenia nada que hacer.
+        for producto in catalog.PRODUCTS:
+            nombres = {p.name for p in producto.params}
+            self.assertNotIn("descargar", nombres, producto.id)
 
     def test_viento_ofrece_ifs_y_gfs(self):
         modelos = {o.value for o in self._spec("viento_250", "modelo").options}
@@ -284,7 +292,8 @@ class ModeloGfs(unittest.TestCase):
             with mock.patch.object(catalog, "data_root", return_value=work):
                 plan = recipes.planear("viento_250", params, work)
         self.assertEqual([paso.script for paso in plan.pasos],
-                         ["cuadros/cuadros_viento_250.py"])
+                         ["descargar/viento_250_mslp.py",
+                          "cuadros/cuadros_viento_250.py"])
 
 
 class SnapshotParaguay(unittest.TestCase):
@@ -567,7 +576,13 @@ class SnapshotDeUnCuadro(unittest.TestCase):
         producto = catalog.get_product("goes_c13")
 
         for spec in producto.params:
-            if spec.name in ("animar", "fps", "hora_desde", "hora_hasta"):
+            if spec.name in ("animar", "hora_desde", "hora_hasta"):
+                # "Últimos datos" también los apaga: son dos formas de elegir
+                # el momento, y se suman sin pisarse.
+                self.assertEqual(
+                    spec.enabled_when, {"ultimos": False, "snapshot": False}, spec.name
+                )
+            elif spec.name == "fps":
                 self.assertEqual(spec.enabled_when, {"snapshot": False}, spec.name)
 
 

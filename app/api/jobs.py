@@ -79,6 +79,16 @@ def _ahora() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _epoch(iso: str | None) -> float:
+    """Marca de tiempo ISO -> segundos epoch. Sin fecha, 0 (todo cuenta)."""
+    if not iso:
+        return 0.0
+    try:
+        return datetime.fromisoformat(iso).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
 @dataclass
 class Job:
     id: str
@@ -443,7 +453,12 @@ class JobManager:
             job.work.glob("*.png"),
             key=lambda p: p.stat().st_mtime,
         )
-        for poster in posters[-3:]:
+        # La carpeta de trabajo es una cache compartida por recetas identicas:
+        # publicar solo lo que dejo ESTA corrida. Si no dejo nada nuevo (render
+        # ya hecho), se publica el mas reciente, que es el resultado vigente.
+        inicio = _epoch(job.started_at)
+        nuevos = [p for p in posters if p.stat().st_mtime >= inicio - 1.0]
+        for poster in (nuevos or posters[-1:]):
             self._artefacto(job, poster, "image")
 
     async def _correr(self, job: Job) -> None:
@@ -547,7 +562,7 @@ class JobManager:
                     if not crudos:
                         raise RuntimeError(
                             "no hay crudos de SST para el poster realista; "
-                            "activa 'Forzar descarga' para bajarlos"
+                            "la descarga no dejo archivos (revisa el log de arriba)"
                         )
                     args = [str(crudos[0]) if a == "{crudo}" else a for a in args]
 

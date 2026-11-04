@@ -42,6 +42,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 sys.path.insert(0, str(RAIZ / "prototipos"))
 from goes_lectura import cargar  # noqa: E402
+from goes_reciente import ultimos_de  # noqa: E402
 from poster_goes import BG, PALETTES, ZONES, draw_goes_poster  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
 
@@ -64,6 +65,12 @@ def slot_map(datos: Path) -> dict:
               + timedelta(days=int(s[4:7]) - 1, hours=int(s[7:9]), minutes=int(s[9:11])))
         m[(dt.date(), dt.hour, dt.minute)] = f
     return m
+
+
+def instantes(sl_map: dict) -> list[datetime]:
+    """Todos los instantes con `.nc` local, en orden cronológico."""
+    return sorted(datetime.combine(d, datetime.min.time()).replace(hour=h, minute=m)
+                  for (d, h, m) in sl_map)
 
 
 def render(cfg, sl_map, start, end, vmin, vmax):
@@ -89,8 +96,11 @@ def main(argv=None):
         description="Cuadros (PNG) de una animación GOES-R ABI, por lotes.")
     ap.add_argument("--sat", default="G19", help="satélite, p. ej. G19")
     ap.add_argument("--banda", default="C13", help="banda, p. ej. C13")
-    ap.add_argument("--desde", default="2026-10-02", help="primer cuadro, UTC")
+    ap.add_argument("--desde", default=None,
+                    help="primer cuadro, UTC (por defecto, los últimos N del disco)")
     ap.add_argument("--n", type=int, default=144, help="cantidad de cuadros")
+    ap.add_argument("--ultimos", type=int, default=0, metavar="N",
+                    help="los N cuadros más nuevos con .nc en disco (ignora --desde)")
     ap.add_argument("--paso", type=int, default=10, help="minutos entre cuadros")
     ap.add_argument("--px", type=int, default=720, help="lado de cada cuadro en píxeles")
     ap.add_argument("--tope", type=int,
@@ -119,10 +129,29 @@ def main(argv=None):
     # uso interno: renderiza un rango con escala fija
     ap.add_argument("--rango", nargs=4, metavar=("S", "E", "VMIN", "VMAX"),
                     help=argparse.SUPPRESS)
+    ap.add_argument("--t0", help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
 
     datos = Path(args.datos) if args.datos else carpeta_datos(args.sat, args.banda)
-    t0 = datetime.fromisoformat(args.desde)
+    sl_map = slot_map(datos)
+    if not sl_map:
+        raise SystemExit(f"No hay .nc en {datos} "
+                         "(descargalos con descargar/descargar_goes.py).")
+
+    # La ventana se resuelve una sola vez, acá; los lotes hijos la reciben con
+    # `--t0` para que un slot nuevo a mitad del render no corra la serie.
+    if args.t0:
+        t0 = datetime.fromisoformat(args.t0)
+    elif args.ultimos:
+        elegidos = ultimos_de(instantes(sl_map), args.ultimos)
+        if not elegidos:
+            raise SystemExit(f"No hay {args.ultimos} cuadros con .nc en {datos}.")
+        t0, args.n = elegidos[0], len(elegidos)
+    elif args.desde:
+        t0 = datetime.fromisoformat(args.desde)
+    else:
+        t0 = max(instantes(sl_map)) - timedelta(minutes=args.paso * (args.n - 1))
+
     lado = args.px / args.dpi
     vista = "globo" if args.globo else "disco"
     globo_center = None
@@ -143,11 +172,6 @@ def main(argv=None):
         "frames_dir": salida / f"frames_{args.sat}_{t0:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px",
     }
     cfg["frames_dir"].mkdir(parents=True, exist_ok=True)
-
-    sl_map = slot_map(datos)
-    if not sl_map:
-        raise SystemExit(f"No hay .nc en {datos} "
-                         "(descargalos con descargar/descargar_goes.py).")
 
     # Modo lote: renderiza el rango y sale.
     if args.rango:
@@ -175,7 +199,8 @@ def main(argv=None):
             e = min(s + args.lote - 1, args.n)
             print(f"lote {s}-{e} ...", flush=True)
             subprocess.run([sys.executable, str(Path(__file__).resolve()),
-                            *sys.argv[1:], "--rango", str(s), str(e), str(vmin), str(vmax)],
+                            *sys.argv[1:], "--rango", str(s), str(e), str(vmin), str(vmax),
+                            "--t0", t0.isoformat()],
                            check=True)
             print(f"  ok ({time.time() - t_inicio:.0f}s)", flush=True)
 

@@ -56,8 +56,14 @@ def _lut(paleta: str) -> np.ndarray:
     return (np.asarray(cmap(np.linspace(0.0, 1.0, 256)))[:, :3] * 255.0).astype(np.uint8)
 
 
-def slots(banda: str, sat: str, desde: datetime | None, n: int, paso: int):
-    """Slots con `.nc` en disco, empezando en `desde` (o en el último)."""
+def slots(banda: str, sat: str, desde: datetime | None, n: int, paso: int,
+          ultimos: int = 0):
+    """Slots con `.nc` en disco.
+
+    - `ultimos > 0`: los N más nuevos, terminando en el último que haya.
+    - `desde`: serie que arranca en ese instante.
+    - sin ninguno de los dos: el último cuadro.
+    """
     encontrados: dict[datetime, Path] = {}
     for archivo in tc.carpeta(banda, sat).glob("*.nc"):
         match = PATRON.search(archivo.name)
@@ -72,7 +78,11 @@ def slots(banda: str, sat: str, desde: datetime | None, n: int, paso: int):
             f"No hay .nc de {banda} de {sat} en {tc.carpeta(banda, sat)}. "
             "Bajalos con descargar/descargar_goes.py."
         )
-    t0 = desde or max(encontrados)
+    if ultimos > 0:
+        n = ultimos
+        t0 = max(encontrados) - timedelta(minutes=paso * (ultimos - 1))
+    else:
+        t0 = desde or max(encontrados)
     lista = []
     for i in range(n):
         instante = t0 + timedelta(minutes=paso * i)
@@ -161,6 +171,8 @@ def main(argv=None) -> int:
     ap.add_argument("--sat", default=SAT, help=f"satélite (por defecto {SAT})")
     ap.add_argument("--desde", help="slot UTC ISO (por defecto, el último con .nc)")
     ap.add_argument("--n", type=int, default=1, help="cantidad de cuadros")
+    ap.add_argument("--ultimos", type=int, default=0, metavar="N",
+                    help="los N cuadros más nuevos con .nc en disco (ignora --desde)")
     ap.add_argument("--paso", type=int, default=10, help="minutos entre cuadros")
     ap.add_argument("--px", type=int, default=PX, help=f"diámetro del globo (por defecto {PX})")
     ap.add_argument("--dpi", type=int, help="dpi; si se omite se deduce de --px")
@@ -207,7 +219,7 @@ def main(argv=None) -> int:
     )
 
     desde = datetime.fromisoformat(args.desde) if args.desde else None
-    lista = slots(args.banda, args.sat, desde, args.n, args.paso)
+    lista = slots(args.banda, args.sat, desde, args.n, args.paso, args.ultimos)
 
     if args.frames:
         salida = Path(args.frames)

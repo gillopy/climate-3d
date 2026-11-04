@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { RangoFechas } from "../../types";
-import { Calendario, formatearFecha, formatearRango, hoyLocal } from "./Calendar";
+import { Calendario, formatearFecha, formatearRango, hoyUTC } from "./Calendar";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -85,7 +85,7 @@ export function VentanaTemporal({
 }: VentanaProps) {
   const [abierto, setAbierto] = useState<"start" | "end" | null>(null);
   const caja = useRef<HTMLDivElement | null>(null);
-  const inicio = ISO.test(value.start) ? value.start : hoyLocal();
+  const inicio = ISO.test(value.start) ? value.start : hoyUTC();
   const fin = ISO.test(value.end) && value.end >= inicio ? value.end : inicio;
   const dias = diasEntre(inicio, fin);
 
@@ -221,7 +221,7 @@ export function FechaUnica({
 }: FechaProps) {
   const [abierto, setAbierto] = useState(false);
   const caja = useRef<HTMLDivElement | null>(null);
-  const dia = ISO.test(value) ? value : hoyLocal();
+  const dia = ISO.test(value) ? value : hoyUTC();
 
   useEffect(() => {
     if (!abierto) return;
