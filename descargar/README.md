@@ -55,6 +55,24 @@ Los `.nc` son de varios MB cada uno, así que una ventana larga pesa GB.
 
 ---
 
+## `descargar_goes_rgb.py`
+
+Baja **todas las bandas** de un RGB oficial en una sola pasada. Dust necesita C11, C13,
+C14 y C15; Air Mass, C08, C10, C12 y C13; Fire Temperature, C05, C06 y C07.
+
+| Opción | Qué hace |
+|---|---|
+| `--producto` | `dust`, `airmass` o `firetemp` |
+| `--sat` | Satélite (`G19`, `G18`, …) |
+| `--desde` / `--hasta` | Rango UTC (`AAAA-MM-DD` o `AAAA-MM-DDTHH:MM`) |
+| `--ultimos` | Los N slots más nuevos con **todas** las bandas publicadas |
+| `--paso` | Minutos entre cuadros (por defecto 10) |
+
+Las bandas caen en las carpetas de siempre (`goes_c15_g19`, `goes_c11_g19`, …), así que el
+render las encuentra sin configuración extra.
+
+---
+
 ## `descargar_era5.py`
 
 Baja **ERA5 2m temperature** (2024–2026) desde Copernicus CDS.

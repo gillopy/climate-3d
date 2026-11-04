@@ -160,6 +160,30 @@ cuadros. Como GOES-East no ve el hemisferio centrado en Paraguay entero, el disc
 dato. Los scripts son [`descargar/sandwich.py`](./descargar/sandwich.py) y
 [`cuadros/cuadros_sandwich.py`](./cuadros/cuadros_sandwich.py).
 
+### Dust, Air Mass y Fire Temperature (GOES-19): tres RGB oficiales en globo
+
+![Dust RGB de GOES-19, 4 de noviembre de 2026, 18:50 UTC](docs/galeria/goes_dust_globo_G19_2026-11-04T1850.png)
+
+Tres productos RGB del ABI, cada uno con **su propia receta** (bandas, rango y gamma del
+quick guide de NOAA) y su propia lectura del color. No comparten la rampa de C13: un RGB
+no es una banda coloreada, son tres canales mezclados, y la receta *es* la paleta.
+
+| Producto | R | G | B | Qué se ve |
+| --- | --- | --- | --- | --- |
+| **Dust** | C15−C13 | C14−C11 (γ2.5) | C13 | Polvo en magenta/rosa; de noche, violeta bajo 3 km |
+| **Air Mass** | C08−C10 | C12−C13 | C08 invertida | Aire polar azul/violeta, tropical verde, seco oliva/naranja |
+| **Fire Temperature** | C07 (γ0.4) | C06 | C05 | Fuego de rojo a blanco según intensidad; cicatrices marrón |
+
+Los tres se dibujan con el mismo globo del color real (centro subsatelital, fondo oscuro,
+sin retícula ni costas) y comparten los controles de GOES: ventana, últimos N cuadros,
+snapshot de una hora/minuto exactos y animación. Las bandas se bajan con
+[`descargar/descargar_goes_rgb.py`](./descargar/descargar_goes_rgb.py) y el render vive en
+[`prototipos/poster_goes_rgb.py`](./prototipos/poster_goes_rgb.py); la tabla de recetas,
+en [`comun/rgb_goes.py`](./comun/rgb_goes.py).
+
+> **Ojo con Fire Temperature**: usa las bandas visibles/near-IR, así que de noche las
+> nubes vienen negras. Es un producto diurno para incendios, no un IR de 24 h.
+
 ### Himawari-9 AHI B13 (Clean Infrared): el ciclón del mar Filipino
 
 ![Clean Infrared de Himawari-9, 21 de octubre de 2026, 20:20 (UTC-4)](docs/galeria/himawari_b13_globo_2026-10-21T2020.png)

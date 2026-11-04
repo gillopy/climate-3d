@@ -66,6 +66,7 @@ de entrada y `salidas/` con los PNG, frames y videos.
 | GOES color real nativo | `truecolor_goes.py` | `poster_goes_disco.py` | — | `poster_G19_truecolor_nativo_*` |
 | GeoColor | `geocolor.py` | — | `cuadros_geocolor.py` | `frames_geocolor_*` |
 | Sandwich RGB | `sandwich.py` | — | `cuadros_sandwich.py` | `frames_sandwich_*` |
+| Dust / Air Mass / Fire RGB | `descargar_goes_rgb.py` | `poster_goes_rgb.py` | el mismo `--frames` | `poster_G19_<producto>_*` |
 | Himawari-9 AHI B13 | `descargar_himawari.py` | `cuadros_himawari_ir.py --solo-poster` | `cuadros_himawari_ir.py` | `frames_H09_B13_*` |
 | MUR SST | `mur_sst.py` | `poster_mur_realista.py` | `cuadros_mur.py`, `animar_mur_realista.py` | `frames_mur_globo_*` |
 | True Color GIBS | `truecolor.py` | — | `cuadros_truecolor.py` | `frames_truecolor_*` |
@@ -194,6 +195,26 @@ temperatura del tope; el gris del visible, su forma.
 - **Sólo de día**: fuera del tramo diurno el visible de GIBS viene negro.
 - `--alpha` (0.5 por defecto) es la mezcla clásica.
 - GIBS rate-limitea: el descargador manda `User-Agent` y usa `--hilos 8`.
+
+### 6b. Dust, Air Mass y Fire Temperature: los RGB oficiales
+
+Tres canales por producto, con los rangos y gammas del quick guide de NOAA. **No hay
+paleta aparte**: la receta ES el color.
+
+| Producto | R | G | B |
+| --- | --- | --- | --- |
+| Dust | C15−C13 (−6.7…2.6 K) | C14−C11 (−0.5…20 K, γ2.5) | C13 (−11.95…15.55 °C) |
+| Air Mass | C08−C10 (−26.2…0.6 K) | C12−C13 (−43.2…6.7 K) | C08 invertida (−64.65…−29.25 °C) |
+| Fire Temperature | C07 (0…60 °C, γ0.4) | C06 (0…100 %) | C05 (0…75 %) |
+
+```powershell
+.venv\Scripts\python.exe descargar\descargar_goes_rgb.py --producto dust --ultimos 10
+.venv\Scripts\python.exe prototipos\poster_goes_rgb.py --producto dust --ultimos 1 --px 1400
+```
+
+- Las tres recetas están en [`comun/rgb_goes.py`](../comun/rgb_goes.py).
+- Fire Temperature usa el visible/near-IR: de día se ven las nubes, de noche vienen negras.
+- `--ultimos` sólo elige slots donde están **todas** las bandas; si falta una, no renderiza.
 
 ## Himawari-9 (AHI)
 
