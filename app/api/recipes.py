@@ -1314,10 +1314,129 @@ def _truecolor_viirs(params: dict[str, Any], work: Path) -> Plan:
     return Plan(pasos=pasos, descarga=descarga)
 
 
+# --- GOES: RGB oficial de tres canales (Dust, Air Mass, Fire Temperature) ---
+def _bandas_rgb(producto: str) -> tuple[str, ...]:
+    """Bandas ABI de la receta, desde la misma tabla que usa el render."""
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from rgb_goes import bandas
+
+    return tuple(bandas(producto))
+
+
+def _slots_goes_rgb(sat: str, bandas: tuple[str, ...]) -> list[datetime]:
+    """Slots con `.nc` de TODAS las bandas de la receta."""
+    conjuntos = [set(_slots_goes(sat, banda)) for banda in bandas]
+    return sorted(set.intersection(*conjuntos)) if conjuntos else []
+
+
+def _ultimos_goes_rgb(sat: str, producto: str, n: int) -> list[datetime]:
+    """Los `n` slots más nuevos con TODAS las bandas publicadas en NOAA S3.
+
+    `goes_reciente` es stdlib puro: pide el listado una sola vez por hora y sirve
+    para las 3-4 bandas del producto (el `.venv` de la API no tiene xarray).
+    """
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    try:
+        from goes_reciente import ultimos_slots_conjunto
+
+        slots = ultimos_slots_conjunto(sat, _bandas_rgb(producto), n)
+    except Exception:  # noqa: BLE001 - offline: molesta más un job muerto que un fallback
+        slots = []
+    if slots:
+        return slots
+
+    locales = _slots_goes_rgb(sat, _bandas_rgb(producto))
+    if locales:
+        return locales[-n:]
+    raise ValueError(
+        f"No hay datos de {sat} {producto}: NOAA S3 no respondió y el disco está "
+        "vacío. Revisá la conexión y volvé a intentar."
+    )
+
+
+def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
+    """Plan de un RGB oficial: baja todas sus bandas y compone el globo."""
+    inicio, fin = _rango(params)
+    sat = str(params.get("satelite", "G19"))
+    bandas = _bandas_rgb(producto)
+    px = _px(params, 2712)
+    n_ultimos = _ultimos(params)
+    animar = bool(n_ultimos) or (_bool(params, "animar") and not _snapshot(params))
+
+    if n_ultimos:
+        slots_nuevos = _ultimos_goes_rgb(sat, producto, n_ultimos)
+        desde, n, paso, falta = slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True
+    elif _snapshot(params):
+        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+    else:
+        disponibles = [
+            s for s in _slots_goes_rgb(sat, bandas) if inicio <= s.date() <= fin
+        ]
+        lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+        cenital = _slot_cenital(inicio, lon_sub)
+        ventana = _ventana_animacion(
+            inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+        )
+        desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
+
+    lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+    descarga = Step(
+        kind="download",
+        label=(f"bajando los últimos {n} slots de {producto} ({sat})"
+               if n_ultimos else f"bajando {producto} de {sat} ({n} slot(s))"),
+        script="descargar/descargar_goes_rgb.py",
+        args=[
+            "--producto", producto,
+            "--sat", sat,
+            "--desde", desde.isoformat(),
+            "--hasta", (desde + timedelta(minutes=paso * n)).isoformat(),
+            "--paso", str(paso),
+        ],
+        expected=max(1, math.ceil(n / 10)),
+    )
+
+    comunes = [
+        "--producto", producto,
+        "--sat", sat,
+        "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
+        "--n", str(n),
+        "--paso", str(paso),
+        "--px", str(px),
+        # Globo completo centrado en el punto subsatelital, como el color real.
+        "--centro", f"{lon_sub:g}", "0",
+        "--recorte", "1.0",
+    ]
+    if animar and n > 1:
+        render_step = Step(
+            kind="render",
+            label=f"{n} cuadro(s) de {producto}",
+            script="prototipos/poster_goes_rgb.py",
+            args=[*comunes, "--frames", str(work / "frames")],
+            expected=n,
+        )
+    else:
+        render_step = Step(
+            kind="render",
+            label=f"poster {producto} {px}px",
+            script="prototipos/poster_goes_rgb.py",
+            args=[*comunes, "--out", str(work / f"{sat}_{producto}_{desde:%Y-%m-%dT%H%M}.png")],
+            expected=1,
+        )
+
+    return Plan(pasos=[descarga, render_step], descarga=descarga)
+
+
 _CONSTRUCTORES = {
     "goes_c13": _goes,
     "goes_truecolor": _goes_truecolor,
     "goes_banda": _goes_banda,
+    "goes_dust": lambda p, w: _goes_rgb(p, w, "dust"),
+    "goes_airmass": lambda p, w: _goes_rgb(p, w, "airmass"),
+    "goes_firetemp": lambda p, w: _goes_rgb(p, w, "firetemp"),
     "geocolor": _geocolor,
     "truecolor_viirs": _truecolor_viirs,
     "mur_sst": _mur,

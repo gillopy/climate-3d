@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -133,6 +134,81 @@ def _params_ultimos() -> list[ParamSpec]:
             enabled_when={"ultimos": True},
         ),
     ]
+
+
+def _receta_rgb(producto: str) -> dict:
+    """Receta RGB oficial (bandas, rangos y guía) desde `comun/rgb_goes.py`.
+
+    La app no reimplementa la receta: la misma tabla que usa el render manda en
+    el catálogo, así no se puede desincronizar la ayuda de lo que se dibuja.
+    """
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from rgb_goes import RECETAS  # import local: evita depender del sys.path global
+
+    return RECETAS[producto]
+
+
+def _producto_rgb(pid: str, nombre: str, producto: str) -> Product:
+    """Un producto RGB: mismos controles que `goes_banda`, sin banda ni paleta."""
+    receta = _receta_rgb(producto)
+    from rgb_goes import etiqueta_canal  # noqa: PLC0415 - ver `_receta_rgb`
+
+    canales = " · ".join(etiqueta_canal(c) for c in receta["canales"])
+    return Product(
+        id=pid,
+        name=nombre,
+        group="satelite",
+        stage="descargar/descargar_goes_rgb.py + prototipos/poster_goes_rgb.py",
+        summary=f"RGB oficial de tres canales ({canales}). {receta['resumen']}",
+        params=[
+            ParamSpec(
+                name="satelite",
+                label="Satelite",
+                kind="select",
+                default="G19",
+                options=[
+                    ParamOption(value="G19", label="GOES-East G19 (75.2 W)"),
+                    ParamOption(value="G18", label="GOES-West G18 (137.2 W)"),
+                    ParamOption(value="G16", label="GOES-East G16 (hasta 2025)"),
+                ],
+                help="define la carpeta de datos goes_<banda>_<sat>",
+            ),
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
+                      default=_rango(), enabled_when={"ultimos": False}),
+            *_params_ultimos(),
+            *_params_cuadro(),
+            ParamSpec(name="resolucion", label="Resolucion", kind="select",
+                      default="2712", options=_RESOLUCIONES),
+            ParamSpec(
+                name="hora_desde",
+                label="Desde (UTC)",
+                kind="hour",
+                default=0,
+                min=0,
+                max=23,
+                step=1,
+                help=_AYUDA_HORA_UTC,
+                enabled_when={"ultimos": False},
+            ),
+            ParamSpec(
+                name="hora_hasta",
+                label="Hasta (UTC)",
+                kind="hour",
+                default=24,
+                min=1,
+                max=24,
+                step=1,
+                help="fin exclusivo: 24 cierra el día UTC completo",
+                enabled_when={"ultimos": False},
+            ),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
+                      enabled_when={"ultimos": False}),
+            ParamSpec(name="fps", label="Cuadros por segundo", kind="slider",
+                      default=12, min=4, max=30, step=2),
+        ],
+    )
 
 
 PRODUCTS: list[Product] = [
@@ -349,6 +425,9 @@ PRODUCTS: list[Product] = [
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
+    _producto_rgb("goes_dust", "GOES - Dust RGB", "dust"),
+    _producto_rgb("goes_airmass", "GOES - Air Mass RGB", "airmass"),
+    _producto_rgb("goes_firetemp", "GOES - Fire Temperature RGB", "firetemp"),
     Product(
         id="geocolor",
         name="GOES - GeoColor (dia real, IR y luces)",
@@ -788,6 +867,9 @@ def get_product(product_id: str) -> Product | None:
 _VARIANTES = {
     "goes_c13": ("satelite",),
     "goes_banda": ("satelite", "paleta"),
+    "goes_dust": ("satelite",),
+    "goes_airmass": ("satelite",),
+    "goes_firetemp": ("satelite",),
     "goes_truecolor": ("satelite", "encuadre", "limbo"),
     "geocolor": ("satelite",),
     "precipitacion_ecmwf": ("modelo",),
@@ -893,6 +975,12 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
             "goes_c13_g19",
         )
         datos = raiz / carpeta
+        if datos.is_dir():
+            encontradas |= _fechas_de_nombres([f.name for f in datos.glob("*.nc")], _DIA_GOES)
+
+    if product.id in ("goes_dust", "goes_airmass", "goes_firetemp"):
+        banda = "C07" if product.id == "goes_firetemp" else "C13"
+        datos = raiz / f"goes_{banda.lower()}_{str(params.get('satelite', 'G19')).lower()}"
         if datos.is_dir():
             encontradas |= _fechas_de_nombres([f.name for f in datos.glob("*.nc")], _DIA_GOES)
 

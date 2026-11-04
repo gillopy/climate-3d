@@ -86,6 +86,45 @@ def ultimos_slots(sat: str, banda: str, n: int, ahora: datetime | None = None,
     return sorted(encontrados)
 
 
+def claves_por_instante(sat: str, hora: datetime,
+                        timeout: int = 120) -> dict[datetime, dict[str, str]]:
+    """{instante: {banda: clave}} de esa hora, con un solo listado."""
+    salida: dict[datetime, dict[str, str]] = {}
+    for clave in listar_hora(sat, hora, timeout=timeout):
+        match = _ABI.search(clave)
+        if not match or match["sat"] != sat:
+            continue
+        instante = datetime.strptime(match["s"][:13], "%Y%j%H%M%S").replace(second=0)
+        salida.setdefault(instante, {})[match["banda"]] = clave
+    return salida
+
+
+def ultimos_slots_conjunto(sat: str, bandas, n: int, ahora: datetime | None = None,
+                           paso: int = PASO,
+                           intentos_horas: int = INTENTOS_HORAS) -> list[datetime]:
+    """Los `n` instantes más nuevos donde están publicadas TODAS las bandas.
+
+    Un producto RGB necesita 3-4 bandas del mismo slot; el listado de cada hora
+    se pide una sola vez y sirve para todas.
+    """
+    if n <= 0:
+        return []
+    necesarias = set(bandas)
+    t = piso_slot(ahora or ahora_utc(), paso)
+    por_hora: dict[datetime, dict[datetime, dict[str, str]]] = {}
+    encontrados: list[datetime] = []
+    for _ in range(intentos_horas * 60 // paso):
+        hora = t.replace(minute=0)
+        if hora not in por_hora:
+            por_hora[hora] = claves_por_instante(sat, hora)
+        if necesarias <= set(por_hora[hora].get(t, {})):
+            encontrados.append(t)
+            if len(encontrados) == n:
+                break
+        t -= timedelta(minutes=paso)
+    return sorted(encontrados)
+
+
 def ventana_ultimos(n: int, sat: str, banda: str, ahora: datetime | None = None,
                     paso: int = PASO) -> tuple[datetime, datetime]:
     """`[desde, hasta)` que cubre los `n` slots más nuevos publicados."""
