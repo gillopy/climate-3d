@@ -207,6 +207,42 @@ code {
   color: var(--text-dim);
 }
 
+/* --- Reloj UTC / UTC-3 ----------------------------------------------- */
+.clock {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.clock__linea {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.clock__zona {
+  min-width: 34px;
+  text-align: right;
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+.clock time {
+  color: var(--text);
+}
+
 /* --- Aviso global ---------------------------------------------------- */
 .notice {
   display: flex;

@@ -95,7 +95,6 @@ export function RecipeForm({
   onChange,
   onSubmit,
 }: Props) {
-  const pideDescarga = product.params.some((spec) => spec.name === "descargar");
   const ultimaFecha = dates?.dates.at(0) ?? "";
   // Solo cuando el disco tiene las fechas: con el calendario demo no se marca.
   const disponibles = new Set(
@@ -348,9 +347,8 @@ export function RecipeForm({
           {product.command_ready ? (
             <>
               Corre con <code>{repoPython.split("\\").slice(-3).join("\\")}</code>.{" "}
-              {pideDescarga
-                ? "Las descargas usan la carpeta de datos compartida y quedan cacheadas."
-                : "Sin descarga: usa lo que ya esta en disco, y si falta algo el job lo dice."}
+              Cada generar consulta el origen: lo que ya está en la carpeta de datos
+              compartida se reutiliza.
             </>
           ) : (
             <>

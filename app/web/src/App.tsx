@@ -10,6 +10,7 @@ import {
   subscribeJob,
 } from "./api";
 import { JobPanel } from "./components/JobPanel";
+import { Reloj } from "./components/controls/Clock";
 import { RecipeForm } from "./components/RecipeForm";
 import type {
   CatalogResponse,
@@ -259,6 +260,7 @@ export default function App() {
             <span className="health__swatch" aria-hidden="true" />
             {conDatos ? "datos en disco" : "sin datos locales"}
           </span>
+          <Reloj />
         </div>
       </header>
 
