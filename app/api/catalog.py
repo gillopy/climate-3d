@@ -324,7 +324,9 @@ PRODUCTS: list[Product] = [
                 ],
                 help="el suavizado limpia el moteado del limbo pero borronea las nubes",
             ),
-            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
+                      default=_rango(), enabled_when={"ultimos": False}),
+            *_params_ultimos(),
             *_params_cuadro(),
             ParamSpec(
                 name="resolucion",
@@ -343,6 +345,7 @@ PRODUCTS: list[Product] = [
                 max=23,
                 step=1,
                 help=_AYUDA_HORA_UTC,
+                enabled_when={"ultimos": False},
             ),
             ParamSpec(
                 name="hora_hasta",
@@ -353,8 +356,10 @@ PRODUCTS: list[Product] = [
                 max=24,
                 step=1,
                 help="fin exclusivo: 24 cierra el día UTC completo",
+                enabled_when={"ultimos": False},
             ),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
+                      enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=8, min=4, max=30, step=2),
         ],
     ),
@@ -446,7 +451,9 @@ PRODUCTS: list[Product] = [
                     ParamOption(value="G18", label="GOES-West G18 (137.2 W)"),
                 ],
             ),
-            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
+                      default=_rango(), enabled_when={"ultimos": False}),
+            *_params_ultimos(),
             *_params_cuadro(),
             ParamSpec(
                 name="resolucion",
@@ -464,6 +471,7 @@ PRODUCTS: list[Product] = [
                 max=23,
                 step=1,
                 help=_AYUDA_HORA_UTC,
+                enabled_when={"ultimos": False},
             ),
             ParamSpec(
                 name="hora_hasta",
@@ -474,8 +482,10 @@ PRODUCTS: list[Product] = [
                 max=24,
                 step=1,
                 help="fin exclusivo: 24 cierra el día UTC completo",
+                enabled_when={"ultimos": False},
             ),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
+                      enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=8, min=4, max=30, step=2),
         ],
     ),
@@ -765,7 +775,9 @@ PRODUCTS: list[Product] = [
         summary="AHI banda 13 (10.4 um). El disco entero, centrado en el punto "
         "subsatelital (140.7 E): la vista del satelite, sin recorte regional.",
         params=[
-            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango()),
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
+                      default=_rango(), enabled_when={"ultimos": False}),
+            *_params_ultimos(),
             *_params_cuadro(),
             ParamSpec(
                 name="resolucion",
@@ -784,6 +796,7 @@ PRODUCTS: list[Product] = [
                 max=23,
                 step=1,
                 help=_AYUDA_HORA_UTC,
+                enabled_when={"ultimos": False},
             ),
             ParamSpec(
                 name="hora_hasta",
@@ -794,8 +807,10 @@ PRODUCTS: list[Product] = [
                 max=24,
                 step=1,
                 help="fin exclusivo: 24 cierra el día UTC completo",
+                enabled_when={"ultimos": False},
             ),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
+                      enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
@@ -851,7 +866,49 @@ def _con_snapshot(producto: Product) -> Product:
     return producto
 
 
-PRODUCTS = [_con_snapshot(p) for p in PRODUCTS]
+#: Productos sin encuadre Paraguay: el Snapshot ya ES el encuadre (y no se toca);
+#: el MUR es SST oceánica (Paraguay es mediterráneo, no hay mar que mostrar); el
+#: follaje usa un globo Robinson/3D con otro diseño y el Himawari no lo necesita.
+SIN_PARAGUAY = {"snapshot_paraguay", "mur_sst", "mur_realista", "follaje", "himawari"}
+
+
+def _con_paraguay(producto: Product) -> Product:
+    """Suma el encuadre "Solo Paraguay" con su margen.
+
+    El margen se expresa en porcentaje (0-20), igual que en el producto Snapshot;
+    el motor lo traduce a una fracción del lado de la caja del país. El producto
+    Snapshot queda intacto: ya es una captura de Paraguay.
+    """
+    if producto.id in SIN_PARAGUAY:
+        return producto
+    producto.params.insert(
+        0,
+        ParamSpec(
+            name="paraguay",
+            label="Solo Paraguay",
+            kind="toggle",
+            default=False,
+            help="encuadra la captura o la animación en las coordenadas de Paraguay",
+        ),
+    )
+    producto.params.insert(
+        1,
+        ParamSpec(
+            name="margen",
+            label="Margen Paraguay (%)",
+            kind="slider",
+            default=6,
+            min=0,
+            max=20,
+            step=1,
+            help="aire alrededor del país dentro del encuadre",
+            enabled_when={"paraguay": True},
+        ),
+    )
+    return producto
+
+
+PRODUCTS = [_con_snapshot(_con_paraguay(p)) for p in PRODUCTS]
 
 _BY_ID = {p.id: p for p in PRODUCTS}
 

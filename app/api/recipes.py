@@ -158,6 +158,47 @@ def _ultimos_goes(sat: str, banda: str, n: int) -> list[datetime]:
     )
 
 
+def _ultimos_geocolor(sat: str, n: int) -> list[datetime]:
+    """Los `n` slots GeoColor más nuevos que GIBS ya publica.
+
+    GIBS contesta 200 con una imagen negra para un instante sin gránulo, así que
+    `comun/geocolor_reciente` camina hacia atrás validando miniaturas. Si la red
+    falla, cae al reloj de C13 en NOAA S3 (misma cadencia de 10 min).
+    """
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    try:
+        from geocolor_reciente import ultimos_slots
+
+        return ultimos_slots(sat, n)
+    except Exception:  # noqa: BLE001 - offline: se usa el reloj de C13
+        return _ultimos_goes(sat, "C13", n)
+
+
+def _ultimos_himawari(n: int) -> list[datetime]:
+    """Los `n` slots Himawari-9 más nuevos con los 10 segmentos publicados."""
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    try:
+        from himawari_reciente import ultimos_slots
+
+        slots = ultimos_slots(n)
+    except Exception:  # noqa: BLE001 - offline: se usan los que ya están en disco
+        slots = []
+    if slots:
+        return slots
+
+    locales = _slots_himawari()
+    if locales:
+        return locales[-n:]
+    raise ValueError(
+        "No hay datos de Himawari: el bucket de NOAA no respondió y el disco está "
+        "vacío. Revisá la conexión y volvé a intentar."
+    )
+
+
 def _snapshot(params: dict[str, Any]) -> bool:
     """True si el pedido quiere un solo cuadro: sin serie y sin animación.
 
@@ -354,6 +395,50 @@ def _animar(params: dict[str, Any], work: Path) -> Step:
             str(work / "animacion.mp4"),
         ],
     )
+
+
+# --- encuadre "Solo Paraguay" -------------------------------------------
+def _margen_paraguay(params: dict[str, Any]) -> float:
+    """Margen del encuadre como fracción del lado (la UI manda 0-20 %)."""
+    try:
+        return max(0.0, min(0.20, float(params.get("margen", 6)) / 100.0))
+    except (TypeError, ValueError):
+        return 0.06
+
+
+def _encuadre_paraguay(params: dict[str, Any], modo: str) -> list[str]:
+    """Flags del encuadre Paraguay para el render, o [] si está apagado.
+
+    `modo` es cómo lo pide cada script:
+      * `radio`   — `--centro LON LAT --radio GRADOS` (cartopy)
+      * `recorte` — `--centro LON LAT --recorte FRACCIÓN` (póster orthographic)
+      * `bbox`    — `--bbox O S E N` (mapa plano)
+    """
+    if not _bool(params, "paraguay"):
+        return []
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from paraguay import encuadre
+
+    caja = encuadre(_margen_paraguay(params))
+    if modo == "radio":
+        return ["--centro", f"{caja['lon']:g}", f"{caja['lat']:g}",
+                "--radio", f"{caja['radio']:g}"]
+    if modo == "recorte":
+        return ["--centro", f"{caja['lon']:g}", f"{caja['lat']:g}",
+                "--recorte", f"{caja['radio'] / 90.0:g}"]
+    if modo == "bbox":
+        return ["--bbox", f"{caja['oeste']:g}", f"{caja['sur']:g}",
+                f"{caja['este']:g}", f"{caja['norte']:g}"]
+    raise ValueError(f"modo de encuadre desconocido: {modo}")
+
+
+def _borde_paraguay(params: dict[str, Any]) -> str:
+    """Ruta del contorno de Paraguay si el encuadre está activo, o cadena vacía."""
+    if not _bool(params, "paraguay"):
+        return ""
+    return str(RAIZ_REPO / "datos" / "paraguay_gadm.json")
 
 
 # --- GOES: satelite + banda + paleta ------------------------------------
@@ -579,6 +664,11 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
     # centra donde se le diga. `cuadros_goes.py --globo` no tiene radio y el
     # globo se sale del marco por abajo.
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+    # Con "Solo Paraguay" el centro y el radio salen de la caja del país; si no,
+    # el globo completo centrado en el punto subsatelital.
+    marco = _encuadre_paraguay(params, "radio") or [
+        "--centro", f"{lon_sub:g}", "0", "--radio", "90",
+    ]
     args = [
         "--sat", sat,
         "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
@@ -586,9 +676,8 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         "--paso", str(paso),
         "--px", str(px),
         "--paleta", str(params.get("paleta", "clean_ir")),
-        "--geojson", "",  # sin el contorno de Paraguay: solo el dato
-        "--centro", f"{lon_sub:g}", "0",
-        "--radio", "90",
+        "--geojson", _borde_paraguay(params),
+        *marco,
         "--datos", str(datos_dir),
         "--out", str(work),
         "--frames", str(work / "frames"),
@@ -719,6 +808,7 @@ def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
             *comunes,
             "--px", str(px),
             "--fondo-globo", fondo,
+            *_encuadre_paraguay(params, "radio"),
             "--salidas", str(work),
             *(["--solo-poster"] if snap else []),
         ],
@@ -857,6 +947,7 @@ def _viento_250(params: dict[str, Any], work: Path) -> Plan:
             *comunes,
             "--px", str(px),
             "--fondo-globo", fondo,
+            *_encuadre_paraguay(params, "radio"),
             "--salidas", str(work),
             *(["--solo-poster"] if snap else []),
         ],
@@ -906,12 +997,22 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
     sat = str(params.get("satelite", "G19"))
     px = _px(params, 2400)
-    animar = _bool(params, "animar") and not _snapshot(params)
-    disco = str(params.get("encuadre", "globo")) == "disco"
+    n_ultimos = _ultimos(params)
+    animar = bool(n_ultimos) or (_bool(params, "animar") and not _snapshot(params))
+    # El disco nativo no se puede encuadrar en Paraguay: con el encuadre activo
+    # se usa el globo, que es el que acepta centro y recorte.
+    disco = (str(params.get("encuadre", "globo")) == "disco"
+             and not _bool(params, "paraguay"))
 
     # C02 es la banda pesada (~410 MB): si esta, el slot existe.
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
-    if _snapshot(params):
+    if n_ultimos:
+        # "Últimos datos": los slots nuevos publicados, sin mirar la ventana.
+        slots_nuevos = _ultimos_goes(sat, "C02", n_ultimos)
+        desde, n, paso, falta = (
+            slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True,
+        )
+    elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
         desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
     else:
@@ -950,14 +1051,17 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
             expected=1,
         )
     else:
-        # Globo centrado en el punto subsatelital: disco completo, sin recorte
-        # regional. El default del script es (-71, -10), que corta los bordes.
+        # Globo centrado en el punto subsatelital o encuadre Paraguay.
         lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
-        centro = ["--centro", f"{lon_sub:g}", "0"]
-        if str(params.get("limbo", "completo")) == "completo":
-            # Sin esto el script corta en 73.3 grados y deja afuera el 6 %
-            # del disco: el limite visible real del satelite esta en 81.3.
-            centro += ["--recorte", "1.0"]
+        marco = _encuadre_paraguay(params, "recorte")
+        if marco:
+            centro = marco
+        else:
+            centro = ["--centro", f"{lon_sub:g}", "0"]
+            if str(params.get("limbo", "completo")) == "completo":
+                # Sin esto el script corta en 73.3 grados y deja afuera el 6 %
+                # del disco: el limite visible real del satelite esta en 81.3.
+                centro += ["--recorte", "1.0"]
         if str(params.get("nitidez", "maxima")) == "maxima":
             # La mediana 3x3 y el desenfoque de 0.8 px borronean las nubes:
             # a 2712 px se nota. Se apagan salvo que se pida el look suave.
@@ -972,7 +1076,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                     "--sat", sat,
                     "--px", str(px),
                     "--fondo", "oscuro",
-                    "--no-lineas", "--no-fronteras", "--borde", "",
+                    "--no-lineas", "--no-fronteras", "--borde", _borde_paraguay(params),
                     *centro,
                     "--n", str(n),
                     "--paso", str(paso),
@@ -990,7 +1094,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                     "--sat", sat,
                     "--px", str(px),
                     "--fondo", "oscuro",
-                    "--no-lineas", "--no-fronteras", "--borde", "",
+                    "--no-lineas", "--no-fronteras", "--borde", _borde_paraguay(params),
                     *centro,
                     "--out", str(work / f"truecolor_{desde:%Y-%m-%dT%H%M}.png"),
                 ],
@@ -1080,9 +1184,16 @@ def _slots_himawari() -> list[datetime]:
 def _himawari(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
     px = _px(params, 1400)
-    animar = _bool(params, "animar") and not _snapshot(params)
+    n_ultimos = _ultimos(params)
+    animar = bool(n_ultimos) or (_bool(params, "animar") and not _snapshot(params))
 
-    if _snapshot(params):
+    if n_ultimos:
+        # "Últimos datos": el bucket del AHI, sin mirar la ventana de fechas.
+        slots_nuevos = _ultimos_himawari(n_ultimos)
+        desde, n, paso, falta = (
+            slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True,
+        )
+    elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
         desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
     else:
@@ -1107,6 +1218,9 @@ def _himawari(params: dict[str, Any], work: Path) -> Plan:
         expected=max(1, math.ceil(n / 10)),
     )
 
+    # Disco completo centrado en el punto subsatelital (Himawari no tiene la
+    # sección "Solo Paraguay").
+    marco = ["--centro", f"{_LON_SUBSAT['H09']:g}", "0", "--radio", "90"]
     render_step = Step(
         kind="render",
         label=f"renderizando {n} cuadro(s) de Himawari",
@@ -1116,10 +1230,8 @@ def _himawari(params: dict[str, Any], work: Path) -> Plan:
             "--n", str(n),
             "--paso", str(paso),
             "--px", str(px),
-            # Centro en el punto subsatelital y radio 90: el disco completo,
-            # sin recorte regional.
-            "--centro", f"{_LON_SUBSAT['H09']:g}", "0",
-            "--radio", "90",
+            # Globo completo centrado en el punto subsatelital, o Paraguay.
+            *marco,
             "--datos", str(_carpeta_himawari()),
             "--out", str(work),
             "--frames", str(work / "frames"),
@@ -1174,6 +1286,9 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
         expected=max(1, math.ceil(n / 10)),
     )
 
+    marco = _encuadre_paraguay(params, "recorte") or [
+        "--centro", f"{lon_sub:g}", "0", "--recorte", "1.0",
+    ]
     comunes = [
         "--banda", banda,
         "--sat", sat,
@@ -1182,9 +1297,9 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
         "--paso", str(paso),
         "--px", str(px),
         "--paleta", str(params.get("paleta", "clean_ir")),
-        # Globo completo centrado en el punto subsatelital, como el color real.
-        "--centro", f"{lon_sub:g}", "0",
-        "--recorte", "1.0",
+        # Globo completo centrado en el punto subsatelital, o Paraguay.
+        *marco,
+        "--borde", _borde_paraguay(params),
     ]
     if animar and n > 1:
         render_step = Step(
@@ -1212,12 +1327,17 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
 def _geocolor(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
     px = _px(params, 1400)
-    animar = _bool(params, "animar") and not _snapshot(params)
+    n_ultimos = _ultimos(params)
+    animar = bool(n_ultimos) or (_bool(params, "animar") and not _snapshot(params))
     sat = str(params.get("satelite", "G19"))
     lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
 
     cenital = _slot_cenital(inicio, lon_sub)
-    if _snapshot(params):
+    if n_ultimos:
+        # "Últimos datos": se resuelve contra GIBS, que es quien publica GeoColor.
+        slots = _ultimos_geocolor(sat, n_ultimos)
+        desde, n, paso = slots[0], len(slots), _PASO_SLOT
+    elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
         desde, n, paso = _slot_pedido(params, fin), 1, _PASO_SLOT
     else:
@@ -1234,17 +1354,31 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
 
     # El hemisferio visible depende del satélite: la caja va centrada en él. Para
     # GOES-West cruza el antimeridiano y los dos scripts la parten en dos mitades.
-    caja = [lon_sub - 90.0, -80.0, lon_sub + 90.0, 80.0]
-    comunes = [
-        "--globo",
-        "--sat", sat,
-        "--bbox", *[f"{valor:g}" for valor in caja],
-        "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
-        "--n", str(n),
-        "--paso", str(paso),
-        "--px", str(px),
-        "--out", str(work),
-    ]
+    # Con "Solo Paraguay" se pide la caja del país SIN --globo: el render sale
+    # como mapa plano cuadrado (el mismo encuadre del producto Snapshot).
+    py = _bool(params, "paraguay")
+    if py:
+        comunes = [
+            "--sat", sat,
+            *_encuadre_paraguay(params, "bbox"),
+            "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
+            "--n", str(n),
+            "--paso", str(paso),
+            "--px", str(px),
+            "--out", str(work),
+        ]
+    else:
+        caja = [lon_sub - 90.0, -80.0, lon_sub + 90.0, 80.0]
+        comunes = [
+            "--globo",
+            "--sat", sat,
+            "--bbox", *[f"{valor:g}" for valor in caja],
+            "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
+            "--n", str(n),
+            "--paso", str(paso),
+            "--px", str(px),
+            "--out", str(work),
+        ]
     descarga = Step(
         kind="download",
         label=f"bajando GeoColor de {sat} ({n} cuadro(s))",
@@ -1258,10 +1392,10 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
         script="cuadros/cuadros_geocolor.py",
         args=[
             *comunes,
-            # Globo completo centrado en el punto subsatelital y sin el borde
-            # de Paraguay, igual que el resto de los productos GOES.
-            "--centro", f"{lon_sub:g}", "0",
-            "--geojson", "",
+            # Globo completo centrado en el punto subsatelital, o el contorno de
+            # Paraguay sobre la caja recortada.
+            *([] if py else ["--centro", f"{lon_sub:g}", "0"]),
+            "--geojson", _borde_paraguay(params),
         ],
         expected=n,
     )
@@ -1302,7 +1436,11 @@ def _truecolor_viirs(params: dict[str, Any], work: Path) -> Plan:
         kind="render",
         label=f"renderizando {n} cuadro(s) de NOAA-20",
         script="cuadros/cuadros_truecolor.py",
-        args=[*comunes, "--geojson", ""],
+        args=[
+            *comunes,
+            *_encuadre_paraguay(params, "radio"),
+            "--geojson", _borde_paraguay(params),
+        ],
         expected=n,
     )
 
@@ -1399,6 +1537,9 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
         expected=max(1, math.ceil(n / 10)),
     )
 
+    marco = _encuadre_paraguay(params, "recorte") or [
+        "--centro", f"{lon_sub:g}", "0", "--recorte", "1.0",
+    ]
     comunes = [
         "--producto", producto,
         "--sat", sat,
@@ -1406,9 +1547,9 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
         "--n", str(n),
         "--paso", str(paso),
         "--px", str(px),
-        # Globo completo centrado en el punto subsatelital, como el color real.
-        "--centro", f"{lon_sub:g}", "0",
-        "--recorte", "1.0",
+        # Globo completo centrado en el punto subsatelital, o Paraguay.
+        *marco,
+        "--borde", _borde_paraguay(params),
     ]
     if animar and n > 1:
         render_step = Step(

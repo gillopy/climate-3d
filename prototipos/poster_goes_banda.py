@@ -149,7 +149,7 @@ def componer_banda(nc: Path, args) -> tuple[np.ndarray, float, dict]:
         f1 = min(f0 + tc.FILAS, px)
         lon, lat, rho, dentro = tc._orto_franja(px, escala, centro, f0, f1)
         valores = _muestrear_banda(campo, x, y, lon0, h, lon, lat)
-        a = tc._alfa(rho, px) * dentro
+        a = tc._alfa(rho, px, escala) * dentro
 
         normalizado = np.clip((valores - args.vmin) / (args.vmax - args.vmin), 0.0, 1.0)
         indice = (normalizado * 255.0).astype(np.uint8)

@@ -148,7 +148,7 @@ def _borde_geojson(ax, ruta, color, ancho):
                                          colors=color, linewidths=ancho, zorder=5))
 
 
-def _warp_ortho(rgb, bbox, centro, lado):
+def _warp_ortho(rgb, bbox, centro, lado, radio: float = 90.0):
     """Reproyecta una imagen lon/lat a Orthographic (mapeo inverso, con numpy).
 
     Para cada píxel del disco de destino se calcula su (lon, lat) y se muestrea la
@@ -164,15 +164,18 @@ def _warp_ortho(rgb, bbox, centro, lado):
     lon0, lat0 = np.radians(centro[0]), np.radians(centro[1])
     alto_o, ancho_o = rgb.shape[:2]
 
-    # Disco normalizado: x, y en [-1, 1], radio 1 = 90° de distancia al centro.
+    # Disco normalizado: x, y en [-1, 1], radio 1 = `radio` grados al centro.
+    # Con `radio < 90` el encuadre regional entra completo en el cuadro (sin
+    # esquinas negras): el borde visible del hemisferio queda fuera de la imagen.
+    escala = float(np.sin(np.radians(radio)))
     y = np.linspace(1.0, -1.0, lado)        # la fila 0 es el norte
     x = np.linspace(-1.0, 1.0, lado)
     X, Y = np.meshgrid(x, y)
     rho = np.hypot(X, Y)
-    dentro = rho <= 1.0
+    dentro = (rho * escala) <= 1.0
 
     rho_s = np.where(dentro & (rho > 1e-12), rho, 1.0)   # evita 0/0 en el centro
-    c = np.arcsin(np.clip(rho_s, 0.0, 1.0))
+    c = np.arcsin(np.clip(rho_s * escala, 0.0, 1.0))
     sin_c, cos_c = np.sin(c), np.cos(c)
 
     lat = np.arcsin(np.clip(cos_c * np.sin(lat0)
@@ -238,11 +241,16 @@ def render_globo(crudo: Path, t: datetime, args, destino: Path) -> Path:
     ax.spines["geo"].set_visible(False)
     # El warp va antes y en coordenadas de la proyección del eje: así cartopy no
     # reproyecta nada y evita el import de `img_transform` (que pide scipy/pykdtree).
-    disco = _warp_ortho(rgb, args.bbox, args.centro, args.px)
+    disco = _warp_ortho(rgb, args.bbox, args.centro, args.px, args.radio)
     xl, yl = ax.projection.x_limits, ax.projection.y_limits
-    ax.imshow(disco, origin="upper", extent=[xl[0], xl[1], yl[0], yl[1]],
+    r_m = float(xl[1]) * float(np.sin(np.radians(args.radio)))
+    ax.imshow(disco, origin="upper", extent=[-r_m, r_m, -r_m, r_m],
               transform=ax.projection, zorder=2)
-    ax.set_global()
+    if args.radio >= 90.0:
+        ax.set_global()
+    else:
+        ax.set_xlim(-r_m, r_m)
+        ax.set_ylim(-r_m, r_m)
     try:
         ax.add_feature(cfeature.COASTLINE.with_scale("110m"), linewidth=0.5,
                        edgecolor="#0b0b0b", zorder=4)
@@ -328,6 +336,9 @@ def main(argv=None) -> int:
     ap.add_argument("--centro", nargs=2, type=float, metavar=("LON", "LAT"),
                     default=[GLOBO_LON, GLOBO_LAT],
                     help=f"centro del globo (por defecto {GLOBO_LON} {GLOBO_LAT})")
+    ap.add_argument("--radio", type=float, default=90.0,
+                    help="radio visible en grados (90 = hemisferio completo; "
+                         "valores chicos recortan una región, p. ej. Paraguay)")
     ap.add_argument("--geojson", default=str(RAIZ / "datos" / "paraguay_gadm.json"),
                     help="borde destacado en el globo (GeoJSON); vacío = sin borde")
     ap.add_argument("--borde-color", default="#000000", help="color del borde destacado")

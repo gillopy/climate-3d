@@ -126,7 +126,7 @@ def componer_disco(paths: dict[str, Path], args) -> tuple[np.ndarray, float, dic
             for banda, (campo, x, y, lon0, h) in campos.items()
         }
         bloque, valido = componer_rgb(franja, args.producto)
-        a = tc._alfa(rho, px) * dentro
+        a = tc._alfa(rho, px, escala) * dentro
         bloque[~valido] = 0
 
         rgb[f0:f1] = bloque

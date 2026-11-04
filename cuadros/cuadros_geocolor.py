@@ -98,6 +98,51 @@ def etiquetar(img: Image.Image, t: datetime, credito: str) -> Image.Image:
     return Image.alpha_composite(img.convert("RGBA"), capa).convert("RGB")
 
 
+def _borde_plano(img: Image.Image, caja, ruta, color=(255, 255, 255),
+                 ancho: int = 2) -> Image.Image:
+    """Contorno del país sobre una imagen plana lon/lat (modo sin `--globo`).
+
+    Es el equivalente de `_borde_geojson` para el recorte regional: el contorno
+    se proyecta con la misma caja que la imagen, sin cartopy.
+    """
+    if not ruta:
+        return img
+    import json
+
+    datos = json.loads(Path(ruta).read_text(encoding="utf-8"))
+    o, s, e, n = caja
+    ancho_px, alto_px = img.size
+    base = img.convert("RGBA")
+    capa = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(capa)
+
+    def anillos(objeto):
+        if not isinstance(objeto, (list, tuple)):
+            return
+        if len(objeto) >= 2 and all(
+            isinstance(p, (list, tuple)) and len(p) >= 2
+            and isinstance(p[0], (int, float)) and isinstance(p[1], (int, float))
+            for p in objeto
+        ):
+            yield objeto
+            return
+        for hijo in objeto:
+            yield from anillos(hijo)
+
+    for feature in datos.get("features", []):
+        for anillo in anillos(feature.get("geometry", {}).get("coordinates", [])):
+            puntos = [
+                ((float(p[0]) - o) / (e - o) * ancho_px,
+                 (n - float(p[1])) / (n - s) * alto_px)
+                for p in anillo
+            ]
+            if len(puntos) < 2:
+                continue
+            d.line(puntos, fill=(0, 0, 0, 210), width=ancho + 2, joint="curve")
+            d.line(puntos, fill=(*color, 235), width=ancho, joint="curve")
+    return Image.alpha_composite(base, capa).convert("RGB")
+
+
 def _estilo_poster():
     """Constantes del póster del repo, compartidas en `comun/estilo.py`."""
     from estilo import BG, MONTHS_EN, TXT, TXT_DIM, WM_COLOR
@@ -411,8 +456,9 @@ def main(argv=None) -> int:
         else:
             img = Image.open(crudo)
             img = img if args.sin_fecha else etiquetar(img, t, args.credito)
+            img = _borde_plano(img, args.bbox, args.geojson)
             parcial = destino.with_suffix(".png.parcial")
-            img.convert("RGB").save(parcial)
+            img.convert("RGB").save(parcial, format="PNG")
             parcial.replace(destino)
         hechos += 1
         print(f"  {hechos}/{args.n} listos ({time.time() - inicio:.0f}s)", flush=True)

@@ -16,6 +16,9 @@ from pathlib import Path
 
 MARGEN = 0.06                          # 6 % del lado, por defecto
 
+#: GeoJSON con el contorno del país (cobertura y borde de los encuadres).
+GEOJSON = Path(__file__).resolve().parents[1] / "datos" / "paraguay_gadm.json"
+
 API = "https://wvs.earthdata.nasa.gov/api/v1/snapshot"
 
 # Capas disponibles: (id de GIBS, es un compuesto diario).
@@ -120,6 +123,26 @@ def caja_geojson(ruta: Path, margen: float = MARGEN) -> tuple[float, float, floa
     dx = (este - oeste) * margen
     dy = (norte - sur) * margen
     return (oeste - dx, sur - dy, este + dx, norte + dy)
+
+
+def encuadre(margen: float = MARGEN,
+             geojson: Path | None = None) -> dict[str, float]:
+    """Centro y radio (grados) del encuadre Paraguay, con `margen` del lado.
+
+    `radio` es la mitad del lado mayor de la caja expandida: el encuadre cuadrado
+    que entra tal cual en los renderizadores con `--radio` (grados) o, dividido
+    por 90, en los que usan `--recorte` (fracción del hemisferio).
+    """
+    o, s, e, n = caja_geojson(geojson or GEOJSON, margen)
+    return {
+        "oeste": o,
+        "sur": s,
+        "este": e,
+        "norte": n,
+        "lon": (o + e) / 2.0,
+        "lat": (s + n) / 2.0,
+        "radio": max((e - o) / 2.0, (n - s) / 2.0),
+    }
 
 
 # Detalle real de cada capa, en metros por píxel (medido sobre este encuadre).

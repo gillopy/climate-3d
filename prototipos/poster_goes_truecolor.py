@@ -226,7 +226,10 @@ def _orto_franja(px: int, escala: float, centro: tuple[float, float], f0: int, f
     x = np.linspace(-1.0, 1.0, px)
     X, Y = np.meshgrid(x, y)
     rho = np.hypot(X, Y)
-    dentro = rho <= 1.0
+    # Con zoom (`escala < 1`) el borde visible del disco cae FUERA del cuadro: el
+    # encuadre regional entra completo y no quedan esquinas negras. Con escala = 1
+    # (globo completo) el círculo inscripto recorta las esquinas, como siempre.
+    dentro = (rho * escala) <= 1.0
     rho_s = np.where(dentro & (rho > 1e-12), rho, 1.0)
     sin_c = np.clip(rho_s * escala, 0.0, 1.0)
     cos_c = np.sqrt(np.clip(1.0 - sin_c ** 2, 0.0, 1.0))
@@ -240,9 +243,14 @@ def _orto_franja(px: int, escala: float, centro: tuple[float, float], f0: int, f
     return np.degrees(lon), np.degrees(lat), rho, dentro
 
 
-def _alfa(rho, px: int):
-    """Alfa geomÃ©trico del disco: antialias de ~1.5 px sobre el radio 1."""
-    return np.clip((1.0 - rho) * (px / 2.0) / 1.5, 0.0, 1.0)
+def _alfa(rho, px: int, escala: float = 1.0):
+    """Alfa geométrico del disco: antialias de ~1.5 px sobre el borde visible.
+
+    El borde visible está en `rho * escala = 1`. Con el globo completo (`escala=1`)
+    es el círculo inscripto; con zoom cae fuera del cuadro y toda la imagen queda
+    opaca.
+    """
+    return np.clip((1.0 - rho * escala) * (px / 2.0) / 1.5, 0.0, 1.0)
 
 
 def _muestrear(plano, x, y, lon0: float, h: float, lon, lat):
@@ -402,7 +410,7 @@ def componer_disco(planos, escala, centro, px: int, t: datetime, args):
     pm = int(np.clip(px // 8, 256, 1400))
     lon, lat, rho, dentro = _orto_franja(pm, escala, centro, 0, pm)
     mu, _decl = cos_cenital(lon, lat, t)
-    alfa_m = _alfa(rho, pm) * dentro
+    alfa_m = _alfa(rho, pm, escala) * dentro
     factor = _factor_solar(mu, args)
     valido = alfa_m > 0
     refs = {}
@@ -419,7 +427,7 @@ def componer_disco(planos, escala, centro, px: int, t: datetime, args):
         f1 = min(f0 + FILAS, px)
         lon, lat, rho, dentro = _orto_franja(px, escala, centro, f0, f1)
         mu, _decl = cos_cenital(lon, lat, t)
-        a = _alfa(rho, px) * dentro
+        a = _alfa(rho, px, escala) * dentro
         factor = _factor_solar(mu, args)
         refs = {}
         for banda in BANDAS:
