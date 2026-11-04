@@ -37,7 +37,12 @@ BBOX = (-85.0, -40.0, -35.0, 15.0)      # oeste, sur, este, norte
 BBOX_GLOBO = (-160.0, -80.0, 15.0, 80.0)
 GLOBO_LON, GLOBO_LAT = -58.0, -23.0     # mismo centro por defecto del resto del repo
 # Dos líneas, como el subtítulo del póster: en una sola se sale del cuadro.
-SUBTITULO = "G19 GOES-EAST · GEOCOLOR\nCOLOR REAL (DÍA) · IR Y LUCES (NOCHE)"
+_SUBTITULOS = {
+    "G19": "G19 GOES-EAST · GEOCOLOR",
+    "G16": "G16 GOES-EAST · GEOCOLOR",
+    "G18": "G18 GOES-WEST · GEOCOLOR",
+}
+SUBTITULO = _SUBTITULOS["G19"] + "\nCOLOR REAL (DÍA) · IR Y LUCES (NOCHE)"
 FUENTE = "SOURCE: NOAA/NESDIS/STAR GEOCOLOR · NASA GIBS"
 # Los rótulos están calibrados a la animación de 720 px del repo (19 pt de título), pero
 # escalarlos linealmente hace que a 2048 px dominen el cuadro. Crecen sub-lineal (exponente
@@ -172,6 +177,11 @@ def _warp_ortho(rgb, bbox, centro, lado, banda=256):
         lon = np.where(es_centro, lon0, lon)
 
         lon_deg = (np.degrees(lon) + 180.0) % 360.0 - 180.0
+        # GOES-West ve un hemisferio que cruza el antimeridiano: la caja puede
+        # empezar en -227, así que la longitud se lleva al marco de la caja.
+        if o < -180.0:
+            lon_deg = np.where(lon_deg > e, lon_deg - 360.0, lon_deg)
+
         lat_deg = np.degrees(lat)
 
         # Posición de muestreo en la imagen de origen (plate carrée).
@@ -287,7 +297,8 @@ def _sello_render(args, salida_alto: int) -> str:
 def _comando_descarga(t0: datetime, args) -> str:
     """Comando de `descargar/geocolor.py` que genera los crudos de esta corrida."""
     cmd = (f".venv\\Scripts\\python.exe descargar\\geocolor.py "
-           f"--desde {t0:%Y-%m-%dT%H:%M} --n {args.n} --px {args.px}")
+           f"--desde {t0:%Y-%m-%dT%H:%M} --n {args.n} --px {args.px}"
+           f" --sat {args.sat.upper()}")
     return cmd + (" --globo" if args.globo else "")
 
 
@@ -302,6 +313,8 @@ def main(argv=None) -> int:
     ap.add_argument("--bbox", nargs=4, type=float, metavar=("O", "S", "E", "N"),
                     help="caja lon/lat de origen (por defecto, Sudamérica; con --globo, "
                          "la que cubre el hemisferio visible)")
+    ap.add_argument("--sat", default="G19",
+                    help="satélite del rótulo: G19/G16 = GOES-East, G18 = GOES-West")
     ap.add_argument("--globo", action="store_true",
                     help="reproyectar a Orthographic centrado en --centro (aspecto 'planeta')")
     ap.add_argument("--centro", nargs=2, type=float, metavar=("LON", "LAT"),
@@ -324,8 +337,15 @@ def main(argv=None) -> int:
     ap.add_argument("--out", help="carpeta de salida (por defecto, comun.rutas.SALIDAS)")
     args = ap.parse_args(argv)
 
+    global SUBTITULO
+    sat = args.sat.upper()
+    SUBTITULO = (f"{_SUBTITULOS.get(sat, _SUBTITULOS['G19'])}\n"
+                 "COLOR REAL (DÍA) · IR Y LUCES (NOCHE)")
+
     if args.bbox is None:
-        args.bbox = list(BBOX_GLOBO if args.globo else BBOX)
+        # Mismo criterio que la descarga: el globo se centra en el satélite.
+        args.bbox = ([args.centro[0] - 90.0, -80.0, args.centro[0] + 90.0, 80.0]
+                     if args.globo else list(BBOX))
     o, s, e, n = args.bbox
     if not (o < e and s < n):
         raise SystemExit(f"caja inválida: {args.bbox}")
@@ -339,7 +359,7 @@ def main(argv=None) -> int:
     t0 = datetime.fromisoformat(args.desde)
     salida = Path(args.out) if args.out else SALIDAS
     vista = "globo" if args.globo else "plano"
-    etiqueta = f"geocolor_{vista}_{t0:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px"
+    etiqueta = f"geocolor_{vista}_{sat}_{t0:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px"
     frames_dir = salida / f"frames_{etiqueta}"
 
     if not frames_dir.exists():
@@ -365,10 +385,15 @@ def main(argv=None) -> int:
     # que corresponda se nombra con el comando exacto que los genera.
     faltan = [i for i in range(1, args.n + 1)
               if not (frames_dir / f"crudo_{i:03d}.jpg").exists()]
-    if faltan:
+    if len(faltan) == args.n:
         raise SystemExit(
-            f"Faltan {len(faltan)} crudos ({faltan[:12]}...). Generálos con:\n"
+            f"No hay ningún crudo en {frames_dir}. Generálos con:\n"
             f"  {_comando_descarga(t0, args)}")
+    if faltan:
+        # GIBS tiene huecos de 10-20 min: se saltean esos cuadros en vez de tirar
+        # abajo la animación entera.
+        print(f"  aviso: {len(faltan)} cuadro(s) sin dato de GIBS "
+              f"({faltan[:12]}...); se saltean", flush=True)
 
     print(f"GeoColor {vista} | {args.n} cuadros desde {t0:%Y-%m-%d %H:%M} UTC | "
           f"salida {args.px}x{salida_alto} px | frames en {frames_dir}")
@@ -377,6 +402,8 @@ def main(argv=None) -> int:
     for i, t in enumerate(tiempos, 1):
         crudo = frames_dir / f"crudo_{i:03d}.jpg"
         destino = frames_dir / f"cuadro_{i:03d}.png"
+        if not crudo.exists():
+            continue                   # hueco de GIBS: la serie sigue sin ese cuadro
         if destino.exists() and destino.stat().st_mtime >= crudo.stat().st_mtime:
             pass                       # ya renderizado con estos parámetros
         elif args.globo:

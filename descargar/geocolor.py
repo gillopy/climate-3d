@@ -110,22 +110,61 @@ def valida(datos: bytes) -> bool:
     return int(pixeles.max()) > 8
 
 
+def caja_globo(centro_lon: float) -> list[float]:
+    """Caja que cubre el hemisferio visible del satélite, centrada en él."""
+    return [centro_lon - 90.0, -80.0, centro_lon + 90.0, 80.0]
+
+
+def partes(bbox, ancho: int) -> list[tuple[tuple[float, float, float, float], int]]:
+    """La caja partida si cruza el antimeridiano (caso GOES-West).
+
+    GIBS rechaza longitudes fuera de -180..180, así que el hemisferio de G18
+    (centrado en -137) se pide en dos mitades y se pega después.
+    """
+    o, s, e, n = bbox
+    if o >= -180.0:
+        return [((o, s, e, n), ancho)]
+    corte = o + 360.0
+    fraccion = (180.0 - corte) / (e - o)
+    ancho1 = max(1, min(ancho - 1, round(ancho * fraccion)))
+    return [((corte, s, 180.0, n), ancho1), ((-180.0, s, e, n), ancho - ancho1)]
+
+
+def _bajar(t: datetime, bbox, ancho: int, alto: int, capa: str) -> bytes:
+    """Baja el cuadro (una o dos mitades) y devuelve el JPEG ya armado."""
+    crudos: list[bytes] = []
+    imagenes: list[Image.Image] = []
+    for caja, ancho_parte in partes(bbox, ancho):
+        r = _sesion().get(url_cuadro(t, caja, ancho_parte, alto, capa), timeout=TIMEOUT)
+        r.raise_for_status()
+        if not valida(r.content):
+            raise ValueError(f"cuadro sin dato ({len(r.content)} B)")
+        crudos.append(r.content)
+        imagenes.append(Image.open(io.BytesIO(r.content)).convert("RGB"))
+    if len(crudos) == 1:
+        return crudos[0]
+    lienzo = Image.new("RGB", (sum(im.width for im in imagenes), imagenes[0].height))
+    x = 0
+    for im in imagenes:
+        lienzo.paste(im, (x, 0))
+        x += im.width
+    buf = io.BytesIO()
+    lienzo.save(buf, format="JPEG", quality=92)
+    return buf.getvalue()
+
+
 def descargar_cuadro(t: datetime, bbox, ancho: int, alto: int, destino: Path,
                      capa: str = CAPA, reintentos: int = 3) -> Path:
     """Baja el cuadro a `destino`; lo reutiliza si ya está (reanudable)."""
     if destino.exists() and destino.stat().st_size > 5_000:
         return destino
     destino.parent.mkdir(parents=True, exist_ok=True)
-    url = url_cuadro(t, bbox, ancho, alto, capa)
     espera = 2.0
     for intento in range(1, reintentos + 1):
         try:
-            r = _sesion().get(url, timeout=TIMEOUT)
-            r.raise_for_status()
-            if not valida(r.content):
-                raise ValueError(f"cuadro sin dato ({len(r.content)} B)")
+            datos = _bajar(t, bbox, ancho, alto, capa)
             tmp = destino.with_suffix(destino.suffix + ".parcial")
-            tmp.write_bytes(r.content)
+            tmp.write_bytes(datos)
             tmp.replace(destino)
             return destino
         except Exception as exc:                       # red o corte del servicio
@@ -158,9 +197,9 @@ def main(argv=None) -> int:
     ap.add_argument("--alto", type=int, help="alto en píxeles (por defecto, según la caja)")
     ap.add_argument("--src-px", type=int,
                     help="ancho de la imagen de origen; por defecto, según el modo")
-    ap.add_argument("--hilos", type=int, default=16,
-                    help="descargas simultáneas (por defecto 16, para saturar el enlace; "
-                         "bajalo si el servicio devuelve 429)")
+    ap.add_argument("--hilos", type=int, default=6,
+                    help="descargas simultáneas (por defecto 6: con más, GIBS empieza a "
+                         "devolver cuadros negros)")
     ap.add_argument("--sat", default="G19",
                     help="satélite: G19/G16 = GOES-East, G18 = GOES-West (por defecto G19)")
     ap.add_argument("--out", help="carpeta de salida (por defecto, comun.rutas.SALIDAS)")
@@ -172,7 +211,8 @@ def main(argv=None) -> int:
     capa = CAPAS[sat]
 
     if args.bbox is None:
-        args.bbox = list(BBOX_GLOBO if args.globo else BBOX)
+        # El globo se pide centrado en el satélite: cada uno ve su hemisferio.
+        args.bbox = caja_globo(args.centro[0]) if args.globo else list(BBOX)
     o, s, e, n = args.bbox
     if not (o < e and s < n):
         raise SystemExit(f"caja inválida: {args.bbox}")
@@ -185,7 +225,7 @@ def main(argv=None) -> int:
     t0 = datetime.fromisoformat(args.desde)
     salida = Path(args.out) if args.out else SALIDAS
     vista = "globo" if args.globo else "plano"
-    etiqueta = f"geocolor_{vista}_{t0:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px"
+    etiqueta = f"geocolor_{vista}_{sat}_{t0:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px"
     frames_dir = salida / f"frames_{etiqueta}"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
@@ -200,7 +240,7 @@ def main(argv=None) -> int:
     # Cada cuadro es un GET independiente: se bajan en paralelo. Si el servicio devuelve
     # 429, bajá --hilos.
     hechos = 0
-    fallidos = 0
+    pendientes: list[tuple[int, datetime]] = []
     with ThreadPoolExecutor(max_workers=args.hilos) as pool:
         futuros = {
             pool.submit(descargar_cuadro, t, (o, s, e, n), src_px, src_alto,
@@ -212,17 +252,33 @@ def main(argv=None) -> int:
             try:
                 fut.result()
             except Exception as exc:
-                fallidos += 1
+                pendientes.append((i, t))
                 print(f"[{i}/{args.n}] {t:%Y-%m-%d %H:%M} UTC  ERROR: {exc}", flush=True)
                 continue
             hechos += 1
-            print(f"  {hechos}/{args.n} listos (errores {fallidos}) {time.time() - inicio:.0f}s",
-                  flush=True)
+            print(f"  {hechos}/{args.n} listos (errores {len(pendientes)}) "
+                  f"{time.time() - inicio:.0f}s", flush=True)
+
+    # Los huecos de GIBS son de minutos: una segunda pasada, de a uno, los recupera.
+    if pendientes:
+        print(f"Segunda pasada: {len(pendientes)} cuadro(s) sin dato", flush=True)
+        time.sleep(3)
+        for i, t in pendientes:
+            try:
+                descargar_cuadro(t, (o, s, e, n), src_px, src_alto,
+                                 frames_dir / f"crudo_{i:03d}.jpg", capa)
+                hechos += 1
+            except Exception as exc:
+                print(f"  [{i}] sigue sin dato: {exc}", flush=True)
+        pendientes = [(i, t) for i, t in pendientes
+                      if not (frames_dir / f"crudo_{i:03d}.jpg").exists()]
 
     print(f"{hechos} cuadros listos en {time.time() - inicio:.0f}s")
-    if fallidos:
-        raise SystemExit(f"Faltan {fallidos} cuadros. Volvé a correr el mismo comando: "
-                         "los que ya están se reutilizan y sólo se reintentan los que faltan.")
+    if pendientes:
+        raise SystemExit(
+            f"Faltan {len(pendientes)} cuadro(s) que GIBS no tiene publicados: "
+            f"{[i for i, _ in pendientes][:12]}. Se puede renderizar el resto igual: "
+            "volvé a correr y los que ya están se reutilizan.")
     print("Ahora renderizá con: "
           f".venv\\Scripts\\python.exe cuadros\\cuadros_geocolor.py "
           f"--desde {t0:%Y-%m-%dT%H:%M} --n {args.n} --px {args.px}"

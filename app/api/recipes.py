@@ -1120,12 +1120,17 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
     # de la cache, que el descargador arma con el mismo nombre que el render.
     desde, n, paso, _ = _plan_slots(set(), cenital, animar, ventana)
 
-    etiqueta = f"frames_geocolor_globo_{desde:%Y-%m-%dT%H%M}_{n}f_{px}px"
+    etiqueta = f"frames_geocolor_globo_{sat}_{desde:%Y-%m-%dT%H%M}_{n}f_{px}px"
     carpeta = work / etiqueta
     falta = not (carpeta.is_dir() and next(carpeta.glob("crudo_*.jpg"), None) is not None)
 
+    # El hemisferio visible depende del satélite: la caja va centrada en él. Para
+    # GOES-West cruza el antimeridiano y los dos scripts la parten en dos mitades.
+    caja = [lon_sub - 90.0, -80.0, lon_sub + 90.0, 80.0]
     comunes = [
         "--globo",
+        "--sat", sat,
+        "--bbox", *[f"{valor:g}" for valor in caja],
         "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
         "--n", str(n),
         "--paso", str(paso),
@@ -1136,9 +1141,7 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
         kind="download",
         label=f"bajando GeoColor de {sat} ({n} cuadro(s))",
         script="descargar/geocolor.py",
-        # Cada satélite tiene su capa (East/West): el render no la necesita, la
-        # descarga sí. Sin esto, G18 bajaba la imagen de GOES-East.
-        args=["--sat", sat, *comunes],
+        args=comunes,
         expected=max(1, n),
     )
     render_step = Step(
