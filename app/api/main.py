@@ -55,6 +55,12 @@ gestor = JobManager(MEDIA)
 
 app.mount("/media", StaticFiles(directory=MEDIA), name="media")
 
+# Las muestras las genera el pipeline (`app/tools/previews.py`), no el bundle: se
+# sirven desde `public/` para que actualizarlas no dependa de `npm run build`.
+PREVIEWS = RAIZ_APP / "web" / "public" / "previews"
+if PREVIEWS.is_dir():
+    app.mount("/previews", StaticFiles(directory=PREVIEWS), name="previews")
+
 
 @app.get("/api/health")
 def health() -> dict[str, object]:
