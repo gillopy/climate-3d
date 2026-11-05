@@ -8,10 +8,13 @@
     "export": "python tools/export_demo.py",
     "dev": "node scripts/dev-server.mjs",
     "test": "node --test tests/api.test.mjs",
-    "deploy": "wrangler deploy",
-    "preview": "wrangler dev"
+    "build:worker": "esbuild src/index.mjs --bundle --format=esm --target=es2022 --outfile=site/_worker.js",
+    "deploy:pages": "npm run build:worker && wrangler pages deploy site --project-name climate3d --branch main",
+    "deploy:worker": "wrangler deploy",
+    "preview:pages": "wrangler pages dev site"
   },
   "devDependencies": {
+    "esbuild": "^0.28.0",
     "wrangler": "^4.20.0"
   }
 }

@@ -173,7 +173,21 @@ export default {
       return json({ detail: `Ruta desconocida: ${ruta}` }, 404);
     }
 
-    if (env?.ASSETS) return env.ASSETS.fetch(request);
+    if (env?.ASSETS) {
+      const respuesta = await env.ASSETS.fetch(request);
+      // Pages no trae el fallback SPA de Workers: una navegacion desconocida
+      // tiene que terminar en index.html.
+      if (
+        respuesta.status === 404 &&
+        metodo === "GET" &&
+        (request.headers.get("accept") ?? "").includes("text/html")
+      ) {
+        return env.ASSETS.fetch(
+          new Request(new URL("/index.html", request.url), { headers: request.headers }),
+        );
+      }
+      return respuesta;
+    }
     return new Response("No encontrado", { status: 404 });
   },
 };

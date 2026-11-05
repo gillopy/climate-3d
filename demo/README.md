@@ -29,9 +29,14 @@ El material de entrada son corridas reales que la app ya había hecho.
 ## Cómo funciona
 
 ```
-navegador → Cloudflare Worker (/api/*)  → manifest precalculado
-          → Cloudflare Assets (/media, /previews, /assets)
+navegador → Cloudflare Pages (climate3d.pages.dev)
+          ├── /api/*  → _worker.js (misma API, resultados precalculados)
+          └── resto   → assets estáticos (dist + previews + media)
 ```
+
+`_worker.js` es el mismo handler de `src/index.mjs`, bundleado con esbuild.
+Pages lo ejecuta en modo avanzado y le pasa el binding `ASSETS` para servir
+los archivos estáticos. La URL pública no expone ningún dato de la cuenta.
 
 `src/index.mjs` imita los mismos endpoints que `app/api/main.py`:
 
@@ -70,22 +75,30 @@ el SSE, `reveal` y que todas las imágenes sean WebP livianas.
 
 ## Desplegar
 
-Requiere una cuenta de Cloudflare y **Wrangler 4.20 o superior** (el
-`run_worker_first` en forma de lista necesita esa versión):
+Requiere una cuenta de Cloudflare y **Wrangler 4.20 o superior**:
 
 ```powershell
 cd demo
 npm install
 npx wrangler login
-npm run deploy
+npm run deploy:pages
 ```
 
-Queda en `https://climate3d-demo.<tu-subdominio>.workers.dev`.
+Queda en **https://climate3d.pages.dev**.
 
-El `wrangler.jsonc` ya declara:
-- assets estáticos en `./site`,
-- fallback SPA para el frontend,
-- `run_worker_first` para `/api/*`, así la API nunca cae en `index.html`.
+`deploy:pages` compila `_worker.js` y sube `site/` como deploy directo. No
+necesita Git, ni build en Cloudflare, ni un dominio propio.
+
+### Alternativa: Workers
+
+El mismo handler también corre como Worker con assets:
+
+```powershell
+npm run deploy:worker
+```
+
+En ese caso la URL incluye el subdominio de la cuenta
+(`https://climate3d.<cuenta>.workers.dev`), por eso Pages es la opción pública.
 
 ### Proteger el acceso
 
