@@ -70,7 +70,8 @@ el SSE, `reveal` y que todas las imágenes sean WebP livianas.
 
 ## Desplegar
 
-Requiere una cuenta de Cloudflare y Wrangler 4:
+Requiere una cuenta de Cloudflare y **Wrangler 4.20 o superior** (el
+`run_worker_first` en forma de lista necesita esa versión):
 
 ```powershell
 cd demo

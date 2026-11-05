@@ -327,12 +327,14 @@ def main() -> int:
     )
 
     (salida / "_headers").write_text(
+        "/*\n  x-robots-tag: noindex\n"
         "/assets/*\n  cache-control: public, max-age=31536000, immutable\n"
         "/previews/*\n  cache-control: public, max-age=604800\n"
         "/media/*\n  cache-control: public, max-age=31536000, immutable\n"
         "/api/*\n  cache-control: no-store\n",
         encoding="utf-8",
     )
+    (salida / "robots.txt").write_text("User-agent: *\nDisallow: /\n", encoding="utf-8")
 
     print(f"\nlisto: {len(manifest_combos)} combos, {total / 1024 / 1024:.1f} MB de artefactos")
     print(f"manifiesto: {src / 'manifest.mjs'}")

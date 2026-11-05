@@ -1,3 +1,5 @@
+/*
+  x-robots-tag: noindex
 /assets/*
   cache-control: public, max-age=31536000, immutable
 /previews/*
