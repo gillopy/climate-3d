@@ -52,8 +52,13 @@ odd/
 /previews-check.png
 /snapshot-*.png
 
-# Artefacto de la skill design-md analizando nuxt.com (referencia, no doc del proyecto)
+# Artefactos de la skill design-md (referencia, no doc del proyecto)
 /app/nuxt.design.md
+/app/linear.design.md
+/app/linear-style-reference-DESIGN.md
+
+# Capturas de referencia de Stitch (mocks de diseño, no docs)
+/docs/stitch/
 
 # Reference images downloaded by hand: kept on disk, not part of the pipeline
 /d28crpyip6yh1.png

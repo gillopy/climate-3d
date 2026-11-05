@@ -48,6 +48,7 @@ export default function App() {
   const [reintento, setReintento] = useState(0);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState("");
 
   const satelite = typeof params.satelite === "string" ? params.satelite : "";
   const banda = typeof params.banda === "string" ? params.banda : "";
@@ -217,10 +218,19 @@ export default function App() {
 
   const listo = catalogo?.repo_ready === true;
   const conDatos = catalogo?.data_root_exists === true;
+  const consulta = filtro.trim().toLowerCase();
+  // El filtro busca en lo que la persona ve y en el id técnico del producto.
+  const coincidencias = (catalogo?.products ?? []).filter(
+    (item) =>
+      !consulta ||
+      `${item.name} ${item.summary} ${item.group} ${item.id}`
+        .toLowerCase()
+        .includes(consulta),
+  );
   // Agrupa por nombre conservando el orden en que el catalogo los presenta.
   const grupos: { nombre: string; items: Product[] }[] = [];
   const porGrupo = new Map<string, Product[]>();
-  for (const item of catalogo?.products ?? []) {
+  for (const item of coincidencias) {
     const lista = porGrupo.get(item.group);
     if (lista) {
       lista.push(item);
@@ -235,8 +245,17 @@ export default function App() {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          <h1>Climate 3D</h1>
-          <span className="brand__sub">consola de render</span>
+          <span className="brand__mark" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="5.2" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M2.4 10.2h11.2" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M6.4 10.2 8 12l1.6-1.8" stroke="currentColor" strokeWidth="1.3" />
+            </svg>
+          </span>
+          <span className="brand__txt">
+            <h1>Climate 3D</h1>
+            <span className="brand__sub">render console</span>
+          </span>
         </div>
         <div className="health">
           <span className="health__item health__item--count">
@@ -274,12 +293,51 @@ export default function App() {
       <main className="layout">
         <section className="rail" aria-label="Productos disponibles">
           <div className="rail__head">
-            <h2 className="rail__title" id="productos-titulo">
-              Productos
-            </h2>
-            <span className="rail__count">
-              {catalogo ? String(catalogo.products.length).padStart(2, "0") : "—"}
-            </span>
+            <div className="rail__top">
+              <h2 className="rail__title" id="productos-titulo">
+                Productos
+              </h2>
+              <span className="rail__count" aria-live="polite">
+                {catalogo
+                  ? consulta
+                    ? `${String(coincidencias.length).padStart(2, "0")} / ${catalogo.products.length}`
+                    : String(catalogo.products.length).padStart(2, "0")
+                  : "—"}
+              </span>
+            </div>
+            <div className="rail__search">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle cx="7" cy="7" r="4.4" stroke="currentColor" strokeWidth="1.3" />
+                <path d="m10.4 10.4 3 3" stroke="currentColor" strokeWidth="1.3" />
+              </svg>
+              <input
+                type="search"
+                value={filtro}
+                placeholder="Filtrar productos"
+                aria-label="Filtrar productos por nombre, grupo o resumen"
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(evento) => setFiltro(evento.target.value)}
+              />
+              {filtro ? (
+                <button
+                  type="button"
+                  className="rail__clear"
+                  aria-label="Limpiar filtro"
+                  onClick={() => setFiltro("")}
+                >
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                </button>
+              ) : null}
+            </div>
           </div>
           <ul className="catalog" aria-labelledby="productos-titulo">
             {grupos.map((grupo) => (
@@ -321,6 +379,11 @@ export default function App() {
               </li>
             ))}
           </ul>
+          {consulta && coincidencias.length === 0 && catalogo ? (
+            <p className="rail__empty">
+              Sin coincidencias para «{filtro.trim()}».
+            </p>
+          ) : null}
           {catalogo === null && !error ? (
             <p className="rail__empty">Leyendo el catalogo…</p>
           ) : null}

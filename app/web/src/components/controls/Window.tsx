@@ -42,19 +42,18 @@ function Extremo({
   }
 
   return (
-    <div className="window__stop">
-      <span className="window__stop-name">{nombre}</span>
+    <div className="datepick__stop">
       <button
         type="button"
         ref={boton}
-        className={abierto ? "window__fecha window__fecha--abierta" : "window__fecha"}
+        className={abierto ? "datepick__btn datepick__btn--open" : "datepick__btn"}
         aria-haspopup="dialog"
         aria-expanded={abierto}
         aria-label={`${nombre}: ${fecha}`}
         onClick={alternar}
       >
-        <span className="window__fecha-valor">{fecha}</span>
-        <span className="window__icono" aria-hidden="true" />
+        <span className="datepick__k">{nombre}</span>
+        <span className="datepick__v">{fecha}</span>
       </button>
       {abierto ? children(arriba) : null}
     </div>
@@ -62,7 +61,6 @@ function Extremo({
 }
 
 interface VentanaProps {
-  label: string;
   value: RangoFechas;
   disponibles: Set<string>;
   disabled?: boolean;
@@ -70,14 +68,13 @@ interface VentanaProps {
 }
 
 /**
- * Ventana temporal: dos botones, cada uno con su calendario desplegable.
+ * Ventana temporal: dos extremos, cada uno con su calendario desplegable.
  *
  * El comienzo manda: si se elige un día posterior al final, la ventana se
  * achica a ese día. El final nunca mueve el comienzo — los días anteriores
  * quedan deshabilitados en su calendario.
  */
 export function VentanaTemporal({
-  label,
   value,
   disponibles,
   disabled,
@@ -114,112 +111,97 @@ export function VentanaTemporal({
 
   return (
     <div
-      className={disabled ? "window window--off" : "window"}
+      className={disabled ? "datepick datepick--off" : "datepick"}
       ref={caja}
       onKeyDown={(evento) => {
         if (evento.key === "Escape") setAbierto(null);
       }}
     >
-      <div className="window__head">
-        <span className="window__label">{label}</span>
-        <span className="window__cuenta">
-          {dias} {dias === 1 ? "día" : "días"}
-        </span>
-      </div>
+      <Extremo
+        nombre="Desde"
+        fecha={formatearFecha(inicio)}
+        abierto={abierto === "start"}
+        alAbrir={() => setAbierto(abierto === "start" ? null : "start")}
+      >
+        {(arriba) => (
+          <div
+            className={arriba ? "datepick__pop datepick__pop--arriba" : "datepick__pop"}
+            role="dialog"
+            aria-label="Elegir el comienzo"
+          >
+            <Calendario
+              modo="range"
+              inicio={inicio}
+              fin={fin}
+              disponibles={disponibles}
+              disabled={disabled}
+              onElegir={elegirInicio}
+            />
+          </div>
+        )}
+      </Extremo>
 
-      <div className="window__track">
-        <Extremo
-          nombre="Desde"
-          fecha={formatearFecha(inicio)}
-          abierto={abierto === "start"}
-          alAbrir={() => setAbierto(abierto === "start" ? null : "start")}
-        >
-          {(arriba) => (
-            <div
-              className={arriba ? "window__pop window__pop--arriba" : "window__pop"}
-              role="dialog"
-              aria-label="Elegir el comienzo"
-            >
-              <Calendario
-                modo="range"
-                inicio={inicio}
-                fin={fin}
-                disponibles={disponibles}
-                disabled={disabled}
-                onElegir={elegirInicio}
-              />
-            </div>
-          )}
-        </Extremo>
+      <span className="datepick__sep" aria-hidden="true">
+        →
+      </span>
 
-        <span className="window__arrow" aria-hidden="true">
-          →
-        </span>
+      <Extremo
+        nombre="Hasta"
+        fecha={formatearFecha(fin)}
+        abierto={abierto === "end"}
+        alAbrir={() => setAbierto(abierto === "end" ? null : "end")}
+      >
+        {(arriba) => (
+          <div
+            className={
+              arriba
+                ? "datepick__pop datepick__pop--der datepick__pop--arriba"
+                : "datepick__pop datepick__pop--der"
+            }
+            role="dialog"
+            aria-label="Elegir el final"
+          >
+            <Calendario
+              modo="range"
+              inicio={inicio}
+              fin={fin}
+              disponibles={disponibles}
+              minimo={inicio}
+              disabled={disabled}
+              onElegir={elegirFin}
+            />
+          </div>
+        )}
+      </Extremo>
 
-        <Extremo
-          nombre="Hasta"
-          fecha={formatearFecha(fin)}
-          abierto={abierto === "end"}
-          alAbrir={() => setAbierto(abierto === "end" ? null : "end")}
-        >
-          {(arriba) => (
-            <div
-              className={
-                arriba
-                  ? "window__pop window__pop--der window__pop--arriba"
-                  : "window__pop window__pop--der"
-              }
-              role="dialog"
-              aria-label="Elegir el final"
-            >
-              <Calendario
-                modo="range"
-                inicio={inicio}
-                fin={fin}
-                disponibles={disponibles}
-                minimo={inicio}
-                disabled={disabled}
-                onElegir={elegirFin}
-              />
-            </div>
-          )}
-        </Extremo>
-      </div>
-
-      <p className="window__pie">
-        <span className="window__paso">{formatearRango(inicio, fin)}</span>
-        <span className="window__leyenda">
-          <span className="window__muestra window__muestra--fuera" aria-hidden="true" />
-          fuera del rango
-          {disponibles.size > 0 ? (
-            <>
-              <span className="window__muestra" aria-hidden="true" />
-              con datos en disco
-            </>
-          ) : null}
-        </span>
-      </p>
+      <span
+        className="datepick__days"
+        title={formatearRango(inicio, fin)}
+        aria-label={`${dias} ${dias === 1 ? "día" : "días"}`}
+      >
+        {dias} d
+      </span>
     </div>
   );
 }
 
 interface FechaProps {
-  label: string;
   value: string;
   disponibles: Set<string>;
   disabled?: boolean;
   onChange: (iso: string) => void;
 }
 
-/** Fecha suelta: un botón que abre su calendario y se cierra al elegir. */
+/** Fecha suelta: un control que abre su calendario y se cierra al elegir. */
 export function FechaUnica({
-  label,
   value,
   disponibles,
   disabled,
   onChange,
 }: FechaProps) {
   const [abierto, setAbierto] = useState(false);
+  const [arriba, setArriba] = useState(false);
+  const boton = useRef<HTMLButtonElement | null>(null);
   const caja = useRef<HTMLDivElement | null>(null);
   const dia = ISO.test(value) ? value : hoyUTC();
 
@@ -234,57 +216,57 @@ export function FechaUnica({
     return () => document.removeEventListener("pointerdown", afuera);
   }, [abierto]);
 
+  function alternar() {
+    if (!abierto) {
+      const cajaBoton = boton.current?.getBoundingClientRect();
+      if (cajaBoton) setArriba(window.innerHeight - cajaBoton.bottom < 360);
+    }
+    setAbierto(!abierto);
+  }
+
   return (
     <div
-      className={disabled ? "window window--sola window--off" : "window window--sola"}
+      className={disabled ? "datepick datepick--off" : "datepick"}
       ref={caja}
       onKeyDown={(evento) => {
         if (evento.key === "Escape") setAbierto(false);
       }}
     >
-      <div className="window__head">
-        <span className="window__label">{label}</span>
-        <span className="window__cuenta">{formatearFecha(dia)}</span>
-      </div>
+      <button
+        type="button"
+        ref={boton}
+        className={
+          abierto ? "datepick__btn datepick__btn--sola datepick__btn--open" : "datepick__btn datepick__btn--sola"
+        }
+        aria-haspopup="dialog"
+        aria-expanded={abierto}
+        aria-label={`Día: ${formatearFecha(dia)}`}
+        onClick={alternar}
+      >
+        <span className="datepick__icon" aria-hidden="true" />
+        <span className="datepick__k">Día</span>
+        <span className="datepick__v">{formatearFecha(dia)}</span>
+      </button>
 
-      <div className="window__track window__track--sola">
-        <Extremo
-          nombre="Día"
-          fecha={formatearFecha(dia)}
-          abierto={abierto}
-          alAbrir={() => setAbierto(!abierto)}
+      {abierto ? (
+        <div
+          className={arriba ? "datepick__pop datepick__pop--arriba" : "datepick__pop"}
+          role="dialog"
+          aria-label="Elegir el día"
         >
-          {(arriba) => (
-            <div
-              className={arriba ? "window__pop window__pop--arriba" : "window__pop"}
-              role="dialog"
-              aria-label="Elegir el día"
-            >
-              <Calendario
-                modo="single"
-                inicio={dia}
-                fin={dia}
-                disponibles={disponibles}
-                disabled={disabled}
-                onElegir={(iso) => {
-                  onChange(iso);
-                  setAbierto(false);
-                }}
-              />
-            </div>
-          )}
-        </Extremo>
-      </div>
-
-      <p className="window__pie">
-        <span className="window__paso">Elegí el día</span>
-        {disponibles.size > 0 ? (
-          <span className="window__leyenda">
-            <span className="window__muestra" aria-hidden="true" />
-            con datos en disco
-          </span>
-        ) : null}
-      </p>
+          <Calendario
+            modo="single"
+            inicio={dia}
+            fin={dia}
+            disponibles={disponibles}
+            disabled={disabled}
+            onElegir={(iso) => {
+              onChange(iso);
+              setAbierto(false);
+            }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,154 +1,153 @@
 # Sistema de diseño: Climate 3D — consola de render
 
-**Mundo:** la carta de tiempo significativo (SIGWX) impresa y la mesa de análisis.
-**Superficie:** Operate (la persona completa una tarea; la expresión no puede tapar el trabajo).
+**Mundo:** instrumento de precisión. Un canvas casi negro, una escalera de superficies y un
+solo acento cromático.
+**Superficie:** Operate (la persona completa una tarea; la expresión no puede tapar el
+trabajo).
 
 ## 1. Tema visual y atmósfera
 
-Dos superficies y una sola idea: una **mesa de tinta azul-noche** donde vive el trabajo, y una
-**hoja de carta clara** donde vive el dato. El catálogo y la corrida son mesa; el producto, su
-muestra y su receta son hoja. No hay tarjetas flotando: hay columnas separadas por líneas de
-1 px, como el reticulado de una carta.
+La consola se lee como un instrumento: fondo negro profundo, paneles apenas elevados,
+filetes de 1 px y micro-etiquetas en versalitas. No hay tarjetas flotando ni gradientes
+decorativos; la jerarquía la llevan la **escalera de superficies** y los filetes. El color
+aparece únicamente cuando tiene oficio: acción primaria, foco, selección y estado.
 
-La densidad es alta y el ruido bajo: rótulos en versalitas condensadas, filetes finos, y una
-sola pieza con movimiento — la **traza**, una línea de frente que avanza sobre un tramo rayado
-a medida que corre el trabajo. Lo demás es quieto.
-
-La luz es nocturna porque la escena lo es: alguien mirando discos que brillan en una pantalla
-apagada. El papel de la hoja no es decorativo: es donde se leen los números.
+La imagen del satélite es la protagonista cromática. El cromo de la interfaz se retira para
+que el render respire; el formulario, en cambio, gana estructura: secciones, etiquetas,
+valor actual y ayuda por campo.
 
 ## 2. Paleta y oficios
 
-| Nombre | Hex | Oficio |
+### Superficies
+
+| Token | Hex | Oficio |
 | --- | --- | --- |
-| Tinta de carta | `#0b1420` | Fondo de la mesa (barra, catálogo, corrida). |
-| Tinta elevada | `#101c2b` | Fila de catálogo en hover. |
-| Tinta activa | `#16263a` | Fila de catálogo seleccionada. |
-| Filete de mesa | `#25384d` | Separadores y bordes sobre tinta. |
-| Filete tenue | `#1b2b3d` | Separadores internos de listas. |
-| Papel de carta | `#f1f3f0` | Hoja de trabajo: formulario y ficha. |
-| Papel hundido | `#eceee9` | Ficha y pie de la hoja. |
-| Filete de papel | `#c8cfc6` | Bordes y reglas sobre la hoja. |
-| Tinta de imprenta | `#0b1420` | Texto y títulos sobre la hoja. |
-| Tinta de papel media | `#4b5761` | Rótulos y texto secundario sobre la hoja. |
-| Tinta de papel tenue | `#66727c` | Ayudas de campo sobre la hoja. |
-| Texto de mesa | `#e8eef4` | Texto principal sobre tinta. |
-| Texto de mesa medio | `#93a5b4` | Descripciones y metadatos sobre tinta. |
-| Texto de mesa tenue | `#7b8fa3` | Rótulos de grupo y numeración. |
-| **Frente frío** | `#1f5fd0` | Acción primaria, foco, progreso en curso, selección viva. |
-| Frente profundo | `#17489e` | Hover de la acción primaria. |
-| Lavado de frente | `#dde6f6` | Interruptor encendido sobre la hoja. |
-| **Frente cálido** | `#c2382e` | Error, cancelar, aviso. |
-| Lavado cálido | `#f6e0dd` | Fondo de avisos y del botón cancelar en hover. |
-| Calma | `#2f7a55` | Trabajo listo. |
-| Retenido | `#b47f22` | En cola, advertencia. |
+| `--void` | `#08090a` | Canvas de la aplicación y columna de trabajo. |
+| `--carbon` | `#0f1011` | Riel de productos, panel de corridas, ficha técnica. |
+| `--obsidian` | `#161718` | Controles, filas seleccionadas, popovers. |
+| `--slate` | `#1c1e21` | Hover de controles y filas. |
+| `--line` | `#23252a` | Filete base. |
+| `--line-strong` | `#34343a` | Filete de foco secundario y bordes de popover. |
 
-Reglas: **el color hace oficio, nunca ambienta**. Violeta y rosa no entran: el dato ya los usa.
-Sobre la mesa, el verde y el ámbar aparecen con brillo propio (`#6fbe95`, `#e0796f`) para
-alcanzar contraste AA sobre tinta.
+### Tinta
 
-Los estados se dibujan con el vocabulario de la carta: **rayado a 45°** para lo que espera,
-**tramo azul con punta de frente** para lo que corre, **verde pleno** para lo terminado y
-**rojo** para el error. El mismo rayado se repite en la clave de estados y en la traza.
+| Token | Hex | Oficio |
+| --- | --- | --- |
+| `--paper` | `#f7f8f8` | Títulos y valores. |
+| `--mist` | `#d0d6e0` | Texto principal. |
+| `--fog` | `#8a8f98` | Texto secundario, ayudas y metadatos. |
+| `--ash` | `#7c818a` | Micro-etiquetas; se subió desde el gris original para sostener AA. |
+
+### Acento y semánticos
+
+| Token | Hex | Oficio |
+| --- | --- | --- |
+| **`--iris`** | `#5e6ad2` | Único acento: acción primaria, foco, selección, progreso. |
+| `--iris-hi` | `#828fff` | Hover y texto de acento sobre oscuro. |
+| `--iris-soft` | `rgba(94,106,210,.16)` | Lavado de selección, anillo de foco, chip de valor. |
+| `--success` | `#3fb950` | Trabajo listo y dato en disco. |
+| `--warn` | `#d29922` | En cola, advertencia. |
+| `--danger` | `#f85149` | Error y cancelar. |
+
+Reglas: un solo acento cromático. Los semánticos no se usan como decoración. Violeta y rosa
+quedan reservados al dato científico.
 
 ## 3. Tipografía
 
-Dos voces, ninguna de sistema:
+- **Archivo** (variable, 400–700): lectura, títulos y controles. Títulos a `-0.035em`.
+- **Archivo Narrow** (variable): micro-etiquetas en versalitas con `letter-spacing` de
+  `0.10em` a `0.16em`.
+- **Mono del sistema**: ids, rutas, horas, valores numéricos y resumen. Siempre
+  `font-variant-numeric: tabular-nums`.
 
-- **Archivo** (variable, 400–700): lectura y controles. Títulos a `-0.025em`; cuerpo `13.5px/1.5`.
-- **Archivo Narrow** (variable, 400–700): rótulos, nombres de producto, cifras y sellos.
-  Versalitas con `letter-spacing` de `0.10em` a `0.18em`.
-- **Mono del sistema** sólo para lo que es dato técnico: rutas de script, id del job, log.
-  `font-variant-numeric: tabular-nums` en todo número que cambie.
-
-Escala: `29px` título de la hoja (24px en pantallas angostas) · `17px` nombre de producto en la
-corrida · `14.5px` ítem del catálogo · `13.5px` control · `12.5px` cuerpo secundario · `11px`
-rótulo en versalitas · `9.5px` rótulo de la ficha.
-
-No hay eyebrow sobre los títulos: el título carga solo. Los rótulos existen para los campos,
-no para decorar encabezados.
+Escala: `27px` título del producto · `16px` nombre en la corrida · `13.5px` base ·
+`12.5px` etiquetas de campo y controles · `11.5px` ayuda · `10.5px` metadatos ·
+`10px` micro-etiqueta · `9px` rótulo de ficha.
 
 ## 4. Componentes
 
-- **Catálogo**: lista continua sin tarjetas. Fila = miniatura de 46 px, nombre, dos líneas de
-  resumen, marca de 8 px. Agrupado por `grupo` con un rótulo en versalitas. Selección: fila más
-  clara + miniatura y marca en azul. Hover: un escalón de tinta. En ≤1080 px se convierte en
-  cinta horizontal de 196 px por ficha.
-- **Hoja**: cabecera con título y la receta técnica en mono; **placa** de borde a borde que
-  sigue al render —alto propio, sin marco fijo ni franjas negras, imagen centrada con borde de
-  1 px y marcas de registro en las esquinas—; **ficha** de cuatro celdas con filetes verticales
-  (grupo, datos en disco, última fecha, origen); campos; pie con la acción.
-- **Formulario**: siempre dos tramos, sea cual sea el producto. Primero las opciones —snapshot,
-  satélite, capa, banda, paleta, encuadre, modelo, proyección, fondo, resolución, descargas,
-  animación—; después un corte con la leyenda **"Fecha y hora"** y, en el mismo orden para
-  todos, `última disponible`, fecha o ventana, hora, minuto, corrida y horizonte. El tramo de
-  tiempo es el último de la hoja.
-- **Campos**: rótulo en versalitas + control. Sin cajas envolventes. Los controles viven sobre
-  papel blanco con borde de 1 px y radio de 6 px; foco con anillo azul de 2 px.
-- **Desplegable** (`select`): control cerrado con el valor y un chevron de 5 px; la lista se abre
-  debajo, pegada al control, con sombra suave, alto máximo de 232 px y scroll propio. Opción
-  activa = lavado azul; opción elegida = marca cuadrada azul a la derecha. Mantiene el contrato
-  `combobox`/`listbox`: flechas, Home/End, Enter y Escape. Es la única superficie que se
-  superpone a la hoja, y lo hace por encima del pie pegajoso.
-- **Ventana temporal**: tarjeta siempre visible. Arriba el rótulo y el conteo de días; abajo los
-  dos extremos como botones —`1 NOV 2026 → 2 NOV 2026`, cada uno con el icono de calendario— y
-  un pie con el rango en cifras y la leyenda. Cada botón despliega **su propio** calendario en un
-  panel flotante que se cierra al elegir o al tocar afuera, y que se abre hacia arriba cuando no
-  hay lugar abajo. El comienzo manda: si se elige un día posterior al final, la ventana se achica
-  a ese día; el final nunca mueve el comienzo y su calendario deshabilita los días anteriores.
-  En fecha única hay un solo botón con el mismo comportamiento.
-- **Calendario**: grilla de 7 columnas que arranca el lunes, celdas cuadradas de ~45 px, mes con
-  navegación de 1 mes (entre el rango con datos —o doce meses atrás— y el mes en curso). Dentro
-  del rango: lavado azul; extremos: azul pleno; **fuera del rango o en el futuro: gris apagado**.
-  Los días anteriores al comienzo del rango y los futuros quedan deshabilitados; el resto se
-  puede clickear para extender el rango. Punto de 3 px cuando la fecha ya está en disco; hoy
-  lleva un filete en la celda. En modo fecha única no hay gris: todo día pasado es candidato.
-- **Interruptor**: cuadrado de 46×24 con perilla cuadrada; encendido = lavado azul + perilla
-  azul. No es una píldora: la píldora está reservada a etiquetas pequeñas.
-- **Acción primaria**: azul pleno, versalitas de Archivo Narrow, radio de 12 px, ancho mínimo
-  190 px. En el pie pegajoso, siempre a la vista mientras se recorre la hoja.
-- **Traza**: la firma. Riel de 12 px con rayado de espera; el tramo recorrido es un lavado azul
-  con borde derecho de 2 px y una fila de puntas de frente en su base. Termina en verde o rojo
-  según el estado final. Transición de 400 ms `cubic-bezier(.16,.84,.28,1)`.
-- **Sello de estado**: etiqueta con doble borde, versalitas muy espaciadas y rotación de
-  `-2.5°`. Aparece con un golpe de 220 ms (`scale 1.18 → 1`) sólo en estados terminales.
-- **Consola**: bloque sobre tinta más oscura, mono de 11 px, alto fijo de 232 px con scroll
-  propio y las rutas largas envueltas (`pre-wrap`), nunca cortadas de costado; hora en gris
-  azulado, advertencia en ámbar, error en rojo. Es un bloque que no se encoge: cuando la corrida
-  suma artefactos, scrollea el panel, no la consola.
-- **Placas de salida**: imágenes y videos con pie en mono y peso en bytes.
+- **Barra superior**: 56 px, canvas, filete inferior. Marca con glifo en lavanda, "render
+  console" en versalitas, y a la derecha las píldoras de salud (punto verde para listo,
+  ámbar para advertencia) más el reloj UTC / UTC-3 en mono.
+- **Catálogo**: lista continua sobre `--carbon`. Fila = miniatura de 44 px con radio 6,
+  nombre, dos líneas de resumen y punto de selección. Hover y selección suben un escalón a
+  `--obsidian`; la selección suma un filete de 1 px en `--iris` a la izquierda. El buscador
+  del riel filtra por nombre, grupo, resumen o id y muestra el conteo `visibles / total`
+  con un botón de limpiar. En ≤1120 px se convierte en cinta horizontal.
+- **Cabecera del producto**: título de 27 px, resumen, y en la línea de metadatos el
+  `grupo · id`, el script en mono y la píldora "pipeline listo". A la derecha,
+  **Restablecer** (fantasma, deshabilitado si no hay cambios).
+- **Placa**: imagen real dentro de un panel con radio 14, filete y fondo `#050607`; alto
+  máximo `clamp(260px, 50vh, 560px)`. El pie en mono dice "salida real de este producto" y
+  la variante elegida.
+- **Ficha técnica**: cuatro celdas (grupo, datos en disco, última fecha, origen) en una
+  caja `--carbon` con filetes verticales y valores en mono.
+- **Inspector de receta**: el formulario se agrupa en paneles por sección —**Fuente de
+  datos**, **Salida & geometría**, **Tiempo (UTC)**, **Movimiento & animación** y "Otras
+  opciones"—. Cada panel lleva en la cabecera el número (`01`), el título en versalitas, una
+  píldora con la cuenta (`4 parámetros`) y una descripción corta alineada a la derecha;
+  debajo, una grilla `auto-fit minmax(232px, 1fr)` de tarjetas.
+- **Campo**: tarjeta sobre `--obsidian` con filete y radio 10; etiqueta de 12.5 px + valor
+  actual + ayuda de 11.5 px. Al enfocar cualquier control, el filete de la tarjeta pasa a
+  `--iris-line`. Si el valor difiere del default, aparece un punto lavanda y un enlace
+  **restablecer**; el botón global restauran todos. Los controles deshabilitados por otro
+  parámetro quedan al 38 % y no reciben interacción.
+- **Slider**: riel de 4 px con relleno lavanda hasta el valor, perilla redonda y chip mono
+  con la unidad (`144 h`, `12 fps`, `6 %`). Los extremos muestran el mínimo y el máximo
+  (`0 %` / `20 %`) en mono a los costados. El relleno se calcula con `--fill`.
+- **Desplegable**: control oscuro con chevron dibujado en CSS; lista flotante sobre
+  `--obsidian` con filete fuerte y sombra profunda. Opción activa en `--slate`, opción
+  elegida con punto lavanda. Conserva `combobox`/`listbox` y flechas, Home/End, Enter,
+  Escape.
+- **Fechas**: control compacto de dos extremos (`Desde 4 NOV 2026 → Hasta 5 NOV 2026`) con
+  contador de días en píldora. Cada extremo abre su calendario en un popover que se
+  posiciona arriba si no hay lugar. En fecha única hay un solo control con icono.
+- **Calendario**: grilla de 7 columnas desde el lunes, celdas de 28–30 px, mes en
+  versalitas con navegación. Dentro del rango: lavado lavanda; extremos: lavanda pleno;
+  fuera del rango: apagado. Punto verde cuando la fecha ya está en disco; futuros y
+  anteriores al mínimo quedan deshabilitados.
+- **Interruptor**: píldora de 38×22; apagado = perilla gris sobre `--obsidian`; encendido =
+  riel lavanda y perilla blanca.
+- **Pie pegajoso**: resumen de la receta en chips (`clave` en versalitas + `valor` en mono)
+  a la izquierda y **Generar** a la derecha con atajo `Ctrl ↵`. Fondo translúcido con
+  `backdrop-filter`, filete superior y sombra suave hacia arriba.
+- **Corridas**: lista con punto de estado, nombre, hora y etapa; selección con fondo
+  elevado y filete lavanda de 1 px. Debajo, el detalle: nombre, id en mono, píldora de
+  estado, barra de progreso de 6 px, plan numerado, consola y artefactos.
+- **Estado**: píldora con punto y color semántico (`en cola` ámbar, `corriendo` lavanda,
+  `listo` verde, `error` rojo, `cancelado` gris).
+- **Consola**: bloque `#050607`, mono de 10.5 px, alto fijo de 224 px, scroll propio y
+  rutas envueltas (`pre-wrap`). Cada línea lleva hora y etiqueta de severidad —`INF`, `WRN`,
+  `ERR`— además del color: advertencias en ámbar y errores en rojo.
+- **Artefactos**: miniatura o video dentro de un panel; el pie muestra nombre, peso y un
+  enlace **Bajar** que descarga el archivo con su nombre real.
 
 ## 5. Retícula y ritmo
 
-Tres columnas: `296px · 1fr · 412px` a 1440 px; `264 · 1fr · 372` a 1280; una sola columna por
-debajo de 1080 (catálogo en cinta, hoja, corrida). Cada columna scrollea sola; el alto total es
-la ventana menos la barra de 62 px. Aire: `26px` de margen lateral en la mesa y la hoja, `18px`
-entre campos, `22px` antes de un bloque nuevo, `14px` después.
+Tres columnas: `288px · 1fr · 408px` en escritorio, `264 · 1fr · 372` por debajo de 1380 px.
+Por debajo de 1120 px colapsa a una columna, el catálogo pasa a cinta y el pie deja de
+pegarse. Cada columna scrollea sola; el alto total es la ventana menos la barra de 56 px.
 
-Radios: 12 px en botones y contenedores, 6–8 px en controles y miniaturas, 3 px en sellos.
+Aire: `20px` de margen lateral, `18px` entre campos, `22px` entre secciones, `16px` entre
+bloques del panel. Radios: 6 px controles, 10 px fichas, 14 px placa, píldora para estados y
+chips.
 
-Elevación: **una**. La hoja no flota sobre la mesa (son columnas, no tarjetas). La única sombra
-es la del pie pegajoso cuando la hoja scrollea (`0 -14px 20px -14px`), y existe para decir
-"debajo hay más".
+Elevación: casi nula. Solo los popovers y el pie pegajoso proyectan sombra, y existe para
+decir "esto flota" o "debajo hay más".
 
 ## 6. Movimiento
 
-Dos momentos, ninguno decorativo:
-
-1. La traza avanza 400 ms con ease-out exponencial al cambiar de progreso.
-2. El sello aterriza 220 ms al terminar la corrida.
-
-Todo lo demás cambia en 120–140 ms. Con `prefers-reduced-motion` los tres se apagan.
+Dos gestos, ninguno decorativo: el pulso del estado en curso (1.8 s) y el avance del
+progreso (400 ms). Todo lo demás cambia en 120–160 ms. Con `prefers-reduced-motion` se
+apaga.
 
 ## 7. Accesibilidad
 
-- Contraste AA: texto principal 14:1 sobre la hoja y 13:1 sobre la mesa; secundarios ≥4.8:1.
-- Foco visible con anillo azul de 2 px y `outline-offset` de 2 px en todo control.
+- Contraste AA: `--mist` sobre `--void` ≈ 14:1; `--fog` ≈ 6:1; `--ash` ≈ 5:1.
+- Foco visible con anillo lavanda de 2 px y `outline-offset` de 2 px.
 - Cada campo tiene `label` asociada por `for`/`id` y `aria-describedby` para la ayuda.
-- El desplegable expone `role="combobox"`, `aria-expanded` y `aria-activedescendant`; el foco
-  nunca sale del control cerrado y Escape cierra la lista sin mover el formulario.
-- El calendario es una grilla de botones con `aria-label` completo ("4 de noviembre de 2026"),
-  `aria-pressed` en los extremos y `disabled` en los días futuros.
-- El progreso es `role="progressbar"` con `aria-valuenow`, `aria-valuemin` y `aria-valuemax`.
-- El interruptor es `role="switch"` con `aria-checked` y nombre accesible.
-- Selección de texto y `caret` en azul de frente; scrollbars finas por superficie.
+- El desplegable expone `role="combobox"`, `aria-expanded` y `aria-activedescendant`.
+- El calendario es una grilla de botones con `aria-label` completo y `aria-pressed`.
+- El progreso es `role="progressbar"` con `aria-valuenow`; el interruptor es `role="switch"`
+  con `aria-checked`.
+- El resumen de la receta es texto, no depende del color; los estados suman etiqueta escrita.

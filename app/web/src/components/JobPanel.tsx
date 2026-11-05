@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { Job, JobSummary } from "../types";
+import type { Job, JobSummary, LogLine } from "../types";
 
 const ETIQUETAS: Record<Job["status"], string> = {
   queued: "en cola",
@@ -7,6 +7,14 @@ const ETIQUETAS: Record<Job["status"], string> = {
   done: "listo",
   error: "error",
   cancelled: "cancelado",
+};
+
+// Marca de severidad: la consola se escanea por color y por etiqueta, no solo
+// por el tinte de la linea.
+const NIVEL: Record<LogLine["level"], string> = {
+  info: "INF",
+  warn: "WRN",
+  error: "ERR",
 };
 
 function peso(bytes: number): string {
@@ -101,12 +109,12 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
   const imagenes = job?.artifacts.filter((a) => a.kind === "image") ?? [];
   const videos = job?.artifacts.filter((a) => a.kind === "video") ?? [];
   const porcentaje = Math.round((job?.progress ?? 0) * 100);
-  const traza =
+  const relleno =
     job?.status === "done"
-      ? "trace--done"
+      ? "progress__fill progress__fill--done"
       : job?.status === "error"
-        ? "trace--error"
-        : "";
+        ? "progress__fill progress__fill--error"
+        : "progress__fill";
 
   return (
     <aside className="job" aria-label="Corridas">
@@ -137,7 +145,7 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
                   onClick={() => onSelect(corrida.id)}
                 >
                   <span
-                    className={`key__mark key__mark--${corrida.status}`}
+                    className={`run__dot run__dot--${corrida.status}`}
                     aria-hidden="true"
                   />
                   <span className="run__body">
@@ -166,7 +174,7 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
           <>
             <div className="job__head">
               <h2 className="job__title">Corrida</h2>
-              <span className={`stamp stamp--${job.status}`}>
+              <span className={`status status--${job.status}`}>
                 {ETIQUETAS[job.status]}
               </span>
             </div>
@@ -178,20 +186,20 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
               </code>
             </div>
 
-            <div className={`trace ${traza}`}>
+            <div className="progress">
               <div
-                className="trace__track"
+                className="progress__track"
                 role="progressbar"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={porcentaje}
                 aria-label="Progreso de la corrida"
               >
-                <div className="trace__fill" style={{ width: `${porcentaje}%` }} />
+                <div className={relleno} style={{ width: `${porcentaje}%` }} />
               </div>
-              <div className="trace__meta">
-                <span className="trace__stage">{job.stage}</span>
-                <span className="trace__pct">{porcentaje}%</span>
+              <div className="progress__meta">
+                <span className="progress__stage">{job.stage}</span>
+                <span className="progress__pct">{porcentaje}%</span>
               </div>
             </div>
 
@@ -212,6 +220,13 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
                   key={indice}
                 >
                   <span className="console__time">{linea.at.slice(11, 19)}</span>
+                  <span
+                    className={`console__tag console__tag--${linea.level}`}
+                    aria-hidden="true"
+                  >
+                    {NIVEL[linea.level]}
+                  </span>
+                  <span className="sr-only">{`[${linea.level}] `}</span>
                   <span>{linea.text}</span>
                 </div>
               ))}
@@ -223,8 +238,17 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
                   <figure key={arte.name} className="artifact">
                     <img src={arte.url} alt={arte.name} loading="lazy" />
                     <figcaption>
-                      <span>{arte.name}</span>
-                      <span className="artifact__size">{peso(arte.bytes)}</span>
+                      <span className="artifact__name">{arte.name}</span>
+                      <span className="artifact__meta">
+                        <span className="artifact__size">{peso(arte.bytes)}</span>
+                        <a
+                          className="artifact__dl"
+                          href={arte.url}
+                          download={arte.name}
+                        >
+                          Bajar
+                        </a>
+                      </span>
                     </figcaption>
                   </figure>
                 ))}
@@ -236,10 +260,19 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
                       <img src={arte.url} alt={arte.name} loading="lazy" />
                     )}
                     <figcaption>
-                      <span>{arte.name}</span>
-                      <span className="artifact__size">
-                        {esGif(arte.name) ? "animo " : ""}
-                        {peso(arte.bytes)}
+                      <span className="artifact__name">{arte.name}</span>
+                      <span className="artifact__meta">
+                        <span className="artifact__size">
+                          {esGif(arte.name) ? "animo " : ""}
+                          {peso(arte.bytes)}
+                        </span>
+                        <a
+                          className="artifact__dl"
+                          href={arte.url}
+                          download={arte.name}
+                        >
+                          Bajar
+                        </a>
                       </span>
                     </figcaption>
                   </figure>
