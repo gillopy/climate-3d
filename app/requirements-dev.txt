@@ -1,0 +1,12 @@
+# Dependencias solo para correr la suite de pruebas de la app.
+# La API en runtime no las necesita: se instalan aparte para no engordar
+# `app/requirements.txt`.
+#
+#   app\.venv\Scripts\python.exe -m pip install -r app\requirements-dev.txt
+
+-r requirements.txt
+
+# `app/tests/test_descargadores_gibs.py` importa los descargadores del repo.
+requests==2.34.*
+# `fastapi.testclient` en Starlette 1.x usa `httpx2`, no `httpx`.
+httpx2==2.16.*

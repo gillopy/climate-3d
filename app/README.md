@@ -586,12 +586,47 @@ hijo renderizando y el pipe abierto. Verificado: cancelar en 79 % deja el job en
 Nunca se mezclan: la capa web no necesita `cartopy`, y el pipeline no necesita
 `fastapi`.
 
+Para correr las pruebas, el entorno de la app suma las dependencias de
+`app/requirements-dev.txt` (`requests` para los descargadores y `httpx2` para
+`TestClient`). No son dependencias de runtime: la API arranca sin ellas.
+
+## Pruebas
+
+Una sola vez:
+
+```powershell
+app\.venv\Scripts\python.exe -m pip install -r app\requirements-dev.txt
+```
+
+Toda la suite (unos 3 s, sin red):
+
+```powershell
+app\.venv\Scripts\python.exe -m unittest discover -s app\tests
+```
+
+Qué cubre:
+
+- `test_jobs.py` — ciclo de vida: un job termina en `done` con artefactos, un
+  script que falla deja el código de salida y su stderr en el log, un job sin
+  imágenes avisa, el historial sobrevive al reinicio y una línea corrupta no
+  rompe el resto.
+- `test_jobs_subprocess.py` — regresión del loop Selector de Windows
+  (`uvicorn --reload`): el job tiene que correr igual.
+- `test_api.py` — contrato HTTP: health, catálogo, y los 400/404 con motivo.
+- `test_recetas_ecmwf.py`, `test_goes_rgb.py`, `test_goes_ultimos.py`,
+  `test_paraguay_ultimos.py`, `test_descargadores_gibs.py` — recetas, bandas,
+  encuadre y descargadores.
+
+Resultado esperado al día de hoy: **149 tests, OK**. Si ves `skipped`, falta
+alguna dependencia de `requirements-dev.txt`; el mensaje del skip dice cuál.
+
 ## Límites conocidos
 
 - Un solo worker. Dos personas pidiendo renders a la vez ven la cola, no
   paralelismo.
-- El historial de jobs vive en memoria: reiniciar el server lo borra (los
-  artefactos quedan en `app/var/media/cache`).
+- El historial de jobs se guarda en `app/var/media/historial.jsonl` (las últimas
+  40 corridas terminadas) y se relee al arrancar. Si el archivo se borra, la
+  lista arranca vacía; los artefactos quedan en `app/var/media/cache`.
 - Sin autenticación: es local.
 - El repo vive en OneDrive: `node_modules`, `.venv` y la caché de renders generan
   mucho tráfico de sincronización. Conviene moverlo fuera antes de crecer.

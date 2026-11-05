@@ -15,6 +15,8 @@ import asyncio
 import hashlib
 import json
 import os
+import subprocess
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -53,7 +55,7 @@ _PESO = {"download": 0.4, "render": 0.5, "animate": 0.1}
 _GRACIA_CANCEL = 6.0
 
 
-def _matar_arbol(proc: asyncio.subprocess.Process) -> None:
+def _matar_arbol(proc: subprocess.Popen[bytes]) -> None:
     """Mata el proceso y todos sus hijos.
 
     Los scripts de render lanzan un hijo por lote y ese hijo hereda el stdout:
@@ -107,7 +109,7 @@ class Job:
     plan: list[str] = field(default_factory=list)
     error: str | None = None
     dir: Path | None = None
-    proc: asyncio.subprocess.Process | None = None
+    proc: subprocess.Popen[bytes] | None = None
     cancelar: asyncio.Event = field(default_factory=asyncio.Event)
     subs: set[asyncio.Queue] = field(default_factory=set)
 
@@ -228,7 +230,7 @@ class JobManager:
             _matar_arbol(job.proc)
             try:
                 job.proc.kill()
-            except ProcessLookupError:
+            except OSError:
                 pass
         if job.status == "queued":
             job.status = "cancelled"
@@ -467,9 +469,12 @@ class JobManager:
                 return
             job.status = "running"
             job.started_at = _ahora()
-            assert job.dir is not None
-            job.dir.mkdir(parents=True, exist_ok=True)
             try:
+                # Tambien dentro del try: si la carpeta no se puede crear, el job
+                # tiene que terminar en `error` con el motivo, no quedar colgado
+                # en `running` con la tarea muerta en silencio.
+                assert job.dir is not None
+                job.dir.mkdir(parents=True, exist_ok=True)
                 self._log(job, f"job {job.id} | {job.product_id} | modo={job.mode}")
                 await self._real(job)
 
@@ -492,10 +497,11 @@ class JobManager:
                 self._emitir(job, {"type": "cancelled"})
             except Exception as exc:  # noqa: BLE001 - se reporta tal cual a la UI
                 job.status = "error"
+                detalle = str(exc).strip() or "sin detalle"
                 job.error = (
-                    str(exc)
+                    detalle
                     if isinstance(exc, (RuntimeError, ValueError, SinRed))
-                    else f"{type(exc).__name__}: {exc}"
+                    else f"{type(exc).__name__}: {detalle}"
                 )
                 job.finished_at = _ahora()
                 job.stage = "error"
@@ -639,27 +645,50 @@ class JobManager:
         self._log(job, "  " + " ".join([Path(cmd[0]).name, *cmd[1:]]))
         self._progreso(job, base, etiqueta)
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=str(RAIZ_REPO),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            env=entorno,
-        )
+        # `subprocess.Popen` + un hilo lector, no `asyncio.create_subprocess_exec`:
+        # en Windows el loop Selector (el que arma uvicorn con ``--reload``) no
+        # sabe crear subprocesos y tira ``NotImplementedError`` sin mensaje; el job
+        # moria al instante con el log vacio. Asi corre en cualquier event loop.
+        loop = asyncio.get_running_loop()
+        cola: asyncio.Queue[bytes | None] = asyncio.Queue()
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(RAIZ_REPO),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=entorno,
+            )
+        except OSError as exc:
+            raise RuntimeError(
+                f"no se pudo ejecutar `{cmd[0]}`: {exc}. "
+                "Revisa que el venv del repo exista y que el script sea ejecutable."
+            ) from exc
         job.proc = proc
         assert proc.stdout is not None
 
-        # Un hilo lector alimenta la cola: asi el loop principal nunca se cuelga
-        # esperando un pipe que un hijo huerfano dejo abierto.
-        cola: asyncio.Queue[bytes | None] = asyncio.Queue()
+        def bombear() -> None:
+            # El hilo alimenta la cola para que el loop nunca se cuelgue esperando
+            # un pipe que un hijo huerfano dejo abierto.
+            try:
+                for crudo in iter(proc.stdout.readline, b""):
+                    loop.call_soon_threadsafe(cola.put_nowait, crudo)
+            except (ValueError, OSError):
+                pass  # el pipe se cerro mientras leiamos
+            finally:
+                try:
+                    loop.call_soon_threadsafe(cola.put_nowait, None)
+                except RuntimeError:
+                    pass  # el loop ya cerro: no hay a quien avisarle
+                try:
+                    proc.stdout.close()  # type: ignore[union-attr]
+                except (AttributeError, OSError, ValueError):
+                    pass
 
-        async def bombear() -> None:
-            assert proc.stdout is not None
-            async for crudo in proc.stdout:
-                cola.put_nowait(crudo)
-            cola.put_nowait(None)
-
-        bomba = asyncio.create_task(bombear())
+        hilo = threading.Thread(target=bombear, name=f"job-{job.id}", daemon=True)
+        hilo.start()
         vistos = 0
         limite: float | None = None
 
@@ -692,9 +721,8 @@ class JobManager:
                 if paso.expected > 0:
                     self._progreso(job, base + span * min(0.95, vistos / paso.expected), etiqueta)
 
-            codigo = await asyncio.wait_for(proc.wait(), timeout=10)
+            codigo = await asyncio.wait_for(asyncio.to_thread(proc.wait), timeout=10)
         finally:
-            bomba.cancel()
             job.proc = None
 
         if job.cancelar.is_set():
