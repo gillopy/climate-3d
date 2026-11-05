@@ -21,18 +21,23 @@ from pathlib import Path
 from typing import Any
 
 # --- seleccion curada -----------------------------------------------------
-# Una corrida real por producto, todas dentro de 2026-11-03..2026-11-04.
-# Los directorios salen de `app/var/media/historial.jsonl`.
+# Una corrida real por producto. Los directorios salen del historial de la app
+# (`app/var/media/historial.jsonl`); con `--historial` se puede pasar uno
+# combinado (la app poda el suyo a 40 corridas).
 SELECCION = [
     "cache/1c68639dc983",  # goes_c13          03..04
     "cache/5e119fd99e80",  # geocolor          03..04
     "cache/d8fa7a21aea2",  # goes_truecolor    03..04
-    "cache/90c8540c70b5",  # goes_banda        03..04
-    "cache/63d06b4cfae3",  # goes_dust         03..04
-    "cache/146799ea59cf",  # goes_airmass      04..04
-    "cache/298727bb5a29",  # goes_firetemp     04..04
+    "cache/63d06b4cfae3",  # goes_dust         04
+    "cache/146799ea59cf",  # goes_airmass      04
+    "cache/298727bb5a29",  # goes_firetemp     04
     "cache/86214db86a85",  # snapshot_paraguay 04
-    "cache/a18dad691ec2",  # precipitacion     04
+    "cache/b4bce5063c8f",  # anomalia_2t       05 (encuadre Paraguay limpio)
+    "cache/157a64c714e6",  # viento_250        04 (encuadre Paraguay limpio)
+    "cache/0a4f59e85579",  # mur_sst           04
+    "cache/e05b5761e386",  # mur_realista      04
+    "cache/98b1ea7a7872",  # follaje           10-10
+    "cache/50ecae621392",  # truecolor_viirs   04
 ]
 
 MAX_ANCHO = 1600
@@ -156,6 +161,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", default=str(RAIZ))
     parser.add_argument("--out", default=str(Path(__file__).resolve().parents[1] / "site"))
+    parser.add_argument("--historial",
+                        help="historial.jsonl a congelar (por defecto, el de la app)")
     parser.add_argument("--probe", action="store_true")
     args = parser.parse_args()
 
@@ -163,7 +170,16 @@ def main() -> int:
     salida = Path(args.out).resolve()
     media = repo / "app" / "var" / "media"
 
-    historial = _leer_historial(media)
+    if args.historial:
+        filas = {}
+        for linea in Path(args.historial).read_text(encoding="utf-8").splitlines():
+            if not linea.strip():
+                continue
+            fila = json.loads(linea)
+            filas[fila["dir"]] = fila
+        historial = filas
+    else:
+        historial = _leer_historial(media)
     catalogo = _catalogo(repo)
     ffmpeg = _ffmpeg()
 
@@ -325,6 +341,14 @@ def main() -> int:
         "export default " + json.dumps(manifiesto, ensure_ascii=False, indent=2) + ";\n",
         encoding="utf-8",
     )
+
+    # Las portadas de productos que salieron del dataset no se publican.
+    incluidos = {c["product_id"] for c in manifest_combos}
+    carpeta_previews = salida / "previews"
+    if carpeta_previews.is_dir():
+        for portada in carpeta_previews.glob("*.webp"):
+            if portada.stem.split("--")[0] not in incluidos:
+                portada.unlink()
 
     (salida / "_headers").write_text(
         "/*\n  x-robots-tag: noindex\n"
