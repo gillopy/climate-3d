@@ -1,0 +1,17 @@
+{
+  "name": "climate3d-demo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Demo congelada de Climate 3D: frontend real + API de solo lectura para Cloudflare",
+  "scripts": {
+    "export": "python tools/export_demo.py",
+    "dev": "node scripts/dev-server.mjs",
+    "test": "node --test tests/api.test.mjs",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
