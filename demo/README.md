@@ -8,10 +8,11 @@ El material de entrada son corridas reales que la app ya había hecho.
 
 ## Qué incluye
 
-- **9 productos** con sus renders reales.
-- **2 días**: 2026-11-03 y 2026-11-04.
+- **13 productos** con sus renders reales.
+- **4 días**: 2026-10-10 (follaje), 2026-11-03 y 2026-11-04 (GOES y otros),
+  2026-11-05 (anomalía de 2 m).
 - Imágenes en **WebP** (máx. 1600 px, calidad 82) y videos **MP4 H.264** (1280 px).
-- **4 MB** de artefactos en total.
+- **4.5 MB** de artefactos en total.
 - El build del frontend tal cual, sin recompilar ni tocar `app/web`.
 
 | Producto | Día | Artefactos |
@@ -19,12 +20,16 @@ El material de entrada son corridas reales que la app ya había hecho.
 | `goes_c13` | 03–04 | 2 cuadros + MP4 |
 | `geocolor` | 03–04 | 1 cuadro |
 | `goes_truecolor` | 03–04 | 1 cuadro |
-| `goes_banda` | 03–04 | 2 cuadros + MP4 |
 | `goes_dust` | 04 | 1 cuadro |
 | `goes_airmass` | 04 | 1 cuadro |
 | `goes_firetemp` | 04 | 1 cuadro |
 | `snapshot_paraguay` | 04 | 1 cuadro |
-| `precipitacion_ecmwf` | 04 | 2 cuadros + póster + MP4 |
+| `anomalia_2t` | 05 | póster (encuadre Paraguay limpio) |
+| `viento_250` | 04 | póster (encuadre Paraguay limpio) |
+| `mur_sst` | 04 | 1 cuadro |
+| `mur_realista` | 04 | póster |
+| `follaje` | 10-10 | 1 cuadro |
+| `truecolor_viirs` | 04 | 1 cuadro |
 
 ## Cómo funciona
 
@@ -70,7 +75,7 @@ usan solo Node.
 node --test tests/api.test.mjs
 ```
 
-Los tests cubren catálogo, fechas, las 9 combinaciones, el bloqueo con 409,
+Los tests cubren catálogo, fechas, las combinaciones, el bloqueo con 409,
 el SSE, `reveal` y que todas las imágenes sean WebP livianas.
 
 ## Desplegar

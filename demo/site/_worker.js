@@ -1,21 +1,25 @@
-// demo/src/manifest.mjs
+// src/manifest.mjs
 var manifest_default = {
   "version": 1,
-  "generated_at": "2026-11-05T17:48:16+00:00",
+  "generated_at": "2026-11-05T23:08:01+00:00",
   "days": [
+    "2026-10-10",
     "2026-11-03",
-    "2026-11-04"
+    "2026-11-04",
+    "2026-11-05"
   ],
   "dates": {
+    "anomalia_2t": [
+      "2026-11-05"
+    ],
+    "follaje": [
+      "2026-10-10"
+    ],
     "geocolor": [
       "2026-11-03",
       "2026-11-04"
     ],
     "goes_airmass": [
-      "2026-11-04"
-    ],
-    "goes_banda": [
-      "2026-11-03",
       "2026-11-04"
     ],
     "goes_c13": [
@@ -33,10 +37,19 @@ var manifest_default = {
       "2026-11-03",
       "2026-11-04"
     ],
-    "precipitacion_ecmwf": [
+    "mur_realista": [
+      "2026-11-04"
+    ],
+    "mur_sst": [
       "2026-11-04"
     ],
     "snapshot_paraguay": [
+      "2026-11-04"
+    ],
+    "truecolor_viirs": [
+      "2026-11-04"
+    ],
+    "viento_250": [
       "2026-11-04"
     ]
   },
@@ -267,11 +280,7 @@ var manifest_default = {
             "bytes": 997192
           }
         ],
-        "plan": [
-          "bajando los \xFAltimos 12 slots de C13 (G19)",
-          "renderizando 12 cuadro(s) de C13",
-          "armando la animacion"
-        ],
+        "plan": [],
         "error": null
       }
     },
@@ -617,300 +626,7 @@ var manifest_default = {
             "bytes": 396996
           }
         ],
-        "plan": [
-          "bajando C01+C02+C03 de G19 (1 slot(s))",
-          "poster color real 1400px"
-        ],
-        "error": null
-      }
-    },
-    {
-      "id": "301028c756de",
-      "product_id": "goes_banda",
-      "params": {
-        "snapshot": false,
-        "paraguay": true,
-        "margen": 12,
-        "satelite": "G19",
-        "banda": "C16",
-        "paleta": "gris",
-        "ventana": {
-          "start": "2026-11-03",
-          "end": "2026-11-04"
-        },
-        "ultimos": true,
-        "ultimos_n": "12",
-        "hora": 15,
-        "minuto": "00",
-        "resolucion": "2712",
-        "hora_desde": 0,
-        "hora_hasta": 24,
-        "animar": false,
-        "fps": 12
-      },
-      "dates": [
-        "2026-11-03",
-        "2026-11-04"
-      ],
-      "snapshot": {
-        "id": "301028c756de",
-        "product_id": "goes_banda",
-        "product_name": "GOES - banda cruda, estilo color real",
-        "params": {
-          "snapshot": false,
-          "paraguay": true,
-          "margen": 12,
-          "satelite": "G19",
-          "banda": "C16",
-          "paleta": "gris",
-          "ventana": {
-            "start": "2026-11-03",
-            "end": "2026-11-04"
-          },
-          "ultimos": true,
-          "ultimos_n": "12",
-          "hora": 15,
-          "minuto": "00",
-          "resolucion": "2712",
-          "hora_desde": 0,
-          "hora_hasta": 24,
-          "animar": false,
-          "fps": 12
-        },
-        "mode": "real",
-        "status": "done",
-        "progress": 1,
-        "stage": "resultado precalculado",
-        "created_at": "2026-11-04T21:58:46+00:00",
-        "started_at": "2026-11-04T21:58:48+00:00",
-        "finished_at": "2026-11-04T22:02:24+00:00",
-        "logs": [
-          {
-            "at": "2026-11-04T22:01:33+00:00",
-            "level": "info",
-            "text": "  franja   768/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:33+00:00",
-            "level": "info",
-            "text": "  franja  1024/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:33+00:00",
-            "level": "info",
-            "text": "  franja  1280/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:33+00:00",
-            "level": "info",
-            "text": "  franja  1536/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:34+00:00",
-            "level": "info",
-            "text": "  franja  1792/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:34+00:00",
-            "level": "info",
-            "text": "  franja  2048/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:34+00:00",
-            "level": "info",
-            "text": "  franja  2304/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:35+00:00",
-            "level": "info",
-            "text": "  franja  2560/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:35+00:00",
-            "level": "info",
-            "text": "  franja  2712/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:44+00:00",
-            "level": "info",
-            "text": "  [10/12] 2026-11-04 21:20 UTC"
-          },
-          {
-            "at": "2026-11-04T22:01:45+00:00",
-            "level": "info",
-            "text": "  franja   256/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:45+00:00",
-            "level": "info",
-            "text": "  franja   512/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:46+00:00",
-            "level": "info",
-            "text": "  franja   768/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:46+00:00",
-            "level": "info",
-            "text": "  franja  1024/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:46+00:00",
-            "level": "info",
-            "text": "  franja  1280/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:47+00:00",
-            "level": "info",
-            "text": "  franja  1536/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:47+00:00",
-            "level": "info",
-            "text": "  franja  1792/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:47+00:00",
-            "level": "info",
-            "text": "  franja  2048/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:48+00:00",
-            "level": "info",
-            "text": "  franja  2304/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:48+00:00",
-            "level": "info",
-            "text": "  franja  2560/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:48+00:00",
-            "level": "info",
-            "text": "  franja  2712/2712"
-          },
-          {
-            "at": "2026-11-04T22:01:57+00:00",
-            "level": "info",
-            "text": "  [11/12] 2026-11-04 21:30 UTC"
-          },
-          {
-            "at": "2026-11-04T22:01:59+00:00",
-            "level": "info",
-            "text": "  franja   256/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:00+00:00",
-            "level": "info",
-            "text": "  franja   512/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:00+00:00",
-            "level": "info",
-            "text": "  franja   768/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:01+00:00",
-            "level": "info",
-            "text": "  franja  1024/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:01+00:00",
-            "level": "info",
-            "text": "  franja  1280/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:01+00:00",
-            "level": "info",
-            "text": "  franja  1536/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:02+00:00",
-            "level": "info",
-            "text": "  franja  1792/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:02+00:00",
-            "level": "info",
-            "text": "  franja  2048/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:02+00:00",
-            "level": "info",
-            "text": "  franja  2304/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:03+00:00",
-            "level": "info",
-            "text": "  franja  2560/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:03+00:00",
-            "level": "info",
-            "text": "  franja  2712/2712"
-          },
-          {
-            "at": "2026-11-04T22:02:11+00:00",
-            "level": "info",
-            "text": "  [12/12] 2026-11-04 21:40 UTC"
-          },
-          {
-            "at": "2026-11-04T22:02:11+00:00",
-            "level": "info",
-            "text": "Cuadros en <repo>\\app\\var\\media\\cache\\90c8540c70b5\\frames"
-          },
-          {
-            "at": "2026-11-04T22:02:12+00:00",
-            "level": "info",
-            "text": "[3/3] armando la animacion"
-          },
-          {
-            "at": "2026-11-04T22:02:12+00:00",
-            "level": "info",
-            "text": "  python.exe <repo>\\animar\\armar.py --frames <repo>\\app\\var\\media\\cache\\90c8540c70b5\\frames --fps 12 --formato mp4 --salida <repo>\\app\\var\\media\\cache\\90c8540c70b5\\animacion.mp4"
-          },
-          {
-            "at": "2026-11-04T22:02:12+00:00",
-            "level": "info",
-            "text": "12 cuadros en <repo>\\app\\var\\media\\cache\\90c8540c70b5\\frames -> animacion_frames"
-          },
-          {
-            "at": "2026-11-04T22:02:24+00:00",
-            "level": "info",
-            "text": "MP4: <repo>\\app\\var\\media\\cache\\90c8540c70b5\\animacion.mp4 (1.64 MB)"
-          },
-          {
-            "at": "2026-11-04T22:02:24+00:00",
-            "level": "info",
-            "text": "listo: 3 artefacto(s)"
-          }
-        ],
-        "artifacts": [
-          {
-            "name": "cuadro_001.webp",
-            "url": "/media/301028c756de/cuadro_001.webp",
-            "kind": "image",
-            "bytes": 45658
-          },
-          {
-            "name": "cuadro_012.webp",
-            "url": "/media/301028c756de/cuadro_012.webp",
-            "kind": "image",
-            "bytes": 47812
-          },
-          {
-            "name": "animacion.mp4",
-            "url": "/media/301028c756de/animacion.mp4",
-            "kind": "video",
-            "bytes": 97959
-          }
-        ],
-        "plan": [
-          "bajando los \xFAltimos 12 slots de C16 (G19)",
-          "12 cuadro(s) de C16",
-          "armando la animacion"
-        ],
+        "plan": [],
         "error": null
       }
     },
@@ -1111,10 +827,7 @@ var manifest_default = {
             "bytes": 352864
           }
         ],
-        "plan": [
-          "bajando dust de G19 (1 slot(s))",
-          "poster dust 2712px"
-        ],
+        "plan": [],
         "error": null
       }
     },
@@ -1314,10 +1027,7 @@ var manifest_default = {
             "bytes": 251160
           }
         ],
-        "plan": [
-          "bajando airmass de G19 (1 slot(s))",
-          "poster airmass 2712px"
-        ],
+        "plan": [],
         "error": null
       }
     },
@@ -1674,280 +1384,868 @@ var manifest_default = {
       }
     },
     {
-      "id": "cfa8aac21b7d",
-      "product_id": "precipitacion_ecmwf",
+      "id": "f768b4541c9e",
+      "product_id": "anomalia_2t",
       "params": {
-        "snapshot": false,
+        "snapshot": true,
         "paraguay": true,
         "margen": 6,
-        "modelo": "aifs-ens",
-        "fecha": "2026-11-04",
+        "modelo": "ifs",
+        "fecha": "2026-11-05",
         "corrida": "00",
-        "horizonte": 144,
+        "horizonte": 12,
         "fondo": "claro",
         "resolucion": "1400",
-        "animar": true,
-        "fps": 10
+        "animar": false,
+        "fps": 12
       },
       "dates": [
-        "2026-11-04"
+        "2026-11-05"
       ],
       "snapshot": {
-        "id": "cfa8aac21b7d",
-        "product_id": "precipitacion_ecmwf",
-        "product_name": "ECMWF - precipitacion",
+        "id": "f768b4541c9e",
+        "product_id": "anomalia_2t",
+        "product_name": "ECMWF - anomalia de 2 m",
         "params": {
-          "snapshot": false,
+          "snapshot": true,
           "paraguay": true,
           "margen": 6,
-          "modelo": "aifs-ens",
-          "fecha": "2026-11-04",
+          "modelo": "ifs",
+          "fecha": "2026-11-05",
           "corrida": "00",
-          "horizonte": 144,
+          "horizonte": 12,
           "fondo": "claro",
           "resolucion": "1400",
-          "animar": true,
-          "fps": 10
+          "animar": false,
+          "fps": 12
         },
         "mode": "real",
         "status": "done",
         "progress": 1,
         "stage": "resultado precalculado",
-        "created_at": "2026-11-04T22:54:33+00:00",
-        "started_at": "2026-11-04T22:54:33+00:00",
-        "finished_at": "2026-11-04T22:55:56+00:00",
+        "created_at": "2026-11-05T22:41:47+00:00",
+        "started_at": "2026-11-05T22:41:47+00:00",
+        "finished_at": "2026-11-05T22:42:00+00:00",
         "logs": [
           {
-            "at": "2026-11-04T22:55:03+00:00",
+            "at": "2026-11-05T22:41:47+00:00",
             "level": "info",
-            "text": "FH 144h: m\xE1x Paraguay / Sur de Brasil (lon -62..-54, lat -28..-19) 100.4 mm en lat -25.75, lon -54.00"
+            "text": "job f768b4541c9e | anomalia_2t | modo=real"
           },
           {
-            "at": "2026-11-04T22:55:03+00:00",
+            "at": "2026-11-05T22:41:49+00:00",
             "level": "info",
-            "text": "Serie consolidada: <local> era5\\crudos_precip_aifs-ens_2026-11-04_00z\\serie_tp_mm.npz (25, 721, 1440) float32 | horas 0..144 cada 6 h"
+            "text": "[1/2] bajando anomalia_2t de ifs"
           },
           {
-            "at": "2026-11-04T22:55:03+00:00",
+            "at": "2026-11-05T22:41:49+00:00",
             "level": "info",
-            "text": "Ahora renderiz\xE1 con: .venv\\Scripts\\python.exe cuadros\\cuadros_precipitacion.py --fecha 2026-11-04 --ciclo 00 --hasta-hora 144 --paso 6 --modelo aifs-ens"
+            "text": "  python.exe <repo>\\descargar\\anomalia_2t_ecmwf.py --modelo ifs --fecha 2026-11-05 --ciclo 00 --hasta-hora 12 --paso 12"
           },
           {
-            "at": "2026-11-04T22:55:04+00:00",
+            "at": "2026-11-05T22:41:53+00:00",
             "level": "info",
-            "text": "[2/3] renderizando 25 cuadros"
+            "text": "Climatolog\xEDa en cach\xE9: <local> era5\\climatologia_era5_t2m_mes_hora.npz (12 meses x 4 horas)"
           },
           {
-            "at": "2026-11-04T22:55:04+00:00",
+            "at": "2026-11-05T22:41:53+00:00",
             "level": "info",
-            "text": "  python.exe <repo>\\cuadros\\cuadros_precipitacion.py --modelo aifs-ens --fecha 2026-11-04 --ciclo 00 --hasta-hora 144 --paso 6 --px 1400 --fondo-globo claro --centro -58.4505 -23.4505 --radio 4.69493 --salidas <repo>\\app\\var\\media\\cache\\a18dad691ec2"
+            "text": "Temperatura a 2 m IFS | 2026-11-05 00z | 2 pasos (0h..12h cada 12 h)"
           },
           {
-            "at": "2026-11-04T22:55:04+00:00",
+            "at": "2026-11-05T22:41:53+00:00",
             "level": "info",
-            "text": "Datos: <local> era5\\crudos_precip_aifs-ens_2026-11-04_00z\\serie_tp_mm.npz | 25 pasos | rejilla 1440x721"
+            "text": "fuente: https://data.ecmwf.int/forecasts/20261105/00z/ifs/0p25/oper/20261105000000-0h-oper-fc.index"
           },
           {
-            "at": "2026-11-04T22:55:05+00:00",
+            "at": "2026-11-05T22:41:53+00:00",
             "level": "info",
-            "text": "Precipitaci\xF3n AIFS-ENS | 25 cuadros | init 2026-11-04 00:00 UTC | centro -58.4505 -23.4505 | radio 4.69493\xB0 | 1400x1400 px | frames en <repo>\\app\\var\\media\\cache\\a18dad691ec2\\frames_precipitacion_aifs_ens_globo_2026-11-04T0000_25f_1400px"
+            "text": "crudos en <local> era5\\crudos_anom2t_ifs_2026-11-05_00z | 8 hilos"
           },
           {
-            "at": "2026-11-04T22:55:07+00:00",
+            "at": "2026-11-05T22:41:55+00:00",
             "level": "info",
-            "text": "  1/25 listos (3s)"
+            "text": "  1/2 pasos listos (1 reutilizados, errores 0) 2s"
           },
           {
-            "at": "2026-11-04T22:55:09+00:00",
+            "at": "2026-11-05T22:41:55+00:00",
             "level": "info",
-            "text": "  2/25 listos (4s)"
+            "text": "  2/2 pasos listos (1 reutilizados, errores 0) 3s"
           },
           {
-            "at": "2026-11-04T22:55:10+00:00",
+            "at": "2026-11-05T22:41:55+00:00",
             "level": "info",
-            "text": "  3/25 listos (5s)"
+            "text": "2 pasos listos en 3s (1 reutilizados). Calculando anomal\xEDas..."
           },
           {
-            "at": "2026-11-04T22:55:11+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  4/25 listos (6s)"
+            "text": "  2/2 pasos consolidados (1s)"
           },
           {
-            "at": "2026-11-04T22:55:12+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  5/25 listos (8s)"
+            "text": "Anomal\xEDa de temperatura a 2 m (\xB0C):"
           },
           {
-            "at": "2026-11-04T22:55:14+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  6/25 listos (9s)"
+            "text": "  paso   m\xEDn global   m\xE1x global   m\xEDn Sudam\xE9rica   m\xE1x Sudam\xE9rica"
           },
           {
-            "at": "2026-11-04T22:55:17+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  7/25 listos (12s)"
+            "text": "    0 h     -26.2        +15.0         -9.0            +9.2"
           },
           {
-            "at": "2026-11-04T22:55:19+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  8/25 listos (14s)"
+            "text": "   12 h     -22.8        +16.2         -7.9            +7.4"
           },
           {
-            "at": "2026-11-04T22:55:21+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  9/25 listos (16s)"
+            "text": "FH 12h: Sudam\xE9rica (lon -65..-45, lat -32..-18) -7.9 \xB0C a +7.4 \xB0C"
           },
           {
-            "at": "2026-11-04T22:55:24+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  10/25 listos (19s)"
+            "text": "Serie consolidada: <local> era5\\crudos_anom2t_ifs_2026-11-05_00z\\serie_anom_2t_c.npz (2, 721, 1440) float32 | horas 0..12 cada 12 h"
           },
           {
-            "at": "2026-11-04T22:55:25+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  11/25 listos (20s)"
+            "text": "Ahora renderiz\xE1 con: .venv\\Scripts\\python.exe cuadros\\cuadros_anomalia_2t.py --fecha 2026-11-05 --ciclo 00 --hasta-hora 12 --paso 12"
           },
           {
-            "at": "2026-11-04T22:55:27+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  12/25 listos (22s)"
+            "text": "[2/2] renderizando 2 cuadros"
           },
           {
-            "at": "2026-11-04T22:55:28+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  13/25 listos (24s)"
+            "text": "  python.exe <repo>\\cuadros\\cuadros_anomalia_2t.py --modelo ifs --fecha 2026-11-05 --ciclo 00 --hasta-hora 12 --paso 12 --px 1400 --fondo-globo claro --centro -58.4505 -23.4505 --radio 4.69493 --limpio --salidas <repo>\\app\\var\\media\\cache\\b4bce5063c8f --solo-poster"
           },
           {
-            "at": "2026-11-04T22:55:31+00:00",
+            "at": "2026-11-05T22:41:56+00:00",
             "level": "info",
-            "text": "  14/25 listos (26s)"
+            "text": "Datos: <local> era5\\crudos_anom2t_ifs_2026-11-05_00z\\serie_anom_2t_c.npz | 2 pasos | rejilla 1440x721"
           },
           {
-            "at": "2026-11-04T22:55:32+00:00",
+            "at": "2026-11-05T22:42:00+00:00",
             "level": "info",
-            "text": "  15/25 listos (27s)"
+            "text": "P\xF3ster FH +12h: <repo>\\app\\var\\media\\cache\\b4bce5063c8f\\poster_anom2t_ifs_2026-11-05_00z_fh012.png (1400x1400 px, 3.5s)"
           },
           {
-            "at": "2026-11-04T22:55:33+00:00",
+            "at": "2026-11-05T22:42:00+00:00",
             "level": "info",
-            "text": "  16/25 listos (29s)"
+            "text": "listo: 1 artefacto(s)"
+          }
+        ],
+        "artifacts": [
+          {
+            "name": "poster_anom2t_ifs_2026-11-05_00z_fh012.webp",
+            "url": "/media/f768b4541c9e/poster_anom2t_ifs_2026-11-05_00z_fh012.webp",
+            "kind": "image",
+            "bytes": 76954
+          }
+        ],
+        "plan": [
+          "bajando anomalia_2t de ifs",
+          "renderizando 2 cuadros"
+        ],
+        "error": null
+      }
+    },
+    {
+      "id": "45ebff35d312",
+      "product_id": "viento_250",
+      "params": {
+        "snapshot": true,
+        "paraguay": true,
+        "margen": 6,
+        "modelo": "gfs",
+        "fecha": "2026-11-04",
+        "corrida": "00",
+        "horizonte": 144,
+        "fondo": "oscuro",
+        "resolucion": "1400",
+        "animar": false,
+        "fps": 12
+      },
+      "dates": [
+        "2026-11-04"
+      ],
+      "snapshot": {
+        "id": "45ebff35d312",
+        "product_id": "viento_250",
+        "product_name": "Viento en 250 mb",
+        "params": {
+          "snapshot": true,
+          "paraguay": true,
+          "margen": 6,
+          "modelo": "gfs",
+          "fecha": "2026-11-04",
+          "corrida": "00",
+          "horizonte": 144,
+          "fondo": "oscuro",
+          "resolucion": "1400",
+          "animar": false,
+          "fps": 12
+        },
+        "mode": "real",
+        "status": "done",
+        "progress": 1,
+        "stage": "resultado precalculado",
+        "created_at": "2026-11-05T22:42:02+00:00",
+        "started_at": "2026-11-05T22:42:02+00:00",
+        "finished_at": "2026-11-05T22:42:18+00:00",
+        "logs": [
+          {
+            "at": "2026-11-05T22:42:02+00:00",
+            "level": "info",
+            "text": "job 45ebff35d312 | viento_250 | modo=real"
           },
           {
-            "at": "2026-11-04T22:55:35+00:00",
+            "at": "2026-11-05T22:42:03+00:00",
             "level": "info",
-            "text": "  17/25 listos (30s)"
+            "text": "[1/2] bajando el viento en 250 mb de gfs"
           },
           {
-            "at": "2026-11-04T22:55:36+00:00",
+            "at": "2026-11-05T22:42:03+00:00",
             "level": "info",
-            "text": "  18/25 listos (31s)"
+            "text": "  python.exe <repo>\\descargar\\viento_250_mslp.py --modelo gfs --fecha 2026-11-04 --ciclo 00 --hasta-hora 144 --paso 144"
           },
           {
-            "at": "2026-11-04T22:55:38+00:00",
+            "at": "2026-11-05T22:42:05+00:00",
             "level": "info",
-            "text": "  19/25 listos (33s)"
+            "text": "Viento 250 mb + MSLP GFS 0.25\xB0 | 2026-11-04 00z | 2 pasos (0h..144h cada 144 h)"
           },
           {
-            "at": "2026-11-04T22:55:41+00:00",
+            "at": "2026-11-05T22:42:05+00:00",
             "level": "info",
-            "text": "  20/25 listos (36s)"
+            "text": "fuente: https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.20261104/00/atmos/gfs.t00z.pgrb2.0p25.f000.idx"
           },
           {
-            "at": "2026-11-04T22:55:42+00:00",
+            "at": "2026-11-05T22:42:05+00:00",
             "level": "info",
-            "text": "  21/25 listos (37s)"
+            "text": "crudos en <local> era5\\crudos_viento250_gfs_2026-11-04_00z | 8 hilos"
           },
           {
-            "at": "2026-11-04T22:55:44+00:00",
+            "at": "2026-11-05T22:42:06+00:00",
             "level": "info",
-            "text": "  22/25 listos (39s)"
+            "text": "  1/2 pasos listos (3 reutilizados, errores 0) 1s"
           },
           {
-            "at": "2026-11-04T22:55:46+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": "  23/25 listos (41s)"
+            "text": "  2/2 pasos listos (3 reutilizados, errores 0) 3s"
           },
           {
-            "at": "2026-11-04T22:55:47+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": "  24/25 listos (43s)"
+            "text": "2 pasos listos en 3s (3 reutilizados). Consolidando..."
           },
           {
-            "at": "2026-11-04T22:55:49+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": "  25/25 listos (45s)"
+            "text": "  2/2 pasos consolidados (1s)"
           },
           {
-            "at": "2026-11-04T22:55:51+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": "25 cuadros en <repo>\\app\\var\\media\\cache\\a18dad691ec2\\frames_precipitacion_aifs_ens_globo_2026-11-04T0000_25f_1400px (25 renderizados)"
+            "text": "Viento en 250 mb (kt) y MSLP (hPa):"
           },
           {
-            "at": "2026-11-04T22:55:51+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": "P\xF3ster FH +144h: <repo>\\app\\var\\media\\cache\\a18dad691ec2\\poster_precip_aifs-ens_2026-11-04_00z_fh144.png"
+            "text": "  paso   m\xE1x global   m\xE1x Sudam\xE9rica   MSLP m\xEDn/m\xE1x global"
           },
           {
-            "at": "2026-11-04T22:55:51+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": 'Arm\xE1 el video con: .venv\\Scripts\\python.exe animar\\armar.py --frames "<repo>\\app\\var\\media\\cache\\a18dad691ec2\\frames_precipitacion_aifs_ens_globo_2026-11-04T0000_25f_1400px"'
+            "text": "    0 h      169.9         152.9        954.3 /  1058.2"
           },
           {
-            "at": "2026-11-04T22:55:52+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": "[3/3] armando la animacion"
+            "text": "  144 h      196.2         122.2        949.5 /  1061.9"
           },
           {
-            "at": "2026-11-04T22:55:52+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": "  python.exe <repo>\\animar\\armar.py --frames <repo>\\app\\var\\media\\cache\\a18dad691ec2\\frames_precipitacion_aifs_ens_globo_2026-11-04T0000_25f_1400px --fps 10 --formato mp4 --salida <repo>\\app\\var\\media\\cache\\a18dad691ec2\\animacion.mp4"
+            "text": "FH 144h: m\xE1x global 196.2 kt en lat 45.00, lon 162.75"
           },
           {
-            "at": "2026-11-04T22:55:52+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": "25 cuadros en <repo>\\app\\var\\media\\cache\\a18dad691ec2\\frames_precipitacion_aifs_ens_globo_2026-11-04T0000_25f_1400px -> animacion_precipitacion_aifs_ens_globo_2026-11-04T0000_25f_1400px"
+            "text": "FH 144h: m\xE1x Sudam\xE9rica (lon -65..-45, lat -32..-18) 122.2 kt en lat -29.00, lon -52.75"
           },
           {
-            "at": "2026-11-04T22:55:56+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": "MP4: <repo>\\app\\var\\media\\cache\\a18dad691ec2\\animacion.mp4 (0.64 MB)"
+            "text": "FH 144h: MSLP global 949.5 .. 1061.9 hPa"
           },
           {
-            "at": "2026-11-04T22:55:56+00:00",
+            "at": "2026-11-05T22:42:08+00:00",
             "level": "info",
-            "text": "listo: 4 artefacto(s)"
+            "text": "Serie consolidada: <local> era5\\crudos_viento250_gfs_2026-11-04_00z\\serie_viento_250.npz (2, 721, 1440) float32 | horas 0..144 cada 144 h"
+          },
+          {
+            "at": "2026-11-05T22:42:08+00:00",
+            "level": "info",
+            "text": "Ahora renderiz\xE1 con: .venv\\Scripts\\python.exe cuadros\\cuadros_viento_250.py --fecha 2026-11-04 --ciclo 00 --hasta-hora 144 --paso 144 --modelo gfs"
+          },
+          {
+            "at": "2026-11-05T22:42:08+00:00",
+            "level": "info",
+            "text": "[2/2] renderizando 2 cuadros de viento"
+          },
+          {
+            "at": "2026-11-05T22:42:08+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\cuadros\\cuadros_viento_250.py --modelo gfs --fecha 2026-11-04 --ciclo 00 --hasta-hora 144 --paso 144 --px 1400 --fondo-globo oscuro --centro -58.4505 -23.4505 --radio 4.69493 --limpio --salidas <repo>\\app\\var\\media\\cache\\157a64c714e6 --solo-poster"
+          },
+          {
+            "at": "2026-11-05T22:42:09+00:00",
+            "level": "info",
+            "text": "Datos: <local> era5\\crudos_viento250_gfs_2026-11-04_00z\\serie_viento_250.npz | 2 pasos | rejilla 1440x721"
+          },
+          {
+            "at": "2026-11-05T22:42:18+00:00",
+            "level": "info",
+            "text": "P\xF3ster FH +144h: <repo>\\app\\var\\media\\cache\\157a64c714e6\\poster_viento250_gfs_2026-11-04_00z_fh144.png (1400x1400 px, 8.6s)"
+          },
+          {
+            "at": "2026-11-05T22:42:18+00:00",
+            "level": "info",
+            "text": "listo: 1 artefacto(s)"
+          }
+        ],
+        "artifacts": [
+          {
+            "name": "poster_viento250_gfs_2026-11-04_00z_fh144.webp",
+            "url": "/media/45ebff35d312/poster_viento250_gfs_2026-11-04_00z_fh144.webp",
+            "kind": "image",
+            "bytes": 48668
+          }
+        ],
+        "plan": [
+          "bajando el viento en 250 mb de gfs",
+          "renderizando 2 cuadros de viento"
+        ],
+        "error": null
+      }
+    },
+    {
+      "id": "940cc2826b09",
+      "product_id": "mur_sst",
+      "params": {
+        "snapshot": true,
+        "ventana": {
+          "start": "2026-11-04",
+          "end": "2026-11-04"
+        },
+        "resolucion": "1400",
+        "animar": false,
+        "fps": 12
+      },
+      "dates": [
+        "2026-11-04"
+      ],
+      "snapshot": {
+        "id": "940cc2826b09",
+        "product_id": "mur_sst",
+        "product_name": "MUR - temperatura del mar",
+        "params": {
+          "snapshot": true,
+          "ventana": {
+            "start": "2026-11-04",
+            "end": "2026-11-04"
+          },
+          "resolucion": "1400",
+          "animar": false,
+          "fps": 12
+        },
+        "mode": "real",
+        "status": "done",
+        "progress": 1,
+        "stage": "resultado precalculado",
+        "created_at": "2026-11-05T22:43:17+00:00",
+        "started_at": "2026-11-05T22:43:17+00:00",
+        "finished_at": "2026-11-05T22:43:43+00:00",
+        "logs": [
+          {
+            "at": "2026-11-05T22:43:17+00:00",
+            "level": "info",
+            "text": "job 940cc2826b09 | mur_sst | modo=real"
+          },
+          {
+            "at": "2026-11-05T22:43:17+00:00",
+            "level": "info",
+            "text": "[1/2] bajando cuadros de SST"
+          },
+          {
+            "at": "2026-11-05T22:43:17+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\descargar\\mur_sst.py --desde 2026-11-04 --hasta 2026-11-04 --paso 1 --px 1400 --out <repo>\\app\\var\\media\\cache\\0a4f59e85579"
+          },
+          {
+            "at": "2026-11-05T22:43:18+00:00",
+            "level": "info",
+            "text": "MUR SST (globo) | 1 cuadros desde 2026-11-04 UTC | paso 1 d | origen 8192x4096 px"
+          },
+          {
+            "at": "2026-11-05T22:43:18+00:00",
+            "level": "info",
+            "text": "caja -180.0,-90.0,180.0,90.0 | frames en <repo>\\app\\var\\media\\cache\\0a4f59e85579\\frames_mur_globo_2026-11-04T0000_1f_1400px"
+          },
+          {
+            "at": "2026-11-05T22:43:39+00:00",
+            "level": "info",
+            "text": "  1/1 listos (errores 0) 21s"
+          },
+          {
+            "at": "2026-11-05T22:43:39+00:00",
+            "level": "info",
+            "text": "1 cuadros listos en 21s"
+          },
+          {
+            "at": "2026-11-05T22:43:39+00:00",
+            "level": "info",
+            "text": 'Ahora renderiz\xE1 con: .venv\\Scripts\\python.exe cuadros\\cuadros_mur.py --desde 2026-11-04 --hasta 2026-11-04 --paso 1 --px 1400 --out "<repo>\\app\\var\\media\\cache\\0a4f59e85579"'
+          },
+          {
+            "at": "2026-11-05T22:43:39+00:00",
+            "level": "info",
+            "text": "[2/2] componiendo el globo"
+          },
+          {
+            "at": "2026-11-05T22:43:39+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\cuadros\\cuadros_mur.py --desde 2026-11-04 --hasta 2026-11-04 --paso 1 --px 1400 --out <repo>\\app\\var\\media\\cache\\0a4f59e85579"
+          },
+          {
+            "at": "2026-11-05T22:43:40+00:00",
+            "level": "info",
+            "text": "MUR SST globo | 1 cuadros desde 2026-11-04 UTC | salida 1400x1400 px | frames en <repo>\\app\\var\\media\\cache\\0a4f59e85579\\frames_mur_globo_2026-11-04T0000_1f_1400px"
+          },
+          {
+            "at": "2026-11-05T22:43:43+00:00",
+            "level": "info",
+            "text": "  1/1 listos (3s)"
+          },
+          {
+            "at": "2026-11-05T22:43:43+00:00",
+            "level": "info",
+            "text": "1 cuadros en <repo>\\app\\var\\media\\cache\\0a4f59e85579\\frames_mur_globo_2026-11-04T0000_1f_1400px"
+          },
+          {
+            "at": "2026-11-05T22:43:43+00:00",
+            "level": "info",
+            "text": 'Arm\xE1 el video con: .venv\\Scripts\\python.exe animar\\armar.py --frames "<repo>\\app\\var\\media\\cache\\0a4f59e85579\\frames_mur_globo_2026-11-04T0000_1f_1400px"'
+          },
+          {
+            "at": "2026-11-05T22:43:43+00:00",
+            "level": "info",
+            "text": "listo: 1 artefacto(s)"
           }
         ],
         "artifacts": [
           {
             "name": "cuadro_001.webp",
-            "url": "/media/cfa8aac21b7d/cuadro_001.webp",
+            "url": "/media/940cc2826b09/cuadro_001.webp",
             "kind": "image",
-            "bytes": 65566
-          },
-          {
-            "name": "cuadro_025.webp",
-            "url": "/media/cfa8aac21b7d/cuadro_025.webp",
-            "kind": "image",
-            "bytes": 87610
-          },
-          {
-            "name": "animacion.mp4",
-            "url": "/media/cfa8aac21b7d/animacion.mp4",
-            "kind": "video",
-            "bytes": 195356
-          },
-          {
-            "name": "poster_precip_aifs-ens_2026-11-04_00z_fh144.webp",
-            "url": "/media/cfa8aac21b7d/poster_precip_aifs-ens_2026-11-04_00z_fh144.webp",
-            "kind": "image",
-            "bytes": 87610
+            "bytes": 288480
           }
         ],
         "plan": [
-          "bajando precipitacion de aifs-ens",
-          "renderizando 25 cuadros",
-          "armando la animacion"
+          "bajando cuadros de SST",
+          "componiendo el globo"
+        ],
+        "error": null
+      }
+    },
+    {
+      "id": "bc488f72cd96",
+      "product_id": "mur_realista",
+      "params": {
+        "snapshot": true,
+        "ventana": {
+          "start": "2026-11-04",
+          "end": "2026-11-04"
+        },
+        "resolucion": "1400",
+        "paleta": "realista",
+        "trend": false
+      },
+      "dates": [
+        "2026-11-04"
+      ],
+      "snapshot": {
+        "id": "bc488f72cd96",
+        "product_id": "mur_realista",
+        "product_name": "MUR - SST poster realista",
+        "params": {
+          "snapshot": true,
+          "ventana": {
+            "start": "2026-11-04",
+            "end": "2026-11-04"
+          },
+          "resolucion": "1400",
+          "paleta": "realista",
+          "trend": false
+        },
+        "mode": "real",
+        "status": "done",
+        "progress": 1,
+        "stage": "resultado precalculado",
+        "created_at": "2026-11-05T22:43:44+00:00",
+        "started_at": "2026-11-05T22:43:44+00:00",
+        "finished_at": "2026-11-05T22:44:05+00:00",
+        "logs": [
+          {
+            "at": "2026-11-05T22:43:44+00:00",
+            "level": "info",
+            "text": "job bc488f72cd96 | mur_realista | modo=real"
+          },
+          {
+            "at": "2026-11-05T22:43:44+00:00",
+            "level": "info",
+            "text": "[1/2] bajando la serie semanal de SST"
+          },
+          {
+            "at": "2026-11-05T22:43:44+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\descargar\\mur_sst.py --desde 2026-11-04 --hasta 2026-11-04 --paso 1 --px 2048 --out <repo>\\app\\var\\media\\cache\\e05b5761e386"
+          },
+          {
+            "at": "2026-11-05T22:43:45+00:00",
+            "level": "info",
+            "text": "MUR SST (globo) | 1 cuadros desde 2026-11-04 UTC | paso 1 d | origen 8192x4096 px"
+          },
+          {
+            "at": "2026-11-05T22:43:45+00:00",
+            "level": "info",
+            "text": "caja -180.0,-90.0,180.0,90.0 | frames en <repo>\\app\\var\\media\\cache\\e05b5761e386\\frames_mur_globo_2026-11-04T0000_1f_2048px"
+          },
+          {
+            "at": "2026-11-05T22:43:48+00:00",
+            "level": "info",
+            "text": "  1/1 listos (errores 0) 3s"
+          },
+          {
+            "at": "2026-11-05T22:43:48+00:00",
+            "level": "info",
+            "text": "1 cuadros listos en 3s"
+          },
+          {
+            "at": "2026-11-05T22:43:48+00:00",
+            "level": "info",
+            "text": 'Ahora renderiz\xE1 con: .venv\\Scripts\\python.exe cuadros\\cuadros_mur.py --desde 2026-11-04 --hasta 2026-11-04 --paso 1 --px 2048 --out "<repo>\\app\\var\\media\\cache\\e05b5761e386"'
+          },
+          {
+            "at": "2026-11-05T22:43:48+00:00",
+            "level": "info",
+            "text": "[2/2] poster realista 1400px"
+          },
+          {
+            "at": "2026-11-05T22:43:48+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\prototipos\\poster_mur_realista.py --crudo <repo>\\app\\var\\media\\cache\\e05b5761e386\\frames_mur_globo_2026-11-04T0000_1f_2048px\\crudo_001.jpg --px 1400 --paleta realista --rios --out <repo>\\app\\var\\media\\cache\\e05b5761e386\\mur_realista_1400px.png"
+          },
+          {
+            "at": "2026-11-05T22:43:48+00:00",
+            "level": "info",
+            "text": "Crudo: <repo>\\app\\var\\media\\cache\\e05b5761e386\\frames_mur_globo_2026-11-04T0000_1f_2048px\\crudo_001.jpg"
+          },
+          {
+            "at": "2026-11-05T22:43:48+00:00",
+            "level": "info",
+            "text": "Fecha: 2026-11-04 00:00 UTC | centro (-125.0, 0.0) | globo 1400 px | paleta realista"
+          },
+          {
+            "at": "2026-11-05T22:43:57+00:00",
+            "level": "info",
+            "text": "Distribucion area-ponderada: media +0.54 C | desvio 1.03 C"
+          },
+          {
+            "at": "2026-11-05T22:43:57+00:00",
+            "level": "info",
+            "text": "Reproyectando a Orthographic..."
+          },
+          {
+            "at": "2026-11-05T22:44:05+00:00",
+            "level": "info",
+            "text": "PNG: <repo>\\app\\var\\media\\cache\\e05b5761e386\\mur_realista_1400px.png"
+          },
+          {
+            "at": "2026-11-05T22:44:05+00:00",
+            "level": "info",
+            "text": "listo: 1 artefacto(s)"
+          }
+        ],
+        "artifacts": [
+          {
+            "name": "mur_realista_1400px.webp",
+            "url": "/media/bc488f72cd96/mur_realista_1400px.webp",
+            "kind": "image",
+            "bytes": 253494
+          }
+        ],
+        "plan": [
+          "bajando la serie semanal de SST",
+          "poster realista 1400px"
+        ],
+        "error": null
+      }
+    },
+    {
+      "id": "4ef3908faa92",
+      "product_id": "follaje",
+      "params": {
+        "snapshot": true,
+        "ventana": {
+          "start": "2026-10-10",
+          "end": "2026-10-10"
+        },
+        "proyeccion": "plano",
+        "resolucion": "1400",
+        "animar": false,
+        "fps": 12
+      },
+      "dates": [
+        "2026-10-10"
+      ],
+      "snapshot": {
+        "id": "4ef3908faa92",
+        "product_id": "follaje",
+        "product_name": "PACE - follaje (LANDVI)",
+        "params": {
+          "snapshot": true,
+          "ventana": {
+            "start": "2026-10-10",
+            "end": "2026-10-10"
+          },
+          "proyeccion": "plano",
+          "resolucion": "1400",
+          "animar": false,
+          "fps": 12
+        },
+        "mode": "real",
+        "status": "done",
+        "progress": 1,
+        "stage": "resultado precalculado",
+        "created_at": "2026-11-05T22:44:05+00:00",
+        "started_at": "2026-11-05T22:44:05+00:00",
+        "finished_at": "2026-11-05T22:44:16+00:00",
+        "logs": [
+          {
+            "at": "2026-11-05T22:44:05+00:00",
+            "level": "info",
+            "text": "job 4ef3908faa92 | follaje | modo=real"
+          },
+          {
+            "at": "2026-11-05T22:44:05+00:00",
+            "level": "info",
+            "text": "[1/2] bajando LANDVI de PACE"
+          },
+          {
+            "at": "2026-11-05T22:44:05+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\descargar\\pace_landvi.py --desde 2026-10-10 --hasta 2026-10-10"
+          },
+          {
+            "at": "2026-11-05T22:44:06+00:00",
+            "level": "info",
+            "text": "Falta autenticaci\xF3n: export\xE1 las cookies del navegador con --cookies, o cre\xE1 ~/.netrc con la entrada de urs.earthdata.nasa.gov."
+          },
+          {
+            "at": "2026-11-05T22:44:06+00:00",
+            "level": "warn",
+            "text": "la descarga cerro con codigo 1: sigo con lo que hay"
+          },
+          {
+            "at": "2026-11-05T22:44:06+00:00",
+            "level": "info",
+            "text": "[2/2] renderizando el follaje (plano)"
+          },
+          {
+            "at": "2026-11-05T22:44:06+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\cuadros\\cuadros_follaje.py --desde 2026-10-10 --hasta 2026-10-10 --px 1400 --out <repo>\\app\\var\\media\\cache\\98b1ea7a7872\\frames"
+          },
+          {
+            "at": "2026-11-05T22:44:08+00:00",
+            "level": "info",
+            "text": "1 cuadros -> <repo>\\app\\var\\media\\cache\\98b1ea7a7872\\frames"
+          },
+          {
+            "at": "2026-11-05T22:44:16+00:00",
+            "level": "info",
+            "text": "  cuadro_001.png  Oct 4 - 10, 2026  (2.5s)"
+          },
+          {
+            "at": "2026-11-05T22:44:16+00:00",
+            "level": "info",
+            "text": "Listo. Arm\xE1 el video con:"
+          },
+          {
+            "at": "2026-11-05T22:44:16+00:00",
+            "level": "info",
+            "text": '  .venv\\Scripts\\python.exe animar\\armar.py --frames "<repo>\\app\\var\\media\\cache\\98b1ea7a7872\\frames" --fps 6'
+          },
+          {
+            "at": "2026-11-05T22:44:16+00:00",
+            "level": "info",
+            "text": "listo: 1 artefacto(s)"
+          }
+        ],
+        "artifacts": [
+          {
+            "name": "cuadro_001.webp",
+            "url": "/media/4ef3908faa92/cuadro_001.webp",
+            "kind": "image",
+            "bytes": 103864
+          }
+        ],
+        "plan": [
+          "bajando LANDVI de PACE",
+          "renderizando el follaje (plano)"
+        ],
+        "error": null
+      }
+    },
+    {
+      "id": "de71dcb4fe17",
+      "product_id": "truecolor_viirs",
+      "params": {
+        "snapshot": true,
+        "paraguay": false,
+        "margen": 6,
+        "ventana": {
+          "start": "2026-11-04",
+          "end": "2026-11-04"
+        },
+        "resolucion": "1400",
+        "animar": false,
+        "fps": 6
+      },
+      "dates": [
+        "2026-11-04"
+      ],
+      "snapshot": {
+        "id": "de71dcb4fe17",
+        "product_id": "truecolor_viirs",
+        "product_name": "NOAA-20 - true color (VIIRS)",
+        "params": {
+          "snapshot": true,
+          "paraguay": false,
+          "margen": 6,
+          "ventana": {
+            "start": "2026-11-04",
+            "end": "2026-11-04"
+          },
+          "resolucion": "1400",
+          "animar": false,
+          "fps": 6
+        },
+        "mode": "real",
+        "status": "done",
+        "progress": 1,
+        "stage": "resultado precalculado",
+        "created_at": "2026-11-05T22:44:17+00:00",
+        "started_at": "2026-11-05T22:44:17+00:00",
+        "finished_at": "2026-11-05T22:44:54+00:00",
+        "logs": [
+          {
+            "at": "2026-11-05T22:44:17+00:00",
+            "level": "info",
+            "text": "job de71dcb4fe17 | truecolor_viirs | modo=real"
+          },
+          {
+            "at": "2026-11-05T22:44:17+00:00",
+            "level": "info",
+            "text": "[1/2] bajando true color NOAA-20 (1 dia(s))"
+          },
+          {
+            "at": "2026-11-05T22:44:17+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\descargar\\truecolor.py --desde 2026-11-04 --hasta 2026-11-04 --paso 1 --px 1400 --capa VIIRS_NOAA20_CorrectedReflectance_TrueColor --out <repo>\\app\\var\\media\\cache\\50ecae621392"
+          },
+          {
+            "at": "2026-11-05T22:44:18+00:00",
+            "level": "info",
+            "text": "True Color noaa20 (globo) | 1 cuadros desde 2026-11-04 UTC | paso 1 d | origen 8192x4096 px"
+          },
+          {
+            "at": "2026-11-05T22:44:18+00:00",
+            "level": "info",
+            "text": "capa VIIRS_NOAA20_CorrectedReflectance_TrueColor | caja -180.0,-90.0,180.0,90.0 | frames en <repo>\\app\\var\\media\\cache\\50ecae621392\\frames_truecolor_noaa20_globo_2026-11-04T0000_1f_1400px"
+          },
+          {
+            "at": "2026-11-05T22:44:50+00:00",
+            "level": "info",
+            "text": "  1/1 listos (errores 0) 32s"
+          },
+          {
+            "at": "2026-11-05T22:44:50+00:00",
+            "level": "info",
+            "text": "1 cuadros listos en 32s"
+          },
+          {
+            "at": "2026-11-05T22:44:50+00:00",
+            "level": "info",
+            "text": 'Ahora renderiz\xE1 con: .venv\\Scripts\\python.exe cuadros\\cuadros_truecolor.py --desde 2026-11-04 --hasta 2026-11-04 --paso 1 --capa VIIRS_NOAA20_CorrectedReflectance_TrueColor --px 1400 --out "<repo>\\app\\var\\media\\cache\\50ecae621392"'
+          },
+          {
+            "at": "2026-11-05T22:44:50+00:00",
+            "level": "info",
+            "text": "[2/2] renderizando 1 cuadro(s) de NOAA-20"
+          },
+          {
+            "at": "2026-11-05T22:44:50+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\cuadros\\cuadros_truecolor.py --desde 2026-11-04 --hasta 2026-11-04 --paso 1 --px 1400 --capa VIIRS_NOAA20_CorrectedReflectance_TrueColor --out <repo>\\app\\var\\media\\cache\\50ecae621392 --geojson "
+          },
+          {
+            "at": "2026-11-05T22:44:50+00:00",
+            "level": "info",
+            "text": "True Color noaa20 globo | 1 cuadros desde 2026-11-04 UTC | salida 1400x1400 px | frames en <repo>\\app\\var\\media\\cache\\50ecae621392\\frames_truecolor_noaa20_globo_2026-11-04T0000_1f_1400px"
+          },
+          {
+            "at": "2026-11-05T22:44:53+00:00",
+            "level": "info",
+            "text": "  1/1 listos (3s)"
+          },
+          {
+            "at": "2026-11-05T22:44:53+00:00",
+            "level": "info",
+            "text": "1 cuadros en <repo>\\app\\var\\media\\cache\\50ecae621392\\frames_truecolor_noaa20_globo_2026-11-04T0000_1f_1400px"
+          },
+          {
+            "at": "2026-11-05T22:44:53+00:00",
+            "level": "info",
+            "text": 'Arm\xE1 el video con: .venv\\Scripts\\python.exe animar\\armar.py --frames "<repo>\\app\\var\\media\\cache\\50ecae621392\\frames_truecolor_noaa20_globo_2026-11-04T0000_1f_1400px"'
+          },
+          {
+            "at": "2026-11-05T22:44:54+00:00",
+            "level": "info",
+            "text": "listo: 1 artefacto(s)"
+          }
+        ],
+        "artifacts": [
+          {
+            "name": "cuadro_001.webp",
+            "url": "/media/de71dcb4fe17/cuadro_001.webp",
+            "kind": "image",
+            "bytes": 440342
+          }
+        ],
+        "plan": [
+          "bajando true color NOAA-20 (1 dia(s))",
+          "renderizando 1 cuadro(s) de NOAA-20"
         ],
         "error": null
       }
@@ -2972,572 +3270,6 @@ var manifest_default = {
               "satelite": "G19",
               "encuadre": "globo",
               "limbo": "recortado"
-            }
-          }
-        ],
-        "command_ready": true,
-        "command": null
-      },
-      {
-        "id": "goes_banda",
-        "name": "GOES - banda cruda, estilo color real",
-        "group": "satelite",
-        "stage": "descargar/descargar_goes.py + prototipos/poster_goes_banda.py",
-        "summary": "Una banda ABI real, no el compuesto de tres. Mismo encuadre y fondo del color real: globo completo, sin reticula, costas ni barra de color.",
-        "params": [
-          {
-            "name": "snapshot",
-            "label": "Snapshot",
-            "kind": "toggle",
-            "default": false,
-            "options": [],
-            "help": "un solo cuadro: no arma serie ni animaci\xF3n, y usa el cuadro de siempre",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": null
-          },
-          {
-            "name": "paraguay",
-            "label": "Solo Paraguay",
-            "kind": "toggle",
-            "default": true,
-            "options": [],
-            "help": "encuadra la captura o la animaci\xF3n en las coordenadas de Paraguay",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": null
-          },
-          {
-            "name": "margen",
-            "label": "Margen Paraguay (%)",
-            "kind": "slider",
-            "default": 12,
-            "options": [],
-            "help": "aire alrededor del pa\xEDs dentro del encuadre",
-            "min": 0,
-            "max": 20,
-            "step": 1,
-            "enabled_when": {
-              "paraguay": true
-            }
-          },
-          {
-            "name": "satelite",
-            "label": "Satelite",
-            "kind": "select",
-            "default": "G19",
-            "options": [
-              {
-                "value": "G19",
-                "label": "GOES-East G19 (75.2 W)"
-              },
-              {
-                "value": "G18",
-                "label": "GOES-West G18 (137.2 W)"
-              },
-              {
-                "value": "G16",
-                "label": "GOES-East G16 (hasta 2025)"
-              }
-            ],
-            "help": "",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": null
-          },
-          {
-            "name": "banda",
-            "label": "Banda",
-            "kind": "select",
-            "default": "C16",
-            "options": [
-              {
-                "value": "C01",
-                "label": "C01 - 0.47 um (visible azul)"
-              },
-              {
-                "value": "C02",
-                "label": "C02 - 0.64 um (visible rojo)"
-              },
-              {
-                "value": "C03",
-                "label": "C03 - 0.86 um (veggie)"
-              },
-              {
-                "value": "C04",
-                "label": "C04 - 1.37 um (cirrus)"
-              },
-              {
-                "value": "C05",
-                "label": "C05 - 1.61 um (nieve y hielo)"
-              },
-              {
-                "value": "C06",
-                "label": "C06 - 2.25 um (particula de nube)"
-              },
-              {
-                "value": "C07",
-                "label": "C07 - 3.90 um (IR onda corta)"
-              },
-              {
-                "value": "C08",
-                "label": "C08 - 6.19 um (vapor de agua alto)"
-              },
-              {
-                "value": "C09",
-                "label": "C09 - 6.95 um (vapor de agua medio)"
-              },
-              {
-                "value": "C10",
-                "label": "C10 - 7.34 um (vapor de agua bajo)"
-              },
-              {
-                "value": "C11",
-                "label": "C11 - 8.50 um (fase de tope de nube)"
-              },
-              {
-                "value": "C12",
-                "label": "C12 - 9.61 um (ozono)"
-              },
-              {
-                "value": "C13",
-                "label": "C13 - 10.35 um (IR ventana limpia)"
-              },
-              {
-                "value": "C14",
-                "label": "C14 - 11.20 um (IR onda larga)"
-              },
-              {
-                "value": "C15",
-                "label": "C15 - 12.30 um (IR onda larga sucia)"
-              },
-              {
-                "value": "C16",
-                "label": "C16 - 13.30 um (CO2 onda larga)"
-              }
-            ],
-            "help": "C01-C06 son reflectancia (visible e infrarrojo cercano); C07-C16, temperatura de brillo",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": null
-          },
-          {
-            "name": "paleta",
-            "label": "Paleta",
-            "kind": "select",
-            "default": "gris",
-            "options": [
-              {
-                "value": "clean_ir",
-                "label": "clean_ir - Clean Infrared (GIBS)"
-              },
-              {
-                "value": "termico",
-                "label": "termico - gris termico"
-              },
-              {
-                "value": "gris",
-                "label": "gris - reflectancia"
-              },
-              {
-                "value": "anomalia",
-                "label": "anomalia - paleta de anomalia"
-              },
-              {
-                "value": "magma",
-                "label": "magma"
-              },
-              {
-                "value": "inferno",
-                "label": "inferno"
-              },
-              {
-                "value": "turbo",
-                "label": "turbo"
-              }
-            ],
-            "help": "clean_ir usa la escala fija de GIBS (-92.1 a 56.9 C); para reflectancia conviene gris",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": null
-          },
-          {
-            "name": "ventana",
-            "label": "Ventana temporal",
-            "kind": "date-range",
-            "default": {
-              "start": "2026-11-03",
-              "end": "2026-11-04"
-            },
-            "options": [],
-            "help": "",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": {
-              "ultimos": false
-            }
-          },
-          {
-            "name": "ultimos",
-            "label": "\xDAltimos datos",
-            "kind": "toggle",
-            "default": true,
-            "options": [],
-            "help": "ignora la ventana de fechas: baja y anima los cuadros m\xE1s nuevos publicados",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": {
-              "snapshot": false
-            }
-          },
-          {
-            "name": "ultimos_n",
-            "label": "Cu\xE1ntos cuadros",
-            "kind": "select",
-            "default": "12",
-            "options": [
-              {
-                "value": "10",
-                "label": "10 cuadros"
-              },
-              {
-                "value": "12",
-                "label": "12 cuadros"
-              },
-              {
-                "value": "24",
-                "label": "24 cuadros"
-              },
-              {
-                "value": "36",
-                "label": "36 cuadros"
-              },
-              {
-                "value": "48",
-                "label": "48 cuadros"
-              },
-              {
-                "value": "60",
-                "label": "60 cuadros"
-              }
-            ],
-            "help": "",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": {
-              "ultimos": true,
-              "snapshot": false
-            }
-          },
-          {
-            "name": "hora",
-            "label": "Hora del cuadro (UTC)",
-            "kind": "hour",
-            "default": 15,
-            "options": [],
-            "help": "hora UTC, igual que el dataset crudo; Paraguay es UTC-3 (12 UTC = 09:00 local)",
-            "min": 0,
-            "max": 23,
-            "step": 1,
-            "enabled_when": {
-              "snapshot": true
-            }
-          },
-          {
-            "name": "minuto",
-            "label": "Minuto",
-            "kind": "select",
-            "default": "00",
-            "options": [
-              {
-                "value": "00",
-                "label": "00"
-              },
-              {
-                "value": "10",
-                "label": "10"
-              },
-              {
-                "value": "20",
-                "label": "20"
-              },
-              {
-                "value": "30",
-                "label": "30"
-              },
-              {
-                "value": "40",
-                "label": "40"
-              },
-              {
-                "value": "50",
-                "label": "50"
-              }
-            ],
-            "help": "los slots del ABI caen cada 10 minutos",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": {
-              "snapshot": true
-            }
-          },
-          {
-            "name": "resolucion",
-            "label": "Resolucion",
-            "kind": "select",
-            "default": "2712",
-            "options": [
-              {
-                "value": "1400",
-                "label": "1400"
-              },
-              {
-                "value": "1800",
-                "label": "1800"
-              },
-              {
-                "value": "2000",
-                "label": "2000"
-              },
-              {
-                "value": "2400",
-                "label": "2400"
-              },
-              {
-                "value": "2712",
-                "label": "2712"
-              },
-              {
-                "value": "3200",
-                "label": "3200"
-              },
-              {
-                "value": "4000",
-                "label": "4000"
-              }
-            ],
-            "help": "",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": null
-          },
-          {
-            "name": "hora_desde",
-            "label": "Desde (UTC)",
-            "kind": "hour",
-            "default": 0,
-            "options": [],
-            "help": "hora UTC, igual que el dataset crudo; Paraguay es UTC-3 (12 UTC = 09:00 local)",
-            "min": 0,
-            "max": 23,
-            "step": 1,
-            "enabled_when": {
-              "ultimos": false,
-              "snapshot": false
-            }
-          },
-          {
-            "name": "hora_hasta",
-            "label": "Hasta (UTC)",
-            "kind": "hour",
-            "default": 24,
-            "options": [],
-            "help": "fin exclusivo: 24 cierra el d\xEDa UTC completo",
-            "min": 1,
-            "max": 24,
-            "step": 1,
-            "enabled_when": {
-              "ultimos": false,
-              "snapshot": false
-            }
-          },
-          {
-            "name": "animar",
-            "label": "Animar",
-            "kind": "toggle",
-            "default": false,
-            "options": [],
-            "help": "",
-            "min": null,
-            "max": null,
-            "step": null,
-            "enabled_when": {
-              "ultimos": false,
-              "snapshot": false
-            }
-          },
-          {
-            "name": "fps",
-            "label": "Cuadros por segundo",
-            "kind": "slider",
-            "default": 12,
-            "options": [],
-            "help": "",
-            "min": 4,
-            "max": 30,
-            "step": 2,
-            "enabled_when": {
-              "snapshot": false
-            }
-          }
-        ],
-        "preview": "/previews/goes_banda.webp",
-        "previews": [
-          {
-            "url": "/previews/goes_banda--G16--anomalia.webp",
-            "when": {
-              "satelite": "G16",
-              "paleta": "anomalia"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G16--clean_ir.webp",
-            "when": {
-              "satelite": "G16",
-              "paleta": "clean_ir"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G16--gris.webp",
-            "when": {
-              "satelite": "G16",
-              "paleta": "gris"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G16--inferno.webp",
-            "when": {
-              "satelite": "G16",
-              "paleta": "inferno"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G16--magma.webp",
-            "when": {
-              "satelite": "G16",
-              "paleta": "magma"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G16--termico.webp",
-            "when": {
-              "satelite": "G16",
-              "paleta": "termico"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G16--turbo.webp",
-            "when": {
-              "satelite": "G16",
-              "paleta": "turbo"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G18--anomalia.webp",
-            "when": {
-              "satelite": "G18",
-              "paleta": "anomalia"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G18--clean_ir.webp",
-            "when": {
-              "satelite": "G18",
-              "paleta": "clean_ir"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G18--gris.webp",
-            "when": {
-              "satelite": "G18",
-              "paleta": "gris"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G18--inferno.webp",
-            "when": {
-              "satelite": "G18",
-              "paleta": "inferno"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G18--magma.webp",
-            "when": {
-              "satelite": "G18",
-              "paleta": "magma"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G18--termico.webp",
-            "when": {
-              "satelite": "G18",
-              "paleta": "termico"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G18--turbo.webp",
-            "when": {
-              "satelite": "G18",
-              "paleta": "turbo"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G19--anomalia.webp",
-            "when": {
-              "satelite": "G19",
-              "paleta": "anomalia"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G19--clean_ir.webp",
-            "when": {
-              "satelite": "G19",
-              "paleta": "clean_ir"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G19--gris.webp",
-            "when": {
-              "satelite": "G19",
-              "paleta": "gris"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G19--inferno.webp",
-            "when": {
-              "satelite": "G19",
-              "paleta": "inferno"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G19--magma.webp",
-            "when": {
-              "satelite": "G19",
-              "paleta": "magma"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G19--termico.webp",
-            "when": {
-              "satelite": "G19",
-              "paleta": "termico"
-            }
-          },
-          {
-            "url": "/previews/goes_banda--G19--turbo.webp",
-            "when": {
-              "satelite": "G19",
-              "paleta": "turbo"
             }
           }
         ],
@@ -4595,17 +4327,17 @@ var manifest_default = {
         "command": null
       },
       {
-        "id": "precipitacion_ecmwf",
-        "name": "ECMWF - precipitacion",
+        "id": "anomalia_2t",
+        "name": "ECMWF - anomalia de 2 m",
         "group": "modelo",
-        "stage": "descargar/precipitacion_ecmwf.py + cuadros/cuadros_precipitacion.py",
-        "summary": "Precipitacion acumulada por horizonte de 6 h sobre globo.",
+        "stage": "descargar/anomalia_2t_ecmwf.py + cuadros/cuadros_anomalia_2t.py",
+        "summary": "Anomalia de temperatura a 2 m contra la climatologia horaria de ERA5.",
         "params": [
           {
             "name": "snapshot",
             "label": "Snapshot",
             "kind": "toggle",
-            "default": false,
+            "default": true,
             "options": [],
             "help": "un solo cuadro: no arma serie ni animaci\xF3n, y usa el cuadro de siempre",
             "min": null,
@@ -4643,15 +4375,11 @@ var manifest_default = {
             "name": "modelo",
             "label": "Modelo",
             "kind": "select",
-            "default": "aifs-ens",
+            "default": "ifs",
             "options": [
               {
                 "value": "ifs",
                 "label": "IFS deterministico"
-              },
-              {
-                "value": "aifs-ens",
-                "label": "AIFS ensemble"
               },
               {
                 "value": "aifs-single",
@@ -4668,7 +4396,7 @@ var manifest_default = {
             "name": "fecha",
             "label": "Fecha de la corrida",
             "kind": "date",
-            "default": "2026-11-04",
+            "default": "2026-11-05",
             "options": [],
             "help": "",
             "min": null,
@@ -4709,7 +4437,7 @@ var manifest_default = {
             "name": "horizonte",
             "label": "Horizonte (h)",
             "kind": "slider",
-            "default": 144,
+            "default": 12,
             "options": [],
             "help": "los pasos de 3 h llegan hasta 144 h",
             "min": 6,
@@ -4783,7 +4511,7 @@ var manifest_default = {
             "name": "animar",
             "label": "Animar",
             "kind": "toggle",
-            "default": true,
+            "default": false,
             "options": [],
             "help": "",
             "min": null,
@@ -4797,7 +4525,7 @@ var manifest_default = {
             "name": "fps",
             "label": "Cuadros por segundo",
             "kind": "slider",
-            "default": 10,
+            "default": 12,
             "options": [],
             "help": "",
             "min": 4,
@@ -4808,27 +4536,750 @@ var manifest_default = {
             }
           }
         ],
-        "preview": "/previews/precipitacion_ecmwf.webp",
+        "preview": "/previews/anomalia_2t.webp",
         "previews": [
           {
-            "url": "/previews/precipitacion_ecmwf--aifs-ens.webp",
-            "when": {
-              "modelo": "aifs-ens"
-            }
-          },
-          {
-            "url": "/previews/precipitacion_ecmwf--aifs-single.webp",
+            "url": "/previews/anomalia_2t--aifs-single.webp",
             "when": {
               "modelo": "aifs-single"
             }
           },
           {
-            "url": "/previews/precipitacion_ecmwf--ifs.webp",
+            "url": "/previews/anomalia_2t--ifs.webp",
             "when": {
               "modelo": "ifs"
             }
           }
         ],
+        "command_ready": true,
+        "command": null
+      },
+      {
+        "id": "viento_250",
+        "name": "Viento en 250 mb",
+        "group": "modelo",
+        "stage": "descargar/viento_250_mslp.py + cuadros/cuadros_viento_250.py",
+        "summary": "Velocidad del viento en 250 mb (kt) con streamlines y extremos de presion a nivel del mar sobre globo.",
+        "params": [
+          {
+            "name": "snapshot",
+            "label": "Snapshot",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "un solo cuadro: no arma serie ni animaci\xF3n, y usa el cuadro de siempre",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "paraguay",
+            "label": "Solo Paraguay",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "encuadra la captura o la animaci\xF3n en las coordenadas de Paraguay",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "margen",
+            "label": "Margen Paraguay (%)",
+            "kind": "slider",
+            "default": 6,
+            "options": [],
+            "help": "aire alrededor del pa\xEDs dentro del encuadre",
+            "min": 0,
+            "max": 20,
+            "step": 1,
+            "enabled_when": {
+              "paraguay": true
+            }
+          },
+          {
+            "name": "modelo",
+            "label": "Modelo",
+            "kind": "select",
+            "default": "gfs",
+            "options": [
+              {
+                "value": "ifs",
+                "label": "ECMWF IFS 0.25"
+              },
+              {
+                "value": "gfs",
+                "label": "GFS 0.25 (NOAA)"
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "fecha",
+            "label": "Fecha de la corrida",
+            "kind": "date",
+            "default": "2026-11-04",
+            "options": [],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "corrida",
+            "label": "Ciclo",
+            "kind": "select",
+            "default": "00",
+            "options": [
+              {
+                "value": "00",
+                "label": "00z"
+              },
+              {
+                "value": "06",
+                "label": "06z"
+              },
+              {
+                "value": "12",
+                "label": "12z"
+              },
+              {
+                "value": "18",
+                "label": "18z"
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "horizonte",
+            "label": "Horizonte (h)",
+            "kind": "slider",
+            "default": 144,
+            "options": [],
+            "help": "los pasos de 3 h llegan hasta 144 h",
+            "min": 6,
+            "max": 144,
+            "step": 6,
+            "enabled_when": null
+          },
+          {
+            "name": "fondo",
+            "label": "Fondo del globo",
+            "kind": "select",
+            "default": "oscuro",
+            "options": [
+              {
+                "value": "oscuro",
+                "label": "Fondo oscuro"
+              },
+              {
+                "value": "claro",
+                "label": "Fondo claro"
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "resolucion",
+            "label": "Resolucion",
+            "kind": "select",
+            "default": "1400",
+            "options": [
+              {
+                "value": "1400",
+                "label": "1400"
+              },
+              {
+                "value": "1800",
+                "label": "1800"
+              },
+              {
+                "value": "2000",
+                "label": "2000"
+              },
+              {
+                "value": "2400",
+                "label": "2400"
+              },
+              {
+                "value": "2712",
+                "label": "2712"
+              },
+              {
+                "value": "3200",
+                "label": "3200"
+              },
+              {
+                "value": "4000",
+                "label": "4000"
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "animar",
+            "label": "Animar",
+            "kind": "toggle",
+            "default": false,
+            "options": [],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "snapshot": false
+            }
+          },
+          {
+            "name": "fps",
+            "label": "Cuadros por segundo",
+            "kind": "slider",
+            "default": 12,
+            "options": [],
+            "help": "",
+            "min": 4,
+            "max": 30,
+            "step": 2,
+            "enabled_when": {
+              "snapshot": false
+            }
+          }
+        ],
+        "preview": "/previews/viento_250.webp",
+        "previews": [
+          {
+            "url": "/previews/viento_250--gfs.webp",
+            "when": {
+              "modelo": "gfs"
+            }
+          },
+          {
+            "url": "/previews/viento_250--ifs.webp",
+            "when": {
+              "modelo": "ifs"
+            }
+          }
+        ],
+        "command_ready": true,
+        "command": null
+      },
+      {
+        "id": "mur_sst",
+        "name": "MUR - temperatura del mar",
+        "group": "satelite",
+        "stage": "descargar/mur_sst.py + cuadros/cuadros_mur.py",
+        "summary": "SST diaria de 1 km: GIBS entrega el cuadro ya coloreado y aca se compone el globo.",
+        "params": [
+          {
+            "name": "snapshot",
+            "label": "Snapshot",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "un solo cuadro: no arma serie ni animaci\xF3n, y usa el cuadro de siempre",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "ventana",
+            "label": "Ventana temporal",
+            "kind": "date-range",
+            "default": {
+              "start": "2026-11-04",
+              "end": "2026-11-04"
+            },
+            "options": [],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "resolucion",
+            "label": "Resolucion",
+            "kind": "select",
+            "default": "1400",
+            "options": [
+              {
+                "value": "1400",
+                "label": "1400"
+              },
+              {
+                "value": "1800",
+                "label": "1800"
+              },
+              {
+                "value": "2000",
+                "label": "2000"
+              },
+              {
+                "value": "2400",
+                "label": "2400"
+              },
+              {
+                "value": "2712",
+                "label": "2712"
+              },
+              {
+                "value": "3200",
+                "label": "3200"
+              },
+              {
+                "value": "4000",
+                "label": "4000"
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "animar",
+            "label": "Animar",
+            "kind": "toggle",
+            "default": false,
+            "options": [],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "snapshot": false
+            }
+          },
+          {
+            "name": "fps",
+            "label": "Cuadros por segundo",
+            "kind": "slider",
+            "default": 12,
+            "options": [],
+            "help": "",
+            "min": 4,
+            "max": 30,
+            "step": 2,
+            "enabled_when": {
+              "snapshot": false
+            }
+          }
+        ],
+        "preview": "/previews/mur_sst.webp",
+        "previews": [],
+        "command_ready": true,
+        "command": null
+      },
+      {
+        "id": "mur_realista",
+        "name": "MUR - SST poster realista",
+        "group": "satelite",
+        "stage": "descargar/mur_sst.py + prototipos/poster_mur_realista.py",
+        "summary": "Fondo blanco, globo inscripto y campana de distribucion: el diseno de poster del repo, no el globo oscuro.",
+        "params": [
+          {
+            "name": "snapshot",
+            "label": "Snapshot",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "un solo cuadro: no arma serie ni animaci\xF3n, y usa el cuadro de siempre",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "ventana",
+            "label": "Ventana temporal",
+            "kind": "date-range",
+            "default": {
+              "start": "2026-11-04",
+              "end": "2026-11-04"
+            },
+            "options": [],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "resolucion",
+            "label": "Resolucion",
+            "kind": "select",
+            "default": "1400",
+            "options": [
+              {
+                "value": "1400",
+                "label": "1400"
+              },
+              {
+                "value": "1800",
+                "label": "1800"
+              },
+              {
+                "value": "2000",
+                "label": "2000"
+              },
+              {
+                "value": "2400",
+                "label": "2400"
+              },
+              {
+                "value": "2712",
+                "label": "2712"
+              },
+              {
+                "value": "3200",
+                "label": "3200"
+              },
+              {
+                "value": "4000",
+                "label": "4000"
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "paleta",
+            "label": "Paleta",
+            "kind": "select",
+            "default": "realista",
+            "options": [
+              {
+                "value": "realista",
+                "label": "realista (Earth Observatory)"
+              },
+              {
+                "value": "gibs",
+                "label": "gibs (SST oficial)"
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "trend",
+            "label": "Mostrar tendencia",
+            "kind": "toggle",
+            "default": false,
+            "options": [],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          }
+        ],
+        "preview": "/previews/mur_realista.webp",
+        "previews": [],
+        "command_ready": true,
+        "command": null
+      },
+      {
+        "id": "follaje",
+        "name": "PACE - follaje (LANDVI)",
+        "group": "satelite",
+        "stage": "descargar/pace_landvi.py + cuadros/cuadros_follaje.py",
+        "summary": "Indice de vegetacion de PACE sobre fondo de poster, ventana por dias.",
+        "params": [
+          {
+            "name": "snapshot",
+            "label": "Snapshot",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "un solo cuadro: no arma serie ni animaci\xF3n, y usa el cuadro de siempre",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "ventana",
+            "label": "Ventana temporal",
+            "kind": "date-range",
+            "default": {
+              "start": "2026-10-10",
+              "end": "2026-10-10"
+            },
+            "options": [],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "proyeccion",
+            "label": "Proyeccion",
+            "kind": "select",
+            "default": "plano",
+            "options": [
+              {
+                "value": "plano",
+                "label": "Plano (Robinson)"
+              },
+              {
+                "value": "globo",
+                "label": "Globo (Orthographic)"
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "resolucion",
+            "label": "Resolucion",
+            "kind": "select",
+            "default": "1400",
+            "options": [
+              {
+                "value": "1400",
+                "label": "1400"
+              },
+              {
+                "value": "1800",
+                "label": "1800"
+              },
+              {
+                "value": "2000",
+                "label": "2000"
+              },
+              {
+                "value": "2400",
+                "label": "2400"
+              },
+              {
+                "value": "2712",
+                "label": "2712"
+              },
+              {
+                "value": "3200",
+                "label": "3200"
+              },
+              {
+                "value": "4000",
+                "label": "4000"
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "animar",
+            "label": "Animar",
+            "kind": "toggle",
+            "default": false,
+            "options": [],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "snapshot": false
+            }
+          },
+          {
+            "name": "fps",
+            "label": "Cuadros por segundo",
+            "kind": "slider",
+            "default": 12,
+            "options": [],
+            "help": "",
+            "min": 4,
+            "max": 30,
+            "step": 2,
+            "enabled_when": {
+              "snapshot": false
+            }
+          }
+        ],
+        "preview": "/previews/follaje.webp",
+        "previews": [
+          {
+            "url": "/previews/follaje--globo.webp",
+            "when": {
+              "proyeccion": "globo"
+            }
+          },
+          {
+            "url": "/previews/follaje--plano.webp",
+            "when": {
+              "proyeccion": "plano"
+            }
+          }
+        ],
+        "command_ready": true,
+        "command": null
+      },
+      {
+        "id": "truecolor_viirs",
+        "name": "NOAA-20 - true color (VIIRS)",
+        "group": "satelite",
+        "stage": "descargar/truecolor.py + cuadros/cuadros_truecolor.py",
+        "summary": "Composicion diaria global de VIIRS en color real corregido. Un cuadro por dia: es un mosaico, no una captura instantanea.",
+        "params": [
+          {
+            "name": "snapshot",
+            "label": "Snapshot",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "un solo cuadro: no arma serie ni animaci\xF3n, y usa el cuadro de siempre",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "paraguay",
+            "label": "Solo Paraguay",
+            "kind": "toggle",
+            "default": false,
+            "options": [],
+            "help": "encuadra la captura o la animaci\xF3n en las coordenadas de Paraguay",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "margen",
+            "label": "Margen Paraguay (%)",
+            "kind": "slider",
+            "default": 6,
+            "options": [],
+            "help": "aire alrededor del pa\xEDs dentro del encuadre",
+            "min": 0,
+            "max": 20,
+            "step": 1,
+            "enabled_when": {
+              "paraguay": true
+            }
+          },
+          {
+            "name": "ventana",
+            "label": "Dias",
+            "kind": "date-range",
+            "default": {
+              "start": "2026-11-04",
+              "end": "2026-11-04"
+            },
+            "options": [],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "resolucion",
+            "label": "Resolucion",
+            "kind": "select",
+            "default": "1400",
+            "options": [
+              {
+                "value": "1400",
+                "label": "1400"
+              },
+              {
+                "value": "1800",
+                "label": "1800"
+              },
+              {
+                "value": "2000",
+                "label": "2000"
+              },
+              {
+                "value": "2400",
+                "label": "2400"
+              },
+              {
+                "value": "2712",
+                "label": "2712"
+              },
+              {
+                "value": "3200",
+                "label": "3200"
+              },
+              {
+                "value": "4000",
+                "label": "4000"
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "animar",
+            "label": "Animar los dias",
+            "kind": "toggle",
+            "default": false,
+            "options": [],
+            "help": "un cuadro por dia; la animacion muestra la evolucion entre fechas",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "snapshot": false
+            }
+          },
+          {
+            "name": "fps",
+            "label": "Cuadros por segundo",
+            "kind": "slider",
+            "default": 6,
+            "options": [],
+            "help": "",
+            "min": 2,
+            "max": 30,
+            "step": 1,
+            "enabled_when": {
+              "snapshot": false
+            }
+          }
+        ],
+        "preview": "/previews/truecolor_viirs.webp",
+        "previews": [],
         "command_ready": true,
         "command": null
       }
@@ -4841,7 +5292,7 @@ var manifest_default = {
   }
 };
 
-// demo/src/index.mjs
+// src/index.mjs
 var JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store"
