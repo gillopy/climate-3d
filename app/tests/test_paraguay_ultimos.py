@@ -19,7 +19,7 @@ from pathlib import Path
 from unittest import mock
 
 RAIZ = Path(__file__).resolve().parents[2]
-for ruta in (RAIZ, RAIZ / "comun"):
+for ruta in (RAIZ, RAIZ / "comun", RAIZ / "cuadros"):
     if str(ruta) not in sys.path:
         sys.path.insert(0, str(ruta))
 
@@ -125,16 +125,41 @@ class RecetasParaguay(unittest.TestCase):
             self.assertLess(float(args[args.index("--radio") + 1]), 10.0, pid)
 
     def test_paraguay_pide_captura_limpia(self):
-        for pid in ("goes_c13", "goes_banda", "goes_dust", "goes_truecolor"):
+        for pid in ("goes_c13", "goes_banda", "goes_dust", "goes_truecolor",
+                    "precipitacion_ecmwf", "anomalia_2t", "viento_250",
+                    "truecolor_viirs"):
             self.assertIn("--limpio", self._render(pid).args, pid)
 
     def test_geocolor_pide_sin_fecha(self):
         self.assertIn("--sin-fecha", self._render("geocolor").args)
 
+    def test_sin_paraguay_no_pide_captura_limpia(self):
+        for pid in ("precipitacion_ecmwf", "anomalia_2t", "viento_250"):
+            params = {s.name: s.default for s in catalog.get_product(pid).params}
+            render = [p for p in recipes.planear(pid, params, Path("C:/tmp/work")).pasos
+                      if p.kind == "render"][0]
+            self.assertNotIn("--limpio", render.args, pid)
+
     def test_himawari_no_tiene_la_seccion(self):
         nombres = {s.name for s in catalog.get_product("himawari").params}
         self.assertNotIn("paraguay", nombres)
         self.assertNotIn("margen", nombres)
+
+
+class GeometriaCuadrada(unittest.TestCase):
+    """El encuadre limpio de Paraguay llena el cuadro, no un disco central."""
+
+    def test_limpio_muestrea_las_esquinas(self):
+        from cuadros_precipitacion import _Geometria
+
+        disco = _Geometria(64, (-58.45, -23.45), 4.7, 721, 1440)
+        cuadrada = _Geometria(64, (-58.45, -23.45), 4.7, 721, 1440, cuadrado=True)
+
+        self.assertFalse(bool(disco.dentro.all()))
+        self.assertTrue(bool(cuadrada.dentro.all()))
+        # Las esquinas del recorte cuadrado salen del dato, no del fondo.
+        self.assertTrue(bool(cuadrada.dentro[0, 0]))
+        self.assertTrue(bool(cuadrada.dentro[-1, -1]))
 
 
 class Ultimos(unittest.TestCase):

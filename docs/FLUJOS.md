@@ -391,8 +391,10 @@ Dos controles transversales de la app, no de un script suelto:
   como `sin(radio) / sin_h` para los pósteres orthographic (`poster_goes_banda.py`,
   `poster_goes_rgb.py`, `poster_goes_truecolor.py`) y `--bbox` para GeoColor
   (mapa plano). El contorno se dibuja con el GeoJSON de Paraguay (`--geojson` o
-  `--borde`). Los pósteres aceptan `--limpio`: sin títulos, créditos, halo ni
-  sombreado de borde. Himawari, MUR y follaje no la tienen.
+  `--borde`). Los pósteres y los renders de modelo (`cuadros_precipitacion.py`,
+  `cuadros_anomalia_2t.py`, `cuadros_viento_250.py`) aceptan `--limpio`: captura
+  plana y cuadrada, sin títulos, créditos, halo, leyenda, costas ni aro. Himawari,
+  MUR y follaje no la tienen.
 - **Últimos datos**: ignora la ventana y resuelve los N slots nuevos. Los GOES
   usan NOAA S3 (`goes_reciente`), GeoColor valida miniaturas contra GIBS
   (`comun/geocolor_reciente.py`) e Himawari lista el bucket de NOAA

@@ -149,16 +149,18 @@ class _Geometria:
 
     __slots__ = ("lado", "f0", "f1", "c0", "c1", "ff", "fc", "dentro", "rho")
 
-    def __init__(self, lado, centro, radio, filas, columnas):
+    def __init__(self, lado, centro, radio, filas, columnas, cuadrado=False):
         lon0 = np.float32(np.radians(centro[0]))
         lat0 = np.float32(np.radians(centro[1]))
 
         # Disco normalizado en float32 para no saturar RAM/swap en resoluciones 2712x2712.
+        # Con `cuadrado` se muestrea todo el cuadro (las esquinas incluidas): es el
+        # encuadre plano de "Solo Paraguay", sin el recorte circular del globo.
         y = np.linspace(1.0, -1.0, lado, dtype=np.float32)
         x = np.linspace(-1.0, 1.0, lado, dtype=np.float32)
         X, Y = np.meshgrid(x, y)
         rho = np.hypot(X, Y)
-        dentro = rho <= 1.0
+        dentro = np.ones_like(rho, dtype=bool) if cuadrado else (rho <= 1.0)
 
         rho_s = np.where(dentro & (rho > 1e-6), rho, np.float32(1.0))
         sin_rad = np.float32(np.sin(np.radians(radio)))
@@ -607,14 +609,23 @@ def render_globo(u_ms: np.ndarray, v_ms: np.ndarray, msl_hpa: np.ndarray,
     from estilo import MONTHS_EN
 
     lon0, lat0 = args.centro
+    limpio = getattr(args, "limpio", False)
     lado_fig = args.px / args.dpi
     fig = plt.figure(figsize=(lado_fig, lado_fig), dpi=args.dpi)
     fig.patch.set_facecolor(BG)
 
-    ax = fig.add_axes([0.014, 0.014, 0.972, 0.972],
+    if args.fondo_globo == "oscuro":
+        oceano, tierra = "#101720", "#1b2430"
+    else:
+        oceano, tierra = "#dce6f0", "#f4f6f8"
+
+    ax = fig.add_axes([0.0, 0.0, 1.0, 1.0] if limpio
+                      else [0.014, 0.014, 0.972, 0.972],
                       projection=ccrs.Orthographic(central_longitude=lon0,
                                                    central_latitude=lat0))
-    ax.set_facecolor(BG)
+    # En limpio el cuadro se llena con el océano: las esquinas del recorte plano
+    # quedan fuera del disco y tienen que verse como superficie, no como fondo negro.
+    ax.set_facecolor(oceano if limpio else BG)
     ax.spines["geo"].set_visible(False)
 
     # Geometría del recorte: el borde del disco cae a `radio` grados del centro.
@@ -623,28 +634,26 @@ def render_globo(u_ms: np.ndarray, v_ms: np.ndarray, msl_hpa: np.ndarray,
     r_m = R * np.sin(np.radians(args.radio))
     ax.set_xlim(-r_m, r_m)
     ax.set_ylim(-r_m, r_m)
-    # El círculo de recorte se instala como *boundary* del eje: `FeatureArtist.draw`
-    # reemplaza cualquier `set_clip_path` propio por `axes.patch`, así que la única forma
-    # de recortar costas/fronteras/tierra al disco es que el patch del eje sea el círculo.
-    ang = np.linspace(0.0, 2.0 * np.pi, 361)
-    ax.set_boundary(MplPath(np.column_stack([r_m * np.cos(ang), r_m * np.sin(ang)])),
-                    transform=ax.transData)
-    # Mismo círculo para recortar colecciones que no pasan por `FeatureArtist`
-    # (el contorno de Paraguay, las streamlines): hay que atarlo al eje para resolver
-    # su transform.
-    clip = mpatches.Circle((0.0, 0.0), radius=r_m, transform=ax.projection)
-    ax.add_patch(clip)
-    clip.set_visible(False)
-
-    if args.fondo_globo == "oscuro":
-        oceano, tierra = "#101720", "#1b2430"
-    else:
-        oceano, tierra = "#dce6f0", "#f4f6f8"
+    clip = None
+    if not limpio:
+        # El círculo de recorte se instala como *boundary* del eje: `FeatureArtist.draw`
+        # reemplaza cualquier `set_clip_path` propio por `axes.patch`, así que la única forma
+        # de recortar costas/fronteras/tierra al disco es que el patch del eje sea el círculo.
+        ang = np.linspace(0.0, 2.0 * np.pi, 361)
+        ax.set_boundary(MplPath(np.column_stack([r_m * np.cos(ang), r_m * np.sin(ang)])),
+                        transform=ax.transData)
+        # Mismo círculo para recortar colecciones que no pasan por `FeatureArtist`
+        # (el contorno de Paraguay, las streamlines): hay que atarlo al eje para resolver
+        # su transform.
+        clip = mpatches.Circle((0.0, 0.0), radius=r_m, transform=ax.projection)
+        ax.add_patch(clip)
+        clip.set_visible(False)
 
     # Superficie base: océano + continentes (queda tapada por el campo de viento, que
     # es opaco, pero delimita el limbo del disco).
-    ax.add_patch(mpatches.Circle((0.0, 0.0), radius=r_m, transform=ax.projection,
-                                 facecolor=oceano, edgecolor="none", zorder=1))
+    if not limpio:
+        ax.add_patch(mpatches.Circle((0.0, 0.0), radius=r_m, transform=ax.projection,
+                                     facecolor=oceano, edgecolor="none", zorder=1))
     try:
         ax.add_feature(cfeature.LAND.with_scale("110m"), facecolor=tierra,
                        edgecolor="none", zorder=2)
@@ -657,13 +666,14 @@ def render_globo(u_ms: np.ndarray, v_ms: np.ndarray, msl_hpa: np.ndarray,
               extent=[-r_m, r_m, -r_m, r_m], transform=ax.projection,
               interpolation="nearest", zorder=3)
 
-    try:
-        ax.add_feature(cfeature.COASTLINE.with_scale("110m"), linewidth=0.65,
-                       edgecolor="#111111", zorder=3.5)
-        ax.add_feature(cfeature.BORDERS.with_scale("110m"), linewidth=0.45,
-                       edgecolor="#222222", zorder=3.5)
-    except Exception as exc:
-        print(f"AVISO: costas/fronteras omitidas ({exc})")
+    if not limpio:
+        try:
+            ax.add_feature(cfeature.COASTLINE.with_scale("110m"), linewidth=0.65,
+                           edgecolor="#111111", zorder=3.5)
+            ax.add_feature(cfeature.BORDERS.with_scale("110m"), linewidth=0.45,
+                           edgecolor="#222222", zorder=3.5)
+        except Exception as exc:
+            print(f"AVISO: costas/fronteras omitidas ({exc})")
 
     # ---------------------------------------------------------------- streamlines
     segmentos = _segmentos_flujo(u_ms, v_ms, lat, lon)
@@ -671,7 +681,8 @@ def render_globo(u_ms: np.ndarray, v_ms: np.ndarray, msl_hpa: np.ndarray,
     if transformados:
         flujo = LineCollection(transformados, colors=COLOR_FLUJO, linewidths=0.35,
                               transform=ax.transData, zorder=4)
-        flujo.set_clip_path(clip)
+        if clip is not None:
+            flujo.set_clip_path(clip)
         ax.add_collection(flujo)
 
         # Escala real de los ejes: px por unidad de dato (para las puntas de flecha).
@@ -683,17 +694,19 @@ def render_globo(u_ms: np.ndarray, v_ms: np.ndarray, msl_hpa: np.ndarray,
             puntas = mpatches.PathPatch(MplPath(vertices, codigos),
                                         facecolor=COLOR_FLUJO, edgecolor="none",
                                         zorder=5, transform=ax.transData)
-            puntas.set_clip_path(clip)
+            if clip is not None:
+                puntas.set_clip_path(clip)
             ax.add_patch(puntas)
 
     borde = _borde_geojson(ax, BORDE_SA, "#000000", ESPESOR_BORDE_PY, zorder=6)
-    if borde is not None:
+    if borde is not None and clip is not None:
         borde.set_clip_path(clip)
 
-    # Aro exterior del globo, para separar el disco del fondo del póster.
-    ax.add_patch(mpatches.Circle((0.0, 0.0), radius=r_m, transform=ax.projection,
-                                 facecolor="none", edgecolor="#3a4659",
-                                 linewidth=1.0, zorder=6))
+    if not limpio:
+        # Aro exterior del globo, para separar el disco del fondo del póster.
+        ax.add_patch(mpatches.Circle((0.0, 0.0), radius=r_m, transform=ax.projection,
+                                     facecolor="none", edgecolor="#3a4659",
+                                     linewidth=1.0, zorder=6))
 
     # ------------------------------------------------------------ extremos MSLP
     lows, highs = _extremos_mslp(msl_hpa, lat, lon, args.centro, args.radio)
@@ -714,6 +727,19 @@ def render_globo(u_ms: np.ndarray, v_ms: np.ndarray, msl_hpa: np.ndarray,
                         textcoords="offset points", color=color,
                         fontsize=13.0 * esc, fontweight="bold", ha="center",
                         va="top", zorder=7, path_effects=trazo)
+
+    if limpio:
+        # Captura limpia: el campo, el flujo y el contorno del país; sin aro, leyenda
+        # ni rótulos de póster.
+        import gc
+        parcial = destino.with_suffix(".png.parcial")
+        fig.savefig(parcial, format="png", facecolor=BG)
+        ax.cla()
+        plt.close(fig)
+        del fig, ax
+        gc.collect()
+        parcial.replace(destino)
+        return destino
 
     # --------------------------------------------------------------- vestuario
     halo = [patheffects.withStroke(linewidth=3.2 * esc, foreground=BG)]
@@ -785,6 +811,7 @@ def _sello_render(args) -> str:
         "px": args.px, "dpi": args.dpi,
         "centro": list(args.centro), "radio": args.radio,
         "fondo": args.fondo_globo, "credito": args.credito,
+        "limpio": getattr(args, "limpio", False),
         "niveles": NIVELES_KT, "colores": COLORES_KT,
         "densidad": DENSIDAD_FLUJO, "umbrales": [UMBRAL_BAJO, UMBRAL_ALTO],
     }
@@ -818,6 +845,9 @@ def main(argv=None) -> int:
                     help=f"grados al borde del disco; 90 = hemisferio (por defecto {RADIO})")
     ap.add_argument("--fondo-globo", choices=["claro", "oscuro"], default=FONDO_GLOBO,
                     help=f"fondo del globo (por defecto {FONDO_GLOBO})")
+    ap.add_argument("--limpio", action="store_true",
+                    help="captura limpia: sólo el dato y el contorno, sin títulos, "
+                         "leyenda, costas ni aro")
     ap.add_argument("--credito", default=CREDITO, help="crédito de la esquina superior")
     ap.add_argument("--solo-poster", action="store_true",
                     help="renderiza sólo el póster estático del último paso")
@@ -850,7 +880,8 @@ def main(argv=None) -> int:
     if t_init is None:
         t_init = datetime.fromisoformat(args.fecha).replace(hour=int(ciclo))
 
-    geo = _Geometria(args.px, args.centro, args.radio, lat.size, lon.size)
+    geo = _Geometria(args.px, args.centro, args.radio, lat.size, lon.size,
+                     cuadrado=getattr(args, "limpio", False))
     ultimo = indices[-1]
     hora_final = horas_pedidas[-1]
     t_valid = t_init + timedelta(hours=hora_final)

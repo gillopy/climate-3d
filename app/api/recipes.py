@@ -813,6 +813,7 @@ def _ecmwf_producto(producto: str, params: dict[str, Any], work: Path) -> Plan:
             "--px", str(px),
             "--fondo-globo", fondo,
             *_encuadre_paraguay(params, "radio"),
+            *(["--limpio"] if _bool(params, "paraguay") else []),
             "--salidas", str(work),
             *(["--solo-poster"] if snap else []),
         ],
@@ -952,6 +953,7 @@ def _viento_250(params: dict[str, Any], work: Path) -> Plan:
             "--px", str(px),
             "--fondo-globo", fondo,
             *_encuadre_paraguay(params, "radio"),
+            *(["--limpio"] if _bool(params, "paraguay") else []),
             "--salidas", str(work),
             *(["--solo-poster"] if snap else []),
         ],
@@ -1448,6 +1450,7 @@ def _truecolor_viirs(params: dict[str, Any], work: Path) -> Plan:
             *comunes,
             *_encuadre_paraguay(params, "radio"),
             "--geojson", _borde_paraguay(params),
+            *(["--limpio"] if _bool(params, "paraguay") else []),
         ],
         expected=n,
     )

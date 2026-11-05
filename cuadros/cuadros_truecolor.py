@@ -229,12 +229,14 @@ def render_globo(crudo: Path, t: datetime, args, destino: Path) -> Path:
 
     BG, TXT, TXT_DIM, WM_COLOR, MONTHS_EN = _estilo_poster()
     lon0, lat0 = args.centro
+    limpio = getattr(args, "limpio", False)
     rgb = np.asarray(Image.open(crudo).convert("RGB"))
 
     lado = args.px / args.dpi
     fig = plt.figure(figsize=(lado, lado), dpi=args.dpi)
     fig.patch.set_facecolor(BG)
-    ax = fig.add_axes([0.014, 0.014, 0.972, 0.972],
+    ax = fig.add_axes([0.0, 0.0, 1.0, 1.0] if limpio
+                      else [0.014, 0.014, 0.972, 0.972],
                       projection=ccrs.Orthographic(central_longitude=lon0,
                                                    central_latitude=lat0))
     ax.set_facecolor(BG)
@@ -251,14 +253,23 @@ def render_globo(crudo: Path, t: datetime, args, destino: Path) -> Path:
     else:
         ax.set_xlim(-r_m, r_m)
         ax.set_ylim(-r_m, r_m)
-    try:
-        ax.add_feature(cfeature.COASTLINE.with_scale("110m"), linewidth=0.5,
-                       edgecolor="#0b0b0b", zorder=4)
-        ax.add_feature(cfeature.BORDERS.with_scale("110m"), linewidth=0.35,
-                       edgecolor="#0b0b0b", linestyle=":", zorder=4)
-    except Exception as exc:
-        print(f"AVISO: costas omitidas ({exc})")
+    if not limpio:
+        try:
+            ax.add_feature(cfeature.COASTLINE.with_scale("110m"), linewidth=0.5,
+                           edgecolor="#0b0b0b", zorder=4)
+            ax.add_feature(cfeature.BORDERS.with_scale("110m"), linewidth=0.35,
+                           edgecolor="#0b0b0b", linestyle=":", zorder=4)
+        except Exception as exc:
+            print(f"AVISO: costas omitidas ({exc})")
     _borde_geojson(ax, args.geojson, args.borde_color, args.borde_ancho)
+
+    if limpio:
+        # Captura limpia: sólo el dato y el contorno del país, sin títulos ni créditos.
+        parcial = destino.with_suffix(".png.parcial")
+        fig.savefig(parcial, format="png", facecolor=BG)
+        plt.close(fig)
+        parcial.replace(destino)
+        return destino
 
     # Referencia: la animación de 720 px del repo, pero sub-lineal (ver ESCALA_TEXTO).
     esc = ESCALA_TEXTO * (args.px / 720.0) ** 0.45
@@ -301,6 +312,7 @@ def _sello_render(args) -> str:
     datos = {
         "px": args.px, "dpi": args.dpi, "alto": args.px, "centro": list(args.centro),
         "bbox": list(args.bbox), "credito": args.credito, "sin_fecha": args.sin_fecha,
+        "limpio": getattr(args, "limpio", False),
         "geojson": args.geojson or "", "borde_color": args.borde_color,
         "borde_ancho": args.borde_ancho, "escala_texto": ESCALA_TEXTO,
         "capa": args.capa, "sensor_nombre": args.sensor_nombre,
@@ -347,6 +359,9 @@ def main(argv=None) -> int:
     ap.add_argument("--credito", default=CREDITO, help="crédito de la marca de agua")
     ap.add_argument("--sin-fecha", action="store_true",
                     help="no estampar la fecha en el cuadro")
+    ap.add_argument("--limpio", action="store_true",
+                    help="captura limpia: sólo el dato y el contorno, sin títulos "
+                         "ni créditos")
     ap.add_argument("--out", help="carpeta de salida (por defecto, comun.rutas.SALIDAS)")
     args = ap.parse_args(argv)
 
