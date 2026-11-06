@@ -920,18 +920,20 @@ def get_product(product_id: str) -> Product | None:
 # Muestras por variante: el nombre del archivo es el contrato.
 #   previews/<producto>--<valor1>--<valor2>.webp
 # Los valores siguen el orden de esta tabla y se comparan con los parametros que
-# manda el formulario. Sin variante para la seleccion actual, se cae al sample.
+# manda el formulario. Los toggles van como true/false en minúscula (tal cual
+# los serializa el frontend). Sin variante para la seleccion actual, se cae al
+# sample.
 _VARIANTES = {
-    "goes_c13": ("satelite",),
+    "goes_c13": ("satelite", "paraguay"),
     "goes_banda": ("satelite", "paleta"),
-    "goes_dust": ("satelite",),
-    "goes_airmass": ("satelite",),
-    "goes_firetemp": ("satelite",),
+    "goes_dust": ("satelite", "paraguay"),
+    "goes_airmass": ("satelite", "paraguay"),
+    "goes_firetemp": ("satelite", "paraguay"),
     "goes_truecolor": ("satelite", "encuadre", "limbo"),
-    "geocolor": ("satelite",),
-    "precipitacion_ecmwf": ("modelo",),
-    "anomalia_2t": ("modelo",),
-    "viento_250": ("modelo",),
+    "geocolor": ("satelite", "paraguay"),
+    "precipitacion_ecmwf": ("modelo", "paraguay"),
+    "anomalia_2t": ("modelo", "paraguay"),
+    "viento_250": ("modelo", "paraguay"),
     "follaje": ("proyeccion",),
     "snapshot_paraguay": ("capa",),
 }

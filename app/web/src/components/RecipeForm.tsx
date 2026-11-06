@@ -164,14 +164,20 @@ export function RecipeForm({
     dates?.source === "descubierto" ? dates.dates : [],
   );
   // La placa muestra el render de la opcion elegida: satelite, paleta, modelo...
+  // Los toggles se comparan serializados ("true"/"false") porque el contrato
+  // de variantes viaja en el nombre del archivo.
+  const textoParam = (valor: Params[string]) =>
+    typeof valor === "boolean" ? String(valor) : String(valor ?? "");
   const variante = product.previews.find((muestra) =>
     Object.entries(muestra.when).every(
-      ([clave, esperado]) => params[clave] === esperado,
+      ([clave, esperado]) => textoParam(params[clave]) === esperado,
     ),
   );
   const muestra = variante?.url ?? product.preview;
+  const textoMuestra = (valor: unknown) =>
+    valor === "true" ? "Paraguay" : valor === "false" ? "globo" : String(valor ?? "");
   const detalleMuestra = variante
-    ? Object.values(variante.when).join(" · ")
+    ? Object.values(variante.when).map(textoMuestra).join(" · ")
     : "";
   const ayudaFecha =
     dates && dates.source === "descubierto"
