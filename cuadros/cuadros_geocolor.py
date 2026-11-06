@@ -232,8 +232,6 @@ def _warp_ortho(rgb, bbox, centro, lado, banda=256):
         # Posición de muestreo en la imagen de origen (plate carrée).
         col = (lon_deg - o) / (e - o) * (ancho_o - 1)
         fila = (n - lat_deg) / (n - s) * (alto_o - 1)
-        valido = (dentro & (col >= 0) & (col <= ancho_o - 1)
-                  & (fila >= 0) & (fila <= alto_o - 1))
 
         c0 = np.clip(np.floor(col), 0, ancho_o - 2).astype(np.intp)
         f0 = np.clip(np.floor(fila), 0, alto_o - 2).astype(np.intp)
@@ -245,8 +243,12 @@ def _warp_ortho(rgb, bbox, centro, lado, banda=256):
         d = rgb[f0 + 1, c0 + 1].astype(np.float32)
         mezcla = (a * (1 - fc) + b * fc) * (1 - ff) + (cc * (1 - fc) + d * fc) * ff
 
+        # Alfa geométrico con antialias (~1.5 px): el círculo del limbo sale
+        # suave. La máscara por grilla de origen dejaba el borde en escalera
+        # porque las celdas se estiran muchísimo en el limbo.
+        alfa = np.clip((1.0 - rho) * (lado / 2.0) / 1.5, 0.0, 1.0)
         salida[i0:i1, :, :3] = np.clip(mezcla, 0, 255).astype(np.uint8)
-        salida[i0:i1, :, 3] = np.where(valido, 255, 0).astype(np.uint8)
+        salida[i0:i1, :, 3] = (alfa * 255.0).astype(np.uint8)
 
     return salida
 
@@ -260,10 +262,12 @@ def render_globo(crudo: Path, t: datetime, args, destino: Path) -> Path:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    import matplotlib.patheffects as patheffects
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
 
     BG, TXT, TXT_DIM, WM_COLOR, MONTHS_EN = _estilo_poster()
+    BG = "#000000"                     # fondo negro puro (sólo GeoColor)
     lon0, lat0 = args.centro
     rgb = np.asarray(Image.open(crudo).convert("RGB"))
 
@@ -296,14 +300,19 @@ def render_globo(crudo: Path, t: datetime, args, destino: Path) -> Path:
 
     # Referencia: la animación de 720 px del repo, pero sub-lineal (ver ESCALA_TEXTO).
     esc = ESCALA_TEXTO * (args.px / 720.0) ** 0.45
+    # Halo bajo el texto (no caja): se lee sobre el planeta sin taparlo.
+    halo = [patheffects.withStroke(linewidth=3.2 * esc, foreground=BG)]
     fig.text(0.026, 0.985, f"{MONTHS_EN[t.month - 1]} {t.year}", color=TXT,
-             fontsize=19 * esc, fontweight="bold", ha="left", va="top")
+             fontsize=19 * esc, fontweight="bold", ha="left", va="top",
+             path_effects=halo, zorder=11)
     fig.text(0.026, 0.944, t.strftime("%d %b %Y · %H:%M UTC").upper(), color=TXT,
-             fontsize=16 * esc, fontweight="bold", ha="left", va="top")
+             fontsize=16 * esc, fontweight="bold", ha="left", va="top",
+             path_effects=halo, zorder=11)
     fig.text(0.026, 0.898, SUBTITULO, color=TXT_DIM, fontsize=13.5 * esc,
-             fontweight="bold", ha="left", va="top", linespacing=1.12)
+             fontweight="bold", ha="left", va="top", linespacing=1.12,
+             path_effects=halo, zorder=11)
     fig.text(0.983, 0.983, args.credito, color=TXT_DIM, fontsize=12 * esc,
-             ha="right", va="top")
+             ha="right", va="top", path_effects=halo, zorder=11)
     fig.text(0.026, 0.012, FUENTE, color=TXT_DIM, fontsize=7.4 * esc, ha="left",
              va="bottom")
     fig.text(0.980, 0.012, f"DATA: {t:%Y-%m-%dT%H:%M} UTC · ZONA SA", color=TXT_DIM,
@@ -335,6 +344,8 @@ def _sello_render(args, salida_alto: int) -> str:
         "sin_fecha": args.sin_fecha, "geojson": args.geojson or "",
         "borde_color": args.borde_color, "borde_ancho": args.borde_ancho,
         "escala_texto": ESCALA_TEXTO, "subtitulo": SUBTITULO,
+        "fondo": "#000000",
+        "alfa": "circulo-suave",
     }
     return hashlib.sha256(json.dumps(datos, sort_keys=True).encode()).hexdigest()[:16]
 
