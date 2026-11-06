@@ -158,7 +158,10 @@ def descargar(t: datetime, caja, px: int, destino: Path, capa: str = CAPA,
             if len(r.content) < 5_000:
                 raise ValueError(f"respuesta demasiado chica ({len(r.content)} B)")
             if not valida(r.content):
-                ultima = ultima_disponible(capa, caja, 320)
+                # La sonda es a 320 px y la descarga a tamaño real: pueden
+                # discrepar (falso positivo). Se sugiere el anterior a `t`,
+                # nunca el mismo `t` que acaba de fallar.
+                ultima = ultima_disponible(capa, caja, 320, desde=t - paso(capa))
                 raise SystemExit(
                     f"No hay gránulo de {capa} para {t:%Y-%m-%d %H:%M} UTC "
                     f"(GIBS devolvió una imagen negra).\n"
@@ -259,7 +262,29 @@ def main(argv=None) -> int:
     print(f"fuente: {url_snapshot(t, caja, args.px, args.capa)}")
 
     inicio = time.time()
-    ruta = descargar(t, caja, args.px, destino, args.capa)
+    if args.ultima:
+        # --ultima se auto-repara: si la full sale negra (la sonda a 320 px
+        # dijo que había dato pero a tamaño real no), retrocede al gránulo
+        # anterior en vez de abortar con el mismo instante.
+        ruta = None
+        for _ in range(intentos(args.capa)):
+            destino = salida / nombre_crudo(args.capa, t, args.px)
+            try:
+                ruta = descargar(t, caja, args.px, destino, args.capa)
+                break
+            except SystemExit as exc:
+                if "imagen negra" not in str(exc):
+                    raise
+                print(f"  {t:%Y-%m-%d %H:%M} sin dato a {args.px}px, "
+                      f"busco el anterior...", flush=True)
+                t = ultima_disponible(args.capa, caja, min(args.px, 320),
+                                      desde=t - paso(args.capa))
+                print(f"  pruebo con {t:%Y-%m-%d %H:%M} UTC", flush=True)
+        if ruta is None:
+            raise SystemExit(f"No encontré ningún gránulo válido de {args.capa} "
+                             f"a {args.px}px.")
+    else:
+        ruta = descargar(t, caja, args.px, destino, args.capa)
     _guardar_respaldo(ruta, args.capa, args.px)
     print(f"listo: {ruta} ({ruta.stat().st_size / 1024:.0f} KB, "
           f"{time.time() - inicio:.1f}s)")

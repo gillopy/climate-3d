@@ -508,8 +508,11 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px):
         ax.set_aspect("equal")
         ax.set_axis_off()
         ax.set_facecolor("none")
+        # El RGB puede pedir bilinear: sin filo que rescatar, lanczos sumaría
+        # un anillo brillante (por defecto, lanczos como siempre).
+        interp = getattr(args, "interp", "lanczos")
         ax.imshow(disco, origin="upper", extent=[-1, 1, -1, 1],
-                  interpolation="lanczos", zorder=2)
+                  interpolation=interp, zorder=2)
         centro = tuple(args.centro)
         if args.borde:
             poly = _lineas_geojson(args.borde)
@@ -544,7 +547,8 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px):
     ax_halo.imshow(halo, origin="upper", extent=[0, 1, 0, 1], interpolation="bilinear")
 
     ax.imshow(sombrear_borde(disco, args.sombra_borde), origin="upper",
-              extent=[-1, 1, -1, 1], interpolation="lanczos", zorder=2)
+              extent=[-1, 1, -1, 1],
+              interpolation=getattr(args, "interp", "lanczos"), zorder=2)
 
     centro = tuple(args.centro)
     if args.lineas:

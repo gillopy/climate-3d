@@ -104,7 +104,6 @@ interface Props {
   dates: DatesResponse | null;
   busy: boolean;
   error: string | null;
-  repoPython: string;
   onChange: (nombre: string, valor: Params[string]) => void;
   onSubmit: () => void;
 }
@@ -156,7 +155,6 @@ export function RecipeForm({
   dates,
   busy,
   error,
-  repoPython,
   onChange,
   onSubmit,
 }: Props) {
@@ -264,9 +262,14 @@ export function RecipeForm({
     const modificado = !igual(valor, spec.default);
     const clase = habilitado ? "field" : "field field--off";
 
-    const marca = modificado ? (
-      <span className="field__dot" aria-hidden="true" />
-    ) : null;
+    // El punto marca "cambiaste el valor": siempre ocupa su lugar para que la
+    // etiqueta no salte, y solo se pinta cuando el valor difiere del default.
+    const marca = (
+      <span
+        className={modificado ? "field__dot" : "field__dot field__dot--off"}
+        aria-hidden="true"
+      />
+    );
 
     const top = (etiqueta: string, htmlFor?: string) => (
       <div className="field__top">
@@ -480,19 +483,6 @@ export function RecipeForm({
         <div>
           <h2 className="work__title">{product.name}</h2>
           <p className="work__summary">{product.summary}</p>
-          <div className="work__meta">
-            <span className="work__script">
-              {product.group} · {product.id}
-            </span>
-            <code className="work__script">{product.stage}</code>
-            <span
-              className={
-                product.command_ready ? "work__flag" : "work__flag work__flag--off"
-              }
-            >
-              {product.command_ready ? "pipeline listo" : "solo preview"}
-            </span>
-          </div>
         </div>
         <button
           type="button"
@@ -549,12 +539,9 @@ export function RecipeForm({
 
       <div className="sheet__body">
         <div className="fields">
-          {grupos.map((grupo, indice) => (
+          {grupos.map((grupo) => (
             <section key={grupo.id} className="fields__grupo">
               <header className="fields__sec">
-                <span className="fields__num" aria-hidden="true">
-                  {String(indice + 1).padStart(2, "0")}
-                </span>
                 <h3 className="fields__title">{grupo.titulo}</h3>
                 <span className="fields__sec-count">
                   {grupo.specs.length}{" "}
@@ -567,20 +554,11 @@ export function RecipeForm({
           ))}
         </div>
 
-        <p className="sheet__note">
-          {product.command_ready ? (
-            <>
-              Corre con <code>{repoPython.split("\\").slice(-3).join("\\")}</code>. Cada
-              generar consulta el origen: lo que ya está en la carpeta de datos
-              compartida se reutiliza.
-            </>
-          ) : (
-            <>
-              No se encontró el Python del repo: falta <code>{repoPython}</code>. Solo
-              queda disponible el preview.
-            </>
-          )}
-        </p>
+        {!product.command_ready ? (
+          <p className="sheet__note">
+            No se encontró el Python del repo: solo queda disponible el preview.
+          </p>
+        ) : null}
       </div>
 
       <div className="sheet__foot">

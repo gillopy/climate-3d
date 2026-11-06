@@ -578,6 +578,14 @@ class JobManager:
                 # El descargador devuelve 1 si algun slot no existe (huecos de la
                 # grilla o horas que todavia no se publicaron). No es fatal: el
                 # render trabaja con lo que si bajo.
+                # Excepción: el snapshot de Paraguay es UNA sola imagen; seguir
+                # sin crudo garantiza fallar en la composición con un error
+                # confuso. Se aborta directo.
+                if paso.script == "descargar/snapshot_paraguay.py":
+                    raise RuntimeError(
+                        f"`{paso.script}` salio con codigo {codigo}. "
+                        f"Mira el log de arriba."
+                    )
                 self._log(
                     job,
                     f"la descarga cerro con codigo {codigo}: sigo con lo que hay",

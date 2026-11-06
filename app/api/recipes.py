@@ -1558,6 +1558,8 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
         "--n", str(n),
         "--paso", str(paso),
         "--px", str(px),
+        # Paleta original sin efectos: sin sombreado de borde.
+        "--sombra-borde", "0",
         # Globo completo centrado en el punto subsatelital, o Paraguay.
         *marco,
         "--borde", _borde_paraguay(params),

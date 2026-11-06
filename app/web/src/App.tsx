@@ -265,7 +265,6 @@ export default function App() {
             className={`health__item ${
               listo ? "health__item--ok" : "health__item--warn"
             }`}
-            title={catalogo?.repo_python ?? ""}
           >
             <span className="health__swatch" aria-hidden="true" />
             {listo ? "pipeline listo" : "sin .venv del repo"}
@@ -274,7 +273,6 @@ export default function App() {
             className={`health__item ${
               conDatos ? "health__item--ok" : "health__item--warn"
             }`}
-            title={catalogo?.data_root ?? ""}
           >
             <span className="health__swatch" aria-hidden="true" />
             {conDatos ? "datos en disco" : "sin datos locales"}
@@ -397,7 +395,6 @@ export default function App() {
               dates={fechas}
               busy={enviando}
               error={null}
-              repoPython={catalogo?.repo_python ?? ".venv\\Scripts\\python.exe"}
               onChange={(nombre, valor) =>
                 setParams((previo) => ({ ...previo, [nombre]: valor }))
               }

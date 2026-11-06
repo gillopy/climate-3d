@@ -214,6 +214,20 @@ class RecetaApp(unittest.TestCase):
             slots = recipes._slots_goes_rgb("G19", bandas("firetemp"))
         self.assertEqual(slots, [datetime(2026, 11, 4, 18, 0)])
 
+    def test_snapshot_paraguay_pide_encuadre_limpio(self):
+        # Solo Paraguay + snapshot: captura limpia rectangular (como el C13),
+        # nunca el globo con su círculo. Vale para los tres RGB.
+        for producto in ("dust", "airmass", "firetemp"):
+            plan = recipes._goes_rgb({
+                "satelite": "G19", "ventana": self.DIA, "snapshot": True,
+                "paraguay": True, "margen": 6,
+                "hora": 15, "minuto": "00", "resolucion": "1400",
+            }, Path("C:/tmp/work"), producto)
+            render = [p for p in plan.pasos if p.kind == "render"][0]
+            self.assertIn("--limpio", render.args, producto)
+            self.assertNotEqual(
+                render.args[render.args.index("--recorte") + 1], "1.0", producto)
+
 
 if __name__ == "__main__":
     unittest.main()

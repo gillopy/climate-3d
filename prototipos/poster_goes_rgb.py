@@ -35,6 +35,9 @@ SAT = "G19"
 PRODUCTO = "dust"
 CENTRO = (-75.2, 0.0)
 PX = 2712
+#: Corte del planeta: fracción del radio del encuadre donde termina el disco.
+#: Todo lo de afuera no se muestra (la línea blanca del pedido).
+CORTE_PLANETA = 0.98
 #: Grilla de origen: 2 km, la resolución del producto. Baja las bandas de 1 km
 #: (C05) a la misma grilla que C06/C07 sin compartir ejes entre bandas.
 TOPE = 5424
@@ -127,12 +130,21 @@ def componer_disco(paths: dict[str, Path], args) -> tuple[np.ndarray, float, dic
         }
         bloque, valido = componer_rgb(franja, args.producto)
         a = tc._alfa(rho, px, escala) * dentro
+        # El corte va en el planeta, no en el marco: rampa analítica de
+        # 1.5 px sobre el círculo de corte, sin dientes ni banda. Sólo en
+        # modo globo (escala ~= 1): en el encuadre regional el dato válido
+        # llena el cuadro y el corte le comería las esquinas en círculo.
+        if escala > 0.5:
+            a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
         bloque[~valido] = 0
 
         rgb[f0:f1] = bloque
         alfa[f0:f1] = (a * 255.0).astype(np.uint8)
         validos += int(np.count_nonzero(a > 0))
         print(f"  franja {f1:5d}/{px}", flush=True)
+
+    # Sin filo brillante: display bilineal en vez de lanczos (sin overshoot).
+    args.interp = "bilinear"
 
     return np.dstack([rgb, alfa]), escala, {"px": px, "validos": validos}
 
