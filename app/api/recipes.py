@@ -1305,6 +1305,8 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
         "--paso", str(paso),
         "--px", str(px),
         "--paleta", str(params.get("paleta", "clean_ir")),
+        # Sin sombreado de borde: oscurecería el limbo.
+        "--sombra-borde", "0",
         # Globo completo centrado en el punto subsatelital, o Paraguay.
         *marco,
         "--borde", _borde_paraguay(params),

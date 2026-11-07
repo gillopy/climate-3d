@@ -37,6 +37,9 @@ BANDA = "C13"
 CENTRO = (-75.2, 0.0)
 PX = 2712
 TOPE = 10848
+#: Corte del planeta: fracción del radio del encuadre donde termina el disco
+#: (igual que en los RGB). Todo lo de afuera no se muestra.
+CORTE_PLANETA = 0.98
 PALETA = "clean_ir"
 VMIN, VMAX = -92.1, 56.9
 
@@ -150,6 +153,9 @@ def componer_banda(nc: Path, args) -> tuple[np.ndarray, float, dict]:
         lon, lat, rho, dentro = tc._orto_franja(px, escala, centro, f0, f1)
         valores = _muestrear_banda(campo, x, y, lon0, h, lon, lat)
         a = tc._alfa(rho, px, escala) * dentro
+        # El corte va en el planeta, no en el marco: rampa analítica de
+        # 1.5 px sobre el círculo de corte, sin dientes ni banda.
+        a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
 
         normalizado = np.clip((valores - args.vmin) / (args.vmax - args.vmin), 0.0, 1.0)
         indice = (normalizado * 255.0).astype(np.uint8)
@@ -160,6 +166,9 @@ def componer_banda(nc: Path, args) -> tuple[np.ndarray, float, dict]:
         alfa[f0:f1] = (a * 255.0).astype(np.uint8)
         validos += int(np.count_nonzero(a > 0))
         print(f"  franja {f1:5d}/{px}", flush=True)
+
+    # Sin filo brillante: display bilineal en vez de lanczos (sin overshoot).
+    args.interp = "bilinear"
 
     return np.dstack([rgb, alfa]), escala, {"px": px, "validos": validos}
 

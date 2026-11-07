@@ -1,7 +1,7 @@
 // Generado por demo/tools/export_demo.py. No editar a mano.
 export default {
   "version": 1,
-  "generated_at": "2026-11-05T23:08:01+00:00",
+  "generated_at": "2026-11-06T19:02:53+00:00",
   "days": [
     "2026-10-10",
     "2026-11-03",
@@ -2566,21 +2566,31 @@ export default {
         "preview": "/previews/goes_c13.webp",
         "previews": [
           {
-            "url": "/previews/goes_c13--G16.webp",
+            "url": "/previews/goes_c13--G16--false.webp",
             "when": {
-              "satelite": "G16"
+              "satelite": "G16",
+              "paraguay": "false"
             }
           },
           {
-            "url": "/previews/goes_c13--G18.webp",
+            "url": "/previews/goes_c13--G18--false.webp",
             "when": {
-              "satelite": "G18"
+              "satelite": "G18",
+              "paraguay": "false"
             }
           },
           {
-            "url": "/previews/goes_c13--G19.webp",
+            "url": "/previews/goes_c13--G19--false.webp",
             "when": {
-              "satelite": "G19"
+              "satelite": "G19",
+              "paraguay": "false"
+            }
+          },
+          {
+            "url": "/previews/goes_c13--G19--true.webp",
+            "when": {
+              "satelite": "G19",
+              "paraguay": "true"
             }
           }
         ],
@@ -2881,15 +2891,24 @@ export default {
         "preview": "/previews/geocolor.webp",
         "previews": [
           {
-            "url": "/previews/geocolor--G18.webp",
+            "url": "/previews/geocolor--G18--false.webp",
             "when": {
-              "satelite": "G18"
+              "satelite": "G18",
+              "paraguay": "false"
             }
           },
           {
-            "url": "/previews/geocolor--G19.webp",
+            "url": "/previews/geocolor--G19--false.webp",
             "when": {
-              "satelite": "G19"
+              "satelite": "G19",
+              "paraguay": "false"
+            }
+          },
+          {
+            "url": "/previews/geocolor--G19--true.webp",
+            "when": {
+              "satelite": "G19",
+              "paraguay": "true"
             }
           }
         ],
@@ -3548,9 +3567,17 @@ export default {
         "preview": "/previews/goes_dust.webp",
         "previews": [
           {
-            "url": "/previews/goes_dust--G19.webp",
+            "url": "/previews/goes_dust--G19--false.webp",
             "when": {
-              "satelite": "G19"
+              "satelite": "G19",
+              "paraguay": "false"
+            }
+          },
+          {
+            "url": "/previews/goes_dust--G19--true.webp",
+            "when": {
+              "satelite": "G19",
+              "paraguay": "true"
             }
           }
         ],
@@ -3829,9 +3856,17 @@ export default {
         "preview": "/previews/goes_airmass.webp",
         "previews": [
           {
-            "url": "/previews/goes_airmass--G19.webp",
+            "url": "/previews/goes_airmass--G19--false.webp",
             "when": {
-              "satelite": "G19"
+              "satelite": "G19",
+              "paraguay": "false"
+            }
+          },
+          {
+            "url": "/previews/goes_airmass--G19--true.webp",
+            "when": {
+              "satelite": "G19",
+              "paraguay": "true"
             }
           }
         ],
@@ -4110,9 +4145,17 @@ export default {
         "preview": "/previews/goes_firetemp.webp",
         "previews": [
           {
-            "url": "/previews/goes_firetemp--G19.webp",
+            "url": "/previews/goes_firetemp--G19--false.webp",
             "when": {
-              "satelite": "G19"
+              "satelite": "G19",
+              "paraguay": "false"
+            }
+          },
+          {
+            "url": "/previews/goes_firetemp--G19--true.webp",
+            "when": {
+              "satelite": "G19",
+              "paraguay": "true"
             }
           }
         ],
@@ -4539,15 +4582,24 @@ export default {
         "preview": "/previews/anomalia_2t.webp",
         "previews": [
           {
-            "url": "/previews/anomalia_2t--aifs-single.webp",
+            "url": "/previews/anomalia_2t--aifs-single--false.webp",
             "when": {
-              "modelo": "aifs-single"
+              "modelo": "aifs-single",
+              "paraguay": "false"
             }
           },
           {
-            "url": "/previews/anomalia_2t--ifs.webp",
+            "url": "/previews/anomalia_2t--ifs--false.webp",
             "when": {
-              "modelo": "ifs"
+              "modelo": "ifs",
+              "paraguay": "false"
+            }
+          },
+          {
+            "url": "/previews/anomalia_2t--ifs--true.webp",
+            "when": {
+              "modelo": "ifs",
+              "paraguay": "true"
             }
           }
         ],
@@ -4767,15 +4819,24 @@ export default {
         "preview": "/previews/viento_250.webp",
         "previews": [
           {
-            "url": "/previews/viento_250--gfs.webp",
+            "url": "/previews/viento_250--gfs--false.webp",
             "when": {
-              "modelo": "gfs"
+              "modelo": "gfs",
+              "paraguay": "false"
             }
           },
           {
-            "url": "/previews/viento_250--ifs.webp",
+            "url": "/previews/viento_250--ifs--false.webp",
             "when": {
-              "modelo": "ifs"
+              "modelo": "ifs",
+              "paraguay": "false"
+            }
+          },
+          {
+            "url": "/previews/viento_250--ifs--true.webp",
+            "when": {
+              "modelo": "ifs",
+              "paraguay": "true"
             }
           }
         ],
