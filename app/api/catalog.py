@@ -17,14 +17,41 @@ from .schemas import ParamOption, ParamSpec, PreviewVariant, Product
 
 RAIZ_REPO = Path(__file__).resolve().parents[2]
 
+def _paleta(value: str, label: str, banda: str | None = None) -> ParamOption:
+    """Paleta del catalogo; con `banda`, solo se ofrece con ese canal."""
+    return ParamOption(
+        value=value,
+        label=label,
+        only_when={"banda": banda} if banda else None,
+    )
+
+
+# Paletas que no dependen del canal elegido: valen en cualquier banda.
+_PALETAS_GENERICAS = [
+    _paleta("termico", "termico - gris termico"),
+    _paleta("gris", "gris - reflectancia"),
+    _paleta("anomalia", "anomalia - paleta de anomalia"),
+    _paleta("magma", "magma"),
+    _paleta("inferno", "inferno"),
+    _paleta("turbo", "turbo"),
+]
+
+# `goes_c13` siempre es C13: la rampa de GIBS no necesita condicion.
 _PALETAS = [
-    ParamOption(value="clean_ir", label="clean_ir - Clean Infrared (GIBS)"),
-    ParamOption(value="termico", label="termico - gris termico"),
-    ParamOption(value="gris", label="gris - reflectancia"),
-    ParamOption(value="anomalia", label="anomalia - paleta de anomalia"),
-    ParamOption(value="magma", label="magma"),
-    ParamOption(value="inferno", label="inferno"),
-    ParamOption(value="turbo", label="turbo"),
+    _paleta("clean_ir", "clean_ir - Clean Infrared (GIBS)"),
+    *_PALETAS_GENERICAS,
+]
+
+# `goes_banda` cambia de canal: cada rampa oficial va atada a su banda y el
+# resto sigue disponible siempre. El orden importa: al cambiar de banda la UI
+# cae en la primera opcion visible, asi que primero van las de la banda y
+# despues `gris`, que es la unica rampa que se lee bien en reflectancia (las
+# visibles C01-C06 usan 0..1).
+_PALETAS_BANDA = [
+    _paleta("clean_ir", "clean_ir - Clean Infrared (GIBS), banda 13", "C13"),
+    _paleta("c16_ir", "c16_ir - IR oficial GOES, banda 16 (-128 a 128 C)", "C16"),
+    _paleta("gris", "gris - reflectancia"),
+    *[opcion for opcion in _PALETAS_GENERICAS if opcion.value != "gris"],
 ]
 
 # Las 16 bandas del ABI, con la lectura que les da NOAA STAR. Sirve para armar
@@ -395,8 +422,8 @@ PRODUCTS: list[Product] = [
                 label="Paleta",
                 kind="select",
                 default="clean_ir",
-                options=_PALETAS,
-                help="clean_ir usa la escala fija de GIBS (-92.1 a 56.9 C); para reflectancia conviene gris",
+                options=_PALETAS_BANDA,
+                help="clean_ir es la de GIBS (-92.1 a 56.9 C) y solo se ofrece en C13; c16_ir es la oficial de la banda 16 (-128 a 128 C); para reflectancia conviene gris",
             ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
                       default=_rango(), enabled_when={"ultimos": False}),

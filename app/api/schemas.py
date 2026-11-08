@@ -21,6 +21,11 @@ class ParamOption(BaseModel):
 
     value: str
     label: str
+    only_when: dict[str, Any] | None = Field(
+        default=None,
+        description="La opcion solo se ofrece cuando otro parametro vale esto "
+        "(por ejemplo, la paleta oficial de una banda).",
+    )
 
 
 class ParamSpec(BaseModel):

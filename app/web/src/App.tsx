@@ -12,6 +12,7 @@ import {
 import { JobPanel } from "./components/JobPanel";
 import { Reloj } from "./components/controls/Clock";
 import { RecipeForm } from "./components/RecipeForm";
+import { valorAjustado } from "./opciones";
 import type {
   CatalogResponse,
   DatesResponse,
@@ -396,7 +397,16 @@ export default function App() {
               busy={enviando}
               error={null}
               onChange={(nombre, valor) =>
-                setParams((previo) => ({ ...previo, [nombre]: valor }))
+                setParams((previo) => {
+                  const siguiente = { ...previo, [nombre]: valor };
+                  // Cambiar la banda puede dejar la paleta elegida fuera de la
+                  // lista: cae en la primera que siga disponible.
+                  for (const spec of producto.params) {
+                    const ajustado = valorAjustado(spec, siguiente);
+                    if (ajustado !== null) siguiente[spec.name] = ajustado;
+                  }
+                  return siguiente;
+                })
               }
               onSubmit={generar}
             />

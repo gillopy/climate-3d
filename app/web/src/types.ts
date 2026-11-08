@@ -11,6 +11,8 @@ export type RunMode = "preview" | "real";
 export interface ParamOption {
   value: string;
   label: string;
+  /** La opcion solo se ofrece cuando otro parametro tiene este valor. */
+  only_when?: Record<string, unknown> | null;
 }
 
 export interface ParamSpec {

@@ -9,6 +9,7 @@ import type {
 import { Select } from "./controls/Select";
 import { FechaUnica, VentanaTemporal } from "./controls/Window";
 import { formatearFecha, formatearRango } from "./controls/Calendar";
+import { opcionesVisibles } from "../opciones";
 
 // La fecha y la hora van siempre al final del formulario y en este orden, sea
 // cual sea el producto: primero se eligen las opciones, después el momento.
@@ -304,13 +305,16 @@ export function RecipeForm({
     );
 
     if (spec.kind === "select") {
+      // Una opcion puede depender de otro control: la paleta oficial de la
+      // banda 16 solo se ofrece cuando esa banda esta elegida.
+      const opciones = opcionesVisibles(spec, params);
       return (
         <div className={clase} key={spec.name}>
           {top(spec.label, id)}
           <Select
             id={id}
             value={String(valor ?? spec.default)}
-            options={spec.options}
+            options={opciones}
             disabled={!habilitado}
             describedBy={ayudaId}
             onChange={(elegido) => onChange(spec.name, elegido)}

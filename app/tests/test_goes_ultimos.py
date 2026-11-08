@@ -215,6 +215,39 @@ class RecetaUltimos(unittest.TestCase):
         self.assertIn("2026-10-02", " ".join(tiempo.args))
 
 
+class EscalasFijas(unittest.TestCase):
+    """Las paletas oficiales conservan su escala; el cuadro no la mueve."""
+
+    DIA = {"start": "2026-11-03", "end": "2026-11-03"}
+
+    def _params(self, **extra) -> dict:
+        params = {
+            "satelite": "G19", "banda": "C13", "paleta": "clean_ir",
+            "resolucion": "1400", "snapshot": True, "hora": 15,
+            "minuto": "00", "ventana": self.DIA,
+        }
+        params.update(extra)
+        return params
+
+    def _args_del_render(self, producto: str, **extra) -> list[str]:
+        plan = recipes.planear(producto, self._params(**extra), Path("C:/tmp/work"))
+        return [p for p in plan.pasos if p.kind == "render"][0].args
+
+    def test_c13_conserva_la_escala_fija_de_gibs(self):
+        # El producto C13 no cambia: clean_ir sigue fija en -92.1 a 56.9 C.
+        args = self._args_del_render("goes_c13", paleta="clean_ir")
+        self.assertEqual(args[args.index("--vmin") + 1], "-92.1")
+        self.assertEqual(args[args.index("--vmax") + 1], "56.9")
+
+    def test_banda_cruda_deja_la_escala_oficial_al_script(self):
+        # `poster_goes_banda.py` fija -128..128 cuando la paleta es c16_ir:
+        # la receta no manda percentiles ni una escala propia.
+        args = self._args_del_render("goes_banda", paleta="c16_ir")
+        self.assertEqual(args[args.index("--paleta") + 1], "c16_ir")
+        self.assertNotIn("--vmin", args)
+        self.assertNotIn("--vmax", args)
+
+
 class OpcionesDelCatalogo(unittest.TestCase):
     """Los productos GOES exponen el switch y la lista exacta de cuadros."""
 

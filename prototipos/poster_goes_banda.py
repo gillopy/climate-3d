@@ -48,15 +48,19 @@ TERMICAS = {"C07", "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15", "C16"
 
 
 def _lut(paleta: str) -> np.ndarray:
-    """256 colores de la paleta, para indexar sin alocar float por píxel.
+    """Colores de la paleta, para indexar sin alocar float por píxel.
 
-    `PALETTES` mezcla colormaps armadas (clean_ir, anomalia) con nombres de
-    matplotlib (gris, magma...): acá se resuelven los dos casos.
+    `PALETTES` mezcla colormaps armadas (clean_ir, anomalia, c16_ir) con
+    nombres de matplotlib (gris, magma...): acá se resuelven los dos casos.
+    Se muestrean `cmap.N` entradas (c16_ir trae 2048: 0.125 C por bin en
+    su escala; las demás, 256): con 256 el degradado cálido de C16 entraba
+    en 4 escalones.
     """
     cmap = PALETTES[paleta]
     if isinstance(cmap, str):
         cmap = colormaps[cmap]
-    return (np.asarray(cmap(np.linspace(0.0, 1.0, 256)))[:, :3] * 255.0).astype(np.uint8)
+    n = int(getattr(cmap, "N", 256))
+    return (np.asarray(cmap(np.linspace(0.0, 1.0, n)))[:, :3] * 255.0).astype(np.uint8)
 
 
 def slots(banda: str, sat: str, desde: datetime | None, n: int, paso: int,
@@ -158,7 +162,8 @@ def componer_banda(nc: Path, args) -> tuple[np.ndarray, float, dict]:
         a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
 
         normalizado = np.clip((valores - args.vmin) / (args.vmax - args.vmin), 0.0, 1.0)
-        indice = (normalizado * 255.0).astype(np.uint8)
+        n = len(lut)
+        indice = (normalizado * (n - 1)).astype(np.uint16 if n > 256 else np.uint8)
         bloque = lut[indice]
         bloque[~np.isfinite(valores)] = 0
 
@@ -210,11 +215,17 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.banda.upper() not in TERMICAS:
-        # Reflectancia: la rampa de GIBS no aplica, va en gris 0..1.
-        if args.paleta == PALETA:
+        # Reflectancia: las rampas termicas (GIBS y la oficial de GOES) no
+        # aplican, va en gris 0..1.
+        if args.paleta in (PALETA, "c16_ir"):
             args.paleta = "gris"
         if args.vmin == VMIN and args.vmax == VMAX:
             args.vmin, args.vmax = 0.0, 1.0
+
+    if args.paleta == "c16_ir" and args.vmin == VMIN and args.vmax == VMAX:
+        # La barra oficial va de -128 a 128 C: sin esto, los mismos colores
+        # caerian en otras temperaturas y no coincide con la pagina de GOES.
+        args.vmin, args.vmax = -128.0, 128.0
 
     if args.fondo == "oscuro":
         tc.WHITE = "#000000"
