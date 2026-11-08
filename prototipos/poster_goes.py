@@ -64,6 +64,7 @@ from rutas import DATOS, SALIDAS  # noqa: E402
 sys.path.insert(0, str(RAIZ / 'comun'))
 from paleta_c07_ir import CMAP_C07_IR_OFICIAL as CMAP_C07_IR_OFICIAL  # noqa: E402
 from paleta_gibs import CMAP_GIBS_CLEAN_IR as CMAP_GIBS_CLEAN_IR  # noqa: E402
+from paleta_reflectancia import CMAP_REFLECTANCIA as CMAP_REFLECTANCIA  # noqa: E402
 from paleta_ir_vapor import CMAP_IR_VAPOR as CMAP_IR_VAPOR  # noqa: E402
 from paleta_ir_ventana import CMAP_IR_VENTANA as CMAP_IR_VENTANA  # noqa: E402
 from paleta_c16_ir import CMAP_C16_IR_OFICIAL as CMAP_C16_IR_OFICIAL  # noqa: E402
@@ -74,6 +75,9 @@ PALETTES = {
     "termico": "Greys",      # IR: frío (nube alta) = blanco, cálido (superficie) = negro
     "anomalia": ANOM_CMAP,   # la muestreada de la imagen de referencia
     "clean_ir": CMAP_GIBS_CLEAN_IR,  # Clean Infrared de NASA Worldview/GIBS (default para ABI C13)
+    # Reflectancia (C01-C06): negro a blanco, sin barra publicada.
+    "reflectancia": CMAP_REFLECTANCIA,
+
     # Banda 7: barra propia (shortwave window).
     "c07_ir": CMAP_C07_IR_OFICIAL,  # 3.9 um, -83 a 127 C
 

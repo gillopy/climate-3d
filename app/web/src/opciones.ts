@@ -5,8 +5,12 @@ function coincide(
   params: Params,
 ): boolean {
   if (!condicion) return true;
-  return Object.entries(condicion).every(
-    ([clave, esperado]) => params[clave] === esperado,
+  // El valor esperado puede ser uno solo o una lista (una paleta compartida
+  // por varias bandas, como la de reflectancia de C01-C06).
+  return Object.entries(condicion).every(([clave, esperado]) =>
+    Array.isArray(esperado)
+      ? esperado.includes(params[clave])
+      : params[clave] === esperado,
   );
 }
 

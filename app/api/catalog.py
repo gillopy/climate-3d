@@ -17,13 +17,17 @@ from .schemas import ParamOption, ParamSpec, PreviewVariant, Product
 
 RAIZ_REPO = Path(__file__).resolve().parents[2]
 
-def _paleta(value: str, label: str, banda: str | None = None) -> ParamOption:
-    """Paleta del catalogo; con `banda`, solo se ofrece con ese canal."""
-    return ParamOption(
-        value=value,
-        label=label,
-        only_when={"banda": banda} if banda else None,
-    )
+def _paleta(
+    value: str, label: str, banda: str | list[str] | None = None
+) -> ParamOption:
+    """Paleta del catalogo; con `banda`, solo se ofrece con ese canal (o canales)."""
+    if isinstance(banda, list):
+        condicion: dict[str, object] | None = {"banda": list(banda)}
+    elif banda:
+        condicion = {"banda": banda}
+    else:
+        condicion = None
+    return ParamOption(value=value, label=label, only_when=condicion)
 
 
 # Paletas que no dependen del canal elegido: valen en cualquier banda.
@@ -48,6 +52,11 @@ _PALETAS = [
 # despues `gris`, que es la unica rampa que se lee bien en reflectancia (las
 # visibles C01-C06 usan 0..1).
 _PALETAS_BANDA = [
+    _paleta(
+        "reflectancia",
+        "reflectancia - visible e infrarrojo cercano, negro a blanco (0 a 100 %)",
+        ["C01", "C02", "C03", "C04", "C05", "C06"],
+    ),
     _paleta("clean_ir", "clean_ir - Clean Infrared (GIBS), banda 13", "C13"),
     _paleta("c07_ir", "c07_ir - IR oficial GOES, banda 7 (3.9 um, -83 a 127 C)", "C07"),
     _paleta("c08_ir", "c08_ir - vapor de agua oficial GOES, banda 8 (6.2 um, -93 a 7 C)", "C08"),
@@ -432,7 +441,7 @@ PRODUCTS: list[Product] = [
                 kind="select",
                 default="clean_ir",
                 options=_PALETAS_BANDA,
-                help="cada banda termica tiene su paleta oficial y solo se ofrece con ella: clean_ir es la de GIBS (-92.1 a 56.9 C, C13), c07_ir la de la banda 7 (-83 a 127 C), c08_ir..c10_ir la de vapor de agua (-93 a 7 C), c11_ir..c15_ir la de la ventana IR (-110 a 57 C) y c16_ir va de -128 a 128 C; para reflectancia conviene gris",
+                help="cada banda termica tiene su paleta oficial y solo se ofrece con ella: reflectancia es la de C01-C06 (negro a blanco, 0 a 100 %); clean_ir es la de GIBS (-92.1 a 56.9 C, C13), c07_ir la de la banda 7 (-83 a 127 C), c08_ir..c10_ir la de vapor de agua (-93 a 7 C), c11_ir..c15_ir la de la ventana IR (-110 a 57 C) y c16_ir va de -128 a 128 C",
             ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
                       default=_rango(), enabled_when={"ultimos": False}),

@@ -243,6 +243,14 @@ class EscalasFijas(unittest.TestCase):
         # `poster_goes_banda.py` fija la escala de cada paleta oficial
         # (c11_ir..c15_ir -110..57, c16_ir -128..128): la receta no manda
         # percentiles ni una escala propia.
+        # Reflectancia (C01-C06): la rampa tambien fija su escala en el script.
+        for banda in range(1, 7):
+            args = self._args_del_render("goes_banda", banda=f"C0{banda}",
+                                       paleta="reflectancia")
+            self.assertEqual(args[args.index("--paleta") + 1], "reflectancia")
+            self.assertNotIn("--vmin", args)
+            self.assertNotIn("--vmax", args)
+
         oficiales = [("C07", "c07_ir"), ("C08", "c08_ir"), ("C09", "c09_ir"), ("C10", "c10_ir")]
         oficiales += [(f"C{b}", f"c{b}_ir") for b in range(11, 17)]
         for banda, paleta in oficiales:

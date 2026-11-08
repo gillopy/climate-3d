@@ -234,12 +234,14 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.banda.upper() not in TERMICAS:
-        # Reflectancia: las rampas termicas (GIBS y las oficiales) no aplican,
-        # va en gris 0..1.
+        # Reflectancia: las rampas termicas (GIBS y las oficiales) no aplican.
+        # El default del producto y las rampas oficiales caen en la de
+        # reflectancia; una paleta generica elegida a mano se respeta.
         if args.paleta == PALETA or args.paleta in ESCALAS_OFICIALES:
-            args.paleta = "gris"
+            args.paleta = "reflectancia"
         if args.vmin == VMIN and args.vmax == VMAX:
-            args.vmin, args.vmax = 0.0, 1.0
+            # `cargar` devuelve la reflectancia en % (0..100), no en fraccion.
+            args.vmin, args.vmax = 0.0, 100.0
 
     if args.paleta in ESCALAS_OFICIALES and args.vmin == VMIN and args.vmax == VMAX:
         # Las barras oficiales tienen escala fija: sin esto, los mismos colores

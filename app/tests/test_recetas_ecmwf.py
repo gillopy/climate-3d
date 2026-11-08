@@ -494,6 +494,10 @@ class BandasYControles(unittest.TestCase):
         paleta = next(p for p in producto.params if p.name == "paleta")
         condiciones = {opcion.value: opcion.only_when for opcion in paleta.options}
 
+        self.assertEqual(
+            condiciones["reflectancia"],
+            {"banda": ["C01", "C02", "C03", "C04", "C05", "C06"]},
+        )
         self.assertEqual(condiciones["clean_ir"], {"banda": "C13"})
         self.assertEqual(condiciones["c07_ir"], {"banda": "C07"})
         self.assertEqual(condiciones["c08_ir"], {"banda": "C08"})
@@ -508,11 +512,18 @@ class BandasYControles(unittest.TestCase):
         producto = catalog.get_product("goes_banda")
         paleta = next(p for p in producto.params if p.name == "paleta")
 
+        def aplica(condicion: dict | None, banda: str) -> bool:
+            if not condicion:
+                return True
+            esperado = condicion["banda"]
+            # Una paleta puede estar atada a una banda o a una lista de bandas.
+            return banda in esperado if isinstance(esperado, list) else esperado == banda
+
         def visibles(banda: str) -> list[str]:
             return [
                 opcion.value
                 for opcion in paleta.options
-                if not opcion.only_when or opcion.only_when["banda"] == banda
+                if aplica(opcion.only_when, banda)
             ]
 
         # La UI cae en la primera visible al cambiar de banda.
@@ -526,8 +537,10 @@ class BandasYControles(unittest.TestCase):
                 continue  # C13 arranca en clean_ir, que es su default
             self.assertEqual(visibles(f"C{banda}")[0], f"c{banda}_ir")
         self.assertIn("c13_ir", visibles("C13"))
-        # Reflectancia: `gris` es la unica rampa que va de negro a blanco.
-        self.assertEqual(visibles("C02")[0], "gris")
+        # Reflectancia: C01-C06 arrancan en la rampa negro-blanco.
+        for banda in range(1, 7):
+            self.assertEqual(visibles(f"C0{banda}")[0], "reflectancia")
+        self.assertNotIn("reflectancia", visibles("C07"))
 
     def test_goes_c13_conserva_su_lista_de_siempre(self):
         producto = catalog.get_product("goes_c13")
