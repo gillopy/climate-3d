@@ -43,6 +43,13 @@ CORTE_PLANETA = 0.98
 PALETA = "clean_ir"
 VMIN, VMAX = -92.1, 56.9
 
+#: Escala fija de las paletas oficiales (grados C). El color no se mueve con
+#: los percentiles de cada cuadro: es la barra que publica la pagina de GOES.
+ESCALAS_OFICIALES = {
+    "c15_ir": (-110.0, 57.0),
+    "c16_ir": (-128.0, 128.0),
+}
+
 #: Bandas termicas (temperatura de brillo en C) frente a reflectancia (0..1).
 TERMICAS = {"C07", "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15", "C16"}
 
@@ -215,17 +222,17 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.banda.upper() not in TERMICAS:
-        # Reflectancia: las rampas termicas (GIBS y la oficial de GOES) no
-        # aplican, va en gris 0..1.
-        if args.paleta in (PALETA, "c16_ir"):
+        # Reflectancia: las rampas termicas (GIBS y las oficiales) no aplican,
+        # va en gris 0..1.
+        if args.paleta == PALETA or args.paleta in ESCALAS_OFICIALES:
             args.paleta = "gris"
         if args.vmin == VMIN and args.vmax == VMAX:
             args.vmin, args.vmax = 0.0, 1.0
 
-    if args.paleta == "c16_ir" and args.vmin == VMIN and args.vmax == VMAX:
-        # La barra oficial va de -128 a 128 C: sin esto, los mismos colores
-        # caerian en otras temperaturas y no coincide con la pagina de GOES.
-        args.vmin, args.vmax = -128.0, 128.0
+    if args.paleta in ESCALAS_OFICIALES and args.vmin == VMIN and args.vmax == VMAX:
+        # Las barras oficiales tienen escala fija: sin esto, los mismos colores
+        # caerian en otras temperaturas y no coincidirian con la pagina de GOES.
+        args.vmin, args.vmax = ESCALAS_OFICIALES[args.paleta]
 
     if args.fondo == "oscuro":
         tc.WHITE = "#000000"

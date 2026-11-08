@@ -240,12 +240,13 @@ class EscalasFijas(unittest.TestCase):
         self.assertEqual(args[args.index("--vmax") + 1], "56.9")
 
     def test_banda_cruda_deja_la_escala_oficial_al_script(self):
-        # `poster_goes_banda.py` fija -128..128 cuando la paleta es c16_ir:
-        # la receta no manda percentiles ni una escala propia.
-        args = self._args_del_render("goes_banda", paleta="c16_ir")
-        self.assertEqual(args[args.index("--paleta") + 1], "c16_ir")
-        self.assertNotIn("--vmin", args)
-        self.assertNotIn("--vmax", args)
+        # `poster_goes_banda.py` fija la escala de cada paleta oficial
+        # (c15_ir -110..57, c16_ir -128..128): la receta no manda percentiles.
+        for banda, paleta in (("C15", "c15_ir"), ("C16", "c16_ir")):
+            args = self._args_del_render("goes_banda", banda=banda, paleta=paleta)
+            self.assertEqual(args[args.index("--paleta") + 1], paleta)
+            self.assertNotIn("--vmin", args, paleta)
+            self.assertNotIn("--vmax", args, paleta)
 
 
 class OpcionesDelCatalogo(unittest.TestCase):

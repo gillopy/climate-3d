@@ -49,6 +49,7 @@ _PALETAS = [
 # visibles C01-C06 usan 0..1).
 _PALETAS_BANDA = [
     _paleta("clean_ir", "clean_ir - Clean Infrared (GIBS), banda 13", "C13"),
+    _paleta("c15_ir", "c15_ir - IR oficial GOES, banda 15 (-110 a 57 C)", "C15"),
     _paleta("c16_ir", "c16_ir - IR oficial GOES, banda 16 (-128 a 128 C)", "C16"),
     _paleta("gris", "gris - reflectancia"),
     *[opcion for opcion in _PALETAS_GENERICAS if opcion.value != "gris"],
@@ -423,7 +424,7 @@ PRODUCTS: list[Product] = [
                 kind="select",
                 default="clean_ir",
                 options=_PALETAS_BANDA,
-                help="clean_ir es la de GIBS (-92.1 a 56.9 C) y solo se ofrece en C13; c16_ir es la oficial de la banda 16 (-128 a 128 C); para reflectancia conviene gris",
+                help="clean_ir es la de GIBS (-92.1 a 56.9 C) y solo se ofrece en C13; c15_ir y c16_ir son las oficiales de las bandas 15 (-110 a 57 C) y 16 (-128 a 128 C); para reflectancia conviene gris",
             ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
                       default=_rango(), enabled_when={"ultimos": False}),
