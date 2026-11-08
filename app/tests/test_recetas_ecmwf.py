@@ -481,6 +481,7 @@ class BandasYControles(unittest.TestCase):
         paleta = next(p for p in producto.params if p.name == "paleta")
         valores = {opcion.value for opcion in paleta.options}
 
+        self.assertIn("c08_ir", valores)
         self.assertIn("c09_ir", valores)
         self.assertIn("c10_ir", valores)
         for banda in range(11, 16):
@@ -493,6 +494,7 @@ class BandasYControles(unittest.TestCase):
         condiciones = {opcion.value: opcion.only_when for opcion in paleta.options}
 
         self.assertEqual(condiciones["clean_ir"], {"banda": "C13"})
+        self.assertEqual(condiciones["c08_ir"], {"banda": "C08"})
         self.assertEqual(condiciones["c09_ir"], {"banda": "C09"})
         self.assertEqual(condiciones["c10_ir"], {"banda": "C10"})
         for banda in range(11, 17):
@@ -513,6 +515,7 @@ class BandasYControles(unittest.TestCase):
 
         # La UI cae en la primera visible al cambiar de banda.
         self.assertEqual(visibles("C13")[0], "clean_ir")
+        self.assertEqual(visibles("C08")[0], "c08_ir")
         self.assertEqual(visibles("C09")[0], "c09_ir")
         self.assertEqual(visibles("C10")[0], "c10_ir")
         for banda in range(11, 17):
