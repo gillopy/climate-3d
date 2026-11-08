@@ -1465,6 +1465,34 @@ def _truecolor_viirs(params: dict[str, Any], work: Path) -> Plan:
     return Plan(pasos=pasos, descarga=descarga)
 
 
+# --- PACE/OCI: compuesto de color real desde NASA GIBS -------------------
+def _pace_truecolor(params: dict[str, Any], work: Path) -> Plan:
+    """Plan del compuesto PACE: el script baja las teselas y arma el globo.
+
+    PACE es polar y su swath no cubre el planeta de una vez, asi que el script
+    combina varios dias (relleno por prioridad temporal). La descarga de teselas
+    vive adentro: es un solo paso.
+    """
+    inicio, fin = _rango(params)
+    px = _px(params, 2000)
+    # El compuesto se arma hacia atras desde el ultimo dia de la ventana.
+    dias = max(1, min(31, (fin - inicio).days + 1))
+
+    render_step = Step(
+        kind="render",
+        label=f"compuesto PACE de {dias} dia(s) hasta {fin}",
+        script="prototipos/poster_pace_gibs.py",
+        args=[
+            "--hasta", fin.isoformat(),
+            "--dias", str(dias),
+            "--px", str(px),
+            "--out", str(work / f"PACE_truecolor_{fin:%Y%m%d}.png"),
+        ],
+        expected=dias,
+    )
+    return Plan(pasos=[render_step])
+
+
 # --- GOES: RGB oficial de tres canales (Dust, Air Mass, Fire Temperature) ---
 def _bandas_rgb(producto: str) -> tuple[str, ...]:
     """Bandas ABI de la receta, desde la misma tabla que usa el render."""
@@ -1688,6 +1716,7 @@ _CONSTRUCTORES = {
     "goes_sandwich": _goes_sandwich,
     "geocolor": _geocolor,
     "truecolor_viirs": _truecolor_viirs,
+    "pace_truecolor": _pace_truecolor,
     "mur_sst": _mur,
     "mur_realista": _mur_realista,
     "precipitacion_ecmwf": _precipitacion,
