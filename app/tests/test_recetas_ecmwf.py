@@ -254,6 +254,29 @@ class CatalogoDeLaApp(unittest.TestCase):
         modelos = {o.value for o in self._spec("viento_250", "modelo").options}
         self.assertEqual(modelos, {"ifs", "gfs"})
 
+    def test_las_placas_de_banda_cambian_con_el_canal(self):
+        # La placa de `goes_banda` puede venir con la banda en el nombre; esa
+        # es mas especifica y tiene que ganarle a la vieja de solo paleta.
+        producto = catalog.get_product("goes_banda")
+        assert producto is not None
+        with tempfile.TemporaryDirectory() as tmp:
+            carpeta = Path(tmp)
+            for nombre in (
+                "goes_banda--G19--C06--reflectancia.webp",
+                "goes_banda--G19--clean_ir.webp",
+            ):
+                (carpeta / nombre).write_bytes(b"")
+            variantes = catalog._muestras(producto, carpeta)
+
+        self.assertEqual(len(variantes), 2)
+        self.assertEqual(
+            variantes[0].when,
+            {"satelite": "G19", "banda": "C06", "paleta": "reflectancia"},
+        )
+        self.assertEqual(
+            variantes[1].when, {"satelite": "G19", "paleta": "clean_ir"}
+        )
+
 
 class ModeloGfs(unittest.TestCase):
     """S8: GFS como fuente del viento en 250 mb."""

@@ -970,7 +970,9 @@ def get_product(product_id: str) -> Product | None:
 # sample.
 _VARIANTES = {
     "goes_c13": ("satelite", "paraguay"),
-    "goes_banda": ("satelite", "paleta"),
+    # Dos formas: la de la banda (la placa cambia al cambiar de canal) y la
+    # vieja por paleta, que queda como respaldo.
+    "goes_banda": (("satelite", "banda", "paleta"), ("satelite", "paleta")),
     "goes_dust": ("satelite", "paraguay"),
     "goes_airmass": ("satelite", "paraguay"),
     "goes_firetemp": ("satelite", "paraguay"),
@@ -984,23 +986,40 @@ _VARIANTES = {
 }
 
 
+def _formas(especificacion) -> tuple[tuple[str, ...], ...]:
+    """Normaliza la declaracion de `_VARIANTES` a una tupla de formas.
+
+    Un producto puede aceptar nombres de archivo con distinta cantidad de
+    campos: `goes_banda--G19--C06--reflectancia` (banda) y el viejo
+    `goes_banda--G19--clean_ir` (solo paleta).
+    """
+    if not especificacion:
+        return ()
+    if isinstance(especificacion[0], str):
+        return (tuple(especificacion),)
+    return tuple(tuple(forma) for forma in especificacion)
+
+
 def _muestras(producto: Product, carpeta: Path) -> list[PreviewVariant]:
     """Variantes que existen en disco para este producto."""
-    campos = _VARIANTES.get(producto.id)
-    if not campos:
+    formas = _formas(_VARIANTES.get(producto.id))
+    if not formas:
         return []
     variantes: list[PreviewVariant] = []
     for archivo in carpeta.glob(f"{producto.id}--*.webp"):
         valores = archivo.stem.split("--")[1:]
-        if len(valores) != len(campos):
-            continue
-        variantes.append(
-            PreviewVariant(
-                url=f"/previews/{archivo.name}",
-                when=dict(zip(campos, valores)),
+        for campos in formas:
+            if len(valores) != len(campos):
+                continue
+            variantes.append(
+                PreviewVariant(
+                    url=f"/previews/{archivo.name}",
+                    when=dict(zip(campos, valores)),
+                )
             )
-        )
-    # La más específica primero: {satélite, paleta} gana sobre {satélite}.
+            break
+    # La más específica primero: {satélite, banda, paleta} gana sobre
+    # {satélite, paleta} y sobre la placa fija del producto.
     variantes.sort(key=lambda v: (-len(v.when), v.url))
     return variantes
 
