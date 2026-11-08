@@ -1482,11 +1482,11 @@ def _slots_goes_rgb(sat: str, bandas: tuple[str, ...]) -> list[datetime]:
     return sorted(set.intersection(*conjuntos)) if conjuntos else []
 
 
-def _ultimos_goes_rgb(sat: str, producto: str, n: int) -> list[datetime]:
-    """Los `n` slots más nuevos con TODAS las bandas publicadas en NOAA S3.
+def _ultimos_goes_bandas(sat: str, bandas: tuple[str, ...], n: int) -> list[datetime]:
+    """Los `n` slots más nuevos con TODAS esas bandas publicadas en NOAA S3.
 
     `goes_reciente` es stdlib puro: pide el listado una sola vez por hora y sirve
-    para las 3-4 bandas del producto (el `.venv` de la API no tiene xarray).
+    para las bandas del producto (el `.venv` de la API no tiene xarray).
     """
     comun = RAIZ_REPO / "comun"
     if str(comun) not in sys.path:
@@ -1494,19 +1494,24 @@ def _ultimos_goes_rgb(sat: str, producto: str, n: int) -> list[datetime]:
     try:
         from goes_reciente import ultimos_slots_conjunto
 
-        slots = ultimos_slots_conjunto(sat, _bandas_rgb(producto), n)
+        slots = ultimos_slots_conjunto(sat, bandas, n)
     except Exception:  # noqa: BLE001 - offline: molesta más un job muerto que un fallback
         slots = []
     if slots:
         return slots
 
-    locales = _slots_goes_rgb(sat, _bandas_rgb(producto))
+    locales = _slots_goes_rgb(sat, bandas)
     if locales:
         return locales[-n:]
     raise ValueError(
-        f"No hay datos de {sat} {producto}: NOAA S3 no respondió y el disco está "
-        "vacío. Revisá la conexión y volvé a intentar."
+        f"No hay datos de {sat} {'+'.join(bandas)}: NOAA S3 no respondió y el "
+        "disco está vacío. Revisá la conexión y volvé a intentar."
     )
+
+
+def _ultimos_goes_rgb(sat: str, producto: str, n: int) -> list[datetime]:
+    """Los `n` slots más nuevos con todas las bandas del RGB."""
+    return _ultimos_goes_bandas(sat, _bandas_rgb(producto), n)
 
 
 def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
@@ -1587,6 +1592,92 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
     return Plan(pasos=[descarga, render_step], descarga=descarga)
 
 
+# --- GOES: Sandwich (visible + IR realzado) ----------------------------
+#: El Sandwich mezcla dos imagenes: el visible (C02) y el IR ventana (C13)
+#: pasado por una rampa de color. No es un RGB de tres canales.
+_SANDWICH_BANDAS = ("C02", "C13")
+
+
+def _goes_sandwich(params: dict[str, Any], work: Path) -> Plan:
+    """Plan del Sandwich: baja las dos bandas y mezcla el globo."""
+    inicio, fin = _rango(params)
+    sat = str(params.get("satelite", "G19"))
+    px = _px(params, 2712)
+    n_ultimos = _ultimos(params)
+    animar = bool(n_ultimos) or (_bool(params, "animar") and not _snapshot(params))
+
+    if n_ultimos:
+        slots_nuevos = _ultimos_goes_bandas(sat, _SANDWICH_BANDAS, n_ultimos)
+        desde, n, paso, falta = slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True
+    elif _snapshot(params):
+        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+    else:
+        disponibles = [
+            s for s in _slots_goes_rgb(sat, _SANDWICH_BANDAS)
+            if inicio <= s.date() <= fin
+        ]
+        lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+        cenital = _slot_cenital(inicio, lon_sub)
+        ventana = _ventana_animacion(
+            inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+        )
+        desde, n, paso, falta = _plan_slots(set(disponibles), cenital, animar, ventana)
+
+    descargas = [
+        Step(
+            kind="download",
+            label=(f"bajando los últimos {n} slots de {banda} ({sat})"
+                   if n_ultimos else f"bajando {banda} de {sat} ({n} slot(s))"),
+            script="descargar/descargar_goes.py",
+            args=[
+                "--sat", sat,
+                "--banda", banda,
+                "--desde", desde.isoformat(),
+                "--hasta", (desde + timedelta(minutes=paso * n)).isoformat(),
+                "--paso", str(paso),
+            ],
+            expected=max(1, math.ceil(n / 10)),
+        )
+        for banda in _SANDWICH_BANDAS
+    ]
+
+    lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+    marco = _encuadre_paraguay(params, "recorte") or [
+        "--centro", f"{lon_sub:g}", "0", "--recorte", "1.0",
+    ]
+    comunes = [
+        "--sat", sat,
+        "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
+        "--n", str(n),
+        "--paso", str(paso),
+        "--px", str(px),
+        "--alpha", str(params.get("alpha", 0.5)),
+        # Sin sombreado de borde: el disco ya trae su propia mezcla.
+        "--sombra-borde", "0",
+        *marco,
+        "--borde", _borde_paraguay(params),
+        *(["--limpio"] if _bool(params, "paraguay") else []),
+    ]
+    if animar and n > 1:
+        render_step = Step(
+            kind="render",
+            label=f"{n} cuadro(s) de Sandwich",
+            script="prototipos/poster_goes_sandwich.py",
+            args=[*comunes, "--frames", str(work / "frames")],
+            expected=n,
+        )
+    else:
+        render_step = Step(
+            kind="render",
+            label=f"poster Sandwich {px}px",
+            script="prototipos/poster_goes_sandwich.py",
+            args=[*comunes, "--out", str(work / f"{sat}_Sandwich_{desde:%Y-%m-%dT%H%M}.png")],
+            expected=1,
+        )
+
+    return Plan(pasos=[*descargas, render_step], descarga=descargas[0])
+
+
 _CONSTRUCTORES = {
     "goes_c13": _goes,
     "goes_truecolor": _goes_truecolor,
@@ -1594,6 +1685,7 @@ _CONSTRUCTORES = {
     "goes_dust": lambda p, w: _goes_rgb(p, w, "dust"),
     "goes_airmass": lambda p, w: _goes_rgb(p, w, "airmass"),
     "goes_firetemp": lambda p, w: _goes_rgb(p, w, "firetemp"),
+    "goes_sandwich": _goes_sandwich,
     "geocolor": _geocolor,
     "truecolor_viirs": _truecolor_viirs,
     "mur_sst": _mur,

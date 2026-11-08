@@ -265,6 +265,7 @@ class CatalogoDeLaApp(unittest.TestCase):
             "goes_airmass",
             "goes_dust",
             "goes_firetemp",
+            "goes_sandwich",
             "snapshot_paraguay",
             "truecolor_viirs",
             "himawari",
@@ -281,6 +282,28 @@ class CatalogoDeLaApp(unittest.TestCase):
             if producto.group not in grupos:
                 grupos.append(producto.group)
         self.assertEqual(grupos, ["satelite", "modelo", "vegetacion"])
+
+    def test_el_sandwich_mezcla_visible_e_infrarrojo(self):
+        producto = catalog.get_product("goes_sandwich")
+        assert producto is not None
+        nombres = {p.name for p in producto.params}
+        self.assertIn("alpha", nombres)
+        self.assertNotIn("paleta", nombres)
+        alpha = next(p for p in producto.params if p.name == "alpha")
+        self.assertEqual((alpha.default, alpha.min, alpha.max), (0.5, 0.0, 1.0))
+
+        plan = recipes._goes_sandwich({
+            "satelite": "G19", "alpha": 0.4, "snapshot": True,
+            "hora": 15, "minuto": "00", "resolucion": "1400",
+            "ventana": {"start": "2026-11-03", "end": "2026-11-03"},
+        }, Path("C:/tmp/work"))
+        bajadas = [p for p in plan.pasos if p.kind == "download"]
+        self.assertEqual(
+            [p.args[p.args.index("--banda") + 1] for p in bajadas], ["C02", "C13"]
+        )
+        render = [p for p in plan.pasos if p.kind == "render"][0]
+        self.assertEqual(render.script, "prototipos/poster_goes_sandwich.py")
+        self.assertEqual(render.args[render.args.index("--alpha") + 1], "0.4")
 
     def test_las_placas_de_banda_cambian_con_el_canal(self):
         # La placa de `goes_banda` puede venir con la banda en el nombre; esa
