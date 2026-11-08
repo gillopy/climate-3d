@@ -268,6 +268,7 @@ class CatalogoDeLaApp(unittest.TestCase):
             "goes_sandwich",
             "snapshot_paraguay",
             "truecolor_viirs",
+            "pace_truecolor",
             "himawari",
             "mur_sst",
             "mur_realista",
@@ -282,6 +283,24 @@ class CatalogoDeLaApp(unittest.TestCase):
             if producto.group not in grupos:
                 grupos.append(producto.group)
         self.assertEqual(grupos, ["satelite", "modelo", "vegetacion"])
+
+    def test_pace_truecolor_es_un_compuesto_de_varios_dias(self):
+        producto = catalog.get_product("pace_truecolor")
+        assert producto is not None
+        # PACE es un compuesto global: no lleva snapshot ni encuadre Paraguay.
+        self.assertEqual(
+            [p.name for p in producto.params], ["ventana", "resolucion"]
+        )
+
+        plan = recipes.planear("pace_truecolor", {
+            "ventana": {"start": "2026-10-17", "end": "2026-10-24"},
+            "resolucion": "2000",
+        }, Path("C:/tmp/work"))
+        self.assertEqual([p.kind for p in plan.pasos], ["render"])
+        render = plan.pasos[0]
+        self.assertEqual(render.script, "prototipos/poster_pace_gibs.py")
+        self.assertEqual(render.args[render.args.index("--hasta") + 1], "2026-10-24")
+        self.assertEqual(render.args[render.args.index("--dias") + 1], "8")
 
     def test_el_sandwich_mezcla_visible_e_infrarrojo(self):
         producto = catalog.get_product("goes_sandwich")
@@ -677,11 +696,12 @@ class ControlesDeTiempo(unittest.TestCase):
 class SnapshotDeUnCuadro(unittest.TestCase):
     """El switch de snapshot: un solo cuadro, sin serie ni animación."""
 
-    def test_todos_los_productos_lo_ofrecen_menos_el_de_snapshot(self):
+    def test_todos_los_productos_lo_ofrecen_menos_los_compuestos(self):
+        # El de Snapshot ya es una captura y el de PACE ya es un compuesto de dias.
         for producto in catalog.PRODUCTS:
             nombres = {p.name for p in producto.params}
-            if producto.id == "snapshot_paraguay":
-                self.assertNotIn("snapshot", nombres)
+            if producto.id in catalog.SIN_SNAPSHOT:
+                self.assertNotIn("snapshot", nombres, producto.id)
             else:
                 self.assertIn("snapshot", nombres, producto.id)
 

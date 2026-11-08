@@ -625,6 +625,31 @@ PRODUCTS: list[Product] = [
         ],
     ),
     Product(
+        id="pace_truecolor",
+        name="PACE - color real (OCI)",
+        group="satelite",
+        stage="prototipos/poster_pace_gibs.py (NASA GIBS)",
+        summary="Compuesto de color real del OCI (670/555/443 nm) desde NASA GIBS. "
+        "PACE es polar y su swath no cubre el planeta de una vez: se combinan varios "
+        "dias para llenar la grilla. Un solo cuadro, globo completo.",
+        params=[
+            ParamSpec(
+                name="ventana",
+                label="Dias del compuesto",
+                kind="date-range",
+                default=_rango(8),
+                help="el compuesto se arma hacia atras desde el ultimo dia",
+            ),
+            ParamSpec(
+                name="resolucion",
+                label="Resolucion",
+                kind="select",
+                default="2000",
+                options=_RESOLUCIONES,
+            ),
+        ],
+    ),
+    Product(
         id="mur_sst",
         name="MUR - temperatura del mar",
         group="satelite",
@@ -949,6 +974,11 @@ PRODUCTS: list[Product] = [
     ),
 ]
 
+#: Productos que no llevan el switch "Snapshot": el de Snapshot ya es una sola
+#: captura y PACE/OCI ya es un compuesto de varios dias.
+SIN_SNAPSHOT = {"snapshot_paraguay", "pace_truecolor"}
+
+
 def _con_snapshot(producto: Product) -> Product:
     """Suma el switch de snapshot y apaga lo que no aplica cuando está prendido.
 
@@ -956,7 +986,7 @@ def _con_snapshot(producto: Product) -> Product:
     corte transversal, sin repetir la misma regla trece veces. El producto de
     Snapshot ya es una sola captura, así que no lo lleva.
     """
-    if producto.id == "snapshot_paraguay":
+    if producto.id in SIN_SNAPSHOT:
         return producto
     for spec in producto.params:
         if spec.name in ("animar", "fps", "hora_desde", "hora_hasta",
@@ -979,7 +1009,8 @@ def _con_snapshot(producto: Product) -> Product:
 #: Productos sin encuadre Paraguay: el Snapshot ya ES el encuadre (y no se toca);
 #: el MUR es SST oceánica (Paraguay es mediterráneo, no hay mar que mostrar); el
 #: follaje usa un globo Robinson/3D con otro diseño y el Himawari no lo necesita.
-SIN_PARAGUAY = {"snapshot_paraguay", "mur_sst", "mur_realista", "follaje", "himawari"}
+SIN_PARAGUAY = {"snapshot_paraguay", "mur_sst", "mur_realista", "follaje", "himawari",
+                "pace_truecolor"}  # PACE no tiene encuadre Paraguay: es un compuesto global
 
 
 def _con_paraguay(producto: Product) -> Product:
@@ -1035,6 +1066,7 @@ _ORDEN = (
     "goes_sandwich",
     "snapshot_paraguay",
     "truecolor_viirs",   # NOAA-20
+    "pace_truecolor",    # PACE / OCI
     "himawari",
     "mur_sst",
     "mur_realista",
