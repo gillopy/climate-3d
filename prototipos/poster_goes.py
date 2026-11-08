@@ -62,6 +62,7 @@ from estilo import (ANOM_CMAP, BG, MONTHS_EN, POSTER_DPI, POSTER_SIZE,  # noqa: 
                     TXT, TXT_DIM, WM_COLOR)
 from rutas import DATOS, SALIDAS  # noqa: E402
 sys.path.insert(0, str(RAIZ / 'comun'))
+from paleta_c07_ir import CMAP_C07_IR_OFICIAL as CMAP_C07_IR_OFICIAL  # noqa: E402
 from paleta_gibs import CMAP_GIBS_CLEAN_IR as CMAP_GIBS_CLEAN_IR  # noqa: E402
 from paleta_ir_vapor import CMAP_IR_VAPOR as CMAP_IR_VAPOR  # noqa: E402
 from paleta_ir_ventana import CMAP_IR_VENTANA as CMAP_IR_VENTANA  # noqa: E402
@@ -73,6 +74,9 @@ PALETTES = {
     "termico": "Greys",      # IR: frío (nube alta) = blanco, cálido (superficie) = negro
     "anomalia": ANOM_CMAP,   # la muestreada de la imagen de referencia
     "clean_ir": CMAP_GIBS_CLEAN_IR,  # Clean Infrared de NASA Worldview/GIBS (default para ABI C13)
+    # Banda 7: barra propia (shortwave window).
+    "c07_ir": CMAP_C07_IR_OFICIAL,  # 3.9 um, -83 a 127 C
+
     # Vapor de agua (C08-C10): NOAA publica una sola barra para las tres bandas.
     "c08_ir": CMAP_IR_VAPOR,  # 6.2 um
     "c09_ir": CMAP_IR_VAPOR,  # 6.9 um

@@ -46,6 +46,8 @@ VMIN, VMAX = -92.1, 56.9
 #: Escala fija de las paletas oficiales (grados C). El color no se mueve con
 #: los percentiles de cada cuadro: es la barra que publica la pagina de GOES.
 ESCALAS_OFICIALES = {
+    # Banda 7: barra propia (shortwave window).
+    "c07_ir": (-83.0, 127.0),
     # Vapor de agua: una sola barra para las bandas 8 a 10.
     "c08_ir": (-93.0, 7.0),
     "c09_ir": (-93.0, 7.0),

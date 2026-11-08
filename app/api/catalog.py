@@ -49,6 +49,7 @@ _PALETAS = [
 # visibles C01-C06 usan 0..1).
 _PALETAS_BANDA = [
     _paleta("clean_ir", "clean_ir - Clean Infrared (GIBS), banda 13", "C13"),
+    _paleta("c07_ir", "c07_ir - IR oficial GOES, banda 7 (3.9 um, -83 a 127 C)", "C07"),
     _paleta("c08_ir", "c08_ir - vapor de agua oficial GOES, banda 8 (6.2 um, -93 a 7 C)", "C08"),
     _paleta("c09_ir", "c09_ir - vapor de agua oficial GOES, banda 9 (6.9 um, -93 a 7 C)", "C09"),
     _paleta("c10_ir", "c10_ir - vapor de agua oficial GOES, banda 10 (7.3 um, -93 a 7 C)", "C10"),
@@ -431,7 +432,7 @@ PRODUCTS: list[Product] = [
                 kind="select",
                 default="clean_ir",
                 options=_PALETAS_BANDA,
-                help="cada banda termica tiene su paleta oficial y solo se ofrece con ella: clean_ir es la de GIBS (-92.1 a 56.9 C, C13), c08_ir..c10_ir la de vapor de agua (-93 a 7 C), c11_ir..c15_ir la de la ventana IR (-110 a 57 C) y c16_ir va de -128 a 128 C; para reflectancia conviene gris",
+                help="cada banda termica tiene su paleta oficial y solo se ofrece con ella: clean_ir es la de GIBS (-92.1 a 56.9 C, C13), c07_ir la de la banda 7 (-83 a 127 C), c08_ir..c10_ir la de vapor de agua (-93 a 7 C), c11_ir..c15_ir la de la ventana IR (-110 a 57 C) y c16_ir va de -128 a 128 C; para reflectancia conviene gris",
             ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
                       default=_rango(), enabled_when={"ultimos": False}),
