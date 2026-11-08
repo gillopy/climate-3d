@@ -47,6 +47,7 @@ VMIN, VMAX = -92.1, 56.9
 #: los percentiles de cada cuadro: es la barra que publica la pagina de GOES.
 ESCALAS_OFICIALES = {
     # Vapor de agua: una sola barra para las bandas 8 a 10.
+    "c09_ir": (-93.0, 7.0),
     "c10_ir": (-93.0, 7.0),
     # Ventana IR: una sola barra para las bandas 11 a 15 (misma escala fija).
     "c11_ir": (-110.0, 57.0),

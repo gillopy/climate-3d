@@ -74,6 +74,7 @@ PALETTES = {
     "anomalia": ANOM_CMAP,   # la muestreada de la imagen de referencia
     "clean_ir": CMAP_GIBS_CLEAN_IR,  # Clean Infrared de NASA Worldview/GIBS (default para ABI C13)
     # Vapor de agua (C08-C10): NOAA publica una sola barra para las tres bandas.
+    "c09_ir": CMAP_IR_VAPOR,  # 6.9 um
     "c10_ir": CMAP_IR_VAPOR,  # 7.3 um
 
     # Ventana IR (C11-C15): NOAA publica una sola barra para las cinco bandas.
