@@ -63,7 +63,7 @@ from estilo import (ANOM_CMAP, BG, MONTHS_EN, POSTER_DPI, POSTER_SIZE,  # noqa: 
 from rutas import DATOS, SALIDAS  # noqa: E402
 sys.path.insert(0, str(RAIZ / 'comun'))
 from paleta_gibs import CMAP_GIBS_CLEAN_IR as CMAP_GIBS_CLEAN_IR  # noqa: E402
-from paleta_c15_ir import CMAP_C15_IR_OFICIAL as CMAP_C15_IR_OFICIAL  # noqa: E402
+from paleta_ir_ventana import CMAP_IR_VENTANA as CMAP_IR_VENTANA  # noqa: E402
 from paleta_c16_ir import CMAP_C16_IR_OFICIAL as CMAP_C16_IR_OFICIAL  # noqa: E402
 
 # Paletas disponibles: la del póster de anomalías y las clásicas de satélite.
@@ -72,7 +72,13 @@ PALETTES = {
     "termico": "Greys",      # IR: frío (nube alta) = blanco, cálido (superficie) = negro
     "anomalia": ANOM_CMAP,   # la muestreada de la imagen de referencia
     "clean_ir": CMAP_GIBS_CLEAN_IR,  # Clean Infrared de NASA Worldview/GIBS (default para ABI C13)
-    "c15_ir": CMAP_C15_IR_OFICIAL,  # IR oficial de la pagina de GOES, escala -110 a 57 C (banda 15)
+    # Ventana IR (C11-C15): NOAA publica una sola barra para las cinco bandas.
+    # Lo que cambia es el canal fisico (um), no la rampa de color.
+    "c11_ir": CMAP_IR_VENTANA,  # 8.5 um
+    "c12_ir": CMAP_IR_VENTANA,  # 9.6 um
+    "c13_ir": CMAP_IR_VENTANA,  # 10.3 um
+    "c14_ir": CMAP_IR_VENTANA,  # 11.2 um
+    "c15_ir": CMAP_IR_VENTANA,  # 12.3 um
     "c16_ir": CMAP_C16_IR_OFICIAL,  # IR oficial de la pagina de GOES, escala -128 a 128 C (banda 16)
     "magma": "magma",
     "inferno": "inferno",

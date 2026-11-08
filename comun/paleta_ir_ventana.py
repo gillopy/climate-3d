@@ -1,7 +1,12 @@
-"""Paleta IR oficial de la pagina de GOES, banda 15 (ABI C15, 12.3 um).
+"""Paleta IR oficial de la pagina de GOES para la ventana IR (bandas 11 a 15).
 
-Barra oficial de NOAA STAR (`images/colorbars/ColorBar450Bands11-15_horz.png`,
-la misma que muestra la ficha de la banda): 450 px, de -110 a 57 C.
+NOAA STAR publica una sola barra para toda la familia: el PNG
+`images/colorbars/ColorBar450Bands11-15_horz.png` es el que muestran las
+fichas de las bandas 11 (8.5 um), 12 (9.6), 13 (10.3), 14 (11.2) y 15 (12.3).
+La banda 16 tiene su propia barra y vive en `paleta_c16_ir.py`.
+
+450 px, de -110 a 57 C. Lo que cambia entre bandas es el canal fisico (µm),
+no la rampa de color.
 
 La barra NO es lineal en temperatura: las seis marcas (-110, -59, -20, 6, 31,
 57) estan a ~89 px una de otra, asi que cada tramo ocupa un ancho distinto en
@@ -31,7 +36,7 @@ from matplotlib.colors import LinearSegmentedColormap
 VMIN, VMAX = -110.0, 57.0
 
 #: Nombre para trazar el origen en la UI / pie del poster.
-NOMBRE_C15_IR = "C15_IR_Oficial_GOES_v1"
+NOMBRE_IR_VENTANA = "IR_Ventana_Oficial_GOES_v1"
 
 #: Nodos `(temp_C, (r, g, b))` muestreados del PNG oficial en la fila central
 #: de la barra (y = 20). El comentario dice en que pixel se midio cada uno.
@@ -52,7 +57,7 @@ NODOS_TEMP = [
 ]
 
 #: Nodos `(pos_normalizada, (r, g, b))` derivados de las temperaturas.
-NODOS_C15_IR = [((t - VMIN) / (VMAX - VMIN), rgb) for t, rgb in NODOS_TEMP]
+NODOS_IR_VENTANA = [((t - VMIN) / (VMAX - VMIN), rgb) for t, rgb in NODOS_TEMP]
 
 
 def _cmap():
@@ -61,14 +66,14 @@ def _cmap():
     Con N=2048 son 0.08 C por bin: el tramo de color (36 C) conserva los
     degradados de la barra y el gris calido degrada sin escalones.
     """
-    colores = [tuple(c / 255.0 for c in rgb) for _, rgb in NODOS_C15_IR]
-    posiciones = [pos for pos, _ in NODOS_C15_IR]
+    colores = [tuple(c / 255.0 for c in rgb) for _, rgb in NODOS_IR_VENTANA]
+    posiciones = [pos for pos, _ in NODOS_IR_VENTANA]
     # `from_list` interpola lineal entre nodos: dentro de cada tramo de la
     # barra el color tambien es lineal, asi que la rampa coincide.
     return LinearSegmentedColormap.from_list(
-        "c15_ir_oficial", list(zip(posiciones, colores)), N=2048
+        "ir_ventana_oficial", list(zip(posiciones, colores)), N=2048
     )
 
 
 #: Colormap listo para usar (equivale a la barra oficial de la banda 15).
-CMAP_C15_IR_OFICIAL = _cmap()
+CMAP_IR_VENTANA = _cmap()

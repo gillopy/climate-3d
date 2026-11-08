@@ -46,7 +46,13 @@ VMIN, VMAX = -92.1, 56.9
 #: Escala fija de las paletas oficiales (grados C). El color no se mueve con
 #: los percentiles de cada cuadro: es la barra que publica la pagina de GOES.
 ESCALAS_OFICIALES = {
+    # Ventana IR: una sola barra para las bandas 11 a 15 (misma escala fija).
+    "c11_ir": (-110.0, 57.0),
+    "c12_ir": (-110.0, 57.0),
+    "c13_ir": (-110.0, 57.0),
+    "c14_ir": (-110.0, 57.0),
     "c15_ir": (-110.0, 57.0),
+    # CO2: barra propia, mas ancha.
     "c16_ir": (-128.0, 128.0),
 }
 

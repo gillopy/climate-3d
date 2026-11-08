@@ -476,12 +476,14 @@ class BandasYControles(unittest.TestCase):
         self.assertIn("c16_ir", valores)
         self.assertNotIn("goes_ir", valores)
 
-    def test_goes_banda_ofrece_la_paleta_oficial_de_la_banda_15(self):
+    def test_goes_banda_ofrece_la_paleta_oficial_de_la_ventana_ir(self):
         producto = catalog.get_product("goes_banda")
         paleta = next(p for p in producto.params if p.name == "paleta")
         valores = {opcion.value for opcion in paleta.options}
 
-        self.assertIn("c15_ir", valores)
+        for banda in range(11, 16):
+            self.assertIn(f"c{banda}_ir", valores)
+        self.assertIn("c16_ir", valores)
 
     def test_las_paletas_oficiales_van_atadas_a_su_banda(self):
         producto = catalog.get_product("goes_banda")
@@ -489,8 +491,8 @@ class BandasYControles(unittest.TestCase):
         condiciones = {opcion.value: opcion.only_when for opcion in paleta.options}
 
         self.assertEqual(condiciones["clean_ir"], {"banda": "C13"})
-        self.assertEqual(condiciones["c15_ir"], {"banda": "C15"})
-        self.assertEqual(condiciones["c16_ir"], {"banda": "C16"})
+        for banda in range(11, 17):
+            self.assertEqual(condiciones[f"c{banda}_ir"], {"banda": f"C{banda}"})
         for generica in ("termico", "gris", "anomalia", "magma", "inferno", "turbo"):
             self.assertIsNone(condiciones[generica], generica)
 
@@ -507,8 +509,11 @@ class BandasYControles(unittest.TestCase):
 
         # La UI cae en la primera visible al cambiar de banda.
         self.assertEqual(visibles("C13")[0], "clean_ir")
-        self.assertEqual(visibles("C15")[0], "c15_ir")
-        self.assertEqual(visibles("C16")[0], "c16_ir")
+        for banda in range(11, 17):
+            if banda == 13:
+                continue  # C13 arranca en clean_ir, que es su default
+            self.assertEqual(visibles(f"C{banda}")[0], f"c{banda}_ir")
+        self.assertIn("c13_ir", visibles("C13"))
         # Reflectancia: `gris` es la unica rampa que va de negro a blanco.
         self.assertEqual(visibles("C02")[0], "gris")
 

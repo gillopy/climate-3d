@@ -241,8 +241,10 @@ class EscalasFijas(unittest.TestCase):
 
     def test_banda_cruda_deja_la_escala_oficial_al_script(self):
         # `poster_goes_banda.py` fija la escala de cada paleta oficial
-        # (c15_ir -110..57, c16_ir -128..128): la receta no manda percentiles.
-        for banda, paleta in (("C15", "c15_ir"), ("C16", "c16_ir")):
+        # (c11_ir..c15_ir -110..57, c16_ir -128..128): la receta no manda
+        # percentiles ni una escala propia.
+        oficiales = [(f"C{b}", f"c{b}_ir") for b in range(11, 17)]
+        for banda, paleta in oficiales:
             args = self._args_del_render("goes_banda", banda=banda, paleta=paleta)
             self.assertEqual(args[args.index("--paleta") + 1], paleta)
             self.assertNotIn("--vmin", args, paleta)
