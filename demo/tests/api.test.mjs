@@ -21,7 +21,10 @@ async function json(ruta, init) {
 test("el catalogo es el real, recortado y sin rutas locales", async () => {
   const { estado, cuerpo } = await json("/api/catalog");
   assert.equal(estado, 200);
-  assert.equal(cuerpo.products.length, manifest.combos.length);
+  const ids = cuerpo.products.map((producto) => producto.id);
+  assert.equal(new Set(ids).size, ids.length, "hay productos duplicados");
+  const conCombos = [...new Set(manifest.combos.map((combo) => combo.product_id))];
+  assert.deepEqual([...ids].sort(), conCombos.sort());
   assert.equal(cuerpo.repo_ready, true);
   assert.ok(!JSON.stringify(cuerpo).includes(":\\"), "no debe filtrar rutas de Windows");
   assert.ok(!cuerpo.media_root.includes("var"));

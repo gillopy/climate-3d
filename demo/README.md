@@ -8,28 +8,32 @@ El material de entrada son corridas reales que la app ya había hecho.
 
 ## Qué incluye
 
-- **13 productos** con sus renders reales.
-- **4 días**: 2026-10-10 (follaje), 2026-11-03 y 2026-11-04 (GOES y otros),
-  2026-11-05 (anomalía de 2 m).
+- **16 productos** con sus renders reales.
+- **7 días**: 2026-10-10 (follaje) y 2026-11-03 a 2026-11-08 (GOES, modelos y otros).
 - Imágenes en **WebP** (máx. 1600 px, calidad 82) y videos **MP4 H.264** (1280 px).
-- **4.5 MB** de artefactos en total.
+- **8.9 MB** de artefactos en total.
 - El build del frontend tal cual, sin recompilar ni tocar `app/web`.
 
 | Producto | Día | Artefactos |
 | --- | --- | --- |
-| `goes_c13` | 03–04 | 2 cuadros + MP4 |
+| `goes_banda` | 07–08 | 15 cuadros (C01–C06 y C08–C16) |
 | `geocolor` | 03–04 | 1 cuadro |
+| `goes_c13` | 03–04 | 2 cuadros + MP4 |
 | `goes_truecolor` | 03–04 | 1 cuadro |
-| `goes_dust` | 04 | 1 cuadro |
 | `goes_airmass` | 04 | 1 cuadro |
+| `goes_dust` | 04 | 1 cuadro |
 | `goes_firetemp` | 04 | 1 cuadro |
+| `goes_sandwich` | 08 | 1 cuadro |
 | `snapshot_paraguay` | 04 | 1 cuadro |
-| `anomalia_2t` | 05 | póster (encuadre Paraguay limpio) |
-| `viento_250` | 04 | póster (encuadre Paraguay limpio) |
+| `truecolor_viirs` | 04 | 1 cuadro |
 | `mur_sst` | 04 | 1 cuadro |
 | `mur_realista` | 04 | póster |
+| `precipitacion_ecmwf` | 06 | póster (encuadre Paraguay limpio) |
+| `anomalia_2t` | 05 | póster (encuadre Paraguay limpio) |
+| `viento_250` | 04 | póster (encuadre Paraguay limpio) |
 | `follaje` | 10-10 | 1 cuadro |
-| `truecolor_viirs` | 04 | 1 cuadro |
+
+`himawari` todavía no entra: no hay una corrida real que congelar.
 
 ## Cómo funciona
 

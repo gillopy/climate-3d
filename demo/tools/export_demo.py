@@ -25,17 +25,36 @@ from typing import Any
 # (`app/var/media/historial.jsonl`); con `--historial` se puede pasar uno
 # combinado (la app poda el suyo a 40 corridas).
 SELECCION = [
+    # GOES banda cruda: barrido completo del 2026-11-08 15:00 UTC, una corrida
+    # por canal. C13 va primero porque es el default del formulario.
+    "cache/592cf601145e",  # goes_banda C13 clean_ir
+    "cache/ed08695cf02c",  # goes_banda C01 reflectancia
+    "cache/b83dc623bb82",  # goes_banda C02 reflectancia
+    "cache/1e8202a76eb3",  # goes_banda C03 reflectancia
+    "cache/cc74c4e0d149",  # goes_banda C04 reflectancia
+    "cache/b0fc16945680",  # goes_banda C05 reflectancia
+    "cache/9bbdd4d9f85d",  # goes_banda C06 reflectancia
+    "cache/63782456c295",  # goes_banda C08 c08_ir
+    "cache/b7051eb198ba",  # goes_banda C09 c09_ir
+    "cache/d4a07c0400a3",  # goes_banda C10 c10_ir
+    "cache/bb69b8e3f84e",  # goes_banda C11 c11_ir
+    "cache/68453ef2dc6e",  # goes_banda C12 c12_ir
+    "cache/20cb2f6efc8f",  # goes_banda C14 c14_ir
+    "cache/071cadf65216",  # goes_banda C15 c15_ir
+    "cache/d0d1cec062bd",  # goes_banda C16 c16_ir
     "cache/1c68639dc983",  # goes_c13          03..04
     "cache/5e119fd99e80",  # geocolor          03..04
     "cache/d8fa7a21aea2",  # goes_truecolor    03..04
     "cache/63d06b4cfae3",  # goes_dust         04
     "cache/146799ea59cf",  # goes_airmass      04
     "cache/298727bb5a29",  # goes_firetemp     04
+    "cache/1068c325336e",  # goes_sandwich     08
     "cache/86214db86a85",  # snapshot_paraguay 04
     "cache/b4bce5063c8f",  # anomalia_2t       05 (encuadre Paraguay limpio)
     "cache/157a64c714e6",  # viento_250        04 (encuadre Paraguay limpio)
     "cache/0a4f59e85579",  # mur_sst           04
     "cache/e05b5761e386",  # mur_realista      04
+    "cache/422e427360ed",  # precipitacion_ecmwf 06 (encuadre Paraguay limpio)
     "cache/98b1ea7a7872",  # follaje           10-10
     "cache/50ecae621392",  # truecolor_viirs   04
 ]
