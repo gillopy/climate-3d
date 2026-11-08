@@ -254,6 +254,34 @@ class CatalogoDeLaApp(unittest.TestCase):
         modelos = {o.value for o in self._spec("viento_250", "modelo").options}
         self.assertEqual(modelos, {"ifs", "gfs"})
 
+    def test_el_rail_respeta_el_orden_pedido(self):
+        # El rail agrupa por `group`, asi que el orden de los grupos tambien
+        # tiene que salir de aca: satelite, modelo y vegetacion al final.
+        esperado = [
+            "goes_banda",
+            "geocolor",
+            "goes_c13",
+            "goes_truecolor",
+            "goes_airmass",
+            "goes_dust",
+            "goes_firetemp",
+            "snapshot_paraguay",
+            "truecolor_viirs",
+            "himawari",
+            "mur_sst",
+            "mur_realista",
+            "precipitacion_ecmwf",
+            "anomalia_2t",
+            "viento_250",
+            "follaje",
+        ]
+        self.assertEqual([p.id for p in catalog.PRODUCTS], esperado)
+        grupos = []
+        for producto in catalog.PRODUCTS:
+            if producto.group not in grupos:
+                grupos.append(producto.group)
+        self.assertEqual(grupos, ["satelite", "modelo", "vegetacion"])
+
     def test_las_placas_de_banda_cambian_con_el_canal(self):
         # La placa de `goes_banda` puede venir con la banda en el nombre; esa
         # es mas especifica y tiene que ganarle a la vieja de solo paleta.

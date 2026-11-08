@@ -862,7 +862,8 @@ PRODUCTS: list[Product] = [
     Product(
         id="follaje",
         name="PACE - follaje (LANDVI)",
-        group="satelite",
+        # Grupo propio: el rail lo deja despues de los modelos (ver _ORDEN).
+        group="vegetacion",
         stage="descargar/pace_landvi.py + cuadros/cuadros_follaje.py",
         summary="Indice de vegetacion de PACE sobre fondo de poster, ventana por dias.",
         params=[
@@ -954,6 +955,31 @@ def _con_paraguay(producto: Product) -> Product:
 
 
 PRODUCTS = [_con_snapshot(_con_paraguay(p)) for p in PRODUCTS]
+
+#: Orden del rail. Los productos se definen en bloques de codigo por familia,
+#: pero la UI los muestra en este orden; lo que no figure aca va al final.
+#: El rail agrupa por `group` respetando el orden de aparicion, asi que este
+#: orden tambien fija el de los grupos (satelite, modelo, vegetacion).
+_ORDEN = (
+    "goes_banda",
+    "geocolor",
+    "goes_c13",
+    "goes_truecolor",
+    "goes_airmass",
+    "goes_dust",
+    "goes_firetemp",
+    "snapshot_paraguay",
+    "truecolor_viirs",   # NOAA-20
+    "himawari",
+    "mur_sst",
+    "mur_realista",
+    "precipitacion_ecmwf",
+    "anomalia_2t",
+    "viento_250",
+    "follaje",           # PACE, ultimo
+)
+_POSICION = {producto_id: posicion for posicion, producto_id in enumerate(_ORDEN)}
+PRODUCTS.sort(key=lambda producto: _POSICION.get(producto.id, len(_ORDEN)))
 
 _BY_ID = {p.id: p for p in PRODUCTS}
 
