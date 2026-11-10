@@ -476,8 +476,8 @@ code {
   right: 5px;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 0;
   border-radius: var(--r-xs);
@@ -485,6 +485,14 @@ code {
   color: var(--fog);
   cursor: pointer;
   transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+
+/* Área de golpe: se extiende hasta el alto del input, sin salirse de
+   su caja ni pisar a otro control. */
+.rail__clear::after {
+  content: "";
+  position: absolute;
+  inset: -6px -4px;
 }
 
 .rail__clear:hover {
@@ -757,11 +765,13 @@ code {
 }
 
 /* Ficha técnica: métricas del producto */
+/* Folio de metadatos: sin filete exterior (carbon sobre void);
+   los divisores internos entre celdas se quedan — son estructura. */
 .folio {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0 var(--pad) 4px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--r-md);
   background: var(--carbon);
   overflow: hidden;
@@ -815,11 +825,13 @@ code {
   min-width: 0;
 }
 
-/* Cada sección es un panel: cabecera numerada y una grilla de hiperparámetros. */
+/* Cada sección es un panel: cabecera numerada y una grilla de
+   hiperparámetros. Minimalista: sin filete — la escalera de
+   superficies (carbon sobre void) dibuja el panel. */
 .fields__grupo {
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--r-lg);
   background: var(--carbon);
 }
@@ -862,7 +874,7 @@ code {
   font-size: 9.5px;
   color: var(--ash);
   padding: 1px 6px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--pill);
   background: var(--obsidian);
   font-variant-numeric: tabular-nums;
@@ -884,24 +896,23 @@ code {
   min-width: 0;
 }
 
+/* Tarjeta del hiperparámetro: sin filete ni hover de contenedor —
+   el hover pertenece a los controles. Al enfocar un control dentro,
+   una fila iris inset marca la tarjeta activa (estado, no elevación). */
 .field {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
   padding: 10px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--r-md);
   background: var(--obsidian);
-  transition: border-color 120ms var(--ease);
-}
-
-.field:hover {
-  border-color: var(--line-strong);
+  transition: box-shadow 120ms var(--ease);
 }
 
 .field:focus-within {
-  border-color: var(--iris-line);
+  box-shadow: inset 0 0 0 1px var(--iris-line);
 }
 
 .field--wide {
@@ -954,6 +965,7 @@ code {
 }
 
 .field__reset {
+  position: relative;
   margin-left: auto;
   padding: 0;
   border: 0;
@@ -966,6 +978,14 @@ code {
   text-transform: uppercase;
   cursor: pointer;
   transition: color 120ms var(--ease);
+}
+
+/* Enlace de texto chico: el área de golpe se amplía sin mover nada;
+   los vecinos de la cabecera del campo no son interactivos. */
+.field__reset::after {
+  content: "";
+  position: absolute;
+  inset: -8px -6px;
 }
 
 .field__reset:hover {
@@ -1038,6 +1058,7 @@ code {
 }
 
 .pick__control {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1057,12 +1078,24 @@ code {
     background 120ms var(--ease);
 }
 
+/* El botón renderiza 33 px de alto (line-height normal): el inset de
+   -4 px lleva el golpe a 41 px sin salirse del ritmo de la grilla. */
+.pick__control::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+
 .pick__control:hover {
   border-color: var(--line-strong);
   background: var(--slate);
 }
 
-.pick__control--open {
+/* Doble clase para que "abierto" le gane al hover (misma
+   especificidad, después en el archivo): el estado manda sobre
+   el apuntador. */
+.pick__control.pick__control--open,
+.pick__control.pick__control--open:hover {
   border-color: var(--iris);
   box-shadow: 0 0 0 3px var(--iris-soft);
   background: var(--slate);
@@ -1119,7 +1152,7 @@ code {
   justify-content: space-between;
   gap: 10px;
   padding: 7px 9px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-sm); /* concéntrico: 10 (lista) = 6 + 4 de padding */
   color: var(--mist);
   font-size: 12.5px;
   cursor: pointer;
@@ -1140,12 +1173,13 @@ code {
 }
 
 /* --- Fecha: control compacto con popover ----------------------------- */
+/* Radio concéntrico: 6 = 4 (botón) + 2 (padding) con el shell. */
 .datepick {
   position: relative;
   display: flex;
   align-items: stretch;
   gap: 4px;
-  padding: 5px;
+  padding: 2px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: var(--obsidian);
@@ -1161,6 +1195,7 @@ code {
 }
 
 .datepick__btn {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1175,6 +1210,15 @@ code {
   text-align: left;
   cursor: pointer;
   transition: background 120ms var(--ease);
+}
+
+/* Renderiza 35 px de alto: -4 vertical llega a 43 (se extiende 2 px
+   sobre la tarjeta del campo, que no es interactiva); -1 horizontal
+   deja el gap de 4 intacto entre extremos. */
+.datepick__btn::after {
+  content: "";
+  position: absolute;
+  inset: -4px -1px;
 }
 
 .datepick__btn:hover {
@@ -1290,28 +1334,38 @@ code {
 
 .cal__barra {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 24px;
+  grid-template-columns: 26px minmax(0, 1fr) 26px;
   align-items: center;
   gap: 5px;
   margin-bottom: 7px;
 }
 
 .cal__paso {
-  width: 24px;
-  height: 24px;
+  position: relative;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--r-xs);
-  background: var(--carbon);
+  background: transparent;
   color: var(--mist);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
-  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+  transition: background-color 120ms var(--ease), color 120ms var(--ease);
+}
+
+/* 40×40 de área de golpe: -8/-6 vertical (padding de 10 del popover
+   arriba, margen de 7 abajo sin rozar los días) y -7 horizontal, que
+   se come el gap de 5 y 2 px del rótulo del mes — que no es
+   interactivo. Las dos flechas quedan lejos: nunca se pisan. */
+.cal__paso::after {
+  content: "";
+  position: absolute;
+  inset: -8px -7px -6px -7px;
 }
 
 .cal__paso:hover:not(:disabled) {
-  border-color: var(--iris-line);
   background: var(--slate);
   color: var(--paper);
 }
@@ -1527,6 +1581,14 @@ input[type="range"]:disabled {
   transition: background 140ms var(--ease), border-color 140ms var(--ease);
 }
 
+/* La píldora visible manda; el área de golpe llega a 40×40 sin
+   cruzar el gap de 18 px entre tarjetas. */
+.switch::after {
+  content: "";
+  position: absolute;
+  inset: -9px -1px;
+}
+
 .switch span {
   position: absolute;
   top: 50%;
@@ -1579,9 +1641,9 @@ input[type="range"]:disabled {
   align-items: baseline;
   gap: 6px;
   padding: 3px 8px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--pill);
-  background: var(--carbon);
+  background: var(--slate);
   font-size: 10.5px;
   color: var(--mist);
   white-space: nowrap;
@@ -1621,28 +1683,40 @@ input[type="range"]:disabled {
   margin-left: auto;
 }
 
-/* --- Botones --------------------------------------------------------- */
+/* --- Botones ---------------------------------------------------------
+   Minimalista, sin filetes: la jerarquía la lleva la escalera de
+   superficies (slate → raised → hundido a obsidian) y el color.
+   Estados completos: hover, active, focus-visible, disabled y carga. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  min-height: 40px; /* área mínima de escritorio denso */
   padding: 9px 14px;
-  border: 1px solid var(--line-strong);
+  border: 0;
   border-radius: var(--r-sm);
-  background: var(--obsidian);
+  background: var(--slate);
   color: var(--paper);
   font-family: var(--sans);
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 120ms var(--ease), border-color 120ms var(--ease),
-    color 120ms var(--ease);
+  transition: background-color 120ms var(--ease), color 120ms var(--ease),
+    transform 120ms var(--ease);
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--slate);
-  border-color: var(--ash);
+  background: var(--raised);
+}
+
+/* Al presionar se hunde (escalera hacia obsidian) y se encoge al
+   0.96 — nunca por debajo de 0.95. 120 ms, banda de DESIGN.md;
+   se apaga con prefers-reduced-motion. El foco lo sostiene el
+   outline global de 2 px: sin filete que recolorear. */
+.btn:active:not(:disabled) {
+  background: var(--obsidian);
+  transform: scale(0.96);
 }
 
 .btn:disabled {
@@ -1650,9 +1724,9 @@ input[type="range"]:disabled {
   cursor: not-allowed;
 }
 
+/* Primaria: bloque sólido de acento, sin borde ni sombra. */
 .btn--primary {
   min-width: 168px;
-  border-color: transparent;
   background: var(--iris);
   color: #fff;
   font-weight: 600;
@@ -1660,33 +1734,56 @@ input[type="range"]:disabled {
 
 .btn--primary:hover:not(:disabled) {
   background: var(--iris-hi);
-  border-color: transparent;
 }
 
 .btn--primary:active:not(:disabled) {
   background: var(--iris-deep);
 }
 
+/* Carga: el botón primario sólo se desactiva mientras encola, así que
+   disabled aquí significa "trabajando". Se queda legible (no al 45 %),
+   cursor de espera y anillo giratorio; el texto "Encolando…" es la
+   señal estática que sostiene el estado sin animación. */
+.btn--primary:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.btn--primary:disabled::after {
+  content: "";
+  width: 11px;
+  height: 11px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: btn-spin 700ms linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Fantasma: texto hasta que se toca; entonces aparece la superficie. */
 .btn--ghost {
-  border-color: var(--line);
   background: transparent;
   color: var(--mist);
 }
 
 .btn--ghost:hover:not(:disabled) {
   background: var(--obsidian);
-  border-color: var(--line-strong);
+  color: var(--paper);
 }
 
+/* Destructiva: sólo color y lavado de estado; sin filete rojo. */
 .btn--warm {
-  border-color: rgba(248, 81, 73, 0.4);
   background: transparent;
   color: #ff8b85;
 }
 
 .btn--warm:hover:not(:disabled) {
   background: var(--danger-soft);
-  border-color: var(--danger);
 }
 
 .btn__hint {
@@ -2516,5 +2613,16 @@ input[type="range"]:disabled {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* Sin escala al presionar: el cambio de color ya es la señal. */
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+
+  /* Sin anillo giratorio en carga: el texto "Encolando…" sostiene
+     el estado por sí solo. */
+  .btn--primary:disabled::after {
+    display: none;
   }
 }
