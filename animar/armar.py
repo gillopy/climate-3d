@@ -29,6 +29,7 @@ from PIL import Image
 
 PATRON = "cuadro_%03d.png"
 _RE_NUM = re.compile(r"cuadro_(\d+)\.png$")
+_RE_TOTAL = re.compile(r"_(\d+)f(?:_|$)")
 
 
 def _formatos(formato: str) -> list[str]:
@@ -46,15 +47,36 @@ def cuadros_numerados(frames_dir: Path) -> list[int]:
     return sorted(nums)
 
 
-def huecos(nums: list[int]) -> list[int]:
-    """Números que faltan entre 1 y el último.
+def cuadros_esperados(nombre: str) -> int | None:
+    """Cuántos cuadros declara el nombre de la carpeta (`..._80f_2712px`).
 
-    No es un error: GIBS y NOAA dejan huecos (gránulos que todavía no publicaron o
-    que esa pasada no tiene), y la animación se arma igual con lo que hay.
+    Hace falta para saber si faltan cuadros del final: sin eso, un hueco después del
+    último presente es invisible.
+    """
+    match = _RE_TOTAL.search(nombre)
+    return int(match.group(1)) if match else None
+
+
+def huecos(nums: list[int], total: int | None = None) -> list[int]:
+    """Números que faltan entre 1 y `total` (por defecto, el último presente).
+
+    No es un error: GIBS y NOAA dejan huecos (gránulos que todavía no publicaron o que
+    esa pasada no tiene). La animación se arma con lo que hay, pero **avisando**: un
+    tramo que no existe no puede pasar como si el tiempo hubiera seguido de largo.
     """
     presentes = set(nums)
-    ultimo = nums[-1] if nums else 0
+    ultimo = total or (nums[-1] if nums else 0)
     return [i for i in range(1, ultimo + 1) if i not in presentes]
+
+
+def _aviso_de_huecos(faltan: list[int], presentes: int, total: int | None) -> str:
+    """Mensaje único y explícito: qué falta y cuánto se acorta la animación."""
+    muestra = ", ".join(str(numero) for numero in faltan[:12])
+    if len(faltan) > 12:
+        muestra += ", ..."
+    esperados = total if total else (presentes + len(faltan))
+    return (f"aviso: faltan {len(faltan)} cuadro(s) de {esperados} ({muestra}): "
+            f"la animación tiene {presentes} y esos tramos no se ven")
 
 
 @contextlib.contextmanager
@@ -148,10 +170,10 @@ def main(argv=None) -> int:
     nums = cuadros_numerados(frames_dir)
     if not nums:
         raise SystemExit(f"No hay cuadro_NNN.png en {frames_dir}.")
-    faltan = huecos(nums)
+    total = cuadros_esperados(frames_dir.name)
+    faltan = huecos(nums, total)
     if faltan:
-        print(f"  aviso: faltan {len(faltan)} cuadro(s) ({faltan[:12]}...); "
-              f"se arman los {len(nums)} disponibles", flush=True)
+        print(f"  {_aviso_de_huecos(faltan, len(nums), total)}", flush=True)
     n_real = len(nums)
     etiqueta = etiqueta_salida(frames_dir, n_real)
 

@@ -81,6 +81,19 @@ def _ahora() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _nivel_de(linea: str) -> str:
+    """Nivel del log para una línea de un script.
+
+    Los descargadores y los renders ya avisan lo no fatal con «aviso:» (un cuadro que
+    GIBS no tiene, una serie que se acorta). Eso no puede entrar como `info`: es
+    justamente lo que hay que mirar.
+    """
+    texto = linea.strip().lower()
+    if texto.startswith(("aviso:", "aviso :", "warning", "warn:")):
+        return "warn"
+    return "info"
+
+
 def _epoch(iso: str | None) -> float:
     """Marca de tiempo ISO -> segundos epoch. Sin fecha, 0 (todo cuenta)."""
     if not iso:
@@ -724,7 +737,9 @@ class JobManager:
                 linea = crudo.decode("utf-8", "replace").rstrip()
                 if not linea:
                     continue
-                self._log(job, linea[:600])
+                # Los scripts ya marcan sus avisos con «aviso:». Si acá quedan como
+                # info, un tramo faltante pasa desapercibido en el historial.
+                self._log(job, linea[:600], _nivel_de(linea))
                 vistos += 1
                 if paso.expected > 0:
                     self._progreso(job, base + span * min(0.95, vistos / paso.expected), etiqueta)

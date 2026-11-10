@@ -55,6 +55,29 @@ class Huecos(unittest.TestCase):
         self.assertEqual(modulo.huecos([1, 2, 3]), [])
         self.assertEqual(modulo.huecos([2, 3]), [1])
 
+    def test_tambien_detecta_los_del_final(self):
+        modulo = _armar()
+        # Sin el total del nombre, un hueco después del último presente es invisible.
+        self.assertEqual(modulo.huecos([1, 2, 3], 6), [4, 5, 6])
+        self.assertEqual(modulo.huecos([1, 2, 4], 5), [3, 5])
+
+    def test_el_total_sale_del_nombre_de_la_carpeta(self):
+        modulo = _armar()
+        self.assertEqual(
+            modulo.cuadros_esperados("frames_geocolor_plano_G19_2026-11-10T0000_80f_2712px"),
+            80)
+        self.assertIsNone(modulo.cuadros_esperados("frames_sin_total"))
+        # El sufijo `_px` no siempre está (carpetas de prueba, otras familias).
+        self.assertEqual(modulo.cuadros_esperados("frames_prueba_8f"), 8)
+
+    def test_el_aviso_dice_cuantos_faltan_y_cuantos_esperaba(self):
+        modulo = _armar()
+        texto = modulo._aviso_de_huecos([76, 78, 79, 80], 76, 80)
+        self.assertIn("aviso:", texto)
+        self.assertIn("4 cuadro(s) de 80", texto)
+        self.assertIn("76", texto)
+        self.assertIn("no se ven", texto)
+
     def test_la_secuencia_contigua_no_copia_nada(self):
         modulo = _armar()
         carpeta = Path(tempfile.mkdtemp(prefix="armar-"))
@@ -290,6 +313,24 @@ class UltimoDiaDeLosDiarios(unittest.TestCase):
                          "2026-10-05")
         self.assertEqual(descarga.args[descarga.args.index("--hasta") + 1],
                          "2026-10-05")
+
+
+class NivelDelLog(unittest.TestCase):
+    """Un aviso de un script tiene que verse como advertencia en el job."""
+
+    def test_los_avisos_van_a_warn(self):
+        from app.api.jobs import _nivel_de
+
+        self.assertEqual(_nivel_de("  aviso: faltan 4 cuadro(s)"), "warn")
+        self.assertEqual(_nivel_de("AVISO: costas omitidas"), "warn")
+        self.assertEqual(_nivel_de("1 cuadros listos en 20s"), "info")
+        self.assertEqual(_nivel_de("[1/2] bajando"), "info")
+
+    def test_una_linea_que_habla_de_avisos_no_alcanza(self):
+        from app.api.jobs import _nivel_de
+
+        # Sólo cuenta si la línea EMPIEZA con el aviso.
+        self.assertEqual(_nivel_de("sin aviso: todo bien"), "info")
 
 
 if __name__ == "__main__":
