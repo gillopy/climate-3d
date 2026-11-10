@@ -743,6 +743,8 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
 # --- MUR: SST descargada ya renderizada por GIBS ------------------------
 def _mur(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango_de_la_corrida(params)
+    if _pide_ultimo_dia(params):
+        inicio = fin = _ultimo_dia(_GIBS_MUR)
     dias = max(1, (fin - inicio).days + 1)
     paso = max(1, int(math.ceil(dias / 8)))
     px = _px(params, 1200)
@@ -770,6 +772,30 @@ def _mur(params: dict[str, Any], work: Path) -> Plan:
     )
     pasos = [descarga, render_step]  # el origen se consulta siempre
     return Plan(pasos=pasos, descarga=descarga)
+
+
+# --- "Último día disponible" para los productos diarios ------------------
+#: Capas de GIBS de los productos diarios que no tienen "últimos datos": el compuesto
+#: de color real de VIIRS y la anomalía de SST de MUR. Mismas constantes que
+#: `descargar/truecolor.py` y `descargar/mur_sst.py`.
+_GIBS_TRUECOLOR = "VIIRS_NOAA20_CorrectedReflectance_TrueColor"
+_GIBS_MUR = "GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies"
+_GIBS_GLOBAL = (-180.0, -90.0, 180.0, 90.0)
+
+
+def _ultimo_dia(layer: str, caja=_GIBS_GLOBAL) -> date:
+    """El día más nuevo que GIBS ya publica para esa capa diaria."""
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from dia_reciente import ultimo_dia  # noqa: PLC0415 - ver `_receta_rgb`
+
+    return ultimo_dia(layer, caja)
+
+
+def _pide_ultimo_dia(params: dict[str, Any]) -> bool:
+    """True si el snapshot pidió usar el último día publicado."""
+    return _snapshot(params) and _bool(params, "ultimo")
 
 
 # --- ECMWF: precipitacion y anomalia ------------------------------------
@@ -1202,6 +1228,8 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
 # --- MUR: poster realista ----------------------------------------------
 def _mur_realista(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango_de_la_corrida(params)
+    if _pide_ultimo_dia(params):
+        inicio = fin = _ultimo_dia(_GIBS_MUR)
     dias = max(1, (fin - inicio).days + 1)
     paso = max(1, int(math.ceil(dias / 12)))
     px = _px(params, 2000)
@@ -1518,7 +1546,10 @@ def _truecolor_viirs(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango_de_la_corrida(params)
     px = _px(params, 2000)
     animar = _bool(params, "animar") and not _snapshot(params)
-    capa = str(params.get("capa", "VIIRS_NOAA20_CorrectedReflectance_TrueColor"))
+    capa = str(params.get("capa", _GIBS_TRUECOLOR))
+    if _pide_ultimo_dia(params):
+        # Un solo día: el más nuevo que GIBS ya tiene armado.
+        inicio = fin = _ultimo_dia(capa)
 
     # La capa es una composicion DIARIA: un cuadro por dia, sin horarios.
     dias = max(1, (fin - inicio).days + 1)

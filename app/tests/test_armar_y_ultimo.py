@@ -18,7 +18,7 @@ import sys
 import tempfile
 import types
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -242,6 +242,54 @@ class RespaldoDeDescarga(unittest.TestCase):
             shutil.rmtree(salida, ignore_errors=True)
         self.assertEqual(usado, datetime(2026, 11, 10, 14, 0))
         self.assertEqual(len(intentos), 4)          # 14:30, 14:20, 14:10, 14:00
+
+
+class UltimoDiaDeLosDiarios(unittest.TestCase):
+    """Los productos diarios resuelven "último" con la sonda de GIBS."""
+
+    DIARIOS = ("truecolor_viirs", "mur_sst", "mur_realista")
+
+    def _params(self, producto, **extra):
+        params = {spec.name: spec.default
+                  for spec in catalog.get_product(producto).params}
+        params.update({"snapshot": True, "ultimo": True, "animar": False})
+        params.update(extra)
+        return params
+
+    def test_los_tres_ofrecen_el_check(self):
+        for producto in self.DIARIOS:
+            with self.subTest(producto=producto):
+                nombres = {spec.name: spec
+                           for spec in catalog.get_product(producto).params}
+                self.assertIn("ultimo", nombres)
+                self.assertEqual(nombres["ultimo"].enabled_when, {"snapshot": True})
+                self.assertFalse(nombres["ultimo"].default)
+
+    def test_la_receta_se_queda_con_un_solo_dia(self):
+        for producto in self.DIARIOS:
+            with self.subTest(producto=producto):
+                with mock.patch.object(recipes, "_ultimo_dia",
+                                       return_value=date(2026, 11, 8)):
+                    plan = recipes.planear(producto, self._params(producto),
+                                           Path("x"))
+                descarga = next(p for p in plan.pasos if p.kind == "download")
+                args = descarga.args
+                self.assertEqual(args[args.index("--desde") + 1], "2026-11-08")
+                self.assertEqual(args[args.index("--hasta") + 1], "2026-11-08")
+                self.assertEqual(args[args.index("--paso") + 1], "1")
+
+    def test_sin_el_check_se_respeta_la_ventana(self):
+        params = self._params("truecolor_viirs", ultimo=False,
+                              ventana={"start": "2026-10-01", "end": "2026-10-05"})
+        with mock.patch.object(recipes, "_ultimo_dia") as sonda:
+            plan = recipes.planear("truecolor_viirs", params, Path("x"))
+        sonda.assert_not_called()
+        descarga = next(p for p in plan.pasos if p.kind == "download")
+        # Con snapshot el rango ya se reduce al último día pedido (no sondea la fuente).
+        self.assertEqual(descarga.args[descarga.args.index("--desde") + 1],
+                         "2026-10-05")
+        self.assertEqual(descarga.args[descarga.args.index("--hasta") + 1],
+                         "2026-10-05")
 
 
 if __name__ == "__main__":

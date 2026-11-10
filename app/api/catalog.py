@@ -1124,18 +1124,27 @@ def _con_paraguay(producto: Product) -> Product:
     return producto
 
 
-def _con_ultimo(producto: Product) -> Product:
-    """Suma "último cuadro disponible" a los productos que ya resuelven los últimos.
+#: Productos diarios sin "últimos datos" que resuelven el último día con la sonda de
+#: GIBS (`comun/dia_reciente.py`). Los modelos ECMWF no van acá: su "último" es la
+#: corrida, que ya se ajusta por otro camino.
+_ULTIMO_DIARIO = {"truecolor_viirs", "mur_sst", "mur_realista"}
 
-    Es la misma maquinaria de `ultimos`, pero para un snapshot: un solo cuadro, el
-    más nuevo que la fuente ya publicó. Sin esto, elegir una hora que GIBS todavía
-    no tiene hace fallar el job, y no hay forma de saberlo antes de pedirla.
+
+def _con_ultimo(producto: Product) -> Product:
+    """Suma "último cuadro disponible" a los productos que saben resolverlo.
+
+    Es la misma maquinaria de `ultimos` (un solo cuadro, el más nuevo publicado) y,
+    para los productos diarios, la sonda de GIBS. Sin esto, elegir un día u hora que
+    la fuente todavía no tiene hace fallar el job, y no hay forma de saberlo antes.
     """
     nombres = {spec.name for spec in producto.params}
-    if "ultimos" not in nombres or "snapshot" not in nombres:
+    if "snapshot" not in nombres:
         return producto
-    indice = max(i for i, spec in enumerate(producto.params)
-                 if spec.name in ("ultimos", "ultimos_n")) + 1
+    if "ultimos" not in nombres and producto.id not in _ULTIMO_DIARIO:
+        return producto
+    indices = [i for i, spec in enumerate(producto.params)
+               if spec.name in ("ultimos", "ultimos_n")]
+    indice = (max(indices) + 1) if indices else 1
     producto.params.insert(
         indice,
         ParamSpec(
