@@ -621,3 +621,63 @@ Eso renderiza los **25 cuadros** de `2712x2712 px` en
 - **Viento en 250 mb y MSLP (ECMWF)**: troposfera alta con streamlines y extremos de presión;
   su flujo está en la sección 14 (`descargar/viento_250_mslp.py` +
   `cuadros/cuadros_viento_250.py`).
+
+---
+
+## 16. Extra: focos de calor de FIRMS sobre cualquier captura
+
+NASA FIRMS entrega detecciones puntuales de calor, no imágenes. El repo las baja y las
+dibuja encima de la captura con la misma proyección del contorno del país. Funciona en el
+Snapshot de Paraguay, GeoColor (recorte y globo), Fire Temperature y Color real de 3 bandas
+(globo y disco nativo): en la app es el toggle **Focos de calor (FIRMS)**.
+
+### Una sola vez: la clave
+
+```powershell
+# Pedila gratis en https://firms.modaps.eosdis.nasa.gov/api/map_key/ y guardala:
+Set-Content -Path "datos\firms_map_key.txt" -Value "TU_MAP_KEY" -NoNewline
+```
+
+`datos/firms_map_key.txt` está ignorado por git. También se acepta la variable
+`FIRMS_MAP_KEY`. Sin clave, la API contesta `400 Invalid MAP_KEY` y el job avisa.
+
+### A mano: bajar los focos y dibujarlos
+
+```powershell
+# 1) Focos del día, para la caja de Paraguay + 6 % de margen
+.venv\Scripts\python.exe descargar\firms.py --fecha 2026-11-08 --ventana dia `
+    --fuente viirs --margen 0.06 --out app\var\media\focos
+
+# 2) Componer la captura con los focos encima (sólo los de Paraguay)
+.venv\Scripts\python.exe cuadros\snapshot_paraguay.py --fecha 2026-11-08 --hora 15 `
+    --entrada app\var\media\crudos --salidas app\var\media `
+    --firms --firms-ventana dia --firms-alcance paraguay `
+    --firms-entrada app\var\media\focos
+
+# 3) O un póster de globo, con el hemisferio entero
+.venv\Scripts\python.exe descargar\firms.py --desde 2026-11-08T00:00 `
+    --hasta 2026-11-09T00:00 --fuente viirs --mundo --out app\var\media\focos
+.venv\Scripts\python.exe prototipos\poster_goes_truecolor.py --desde 2026-11-08T15:00 `
+    --sat G19 --px 1400 --centro -75.2 0 --recorte 1.0 `
+    --firms --firms-ventana dia --firms-alcance completo `
+    --firms-entrada app\var\media\focos
+```
+
+### Los tres controles
+
+| Control | Valores | Qué hace |
+| --- | --- | --- |
+| `--fuente` | `viirs`, `modis`, `snpp`, `landsat`, `todos` | VIIRS (375 m) es el default real; **Landsat sólo cubre EE.UU. y Canadá** |
+| `--firms-alcance` | `completo`, `paraguay` | filtra por el polígono del país, no por la caja |
+| `--firms-ventana` | `dia`, `3h`, `6h`, `12h`, `24h`, `48h`, `72h`, `5d` | `dia` = día UTC completo; `Nh` = a cada lado del cuadro; `24h`+ = hacia atrás |
+
+### Lo que hay que saber
+
+- VIIRS pasa sobre Paraguay cerca de las **05 y las 17 UTC**. `±3 h` a mediodía puede dar
+  **0 focos**: es cuándo mira el satélite, no un error.
+- La API acepta **5 días por pedido**: las ventanas más largas se piden en tandas sin
+  solaparse.
+- El punto se dimensiona por **gravedad** (FRP) y se colorea por **confianza** del sensor.
+- En zonas densas se dibuja **un punto por celda** (el más energético): 39.000 focos
+  visibles en un hemisferio quedan en ~3.700 sin que se note el recorte.
+- Si FIRMS no responde o falta la clave, la captura sale **sin overlay** y el log lo avisa.

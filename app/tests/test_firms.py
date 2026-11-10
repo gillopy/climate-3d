@@ -509,5 +509,42 @@ class Gravedad(unittest.TestCase):
         self.assertEqual(desde, datetime(2026, 11, 3, 15))
 
 
+class Agrupado(unittest.TestCase):
+    """Una marca por celda: en zonas densas no se apilan puntos encima de otros."""
+
+    def _foco(self, lat, lon, frp, confianza="nominal"):
+        return firms.Foco(lat=lat, lon=lon, frp=frp, confianza=confianza,
+                          cuando=datetime(2026, 11, 8, 17), satelite="N20",
+                          instrumento="VIIRS", dia_noche="D")
+
+    def test_una_celda_por_grupo_y_gana_el_mas_energetico(self):
+        focos = [self._foco(0.0, 0.0, 5.0), self._foco(0.0, 0.0, 50.0),
+                 self._foco(9.0, 9.0, 1.0)]
+        posiciones = [(0.0, 0.0), (0.5, 0.5), (100.0, 100.0)]
+        agrupados = firms.agrupar(focos, posiciones, 2.0)
+        self.assertEqual(len(agrupados), 2)
+        self.assertEqual(agrupados[0][0].frp, 50.0)
+        self.assertEqual((agrupados[0][1], agrupados[0][2]), (0.5, 0.5))
+
+    def test_descarta_los_que_caen_fuera_de_la_proyeccion(self):
+        focos = [self._foco(0.0, 0.0, 5.0), self._foco(1.0, 1.0, 9.0)]
+        agrupados = firms.agrupar(focos, [(0.0, 0.0), (float("nan"), 0.0)], 2.0)
+        self.assertEqual([f.frp for f, _x, _y in agrupados], [5.0])
+
+    def test_celda_cero_no_agrupa(self):
+        focos = [self._foco(0.0, 0.0, 5.0), self._foco(0.0, 0.0, 50.0)]
+        agrupados = firms.agrupar(focos, [(0.0, 0.0), (0.1, 0.1)], 0)
+        self.assertEqual(len(agrupados), 2)
+
+    def test_un_hemisferio_denso_baja_por_lo_menos_a_la_mitad(self):
+        # 10.000 focos en un cuadrado de 2x2: con celda de 0,0044 quedan pocos miles.
+        focos = [self._foco(0.0, 0.0, 1.0) for _ in range(10_000)]
+        posiciones = [((i * 7919) % 2000 / 1000.0 - 1.0,
+                       (i * 104729) % 2000 / 1000.0 - 1.0) for i in range(10_000)]
+        agrupados = firms.agrupar(focos, posiciones, 2.0 * firms.CELDA_FOCO)
+        self.assertLess(len(agrupados), 5_000)
+        self.assertGreater(len(agrupados), 100)
+
+
 if __name__ == "__main__":
     unittest.main()

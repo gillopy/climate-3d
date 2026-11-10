@@ -44,6 +44,7 @@ from poster_goes_realista import (  # noqa: E402
 from poster_goes_truecolor import (  # noqa: E402
     BANDAS,
     BORDE_SA,
+    CELDA_FOCO,
     CREDITO,
     ESCALA_Q,
     GAMMA,
@@ -66,6 +67,7 @@ from poster_goes_truecolor import (  # noqa: E402
     _mediana,
     _parametros,
     _plano,
+    agrupar,
     carpeta,
     color_hex,
     cos_cenital,
@@ -269,18 +271,19 @@ def _pintar_focos(ax, focos, x, y, lon0, h, forma, px: int, dpi: float) -> None:
         return
     X, Y = _a_ejes([foco.lon for foco in focos], [foco.lat for foco in focos],
                    x, y, lon0, h, forma)
-    dentro = ~np.isnan(X) & ~np.isnan(Y)
-    if not dentro.any():
+    agrupados = agrupar(focos, list(zip(X, Y)), 2.0 * CELDA_FOCO)
+    if not agrupados:
         return
-    visibles = [foco for foco, ok in zip(focos, dentro) if ok]
-    factores = np.array([factor_gravedad(foco) for foco in visibles])
+    px_x = np.array([a for _foco, a, _y in agrupados])
+    px_y = np.array([b for _foco, _x, b in agrupados])
+    colores = [color_hex(foco.confianza) for foco, _x, _y in agrupados]
+    factores = np.array([factor_gravedad(foco) for foco, _x, _y in agrupados])
     diametro = max(3.0, px * RADIO_FOCO * 2) * 72.0 / dpi
-    ax.scatter(X[dentro], Y[dentro], s=((diametro * 1.75) * factores) ** 2,
+    ax.scatter(px_x, px_y, s=((diametro * 1.75) * factores) ** 2,
                c="#000000", alpha=0.30, linewidths=0, zorder=8.6)
-    ax.scatter(X[dentro], Y[dentro], s=(diametro * factores) ** 2,
-               c=[color_hex(foco.confianza) for foco in visibles],
+    ax.scatter(px_x, px_y, s=(diametro * factores) ** 2, c=colores,
                alpha=0.90, linewidths=0, zorder=9)
-    ax.scatter(X[dentro], Y[dentro], s=((diametro * 0.42) * factores) ** 2,
+    ax.scatter(px_x, px_y, s=((diametro * 0.42) * factores) ** 2,
                c="#fff8dc", alpha=0.92, linewidths=0, zorder=9.1)
 
 

@@ -73,8 +73,8 @@ from poster_goes_realista import (  # noqa: E402
     time_label_nc,
 )
 from poster_mur_realista import sombra_exterior  # noqa: E402
-from firms import (RADIO_FOCO, VENTANAS, color_hex, factor_gravedad,  # noqa: E402
-                   filtrar, leer_carpeta, ventana)
+from firms import (CELDA_FOCO, RADIO_FOCO, VENTANAS, agrupar,  # noqa: E402
+                   color_hex, factor_gravedad, filtrar, leer_carpeta, ventana)
 from rutas import DATOS, SALIDAS  # noqa: E402
 
 # ------------------------------------------------------------------------ constantes
@@ -528,15 +528,21 @@ def _pintar_focos(ax, focos, centro, escala, px: int, dpi: float) -> None:
     visible = np.hypot(x, y) <= 1.0
     if not visible.any():
         return
-    colores = [color_hex(f.confianza) for f, dentro in zip(focos, visible) if dentro]
-    factores = np.array([factor_gravedad(f) for f, dentro in zip(focos, visible)
-                         if dentro])
+    dentro_disco = [foco for foco, ok in zip(focos, visible) if ok]
+    posiciones = [(float(a), float(b)) for a, b in zip(x[visible], y[visible])]
+    agrupados = agrupar(dentro_disco, posiciones, 2.0 * CELDA_FOCO)
+    if not agrupados:
+        return
+    px_x = np.array([a for _foco, a, _y in agrupados])
+    px_y = np.array([b for _foco, _x, b in agrupados])
+    colores = [color_hex(foco.confianza) for foco, _x, _y in agrupados]
+    factores = np.array([factor_gravedad(foco) for foco, _x, _y in agrupados])
     diametro = max(3.0, px * RADIO_FOCO * 2) * 72.0 / dpi
-    ax.scatter(x[visible], y[visible], s=((diametro * 1.75) * factores) ** 2,
+    ax.scatter(px_x, px_y, s=((diametro * 1.75) * factores) ** 2,
                c="#000000", alpha=0.30, linewidths=0, zorder=8.6)
-    ax.scatter(x[visible], y[visible], s=(diametro * factores) ** 2, c=colores,
+    ax.scatter(px_x, px_y, s=(diametro * factores) ** 2, c=colores,
                alpha=0.90, linewidths=0, zorder=9)
-    ax.scatter(x[visible], y[visible], s=((diametro * 0.42) * factores) ** 2,
+    ax.scatter(px_x, px_y, s=((diametro * 0.42) * factores) ** 2,
                c="#fff8dc", alpha=0.92, linewidths=0, zorder=9.1)
 
 

@@ -29,8 +29,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
-from firms import (RADIO_FOCO, VENTANAS, color_foco, color_hex,  # noqa: E402
-                   factor_gravedad, filtrar, leer_carpeta, ventana)
+from firms import (CELDA_FOCO, RADIO_FOCO, VENTANAS, agrupar,  # noqa: E402
+                   color_foco, color_hex, factor_gravedad, filtrar,
+                   leer_carpeta, ventana)
 from rutas import SALIDAS  # noqa: E402
 from paraguay import dentro  # noqa: E402
 from snapshot_paraguay import dibujar_focos  # noqa: E402
@@ -183,19 +184,24 @@ def _focos_globo(ax, focos, args) -> None:
     if not visible.any():
         return
     dentro_disco = [foco for foco, ok in zip(focos, visible) if ok]
+    posiciones = [(float(a), float(b)) for a, b in zip(x[visible], y[visible])]
+    # El eje va de -1 a 1 sobre `px` píxeles: la celda de agrupado en esas unidades.
+    agrupados = agrupar(dentro_disco, posiciones, 2.0 * CELDA_FOCO)
+    if not agrupados:
+        return
     # El tamaño sigue la gravedad del incendio, no la cantidad de puntos.
-    factores = np.array([factor_gravedad(foco) for foco in dentro_disco])
+    factores = np.array([factor_gravedad(foco) for foco, _x, _y in agrupados])
     diametro = max(3.0, args.px * RADIO_FOCO * 2) * 72.0 / args.dpi
     for tamano, color, alpha, orden in (
         (diametro * 1.75, "#000000", 0.28, 7.6),
         (diametro, None, 0.90, 8.0),
         (diametro * 0.42, "#fff8dc", 0.92, 8.1),
     ):
-        ax.scatter([foco.lon for foco in dentro_disco],
-                   [foco.lat for foco in dentro_disco],
+        ax.scatter([foco.lon for foco, _x, _y in agrupados],
+                   [foco.lat for foco, _x, _y in agrupados],
                    s=(tamano * factores) ** 2,
                    c=(color if color
-                      else [color_hex(f.confianza) for f in dentro_disco]),
+                      else [color_hex(foco.confianza) for foco, _x, _y in agrupados]),
                    alpha=alpha, linewidths=0,
                    transform=ccrs.PlateCarree(), zorder=orden)
 

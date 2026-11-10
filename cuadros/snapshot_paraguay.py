@@ -32,8 +32,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
-from firms import (RADIO_FOCO, VENTANAS, color_foco, etiqueta,  # noqa: E402
-                   factor_gravedad, filtrar, leer, nombre_csv, ventana)
+from firms import (CELDA_FOCO, RADIO_FOCO, VENTANAS, agrupar,  # noqa: E402
+                   color_foco, etiqueta, factor_gravedad, filtrar, leer,
+                   nombre_csv, ventana)
 from paraguay import (MARGEN, caja_geojson, crudo_mas_nuevo,  # noqa: E402
                       nombre_captura, px_para_mpp, solo_paraguay, ts_de_crudo)
 from rutas import SALIDAS  # noqa: E402
@@ -143,8 +144,10 @@ def dibujar_focos(imagen: Image.Image, caja, focos, lado: int,
     capa = Image.new("RGBA", (lado * escala, alto * escala), (0, 0, 0, 0))
     lapiz = ImageDraw.Draw(capa)
     base = max(2.5, min(lado, alto) * RADIO_FOCO)
-    for foco in focos:
-        x, y = _a_pixel(foco.lon, foco.lat, caja, lado, escala, alto)
+    posiciones = [_a_pixel(foco.lon, foco.lat, caja, lado, escala, alto)
+                  for foco in focos]
+    celda = max(3.0, min(lado, alto) * CELDA_FOCO) * escala
+    for foco, x, y in agrupar(focos, posiciones, celda):
         # El FRP manda el tamaño, con techo: un foco de 200 MW no tapa la captura.
         radio = base * factor_gravedad(foco)
         _punto(lapiz, x, y, radio * escala, color_foco(foco.confianza))

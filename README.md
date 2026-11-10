@@ -203,6 +203,46 @@ dependen del producto:
 El encuadre se calcula en [`comun/paraguay.py`](./comun/paraguay.py) y el margen se
 traduce a `--radio` (grados) o `--recorte` (fracción del hemisferio) según el render.
 
+### Focos de calor (FIRMS): los incendios encima de la captura
+
+NASA FIRMS publica **detecciones puntuales** de calor (no imágenes) de los satélites que
+pasan sobre el área. Con el toggle **Focos de calor (FIRMS)** la captura sale con esos
+puntos encima, alineados con la misma proyección que dibuja el contorno del país.
+
+**Configuración (una sola vez).** La API exige un MAP_KEY gratuito:
+
+1. Pedilo en <https://firms.modaps.eosdis.nasa.gov/api/map_key/> (email + un click).
+2. Guardalo en `datos/firms_map_key.txt` (está en `.gitignore`), o exportá `FIRMS_MAP_KEY`.
+
+Sin clave el servicio contesta `400 Invalid MAP_KEY` y el job avisa; nunca se commitea la
+clave.
+
+**Dónde se puede usar**: Snapshot de Paraguay, GeoColor (recorte y globo), Fire Temperature
+y Color real de 3 bandas (globo y disco nativo).
+
+**Los tres controles:**
+
+- **Sensor**: `VIIRS` NOAA-20 + NOAA-21 (375 m reales, el que tiene sentido a 250 m/px),
+  `MODIS` (1 km, detecta menos), `Suomi NPP` (publica de forma intermitente) y `Landsat`,
+  que **sólo cubre EE.UU. y Canadá**: para Sudamérica devuelve la cabecera sin filas.
+- **Focos a mostrar**: `Todos los del área` o `Sólo los de Paraguay`. El segundo filtra por
+  el **polígono** del país, no por la caja; en el globo, además, baja ~25 veces menos datos.
+- **Ventana**: `Día UTC` (el compuesto diario *es* ese día), `±3/6/12 h` alrededor del cuadro
+  y `24 h / 2 / 3 / 5 días` hacia atrás, como el *time based* del visor de FIRMS.
+
+**Tres cosas que conviene saber:**
+
+- VIIRS pasa sobre Paraguay cerca de las **05 y las 17 UTC**. Una ventana de `±3 h` a
+  mediodía puede traer **0 focos**: no es un fallo, es cuándo mira el satélite.
+- La API acepta **5 días por pedido**; ventanas más largas se piden en tandas.
+- El tamaño del punto sigue la **gravedad** (FRP: baja, moderada, alta, extrema) y el color
+  la **confianza** del sensor. En zonas densas se dibuja **un punto por celda** (el más
+  energético): con un hemisferio en llamas, dibujar los ~39.000 visibles tapaba el mapa;
+  agrupados quedan ~3.700 sin que se note el recorte.
+
+Si FIRMS no responde, no hay focos o falta la clave, la captura sale **sin overlay** con un
+aviso en el log: un proveedor externo no rompe el job.
+
 ### Himawari-9 AHI B13 (Clean Infrared): el ciclón del mar Filipino
 
 ![Clean Infrared de Himawari-9, 21 de octubre de 2026, 20:20 (UTC-4)](docs/galeria/himawari_b13_globo_2026-10-21T2020.png)

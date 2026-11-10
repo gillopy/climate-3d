@@ -56,6 +56,12 @@ _RELATIVAS = {"24h": timedelta(hours=24), "48h": timedelta(hours=48),
 #: visible sobre la nube.
 RADIO_FOCO = 0.0018
 
+#: Lado de la celda de agrupado, como fracción del lado corto. En zonas densas (un
+#: hemisferio con miles de focos) los marcadores se superponen y tapan el mapa; con
+#: una celda de este tamaño se dibuja uno solo por celda y no se nota el recorte,
+#: porque a esa distancia ya estaban uno encima del otro.
+CELDA_FOCO = 0.0022
+
 #: Gravedad por potencia radiativa (MW), como la escala del visor de FIRMS. El color
 #: sigue la confianza del sensor; el tamaño, la energía del incendio.
 _CORTES_FRP = (5.0, 20.0, 50.0)
@@ -312,3 +318,27 @@ def escribir(ruta: Path, focos: list[Foco]) -> Path:
 def filtrar(focos: list[Foco], desde: datetime, hasta: datetime) -> list[Foco]:
     """Los focos dentro de `[desde, hasta)`."""
     return [foco for foco in focos if desde <= foco.cuando < hasta]
+
+
+def agrupar(focos: list[Foco], posiciones, celda: float):
+    """Un foco por celda de `celda`, con el más energético de cada una.
+
+    `posiciones` son los `(x, y)` de cada foco, ya proyectados y en el mismo orden.
+    En un hemisferio de día de incendios hay decenas de miles de detecciones y los
+    marcadores se apilan hasta tapar la imagen: a una celda de pocos píxeles, dibujar
+    todos no agrega nada que el ojo pueda separar. Se descartan los `(NaN, NaN)`.
+
+    Devuelve `[(foco, x, y)]` con las posiciones ya filtradas.
+    """
+    if celda <= 0:
+        return [(foco, x, y) for foco, (x, y) in zip(focos, posiciones)
+                if not (x != x or y != y)]
+    celdas: dict[tuple[int, int], tuple[Foco, float, float]] = {}
+    for foco, (x, y) in zip(focos, posiciones):
+        if x != x or y != y:               # NaN: fuera de la proyección
+            continue
+        clave = (int(x // celda), int(y // celda))
+        elegido = celdas.get(clave)
+        if elegido is None or foco.frp > elegido[0].frp:
+            celdas[clave] = (foco, x, y)
+    return list(celdas.values())
