@@ -173,22 +173,42 @@ class NingunRendererAMedias(unittest.TestCase):
 
 
 class DiscoNativo(unittest.TestCase):
-    """El disco nativo lo dibuja otro script: no puede recibir focos."""
+    """El disco nativo también dibuja focos: antes los ignoraba en silencio."""
 
-    def test_el_disco_nativo_no_lleva_focos_ni_descarga(self):
+    def _plan(self):
         params = {s.name: s.default
                   for s in catalog.get_product("goes_truecolor").params}
         params.update({"firms": True, "animar": False, "snapshot": True,
                        "encuadre": "disco", "paraguay": False,
                        "ventana": {"start": "2026-11-05", "end": "2026-11-05"},
                        "hora": 15, "minuto": "00"})
-        plan = recipes.planear("goes_truecolor", params, Path("C:/tmp/work"))
-        scripts = [paso.script for paso in plan.pasos]
-        self.assertNotIn("descargar/firms.py", scripts)
+        return recipes.planear("goes_truecolor", params, Path("C:/tmp/work"))
+
+    def test_baja_los_focos_y_los_pasa_al_render(self):
+        plan = self._plan()
+        pasos = [paso.script for paso in plan.pasos]
+        self.assertIn("descargar/firms.py", pasos)
         disco = next(p for p in plan.pasos
                      if p.script == "prototipos/poster_goes_disco.py")
-        self.assertFalse([token for token in disco.args
-                          if token.startswith("--firms")])
+        for bandera in ("--firms", "--firms-ventana", "--firms-alcance",
+                        "--firms-entrada"):
+            self.assertIn(bandera, disco.args)
+
+    def test_el_disco_declara_las_banderas(self):
+        conocidas = declaradas("prototipos/poster_goes_disco.py")
+        for bandera in ("--firms", *COMPANERAS):
+            self.assertIn(bandera, conocidas)
+
+
+class RenderersDeFocos(unittest.TestCase):
+    """La lista de renderers del contrato cubre todo script que dibuje focos."""
+
+    def test_todo_script_con_firms_esta_en_el_contrato(self):
+        for archivo in sorted((RAIZ / "prototipos").glob("*.py")):
+            if "--firms" in archivo.read_text(encoding="utf-8"):
+                self.assertIn(f"prototipos/{archivo.name}",
+                              set(RENDERERS.values()) | {"prototipos/poster_goes_disco.py"},
+                              archivo.name)
 
 
 class ApagadoNoDejaRastro(unittest.TestCase):

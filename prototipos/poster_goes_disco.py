@@ -54,17 +54,22 @@ from poster_goes_truecolor import (  # noqa: E402
     PCT_HI,
     PCT_LO,
     PEDESTAL,
+    RADIO_FOCO,
     SATURACION,
     SUAVIZADO,
     TITULO,
+    VENTANAS,
     _componer,
     _desenfoque,
     _factor_solar,
+    _focos_de,
     _mediana,
     _parametros,
     _plano,
     carpeta,
+    color_hex,
     cos_cenital,
+    factor_gravedad,
     fecha_de,
     slots_comunes,
     time_label_nc,
@@ -255,7 +260,32 @@ def _a_ejes(lon, lat, x, y, lon0, h, forma, limite: float | None = None):
     return X, Y
 
 
-def dibujar(disco, x, y, lon0, h, forma, titulo, tiempo, fuente, args, px):
+def _pintar_focos(ax, focos, x, y, lon0, h, forma, px: int, dpi: float) -> None:
+    """Marca los focos sobre el disco nativo, con la misma proyección del contorno.
+
+    `_a_ejes` devuelve NaN fuera de la grilla: esos focos se descartan solos.
+    """
+    if not focos:
+        return
+    X, Y = _a_ejes([foco.lon for foco in focos], [foco.lat for foco in focos],
+                   x, y, lon0, h, forma)
+    dentro = ~np.isnan(X) & ~np.isnan(Y)
+    if not dentro.any():
+        return
+    visibles = [foco for foco, ok in zip(focos, dentro) if ok]
+    factores = np.array([factor_gravedad(foco) for foco in visibles])
+    diametro = max(3.0, px * RADIO_FOCO * 2) * 72.0 / dpi
+    ax.scatter(X[dentro], Y[dentro], s=((diametro * 1.75) * factores) ** 2,
+               c="#000000", alpha=0.30, linewidths=0, zorder=8.6)
+    ax.scatter(X[dentro], Y[dentro], s=(diametro * factores) ** 2,
+               c=[color_hex(foco.confianza) for foco in visibles],
+               alpha=0.90, linewidths=0, zorder=9)
+    ax.scatter(X[dentro], Y[dentro], s=((diametro * 0.42) * factores) ** 2,
+               c="#fff8dc", alpha=0.92, linewidths=0, zorder=9.1)
+
+
+def dibujar(disco, x, y, lon0, h, forma, titulo, tiempo, fuente, args, px,
+            focos=()):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -316,6 +346,8 @@ def dibujar(disco, x, y, lon0, h, forma, titulo, tiempo, fuente, args, px):
                                              alpha=0.45, zorder=7))
             ax.add_collection(LineCollection(segs, colors="#ffffff", linewidths=0.55,
                                              alpha=0.95, zorder=8))
+
+    _pintar_focos(ax, focos, x, y, lon0, h, forma, px, dpi)
 
     # Textos en las esquinas negras: el disco ocupa el 97 % del cuadro y no hay margen
     # reservado, así que cualquier rótulo tiene que caer fuera del planeta.
@@ -380,6 +412,16 @@ def main(argv=None) -> int:
     ap.add_argument("--reticula", action=argparse.BooleanOptionalAction, default=False,
                     help="meridianos y paralelos cada 30° (por defecto, NO)")
     ap.add_argument("--out", help="PNG de salida (por defecto, en comun.rutas.SALIDAS)")
+    ap.add_argument("--firms", action="store_true",
+                    help="superpone los focos de calor de NASA FIRMS")
+    ap.add_argument("--firms-ventana", default=VENTANAS[0], choices=VENTANAS,
+                    help="ventana de focos: dia = dia UTC completo (default)")
+    ap.add_argument("--firms-alcance", default="completo",
+                    choices=("completo", "paraguay"),
+                    help="completo = todos los focos del area; paraguay = solo los "
+                         "que caen dentro del pais")
+    ap.add_argument("--firms-entrada",
+                    help="carpeta con los CSV de focos (los deja descargar/firms.py)")
     args = ap.parse_args(argv)
     args.fuente = args.fuente.replace("{goes}", "GOES-" + str(args.sat or SAT)[1:])
 
@@ -406,7 +448,7 @@ def main(argv=None) -> int:
           f"declinación {np.degrees(decl):+.1f}°", flush=True)
 
     fig = dibujar(disco, x, y, lon0, h, forma, args.titulo, time_label_nc(nc01),
-                  args.fuente, args, args.px)
+                  args.fuente, args, args.px, _focos_de(args, t0))
 
     out = Path(args.out) if args.out else (
         SALIDAS / f"poster_G19_truecolor_nativo_{t0:%Y-%m-%dT%H%M}.png")

@@ -1125,6 +1125,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
         expected=max(1, n),
     )
 
+    firms_flags = _flags_firms(params, work)
     if disco:
         render_step = Step(
             kind="render",
@@ -1134,6 +1135,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                 "--desde", slot,
                 "--sat", sat,
                 "--px", str(px),
+                *firms_flags,
                 "--out", str(work / f"truecolor_nativo_{desde:%Y-%m-%dT%H%M}.png"),
             ],
             expected=1,
@@ -1154,7 +1156,6 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
             # La mediana 3x3 y el desenfoque de 0.8 px borronean las nubes:
             # a 2712 px se nota. Se apagan salvo que se pida el look suave.
             centro += ["--no-mediana", "--suavizado", "0"]
-        firms_flags = _flags_firms(params, work)
         if animar and n > 1:
             render_step = Step(
                 kind="render",
@@ -1192,10 +1193,8 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                 expected=1,
             )
 
-    # El disco nativo lo dibuja otro script, que no sabe de focos: sólo el globo.
-    focos = (None if disco else
-             _paso_firms(params, desde, desde + timedelta(minutes=paso * n),
-                         work, mundo=not _bool(params, "paraguay")))
+    focos = _paso_firms(params, desde, desde + timedelta(minutes=paso * n),
+                        work, mundo=not _bool(params, "paraguay"))
     pasos = [descarga, *([focos] if focos else []), render_step]  # el origen se consulta en cada corrida
     return Plan(pasos=pasos, descarga=descarga)
 
