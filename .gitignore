@@ -26,6 +26,9 @@ frames_*/
 # Logs
 *.log
 
+# Credenciales locales (la MAP_KEY de NASA FIRMS)
+/datos/firms_map_key.txt
+
 # OS
 Thumbs.db
 desktop.ini

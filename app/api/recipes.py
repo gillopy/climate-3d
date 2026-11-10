@@ -842,6 +842,16 @@ except Exception:  # pragma: no cover
     _CAPAS_SNAPSHOT = {k: None for k in ("truecolor", "snpp", "aqua", "terra",
                                          "geocolor")}
 
+# La lista de sensores y de ventanas de FIRMS manda desde `comun/firms.py`: la UI
+# no puede ofrecer un valor que el descargador no entienda.
+try:
+    from comun.firms import FUENTES as _FUENTES_FIRMS
+    from comun.firms import VENTANAS as _VENTANAS_FIRMS
+except Exception:  # pragma: no cover
+    _FUENTES_FIRMS = {k: None for k in ("viirs", "modis", "snpp", "todos")}
+    _VENTANAS_FIRMS = ("dia", "3h", "6h", "12h")
+
+
 def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
     inicio, _ = _rango(params)
     hora = max(0, min(23, int(params.get("hora", 15) or 0)))
@@ -886,9 +896,43 @@ def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
         args=[*comun, "--out", str(crudos)],
         expected=1,
     )
+
+    # Los focos van después de GIBS: con --ultima el instante recién se conoce
+    # cuando el crudo está en disco, y la ventana de focos depende de ese instante.
+    ventana_focos = str(params.get("firms_ventana", "dia"))
+    if ventana_focos not in _VENTANAS_FIRMS:
+        ventana_focos = "dia"
+    pasos = [descarga]
+    if _bool(params, "firms"):
+        fuente = str(params.get("firms_fuente", "viirs"))
+        if fuente not in _FUENTES_FIRMS:
+            fuente = "viirs"
+        args_firms = [
+            "--fecha", inicio.isoformat(),
+            "--hora", str(hora),
+            "--minuto", str(minuto),
+            "--margen", f"{margen:g}",
+            "--capa", capa,
+            "--fuente", fuente,
+            "--ventana", ventana_focos,
+            "--entrada", str(crudos),
+            "--out", str(crudos),
+        ]
+        if _bool(params, "ultima"):
+            args_firms.append("--ultima")
+        pasos.append(Step(
+            kind="download",
+            label="bajando los focos de FIRMS",
+            script="descargar/firms.py",
+            args=args_firms,
+            expected=2,
+        ))
+
     args_render = [*comun, "--entrada", str(crudos), "--salidas", str(work)]
     if not _bool(params, "borde"):
         args_render.append("--sin-borde")
+    if _bool(params, "firms"):
+        args_render += ["--firms", "--firms-ventana", ventana_focos]
     render_step = Step(
         kind="render",
         label="componiendo la captura",
@@ -896,7 +940,8 @@ def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
         args=args_render,
         expected=1,
     )
-    return Plan(pasos=[descarga, render_step], descarga=descarga)
+    pasos.append(render_step)
+    return Plan(pasos=pasos, descarga=descarga)
 
 
 # --- VIENTO: 250 mb + extremos de MSLP ----------------------------------

@@ -899,6 +899,43 @@ PRODUCTS: list[Product] = [
                 help="250 m/px es el detalle real de VIIRS; por debajo solo interpola",
             ),
             ParamSpec(name="borde", label="Dibujar el contorno", kind="toggle", default=True),
+            ParamSpec(
+                name="firms",
+                label="Focos de calor (FIRMS)",
+                kind="toggle",
+                default=False,
+                help="superpone los focos de NASA FIRMS; necesita el MAP_KEY en "
+                     "datos/firms_map_key.txt",
+            ),
+            ParamSpec(
+                name="firms_fuente",
+                label="Sensor FIRMS",
+                kind="select",
+                default="viirs",
+                options=[
+                    ParamOption(value="viirs", label="VIIRS NOAA-20 + NOAA-21 (375 m)"),
+                    ParamOption(value="modis", label="MODIS Aqua + Terra (1 km)"),
+                    ParamOption(value="snpp", label="Suomi NPP (publica intermitente)"),
+                    ParamOption(value="todos", label="Todos los sensores"),
+                ],
+                help="VIIRS es el que tiene sentido a 250 m/px; MODIS detecta menos",
+                enabled_when={"firms": True},
+            ),
+            ParamSpec(
+                name="firms_ventana",
+                label="Ventana de focos",
+                kind="select",
+                default="dia",
+                options=[
+                    ParamOption(value="dia", label="Día UTC completo"),
+                    ParamOption(value="3h", label="± 3 horas"),
+                    ParamOption(value="6h", label="± 6 horas"),
+                    ParamOption(value="12h", label="± 12 horas"),
+                ],
+                help="el día completo acompaña a los compuestos diarios; las horas "
+                     "son para GeoColor (VIIRS pasa ~05 y ~17 UTC)",
+                enabled_when={"firms": True},
+            ),
         ],
     ),
     Product(

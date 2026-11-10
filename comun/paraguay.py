@@ -196,6 +196,20 @@ def nombre_crudo(capa: str, t: datetime, px: int) -> str:
     return f"crudo_snapshot_{capa}_{t:%Y%m%dT%H%M}_{px}px.png"
 
 
-def nombre_captura(capa: str, t: datetime, px: int) -> str:
-    """Nombre de la captura final."""
-    return f"snapshot_paraguay_{capa}_{t:%Y-%m-%dT%H%M}_{px}px.png"
+def nombre_captura(capa: str, t: datetime, px: int, sufijo: str = "") -> str:
+    """Nombre de la captura final; `sufijo` marca variantes, como `firms`."""
+    cola = f"_{sufijo}" if sufijo else ""
+    return f"snapshot_paraguay_{capa}_{t:%Y-%m-%dT%H%M}_{px}px{cola}.png"
+
+
+def crudo_mas_nuevo(carpeta, capa: str, px: int | None = None) -> Path | None:
+    """El crudo más nuevo de esa capa en `carpeta` (y de ese tamaño, si se pide).
+
+    Lo usan el compositor y el descargador de FIRMS: con `--ultima` el instante no se
+    conoce hasta que GIBS contestó, así que los dos lo sacan del mismo archivo en vez
+    de repetir la búsqueda.
+    """
+    patron = (f"crudo_snapshot_{capa}_*_{px}px.png" if px
+              else f"crudo_snapshot_{capa}_*.png")
+    candidatos = sorted(Path(carpeta).glob(patron))
+    return candidatos[-1] if candidatos else None
