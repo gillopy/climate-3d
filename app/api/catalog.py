@@ -181,6 +181,53 @@ def _params_ultimos() -> list[ParamSpec]:
     ]
 
 
+def _params_firms() -> list[ParamSpec]:
+    """Toggle de focos de FIRMS + sus dos selectores.
+
+    Se arma por producto (no se comparte el objeto) por la misma razón que
+    `_params_ultimos`: `_con_snapshot` ajusta `enabled_when` en cada instancia.
+    """
+    return [
+        ParamSpec(
+            name="firms",
+            label="Focos de calor (FIRMS)",
+            kind="toggle",
+            default=False,
+            help="superpone los focos de NASA FIRMS; necesita el MAP_KEY en "
+                 "datos/firms_map_key.txt",
+        ),
+        ParamSpec(
+            name="firms_fuente",
+            label="Sensor FIRMS",
+            kind="select",
+            default="viirs",
+            options=[
+                ParamOption(value="viirs", label="VIIRS NOAA-20 + NOAA-21 (375 m)"),
+                ParamOption(value="modis", label="MODIS Aqua + Terra (1 km)"),
+                ParamOption(value="snpp", label="Suomi NPP (publica intermitente)"),
+                ParamOption(value="todos", label="Todos los sensores"),
+            ],
+            help="VIIRS es el que tiene sentido a 250 m/px; MODIS detecta menos",
+            enabled_when={"firms": True},
+        ),
+        ParamSpec(
+            name="firms_ventana",
+            label="Ventana de focos",
+            kind="select",
+            default="dia",
+            options=[
+                ParamOption(value="dia", label="Día UTC completo"),
+                ParamOption(value="3h", label="± 3 horas"),
+                ParamOption(value="6h", label="± 6 horas"),
+                ParamOption(value="12h", label="± 12 horas"),
+            ],
+            help="el día completo acompaña a los compuestos diarios; las horas "
+                 "son para el slot exacto (VIIRS pasa ~05 y ~17 UTC)",
+            enabled_when={"firms": True},
+        ),
+    ]
+
+
 def _receta_rgb(producto: str) -> dict:
     """Receta RGB oficial (bandas, rangos y guía) desde `comun/rgb_goes.py`.
 
@@ -195,7 +242,7 @@ def _receta_rgb(producto: str) -> dict:
     return RECETAS[producto]
 
 
-def _producto_rgb(pid: str, nombre: str, producto: str) -> Product:
+def _producto_rgb(pid: str, nombre: str, producto: str, extras=()) -> Product:
     """Un producto RGB: mismos controles que `goes_banda`, sin banda ni paleta."""
     receta = _receta_rgb(producto)
     from rgb_goes import etiqueta_canal  # noqa: PLC0415 - ver `_receta_rgb`
@@ -252,6 +299,7 @@ def _producto_rgb(pid: str, nombre: str, producto: str) -> Product:
                       enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider",
                       default=12, min=4, max=30, step=2),
+            *extras,
         ],
     )
 
@@ -406,6 +454,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
                       enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=8, min=4, max=30, step=2),
+            *_params_firms(),
         ],
     ),
     Product(
@@ -477,7 +526,8 @@ PRODUCTS: list[Product] = [
     ),
     _producto_rgb("goes_dust", "GOES - Dust RGB", "dust"),
     _producto_rgb("goes_airmass", "GOES - Air Mass RGB", "airmass"),
-    _producto_rgb("goes_firetemp", "GOES - Fire Temperature RGB", "firetemp"),
+    _producto_rgb("goes_firetemp", "GOES - Fire Temperature RGB", "firetemp",
+                  extras=_params_firms()),
     Product(
         id="goes_sandwich",
         name="GOES - Sandwich (visible + IR realzado)",
@@ -899,43 +949,7 @@ PRODUCTS: list[Product] = [
                 help="250 m/px es el detalle real de VIIRS; por debajo solo interpola",
             ),
             ParamSpec(name="borde", label="Dibujar el contorno", kind="toggle", default=True),
-            ParamSpec(
-                name="firms",
-                label="Focos de calor (FIRMS)",
-                kind="toggle",
-                default=False,
-                help="superpone los focos de NASA FIRMS; necesita el MAP_KEY en "
-                     "datos/firms_map_key.txt",
-            ),
-            ParamSpec(
-                name="firms_fuente",
-                label="Sensor FIRMS",
-                kind="select",
-                default="viirs",
-                options=[
-                    ParamOption(value="viirs", label="VIIRS NOAA-20 + NOAA-21 (375 m)"),
-                    ParamOption(value="modis", label="MODIS Aqua + Terra (1 km)"),
-                    ParamOption(value="snpp", label="Suomi NPP (publica intermitente)"),
-                    ParamOption(value="todos", label="Todos los sensores"),
-                ],
-                help="VIIRS es el que tiene sentido a 250 m/px; MODIS detecta menos",
-                enabled_when={"firms": True},
-            ),
-            ParamSpec(
-                name="firms_ventana",
-                label="Ventana de focos",
-                kind="select",
-                default="dia",
-                options=[
-                    ParamOption(value="dia", label="Día UTC completo"),
-                    ParamOption(value="3h", label="± 3 horas"),
-                    ParamOption(value="6h", label="± 6 horas"),
-                    ParamOption(value="12h", label="± 12 horas"),
-                ],
-                help="el día completo acompaña a los compuestos diarios; las horas "
-                     "son para GeoColor (VIIRS pasa ~05 y ~17 UTC)",
-                enabled_when={"firms": True},
-            ),
+            *_params_firms(),
         ],
     ),
     Product(

@@ -1117,6 +1117,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
             # La mediana 3x3 y el desenfoque de 0.8 px borronean las nubes:
             # a 2712 px se nota. Se apagan salvo que se pida el look suave.
             centro += ["--no-mediana", "--suavizado", "0"]
+        firms_flags = _flags_firms(params, work)
         if animar and n > 1:
             render_step = Step(
                 kind="render",
@@ -1129,7 +1130,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                     "--fondo", "oscuro",
                     "--no-lineas", "--no-fronteras", "--borde", _borde_paraguay(params),
                     *(["--limpio"] if _bool(params, "paraguay") else []),
-                    *centro,
+                    *centro, *firms_flags,
                     "--n", str(n),
                     "--paso", str(paso),
                     "--frames", str(work / "frames"),
@@ -1148,13 +1149,17 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                     "--fondo", "oscuro",
                     "--no-lineas", "--no-fronteras", "--borde", _borde_paraguay(params),
                     *(["--limpio"] if _bool(params, "paraguay") else []),
-                    *centro,
+                    *centro, *firms_flags,
                     "--out", str(work / f"truecolor_{desde:%Y-%m-%dT%H%M}.png"),
                 ],
                 expected=1,
             )
 
-    pasos = [descarga, render_step]  # el origen se consulta en cada corrida
+    # El disco nativo lo dibuja otro script, que no sabe de focos: sólo el globo.
+    focos = (None if disco else
+             _paso_firms(params, desde, desde + timedelta(minutes=paso * n),
+                         work, mundo=not _bool(params, "paraguay")))
+    pasos = [descarga, *([focos] if focos else []), render_step]  # el origen se consulta en cada corrida
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -1645,6 +1650,7 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
         "--borde", _borde_paraguay(params),
         *(["--limpio"] if _bool(params, "paraguay") else []),
     ]
+    comunes += _flags_firms(params, work)
     if animar and n > 1:
         render_step = Step(
             kind="render",
@@ -1662,7 +1668,71 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
             expected=1,
         )
 
-    return Plan(pasos=[descarga, render_step], descarga=descarga)
+    focos = _paso_firms(params, desde, desde + timedelta(minutes=paso * n),
+                        work, mundo=not _bool(params, "paraguay"))
+    pasos = [descarga, *([focos] if focos else []), render_step]
+    return Plan(pasos=pasos, descarga=descarga)
+
+
+# --- FIRMS: los focos de calor de una captura o de una serie --------------
+def _firms_carpeta(work: Path) -> Path:
+    """Carpeta de los CSV de focos: el render la recibe como `--firms-entrada`."""
+    return work / "firms"
+
+
+def _firms_modo(params: dict[str, Any]) -> str:
+    modo = str(params.get("firms_ventana", "dia"))
+    return modo if modo in _VENTANAS_FIRMS else "dia"
+
+
+def _firms_fuente(params: dict[str, Any]) -> str:
+    fuente = str(params.get("firms_fuente", "viirs"))
+    return fuente if fuente in _FUENTES_FIRMS else "viirs"
+
+
+def _paso_firms(params: dict[str, Any], desde: datetime, hasta: datetime,
+                work: Path, mundo: bool) -> Step | None:
+    """Paso que baja los focos de la ventana que cubre los cuadros.
+
+    `mundo` es para los pósters de globo: el disco entero puede mostrar incendios
+    fuera de Paraguay, así que recortar a la caja del país los perdería.
+    """
+    if not _bool(params, "firms"):
+        return None
+    modo = _firms_modo(params)
+    # Con `dia` el CSV cubre días completos; con horas, se abre a cada lado para
+    # que el primer y el último cuadro tengan focos.
+    margen = (timedelta(0) if modo == "dia"
+              else timedelta(hours=int(modo.removesuffix("h"))))
+    inicio, fin = min(desde, hasta) - margen, max(desde, hasta) + margen
+    if modo == "dia":
+        inicio = inicio.replace(hour=0, minute=0, second=0, microsecond=0)
+        fin = fin.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    args = [
+        "--desde", inicio.strftime("%Y-%m-%dT%H:%M"),
+        "--hasta", fin.strftime("%Y-%m-%dT%H:%M"),
+        "--fuente", _firms_fuente(params),
+        "--out", str(_firms_carpeta(work)),
+    ]
+    if mundo:
+        args.append("--mundo")
+    else:
+        args += ["--margen", f"{_margen_paraguay(params):g}"]
+    return Step(
+        kind="download",
+        label="bajando los focos de FIRMS",
+        script="descargar/firms.py",
+        args=args,
+        expected=2,
+    )
+
+
+def _flags_firms(params: dict[str, Any], work: Path) -> list[str]:
+    """Banderas del render para dibujar los focos, o [] si el toggle está apagado."""
+    if not _bool(params, "firms"):
+        return []
+    return ["--firms", "--firms-ventana", _firms_modo(params),
+            "--firms-entrada", str(_firms_carpeta(work))]
 
 
 # --- GOES: Sandwich (visible + IR realzado) ----------------------------

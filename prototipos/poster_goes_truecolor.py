@@ -73,6 +73,7 @@ from poster_goes_realista import (  # noqa: E402
     time_label_nc,
 )
 from poster_mur_realista import sombra_exterior  # noqa: E402
+from firms import VENTANAS, color_hex, filtrar, leer_carpeta, ventana  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
 
 # ------------------------------------------------------------------------ constantes
@@ -470,7 +471,7 @@ def render(nc_bandas: dict[str, Path], args) -> tuple:
         "px": args.px,
     }
     fig = dibujar(rgba, escala, args.titulo, time_label_nc(nc01), args.fuente, args,
-                  args.px)
+                  args.px, _focos_de(args, t_slot))
     return fig, rgba, alfa, stats
 
 
@@ -487,7 +488,51 @@ def _geometria(px: int, dpi: int | None):
     return ancho_in, alto_in, dpi, (1 - gw) / 2, 0.058, gw, gh
 
 
-def dibujar(disco, escala, titulo, tiempo, fuente, args, px):
+_CACHE_FOCOS: dict[str, list] = {}
+
+
+def _focos_de(args, cuando: datetime) -> list:
+    """Focos de FIRMS de este cuadro, o [] si el toggle está apagado.
+
+    El CSV se lee una sola vez por carpeta: una serie de 24 cuadros no vuelve a
+    abrir el archivo 24 veces.
+    """
+    carpeta = getattr(args, "firms_entrada", None)
+    if not getattr(args, "firms", False) or not carpeta:
+        return []
+    if carpeta not in _CACHE_FOCOS:
+        _CACHE_FOCOS[carpeta] = leer_carpeta(carpeta)
+    desde, hasta = ventana(cuando, getattr(args, "firms_ventana", "dia"))
+    return filtrar(_CACHE_FOCOS[carpeta], desde, hasta)
+
+
+def _pintar_focos(ax, focos, centro, escala, px: int, dpi: float) -> None:
+    """Marca los focos sobre el globo con la misma proyección que el contorno.
+
+    `px` es el diámetro del disco en píxeles y el eje va de -1 a 1: el marcador se
+    calcula en puntos, así se ve igual a cualquier `--px`.
+    """
+    if not focos:
+        return
+    x, y = _orto_directo(np.array([f.lon for f in focos], dtype=float),
+                         np.array([f.lat for f in focos], dtype=float),
+                         centro, escala)
+    x, y = np.asarray(x), np.asarray(y)
+    # Fuera del disco visible no se dibuja: ese foco está del otro lado del planeta.
+    visible = np.hypot(x, y) <= 1.0
+    if not visible.any():
+        return
+    colores = [color_hex(f.confianza) for f, dentro in zip(focos, visible) if dentro]
+    diametro = max(4.0, px * 0.0085) * 72.0 / dpi
+    ax.scatter(x[visible], y[visible], s=(diametro * 1.75) ** 2, c="#000000",
+               alpha=0.30, linewidths=0, zorder=8.6)
+    ax.scatter(x[visible], y[visible], s=diametro ** 2, c=colores,
+               alpha=0.90, linewidths=0, zorder=9)
+    ax.scatter(x[visible], y[visible], s=(diametro * 0.42) ** 2, c="#fff8dc",
+               alpha=0.92, linewidths=0, zorder=9.1)
+
+
+def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
     """Dibuja el globo con el diseÃ±o del pÃ³ster realista (sin tarjeta: no hay escala)."""
     import matplotlib
     matplotlib.use("Agg")
@@ -526,6 +571,7 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px):
                                                  alpha=0.45, zorder=7))
                 ax.add_collection(LineCollection(segs, colors="#ffffff", linewidths=1.0,
                                                  alpha=0.95, zorder=8))
+        _pintar_focos(ax, focos, centro, escala, px, dpi)
         return fig
 
     fig = plt.figure(figsize=(ancho_in, alto_in), dpi=dpi)
@@ -588,6 +634,8 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px):
                                              alpha=0.45, zorder=7))
             ax.add_collection(LineCollection(segs, colors="#ffffff", linewidths=1.0,
                                              alpha=0.95, zorder=8))
+
+    _pintar_focos(ax, focos, centro, escala, px, dpi)
 
     # Sin aro de limbo: en un pÃ³ster de color real el borde lo define el alfa del disco.
     # El cÃ­rculo del pÃ³ster tÃ©rmico, sobre el negro de la noche, se leÃ­a como un aro
@@ -673,8 +721,16 @@ def main(argv=None) -> int:
     ap.add_argument("--n", type=int, default=1, help="cantidad de cuadros de la serie")
     ap.add_argument("--paso", type=int, default=10, help="minutos entre cuadros")
     ap.add_argument("--forzar", action="store_true", help="rehace cuadros ya existentes")
+    ap.add_argument("--firms", action="store_true",
+                    help="superpone los focos de calor de NASA FIRMS")
+    ap.add_argument("--firms-ventana", default=VENTANAS[0], choices=VENTANAS,
+                    help="ventana de focos: dia = dia UTC completo (default)")
+    ap.add_argument("--firms-entrada",
+                    help="carpeta con los CSV de focos (los deja descargar/firms.py)")
     args = ap.parse_args(argv)
     args.fuente = args.fuente.replace("{sat}", args.sat)
+    if args.firms:
+        args.fuente = f"{args.fuente} | FIRMS hotspots"
 
     if args.fondo == "oscuro":
         # Mismo póster, tinta invertida: sobre negro la tinta oscura no se lee.

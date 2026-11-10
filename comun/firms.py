@@ -51,6 +51,24 @@ MAX_DIAS = 5
 _CONFIANZA = {"l": "baja", "n": "nominal", "h": "alta"}
 _LETRA = {"baja": "l", "nominal": "n", "alta": "h"}
 
+#: Paleta única para todos los renders: el compositor la usa en RGB y los pósters
+#: en hex, así un foco no cambia de color según el producto.
+COLORES_FOCO = {
+    "baja": (255, 209, 64),
+    "nominal": (255, 138, 26),
+    "alta": (255, 61, 0),
+}
+
+
+def color_foco(confianza: str) -> tuple[int, int, int]:
+    """Color RGB del foco según la confianza (nominal si viene raro)."""
+    return COLORES_FOCO.get(confianza, COLORES_FOCO["nominal"])
+
+
+def color_hex(confianza: str) -> str:
+    """El mismo color, en hex, para matplotlib."""
+    return "#%02x%02x%02x" % color_foco(confianza)
+
 #: Columnas que se conservan al normalizar el CSV (las mismas que lee `leer_texto`).
 COLUMNAS = ("latitude", "longitude", "frp", "confidence", "acq_date", "acq_time",
             "satellite", "instrument", "daynight")
@@ -90,7 +108,13 @@ def clave_mapa() -> str:
 
 
 def caja_texto(caja) -> str:
-    """`oeste,sur,este,norte` como lo pide la API (5 decimales, sin espacios)."""
+    """`oeste,sur,este,norte` como lo pide la API (5 decimales, sin espacios).
+
+    Acepta `"world"` tal cual: un póster de disco completo no tiene recorte regional
+    y la API tiene ese atajo documentado.
+    """
+    if isinstance(caja, str):
+        return caja
     o, s, e, n = (float(v) for v in caja)
     return f"{o:.5f},{s:.5f},{e:.5f},{n:.5f}"
 
@@ -118,10 +142,14 @@ def ventana(cuando: datetime, modo: str = VENTANA) -> tuple[datetime, datetime]:
     return base - timedelta(hours=horas), base + timedelta(hours=horas)
 
 
+def nombre_csv_rango(desde: datetime, hasta: datetime) -> str:
+    """Nombre del CSV de un rango (`[desde, hasta)`) ya resuelto."""
+    return f"focos_{desde:%Y%m%dT%H%M}_{hasta:%Y%m%dT%H%M}.csv"
+
+
 def nombre_csv(cuando: datetime, modo: str = VENTANA) -> str:
     """Nombre del CSV de focos de esa ventana (igual en los dos scripts)."""
-    desde, hasta = ventana(cuando, modo)
-    return f"focos_{desde:%Y%m%dT%H%M}_{hasta:%Y%m%dT%H%M}.csv"
+    return nombre_csv_rango(*ventana(cuando, modo))
 
 
 def etiqueta(cuando: datetime, modo: str = VENTANA) -> str:
@@ -200,6 +228,21 @@ def leer_texto(texto: str) -> list[Foco]:
 def leer(ruta: Path) -> list[Foco]:
     """Focos de un CSV ya guardado en disco."""
     return leer_texto(Path(ruta).read_text(encoding="utf-8", errors="replace"))
+
+
+def leer_carpeta(carpeta) -> list[Foco]:
+    """Todos los focos de la carpeta, uniendo los `focos_*.csv` que haya.
+
+    Es lo que usan los renders de serie: el descargador deja un CSV por rango y el
+    render no necesita saber cómo se llaman ni cuántos días cubren.
+    """
+    focos: list[Foco] = []
+    for ruta in sorted(Path(carpeta).glob("focos_*.csv")):
+        try:
+            focos.extend(leer(ruta))
+        except OSError:
+            continue
+    return focos
 
 
 def fila(foco: Foco) -> dict[str, str]:

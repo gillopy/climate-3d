@@ -365,5 +365,79 @@ class CapturaApagada(unittest.TestCase):
                          (-63.145, -28.104, -53.756, -18.797))
 
 
+class Carpeta(unittest.TestCase):
+    """El render de serie lee todos los CSV de la carpeta, sin saber sus nombres."""
+
+    def test_une_los_focos_de_la_carpeta(self):
+        carpeta = Path(tempfile.mkdtemp(prefix="firms-"))
+        try:
+            firms.escribir(carpeta / "focos_a.csv",
+                           firms.leer_texto(f"{CABECERA}\n{FILA_VIIRS}\n"))
+            firms.escribir(carpeta / "focos_b.csv",
+                           firms.leer_texto(f"{CABECERA}\n{FILA_MODIS}\n"))
+            (carpeta / "otro.csv").write_text(f"{CABECERA}\n{FILA_VIIRS}\n",
+                                              encoding="utf-8")
+            self.assertEqual(len(firms.leer_carpeta(carpeta)), 2)
+        finally:
+            shutil.rmtree(carpeta, ignore_errors=True)
+
+    def test_una_carpeta_que_no_existe_no_rompe(self):
+        self.assertEqual(firms.leer_carpeta(Path("C:/no/existe/firms")), [])
+
+
+class Tajadas(unittest.TestCase):
+    """La API acepta 5 días por pedido: las tajadas no se solapan."""
+
+    def test_tajadas_de_cinco_dias_sin_solape(self):
+        modulo = _descargador()
+        trozos = list(modulo._trozos(datetime(2026, 11, 1), datetime(2026, 11, 13)))
+        self.assertEqual(trozos, [(date(2026, 11, 1), 5), (date(2026, 11, 6), 5),
+                                  (date(2026, 11, 11), 2)])
+        self.assertEqual(sum(dias for _, dias in trozos), 12)
+
+
+class PosterGoes(unittest.TestCase):
+    """Fire Temperature y color real llevan el toggle; los otros RGB no."""
+
+    def test_los_dos_posteres_lo_exponen(self):
+        for pid in ("goes_firetemp", "goes_truecolor"):
+            nombres = {s.name: s for s in catalog.get_product(pid).params}
+            self.assertIn("firms", nombres, pid)
+            self.assertFalse(nombres["firms"].default, pid)
+            self.assertEqual(nombres["firms_ventana"].enabled_when,
+                             {"firms": True}, pid)
+
+    def test_los_demas_rgb_quedan_intactos(self):
+        for pid in ("goes_dust", "goes_airmass", "goes_sandwich", "goes_c13"):
+            nombres = {s.name for s in catalog.get_product(pid).params}
+            self.assertNotIn("firms", nombres, pid)
+
+    def test_el_paso_del_globo_pide_el_mundo_y_dias_completos(self):
+        paso = recipes._paso_firms({"firms": True, "firms_ventana": "dia"},
+                                   datetime(2026, 11, 8, 15),
+                                   datetime(2026, 11, 9, 2),
+                                   Path("w"), mundo=True)
+        self.assertEqual(paso.script, "descargar/firms.py")
+        args = paso.args
+        self.assertIn("--mundo", args)
+        self.assertEqual(args[args.index("--desde") + 1], "2026-11-08T00:00")
+        self.assertEqual(args[args.index("--hasta") + 1], "2026-11-10T00:00")
+        self.assertEqual(args[args.index("--out") + 1], str(Path("w") / "firms"))
+
+    def test_apagado_no_agrega_paso_ni_banderas(self):
+        self.assertIsNone(recipes._paso_firms({}, datetime(2026, 11, 8),
+                                              datetime(2026, 11, 8),
+                                              Path("w"), mundo=True))
+        self.assertEqual(recipes._flags_firms({}, Path("w")), [])
+
+    def test_las_banderas_del_render_llevan_la_ventana(self):
+        flags = recipes._flags_firms({"firms": True, "firms_ventana": "6h"},
+                                     Path("w"))
+        self.assertIn("--firms", flags)
+        self.assertEqual(flags[flags.index("--firms-ventana") + 1], "6h")
+        self.assertEqual(flags[flags.index("--firms-entrada") + 1],
+                         str(Path("w") / "firms"))
+
+
 if __name__ == "__main__":
     unittest.main()

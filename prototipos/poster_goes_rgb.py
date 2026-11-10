@@ -181,6 +181,12 @@ def main(argv=None) -> int:
     ap.add_argument("--out", help="PNG de salida")
     ap.add_argument("--frames", help="carpeta de cuadros")
     ap.add_argument("--forzar", action="store_true")
+    ap.add_argument("--firms", action="store_true",
+                    help="superpone los focos de calor de NASA FIRMS")
+    ap.add_argument("--firms-ventana", default=tc.VENTANAS[0], choices=tc.VENTANAS,
+                    help="ventana de focos: dia = dia UTC completo (default)")
+    ap.add_argument("--firms-entrada",
+                    help="carpeta con los CSV de focos (los deja descargar/firms.py)")
     args = ap.parse_args(argv)
 
     receta = RECETAS[args.producto]
@@ -197,6 +203,8 @@ def main(argv=None) -> int:
     args.fuente = args.fuente or (
         f"SOURCE: NOAA/NESDIS {args.sat} ABI L2 CMIP | {canales}"
     )
+    if args.firms:
+        args.fuente = f"{args.fuente} | FIRMS hotspots"
 
     desde = datetime.fromisoformat(args.desde) if args.desde else None
     lista = slots_producto(args.producto, args.sat, desde, args.n, args.paso, args.ultimos)
@@ -211,7 +219,8 @@ def main(argv=None) -> int:
                 continue
             disco, escala, _ = componer_disco(paths, args)
             sello = time_label_nc(paths[bandas(args.producto)[0]])
-            fig = tc.dibujar(disco, escala, args.titulo, sello, args.fuente, args, args.px)
+            fig = tc.dibujar(disco, escala, args.titulo, sello, args.fuente, args,
+                             args.px, tc._focos_de(args, instante))
             parcial = destino.with_suffix(".png.parcial")
             fig.savefig(parcial, format="png", facecolor=tc.WHITE)
             import matplotlib.pyplot as plt
@@ -229,7 +238,7 @@ def main(argv=None) -> int:
     print(f"disco {stats['px']} px | {stats['validos']:,} px con dato")
 
     fig = tc.dibujar(disco, escala, args.titulo, time_label_nc(paths[bandas(args.producto)[0]]),
-                     args.fuente, args, args.px)
+                     args.fuente, args, args.px, tc._focos_de(args, instante))
     out = Path(args.out) if args.out else (
         SALIDAS / f"poster_{args.sat}_{args.producto}_{instante:%Y-%m-%dT%H%M}.png")
     out.parent.mkdir(parents=True, exist_ok=True)

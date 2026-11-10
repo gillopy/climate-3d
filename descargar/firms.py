@@ -34,8 +34,8 @@ import requests
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 from firms import (FUENTE, FUENTES, MAX_DIAS, VENTANA, VENTANAS,  # noqa: E402
-                   clave_mapa, escribir, etiqueta, filtrar, leer_texto,
-                   nombre_csv, url_focos, ventana)
+                   caja_texto, clave_mapa, escribir, etiqueta, filtrar,
+                   leer_texto, nombre_csv_rango, url_focos, ventana)
 from paraguay import GEOJSON, MARGEN, caja_geojson, crudo_mas_nuevo, ts_de_crudo  # noqa: E402
 
 TIMEOUT = 60
@@ -106,30 +106,47 @@ def _dias(desde: datetime, hasta: datetime) -> int:
     return max(1, min(MAX_DIAS, (ultimo.date() - desde.date()).days + 1))
 
 
-def descargar(caja, instante: datetime, destino: Path, fuente: str = FUENTE,
+def _trozos(desde: datetime, hasta: datetime):
+    """Tajadas de días que la API acepta (máximo `MAX_DIAS`, sin solaparse).
+
+    La API devuelve días completos: pedir dos veces el mismo día duplicaría focos,
+    así que las tajadas son disjuntas y el filtro fino se hace después.
+    """
+    dia, ultimo = desde.date(), (hasta - timedelta(seconds=1)).date()
+    while dia <= ultimo:
+        dias = min(MAX_DIAS, (ultimo - dia).days + 1)
+        yield dia, dias
+        dia += timedelta(days=dias)
+
+
+def descargar(caja, instante: datetime | None, destino: Path, fuente: str = FUENTE,
               modo: str = VENTANA, clave: str | None = None,
-              reintentos: int = REINTENTOS) -> tuple[Path, list]:
-    """Baja los focos de la ventana y los deja en `destino`. Devuelve `(ruta, focos)`."""
-    desde, hasta = ventana(instante, modo)
-    dias = _dias(desde, hasta)
+              reintentos: int = REINTENTOS, desde: datetime | None = None,
+              hasta: datetime | None = None) -> tuple[Path, list]:
+    """Baja los focos de la ventana y los deja en `destino`.
+
+    La ventana puede venir de un instante + `modo` (una captura) o de `desde`/`hasta`
+    (una serie). Devuelve `(ruta, focos)`.
+    """
+    if desde is None or hasta is None:
+        desde, hasta = ventana(instante, modo)
     clave = clave or clave_mapa()
     focos = []
-    for nombre in FUENTES.get(fuente, FUENTES[FUENTE]):
-        url = url_focos(clave, nombre, caja, desde.date(), dias)
-        try:
-            texto = _pedir(url, reintentos, clave)
-        except SystemExit:
-            raise
-        except Exception as exc:
-            _aviso(f"{nombre}: {type(exc).__name__}: {_sin_clave(str(exc), clave)}")
-            continue
-        encontrados = leer_texto(texto)
-        en_ventana = filtrar(encontrados, desde, hasta)
-        if encontrados and not en_ventana:
-            _aviso(f"{nombre}: {len(encontrados)} focos en el día, 0 en la ventana "
-                   f"{etiqueta(instante, modo)}")
-        print(f"  {nombre}: {len(en_ventana)} focos", flush=True)
-        focos.extend(en_ventana)
+    for dia, dias in _trozos(desde, hasta):
+        for nombre in FUENTES.get(fuente, FUENTES[FUENTE]):
+            url = url_focos(clave, nombre, caja, dia, dias)
+            try:
+                texto = _pedir(url, reintentos, clave)
+            except SystemExit:
+                raise
+            except Exception as exc:
+                _aviso(f"{nombre}: {type(exc).__name__}: {_sin_clave(str(exc), clave)}")
+                continue
+            encontrados = leer_texto(texto)
+            en_ventana = filtrar(encontrados, desde, hasta)
+            print(f"  {nombre} {dia:%Y-%m-%d}+{dias}d: {len(en_ventana)} focos",
+                  flush=True)
+            focos.extend(en_ventana)
     focos.sort(key=lambda foco: foco.cuando)
     return escribir(destino, focos), focos
 
@@ -157,6 +174,10 @@ def main(argv=None) -> int:
     ap.add_argument("--geojson", default=str(GEOJSON),
                     help="GeoJSON que define la cobertura")
     ap.add_argument("--entrada", help="carpeta de crudos (para --ultima)")
+    ap.add_argument("--desde", help="inicio ISO de la ventana (para una serie)")
+    ap.add_argument("--hasta", help="fin ISO de la ventana (para una serie)")
+    ap.add_argument("--mundo", action="store_true",
+                    help="caja `world`: todo el planeta, para un póster de disco")
     ap.add_argument("--out", help="carpeta donde dejar el CSV (por defecto --entrada)")
     ap.add_argument("--clave", help="MAP_KEY (por defecto, entorno o datos/firms_map_key.txt)")
     ap.add_argument("--reintentos", type=int, default=REINTENTOS,
@@ -176,19 +197,32 @@ def main(argv=None) -> int:
     if args.ventana not in VENTANAS:
         raise SystemExit(f"--ventana desconocida: {args.ventana!r}.")
 
-    caja = caja_geojson(Path(args.geojson), args.margen)
     entrada = Path(args.entrada) if args.entrada else Path(args.out or ".")
     salida = Path(args.out) if args.out else entrada
-    instante = _instante(args, entrada)
-    desde, hasta = ventana(instante, args.ventana)
+    caja = "world" if args.mundo else caja_geojson(Path(args.geojson), args.margen)
 
-    print(f"FIRMS {args.fuente} | captura {instante:%Y-%m-%d %H:%M} UTC | "
-          f"ventana {etiqueta(instante, args.ventana)}")
-    print(f"caja: {caja}")
+    if args.desde or args.hasta:
+        # Ventana explícita (series): el render filtra cuadro por cuadro.
+        desde = (datetime.fromisoformat(args.desde) if args.desde
+                 else datetime.fromisoformat(args.hasta))
+        hasta = (datetime.fromisoformat(args.hasta) if args.hasta
+                 else datetime.fromisoformat(args.desde))
+        if hasta <= desde:
+            raise SystemExit(f"ventana vacía: --desde {desde} --hasta {hasta}.")
+        instante = desde
+        print(f"FIRMS {args.fuente} | ventana {desde:%Y-%m-%d %H:%M} a "
+              f"{hasta:%Y-%m-%d %H:%M} UTC")
+    else:
+        instante = _instante(args, entrada)
+        desde, hasta = ventana(instante, args.ventana)
+        print(f"FIRMS {args.fuente} | captura {instante:%Y-%m-%d %H:%M} UTC | "
+              f"ventana {etiqueta(instante, args.ventana)}")
+
+    print(f"caja: {caja_texto(caja)}")
     ruta, focos = descargar(
-        caja, instante, salida / nombre_csv(instante, args.ventana),
+        caja, instante, salida / nombre_csv_rango(desde, hasta),
         fuente=args.fuente, modo=args.ventana, clave=args.clave,
-        reintentos=args.reintentos)
+        reintentos=args.reintentos, desde=desde, hasta=hasta)
     if not focos:
         _aviso("sin focos en la ventana: la captura sale sin overlay")
     print(f"listo: {ruta} ({len(focos)} focos, {ruta.stat().st_size / 1024:.1f} KB)")

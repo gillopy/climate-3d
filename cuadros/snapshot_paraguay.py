@@ -32,8 +32,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
-from firms import (VENTANAS, etiqueta, filtrar, leer, nombre_csv,  # noqa: E402
-                   ventana)
+from firms import (VENTANAS, color_foco, etiqueta, filtrar, leer,  # noqa: E402
+                   nombre_csv, ventana)
 from paraguay import (MARGEN, caja_geojson, crudo_mas_nuevo,  # noqa: E402
                       nombre_captura, px_para_mpp, ts_de_crudo)
 from rutas import SALIDAS  # noqa: E402
@@ -51,13 +51,9 @@ BORDE_ANCHO = 0.0                      # 0 = automático (1,6 px por cada 1600 p
 SOMBRA_ANCHO = 2.4
 SOMBRA_ALFA = 55
 
-# Focos de FIRMS: color por confianza y tamaño por FRP. El halo oscuro los hace
-# legibles sobre nube blanca y el núcleo casi blanco marca el centro del píxel.
-COLORES_FOCO = {
-    "baja": (255, 209, 64),
-    "nominal": (255, 138, 26),
-    "alta": (255, 61, 0),
-}
+# Focos de FIRMS: color por confianza (paleta compartida en `comun/firms.py`) y
+# tamaño por FRP. El halo oscuro los hace legibles sobre nube blanca y el núcleo
+# casi blanco marca el centro del píxel.
 FOCO_RADIO = 0.0028                    # radio base como fracción del lado
 
 # Fuentes candidatas para el crédito opcional (si no hay ninguna, no se dibuja).
@@ -141,8 +137,7 @@ def dibujar_focos(imagen: Image.Image, caja, focos, lado: int) -> Image.Image:
         x, y = _a_pixel(foco.lon, foco.lat, caja, lado, escala)
         # El FRP manda el tamaño, con techo: un foco de 200 MW no tapa la captura.
         radio = min(base * (1.0 + min(foco.frp, 100.0) ** 0.5 / 8.0), base * 3.0)
-        _punto(lapiz, x, y, radio * escala,
-               COLORES_FOCO.get(foco.confianza, COLORES_FOCO["nominal"]))
+        _punto(lapiz, x, y, radio * escala, color_foco(foco.confianza))
     capa = capa.resize((lado, lado), Image.LANCZOS)
     salida = imagen.convert("RGBA").copy()
     salida.alpha_composite(capa)
