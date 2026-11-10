@@ -18,7 +18,7 @@ import sys
 import tempfile
 import types
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -129,6 +129,119 @@ class UltimoDisponible(unittest.TestCase):
         self.assertEqual(render.args[render.args.index("--n") + 1], "1")
         # Un snapshot nunca arma video, aunque el slot salga de "los últimos".
         self.assertFalse([paso for paso in plan.pasos if paso.kind == "animate"])
+
+
+class RespaldoDeSnapshot(unittest.TestCase):
+    """Un slot que la fuente todavía no publicó cae al más nuevo, solo."""
+
+    def _ahora(self):
+        return datetime.now(timezone.utc).replace(tzinfo=None, second=0, microsecond=0)
+
+    def test_un_slot_no_publicado_usa_el_ultimo(self):
+        pedido = self._ahora() - timedelta(minutes=30)
+        ultimo = pedido - timedelta(minutes=60)
+        with mock.patch.object(recipes, "_slot_pedido", return_value=pedido):
+            slot = recipes._slot_snapshot({}, pedido.date(), lambda n: [ultimo])
+        self.assertEqual(slot, ultimo)
+
+    def test_un_slot_ya_publicado_se_respeta(self):
+        pedido = self._ahora() - timedelta(minutes=30)
+        with mock.patch.object(recipes, "_slot_pedido", return_value=pedido):
+            slot = recipes._slot_snapshot({}, pedido.date(), lambda n: [pedido])
+        self.assertEqual(slot, pedido)
+
+    def test_una_fecha_vieja_no_se_toca(self):
+        viejo = datetime(2026, 1, 1, 15)
+        with mock.patch.object(recipes, "_slot_pedido", return_value=viejo):
+            slot = recipes._slot_snapshot({}, viejo.date(),
+                                          lambda n: [datetime(2026, 11, 10, 13, 30)])
+        self.assertEqual(slot, viejo)
+
+    def test_si_el_sondeo_falla_se_intenta_el_slot_pedido(self):
+        pedido = self._ahora() - timedelta(minutes=30)
+
+        def rompe(_):
+            raise OSError("sin red")
+
+        with mock.patch.object(recipes, "_slot_pedido", return_value=pedido):
+            slot = recipes._slot_snapshot({}, pedido.date(), rompe)
+        self.assertEqual(slot, pedido)
+
+
+class CarpetaDeCuadros(unittest.TestCase):
+    """El render encuentra lo que bajó el descargador, aunque haya retrocedido."""
+
+    def _modulo(self):
+        sys.path.insert(0, str(RAIZ / "cuadros"))
+        import cuadros_geocolor  # noqa: PLC0415 - importa cartopy/matplotlib
+        return cuadros_geocolor
+
+    def _crear(self, salida: Path, instante: str) -> Path:
+        carpeta = salida / f"frames_geocolor_plano_G19_{instante}_1f_1400px"
+        carpeta.mkdir(parents=True, exist_ok=True)
+        (carpeta / "crudo_001.jpg").write_bytes(b"jpeg")
+        return carpeta
+
+    def test_lee_el_instante_del_nombre(self):
+        modulo = self._modulo()
+        self.assertEqual(
+            modulo.ts_de_frames("frames_geocolor_globo_G19_2026-11-10T1330_1f_1400px"),
+            datetime(2026, 11, 10, 13, 30))
+        self.assertIsNone(modulo.ts_de_frames("cualquier_cosa"))
+
+    def test_prefiere_la_carpeta_del_slot_pedido(self):
+        modulo = self._modulo()
+        salida = Path(tempfile.mkdtemp(prefix="frames-"))
+        try:
+            exacta = self._crear(salida, "2026-11-10T1400")
+            self._crear(salida, "2026-11-10T1350")
+            args = types.SimpleNamespace(n=1, px=1400)
+            carpeta = modulo._carpeta_de_frames(salida, "plano", "G19",
+                                                datetime(2026, 11, 10, 14, 0), args)
+            self.assertEqual(carpeta, exacta)
+        finally:
+            shutil.rmtree(salida, ignore_errors=True)
+
+    def test_si_el_slot_pedido_no_bajo_usa_el_que_si(self):
+        modulo = self._modulo()
+        salida = Path(tempfile.mkdtemp(prefix="frames-"))
+        try:
+            respaldo = self._crear(salida, "2026-11-10T1350")
+            args = types.SimpleNamespace(n=1, px=1400)
+            carpeta = modulo._carpeta_de_frames(salida, "plano", "G19",
+                                                datetime(2026, 11, 10, 14, 0), args)
+            self.assertEqual(carpeta, respaldo)
+        finally:
+            shutil.rmtree(salida, ignore_errors=True)
+
+
+class RespaldoDeDescarga(unittest.TestCase):
+    """Un snapshot que GIBS no entrega retrocede un slot en vez de morir."""
+
+    def test_retrocede_hasta_el_primero_que_baja(self):
+        spec = importlib.util.spec_from_file_location(
+            "geocolor_descarga", RAIZ / "descargar" / "geocolor.py")
+        modulo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(modulo)
+        salida = Path(tempfile.mkdtemp(prefix="geocolor-"))
+        intentos = []
+
+        def descarga(t, _caja, _ancho, _alto, destino, _capa):
+            intentos.append(t)
+            if t.minute >= 10:
+                raise ValueError("cuadro sin dato")
+            Path(destino).write_bytes(b"jpeg")
+
+        args = types.SimpleNamespace(n=1, paso=10, px=1400, respaldo=4)
+        try:
+            with mock.patch.object(modulo, "descargar_cuadro", descarga):
+                usado = modulo._slot_con_dato(
+                    datetime(2026, 11, 10, 14, 30), salida, "plano", "G19", args,
+                    (-165.0, -80.0, 15.0, 80.0), 1400, 1244, "capa")
+        finally:
+            shutil.rmtree(salida, ignore_errors=True)
+        self.assertEqual(usado, datetime(2026, 11, 10, 14, 0))
+        self.assertEqual(len(intentos), 4)          # 14:30, 14:20, 14:10, 14:00
 
 
 if __name__ == "__main__":

@@ -176,6 +176,37 @@ def descargar_cuadro(t: datetime, bbox, ancho: int, alto: int, destino: Path,
     return destino
 
 
+def _slot_con_dato(t0: datetime, salida: Path, vista: str, sat: str, args,
+                   caja, src_px: int, src_alto: int, capa: str) -> datetime:
+    """Para un snapshot: el primer slot que se puede bajar, retrocediendo `paso`.
+
+    GIBS puede devolver un cuadro negro (o 503) para un gránulo que su miniatura daba
+    por bueno; la miniatura se valida a 320 px y el render real a tamaño completo.
+    Con una serie el hueco se saltea; con un solo cuadro no hay nada que mostrar, así
+    que se prueba el anterior antes de rendirse.
+    """
+    saltos = args.respaldo if args.n == 1 else 0
+    for salto in range(0, saltos + 1):
+        t = t0 - timedelta(minutes=args.paso * salto)
+        etiqueta = f"geocolor_{vista}_{sat}_{t:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px"
+        frames_dir = salida / f"frames_{etiqueta}"
+        if (frames_dir / "crudo_001.jpg").exists():
+            return t
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            descargar_cuadro(t, caja, src_px, src_alto,
+                             frames_dir / "crudo_001.jpg", capa)
+        except Exception as exc:  # noqa: BLE001 - se prueba el anterior
+            print(f"  aviso: {t:%Y-%m-%d %H:%M} UTC no se pudo bajar ({exc})",
+                  flush=True)
+            continue
+        if salto:
+            print(f"  aviso: uso {t:%Y-%m-%d %H:%M} UTC en vez de "
+                  f"{t0:%Y-%m-%d %H:%M} (GIBS no tenía el pedido)", flush=True)
+        return t
+    return t0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Descarga cuadros GeoColor (GOES-East) desde NASA GIBS.")
@@ -203,6 +234,9 @@ def main(argv=None) -> int:
     ap.add_argument("--sat", default="G19",
                     help="satélite: G19/G16 = GOES-East, G18 = GOES-West (por defecto G19)")
     ap.add_argument("--out", help="carpeta de salida (por defecto, comun.rutas.SALIDAS)")
+    ap.add_argument("--respaldo", type=int, default=4,
+                    help="con un solo cuadro, cuántos slots retroceder si GIBS no lo "
+                         "tiene (por defecto 4; 0 = no retroceder)")
     args = ap.parse_args(argv)
 
     sat = args.sat.upper()
@@ -225,6 +259,9 @@ def main(argv=None) -> int:
     t0 = datetime.fromisoformat(args.desde)
     salida = Path(args.out) if args.out else SALIDAS
     vista = "globo" if args.globo else "plano"
+    # Un snapshot sin dato retrocede solo: la miniatura puede existir y el render no.
+    t0 = _slot_con_dato(t0, salida, vista, sat, args, (o, s, e, n), src_px,
+                        src_alto, capa)
     etiqueta = f"geocolor_{vista}_{sat}_{t0:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px"
     frames_dir = salida / f"frames_{etiqueta}"
     frames_dir.mkdir(parents=True, exist_ok=True)

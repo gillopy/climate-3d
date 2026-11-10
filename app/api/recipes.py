@@ -527,6 +527,33 @@ def _piso_slot(t: datetime, paso: int = _PASO_SLOT) -> datetime:
 #: Hora UTC que propone el formulario para un snapshot (mediodía en Paraguay).
 _HORA_SNAPSHOT = 15
 
+#: Ventana en la que se duda de que el slot pedido exista: GIBS y NOAA publican con
+#: retraso (a veces > 1 h). Fuera de esta ventana la fecha se respeta tal cual.
+_RESPALDO_SNAPSHOT = timedelta(hours=6)
+
+
+def _slot_snapshot(params: dict[str, Any], fin: date, resolver) -> datetime:
+    """Instante del snapshot, con respaldo automático al más nuevo publicado.
+
+    El usuario elige una hora; la fuente puede no tenerla todavía y el job moría sin
+    crudo ("No hay ningún crudo..."). Si el pedido es reciente y cae después de lo
+    último publicado, se usa lo último: la diferencia se ve en el `--desde` del plan
+    y en la primera línea del descargador. Una fecha vieja se respeta siempre.
+    """
+    desde = _slot_pedido(params, fin)
+    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+    if desde <= ahora - _RESPALDO_SNAPSHOT:
+        return desde
+    try:
+        nuevos = resolver(1)
+    except Exception:  # noqa: BLE001 - sin red se intenta el slot pedido igual
+        return desde
+    if nuevos and desde > nuevos[0]:
+        print(f"  aviso: {desde:%Y-%m-%d %H:%M} UTC todavía no está publicado; "
+              f"uso {nuevos[0]:%Y-%m-%d %H:%M} UTC", flush=True)
+        return nuevos[0]
+    return desde
+
 
 def _slot_pedido(params: dict[str, Any], dia: date) -> datetime:
     """Instante exacto del snapshot: la hora y el minuto que eligió el usuario.
@@ -638,7 +665,8 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         desde, n, paso, falta = disponibles_slots[0], len(disponibles_slots), _PASO_SLOT, True
     elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes(sat, banda, k)), 1, _PASO_SLOT, True
     else:
         disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
         lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
@@ -1071,7 +1099,8 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
         )
     elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes(sat, C02, k)), 1, _PASO_SLOT, True
     else:
         disponibles = [s for s in _slots_goes(sat, "C02") if inicio <= s.date() <= fin]
         cenital = _slot_cenital(inicio, lon_sub)
@@ -1259,7 +1288,8 @@ def _himawari(params: dict[str, Any], work: Path) -> Plan:
         )
     elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, _ultimos_himawari), 1, _PASO_SLOT, True
     else:
         disponibles = [s for s in _slots_himawari() if inicio <= s.date() <= fin]
         cenital = _slot_cenital(inicio, _LON_SUBSAT["H09"])
@@ -1324,7 +1354,8 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
         desde, n, paso, falta = slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True
     elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes(sat, banda, k)), 1, _PASO_SLOT, True
     else:
         disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
         lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
@@ -1406,7 +1437,8 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
         desde, n, paso = slots[0], len(slots), _PASO_SLOT
     elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
-        desde, n, paso = _slot_pedido(params, fin), 1, _PASO_SLOT
+        desde, n, paso = _slot_snapshot(
+            params, fin, lambda k: _ultimos_geocolor(sat, k)), 1, _PASO_SLOT
     else:
         ventana = _ventana_animacion(
             inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
@@ -1618,7 +1650,8 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
         slots_nuevos = _ultimos_goes_rgb(sat, producto, n_ultimos)
         desde, n, paso, falta = slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True
     elif _snapshot(params):
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes_rgb(sat, producto, k)), 1, _PASO_SLOT, True
     else:
         disponibles = [
             s for s in _slots_goes_rgb(sat, bandas) if inicio <= s.date() <= fin
@@ -1769,7 +1802,8 @@ def _goes_sandwich(params: dict[str, Any], work: Path) -> Plan:
         slots_nuevos = _ultimos_goes_bandas(sat, _SANDWICH_BANDAS, n_ultimos)
         desde, n, paso, falta = slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True
     elif _snapshot(params):
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes_bandas(sat, _SANDWICH_BANDAS, k)), 1, _PASO_SLOT, True
     else:
         disponibles = [
             s for s in _slots_goes_rgb(sat, _SANDWICH_BANDAS)

@@ -18,6 +18,7 @@ Uso (desde la raíz del proyecto):
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import time
 from datetime import datetime, timedelta
@@ -189,6 +190,39 @@ def _focos_globo(ax, focos, args) -> None:
                    c=(color if color else [color_hex(f.confianza) for f in dentro]),
                    alpha=alpha, linewidths=0,
                    transform=ccrs.PlateCarree(), zorder=orden)
+
+
+_RE_FRAMES = re.compile(
+    r"frames_geocolor_(?:plano|globo)_[A-Za-z0-9]+_(\d{4}-\d{2}-\d{2}T\d{4})_")
+
+
+def ts_de_frames(nombre: str) -> datetime | None:
+    """Instante que codifica el nombre de la carpeta de cuadros."""
+    match = _RE_FRAMES.search(nombre)
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(1), "%Y-%m-%dT%H%M")
+    except ValueError:
+        return None
+
+
+def _carpeta_de_frames(salida: Path, vista: str, sat: str, t0: datetime,
+                       args) -> Path:
+    """La carpeta que dejó el descargador para este cuadro.
+
+    Con un snapshot el descargador puede haber retrocedido un slot (GIBS devuelve
+    negro para un gránulo cuya miniatura existía), así que no alcanza con recalcular
+    el nombre: se busca la del slot pedido y, si no tiene cuadros, la más nueva.
+    """
+    exacta = salida / (f"frames_geocolor_{vista}_{sat}_{t0:%Y-%m-%dT%H%M}"
+                       f"_{args.n}f_{args.px}px")
+    if next(exacta.glob("crudo_*.jpg"), None) is not None:
+        return exacta
+    patron = f"frames_geocolor_{vista}_{sat}_*_{args.n}f_{args.px}px"
+    con_cuadros = [carpeta for carpeta in salida.glob(patron)
+                   if next(carpeta.glob("crudo_*.jpg"), None) is not None]
+    return max(con_cuadros, key=lambda carpeta: carpeta.name) if con_cuadros else exacta
 
 
 def _estilo_poster():
@@ -472,8 +506,11 @@ def main(argv=None) -> int:
     t0 = datetime.fromisoformat(args.desde)
     salida = Path(args.out) if args.out else SALIDAS
     vista = "globo" if args.globo else "plano"
-    etiqueta = f"geocolor_{vista}_{sat}_{t0:%Y-%m-%dT%H%M}_{args.n}f_{args.px}px"
-    frames_dir = salida / f"frames_{etiqueta}"
+    frames_dir = _carpeta_de_frames(salida, vista, sat, t0, args)
+    # El descargador pudo retroceder un slot (GIBS sin dato): manda su nombre.
+    ajustado = ts_de_frames(frames_dir.name)
+    if ajustado is not None:
+        t0 = ajustado
 
     if not frames_dir.exists():
         raise SystemExit(f"No existe {frames_dir}. Descargá los cuadros con:\n"
