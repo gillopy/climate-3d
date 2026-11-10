@@ -1,15 +1,22 @@
 // Generado por demo/tools/export_demo.py. No editar a mano.
 export default {
   "version": 1,
-  "generated_at": "2026-11-08T18:12:58+00:00",
+  "generated_at": "2026-11-10T19:24:20+00:00",
   "days": [
     "2026-10-10",
+    "2026-10-29",
+    "2026-10-30",
+    "2026-10-31",
+    "2026-11-01",
+    "2026-11-02",
     "2026-11-03",
     "2026-11-04",
     "2026-11-05",
     "2026-11-06",
     "2026-11-07",
-    "2026-11-08"
+    "2026-11-08",
+    "2026-11-09",
+    "2026-11-10"
   ],
   "dates": {
     "anomalia_2t": [
@@ -19,8 +26,8 @@ export default {
       "2026-10-10"
     ],
     "geocolor": [
-      "2026-11-03",
-      "2026-11-04"
+      "2026-11-09",
+      "2026-11-10"
     ],
     "goes_airmass": [
       "2026-11-04"
@@ -38,15 +45,16 @@ export default {
       "2026-11-04"
     ],
     "goes_firetemp": [
-      "2026-11-04"
+      "2026-11-09",
+      "2026-11-10"
     ],
     "goes_sandwich": [
       "2026-11-07",
       "2026-11-08"
     ],
     "goes_truecolor": [
-      "2026-11-03",
-      "2026-11-04"
+      "2026-11-09",
+      "2026-11-10"
     ],
     "mur_realista": [
       "2026-11-04"
@@ -54,11 +62,18 @@ export default {
     "mur_sst": [
       "2026-11-04"
     ],
+    "pace_truecolor": [
+      "2026-10-29",
+      "2026-10-30",
+      "2026-10-31",
+      "2026-11-01",
+      "2026-11-02"
+    ],
     "precipitacion_ecmwf": [
       "2026-11-06"
     ],
     "snapshot_paraguay": [
-      "2026-11-04"
+      "2026-11-10"
     ],
     "truecolor_viirs": [
       "2026-11-04"
@@ -3479,134 +3494,204 @@ export default {
       }
     },
     {
-      "id": "2910edd68cef",
+      "id": "a0145050deca",
       "product_id": "geocolor",
       "params": {
         "snapshot": true,
-        "paraguay": true,
-        "margen": 10,
+        "paraguay": false,
+        "margen": 6,
         "satelite": "G19",
         "ventana": {
-          "start": "2026-11-03",
-          "end": "2026-11-04"
+          "start": "2026-11-09",
+          "end": "2026-11-10"
         },
         "ultimos": false,
         "ultimos_n": "24",
-        "hora": 21,
+        "ultimo": true,
+        "hora": 15,
         "minuto": "00",
         "resolucion": "1400",
         "hora_desde": 0,
         "hora_hasta": 24,
         "animar": false,
-        "fps": 8
+        "fps": 8,
+        "firms": true,
+        "firms_fuente": "todos",
+        "firms_alcance": "completo",
+        "firms_ventana": "24h"
       },
       "dates": [
-        "2026-11-03",
-        "2026-11-04"
+        "2026-11-09",
+        "2026-11-10"
       ],
       "snapshot": {
-        "id": "2910edd68cef",
+        "id": "a0145050deca",
         "product_id": "geocolor",
         "product_name": "GOES - GeoColor (dia real, IR y luces)",
         "params": {
           "snapshot": true,
-          "paraguay": true,
-          "margen": 10,
+          "paraguay": false,
+          "margen": 6,
           "satelite": "G19",
           "ventana": {
-            "start": "2026-11-03",
-            "end": "2026-11-04"
+            "start": "2026-11-09",
+            "end": "2026-11-10"
           },
           "ultimos": false,
           "ultimos_n": "24",
-          "hora": 21,
+          "ultimo": true,
+          "hora": 15,
           "minuto": "00",
           "resolucion": "1400",
           "hora_desde": 0,
           "hora_hasta": 24,
           "animar": false,
-          "fps": 8
+          "fps": 8,
+          "firms": true,
+          "firms_fuente": "todos",
+          "firms_alcance": "completo",
+          "firms_ventana": "24h"
         },
         "mode": "real",
         "status": "done",
         "progress": 1.0,
         "stage": "resultado precalculado",
-        "created_at": "2026-11-04T21:52:39+00:00",
-        "started_at": "2026-11-04T21:52:39+00:00",
-        "finished_at": "2026-11-04T21:52:45+00:00",
+        "created_at": "2026-11-10T18:30:19+00:00",
+        "started_at": "2026-11-10T18:30:22+00:00",
+        "finished_at": "2026-11-10T18:31:02+00:00",
         "logs": [
           {
-            "at": "2026-11-04T21:52:39+00:00",
+            "at": "2026-11-10T18:30:22+00:00",
             "level": "info",
-            "text": "job 2910edd68cef | geocolor | modo=real"
+            "text": "job a0145050deca | geocolor | modo=real"
           },
           {
-            "at": "2026-11-04T21:52:39+00:00",
+            "at": "2026-11-10T18:30:25+00:00",
             "level": "info",
-            "text": "[1/2] bajando GeoColor de G19 (1 cuadro(s))"
+            "text": "[1/3] bajando GeoColor de G19 (1 cuadro(s))"
           },
           {
-            "at": "2026-11-04T21:52:39+00:00",
+            "at": "2026-11-10T18:30:25+00:00",
             "level": "info",
-            "text": "  python.exe <repo>\\descargar\\geocolor.py --sat G19 --bbox -63.4808 -28.4367 -53.4202 -18.4642 --desde 2026-11-04T21:00 --n 1 --paso 10 --px 1400 --out <repo>\\app\\var\\media\\cache\\5e119fd99e80"
+            "text": "  python.exe <repo>\\descargar\\geocolor.py --globo --sat G19 --bbox -165.2 -80 14.8 80 --desde 2026-11-10T17:30 --n 1 --paso 10 --px 1400 --out <repo>\\app\\var\\media\\cache\\4d3e20b6e3f5"
           },
           {
-            "at": "2026-11-04T21:52:40+00:00",
+            "at": "2026-11-10T18:30:29+00:00",
             "level": "info",
-            "text": "GeoColor plano | G19 (GOES-East_ABI_GeoColor) | 1 cuadros desde 2026-11-04 21:00 UTC | paso 10 min | origen 1400x1388 px"
+            "text": "    reintento 1/2 (cuadro sin dato (41234 B))"
           },
           {
-            "at": "2026-11-04T21:52:40+00:00",
+            "at": "2026-11-10T18:30:33+00:00",
             "level": "info",
-            "text": "caja -63.4808,-28.4367,-53.4202,-18.4642 | frames en <repo>\\app\\var\\media\\cache\\5e119fd99e80\\frames_geocolor_plano_G19_2026-11-04T2100_1f_1400px"
+            "text": "    reintento 2/2 (cuadro sin dato (41234 B))"
           },
           {
-            "at": "2026-11-04T21:52:43+00:00",
+            "at": "2026-11-10T18:30:43+00:00",
             "level": "info",
-            "text": "  1/1 listos (errores 0) 3s"
+            "text": "GeoColor globo | G19 (GOES-East_ABI_GeoColor) | 1 cuadros desde 2026-11-10 17:30 UTC | paso 10 min | origen 2800x2489 px"
           },
           {
-            "at": "2026-11-04T21:52:43+00:00",
+            "at": "2026-11-10T18:30:43+00:00",
             "level": "info",
-            "text": "1 cuadros listos en 3s"
+            "text": "caja -165.2,-80.0,14.8,80.0 | frames en <repo>\\app\\var\\media\\cache\\4d3e20b6e3f5\\frames_geocolor_globo_G19_2026-11-10T1730_1f_1400px"
           },
           {
-            "at": "2026-11-04T21:52:43+00:00",
+            "at": "2026-11-10T18:30:43+00:00",
             "level": "info",
-            "text": "Ahora renderizá con: .venv\\Scripts\\python.exe cuadros\\cuadros_geocolor.py --desde 2026-11-04T21:00 --n 1 --px 1400"
+            "text": "  1/1 listos (errores 0) 0s"
           },
           {
-            "at": "2026-11-04T21:52:44+00:00",
+            "at": "2026-11-10T18:30:43+00:00",
             "level": "info",
-            "text": "[2/2] renderizando 1 cuadro(s) de GeoColor"
+            "text": "1 cuadros listos en 0s"
           },
           {
-            "at": "2026-11-04T21:52:44+00:00",
+            "at": "2026-11-10T18:30:43+00:00",
             "level": "info",
-            "text": "  python.exe <repo>\\cuadros\\cuadros_geocolor.py --sat G19 --bbox -63.4808 -28.4367 -53.4202 -18.4642 --desde 2026-11-04T21:00 --n 1 --paso 10 --px 1400 --out <repo>\\app\\var\\media\\cache\\5e119fd99e80 --geojson <repo>\\datos\\paraguay_gadm.json"
+            "text": "Ahora renderizá con: .venv\\Scripts\\python.exe cuadros\\cuadros_geocolor.py --desde 2026-11-10T17:30 --n 1 --px 1400 --globo"
           },
           {
-            "at": "2026-11-04T21:52:44+00:00",
+            "at": "2026-11-10T18:30:43+00:00",
             "level": "info",
-            "text": "GeoColor plano | 1 cuadros desde 2026-11-04 21:00 UTC | salida 1400x1388 px | frames en <repo>\\app\\var\\media\\cache\\5e119fd99e80\\frames_geocolor_plano_G19_2026-11-04T2100_1f_1400px"
+            "text": "[2/3] bajando los focos de FIRMS"
           },
           {
-            "at": "2026-11-04T21:52:45+00:00",
+            "at": "2026-11-10T18:30:43+00:00",
             "level": "info",
-            "text": "  1/1 listos (1s)"
+            "text": "  python.exe <repo>\\descargar\\firms.py --desde 2026-11-09T17:30 --hasta 2026-11-10T17:41 --fuente todos --out <repo>\\app\\var\\media\\cache\\4d3e20b6e3f5\\firms --caja -165.2 -80 14.8 80"
           },
           {
-            "at": "2026-11-04T21:52:45+00:00",
+            "at": "2026-11-10T18:30:44+00:00",
             "level": "info",
-            "text": "1 cuadros en <repo>\\app\\var\\media\\cache\\5e119fd99e80\\frames_geocolor_plano_G19_2026-11-04T2100_1f_1400px"
+            "text": "FIRMS todos | ventana 2026-11-09 17:30 a 2026-11-10 17:41 UTC"
           },
           {
-            "at": "2026-11-04T21:52:45+00:00",
+            "at": "2026-11-10T18:30:44+00:00",
             "level": "info",
-            "text": "Armá el video con: .venv\\Scripts\\python.exe animar\\armar.py --frames \"<repo>\\app\\var\\media\\cache\\5e119fd99e80\\frames_geocolor_plano_G19_2026-11-04T2100_1f_1400px\""
+            "text": "caja: -165.20000,-80.00000,14.80000,80.00000"
           },
           {
-            "at": "2026-11-04T21:52:45+00:00",
+            "at": "2026-11-10T18:30:47+00:00",
+            "level": "info",
+            "text": "  VIIRS_NOAA20_NRT 2026-11-09+2d: 13894 focos"
+          },
+          {
+            "at": "2026-11-10T18:30:51+00:00",
+            "level": "info",
+            "text": "  VIIRS_NOAA21_NRT 2026-11-09+2d: 10275 focos"
+          },
+          {
+            "at": "2026-11-10T18:30:52+00:00",
+            "level": "info",
+            "text": "  VIIRS_SNPP_NRT 2026-11-09+2d: 0 focos"
+          },
+          {
+            "at": "2026-11-10T18:30:55+00:00",
+            "level": "info",
+            "text": "  MODIS_NRT 2026-11-09+2d: 4067 focos"
+          },
+          {
+            "at": "2026-11-10T18:30:58+00:00",
+            "level": "info",
+            "text": "  LANDSAT_NRT 2026-11-09+2d: 8711 focos"
+          },
+          {
+            "at": "2026-11-10T18:30:58+00:00",
+            "level": "info",
+            "text": "listo: <repo>\\app\\var\\media\\cache\\4d3e20b6e3f5\\firms\\focos_20261109T1730_20261110T1741.csv (36947 focos, 1940.5 KB)"
+          },
+          {
+            "at": "2026-11-10T18:30:58+00:00",
+            "level": "info",
+            "text": "[3/3] renderizando 1 cuadro(s) de GeoColor"
+          },
+          {
+            "at": "2026-11-10T18:30:58+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\cuadros\\cuadros_geocolor.py --globo --sat G19 --bbox -165.2 -80 14.8 80 --desde 2026-11-10T17:30 --n 1 --paso 10 --px 1400 --out <repo>\\app\\var\\media\\cache\\4d3e20b6e3f5 --centro -75.2 0 --geojson  --firms --firms-ventana 24h --firms-alcance completo --firms-entrada <repo>\\app\\var\\media\\cache\\4d3e20b6e3f5\\firms"
+          },
+          {
+            "at": "2026-11-10T18:30:59+00:00",
+            "level": "info",
+            "text": "GeoColor globo | 1 cuadros desde 2026-11-10 17:30 UTC | salida 1400x1400 px | frames en <repo>\\app\\var\\media\\cache\\4d3e20b6e3f5\\frames_geocolor_globo_G19_2026-11-10T1730_1f_1400px"
+          },
+          {
+            "at": "2026-11-10T18:31:02+00:00",
+            "level": "info",
+            "text": "  1/1 listos (4s)"
+          },
+          {
+            "at": "2026-11-10T18:31:02+00:00",
+            "level": "info",
+            "text": "1 cuadros en <repo>\\app\\var\\media\\cache\\4d3e20b6e3f5\\frames_geocolor_globo_G19_2026-11-10T1730_1f_1400px"
+          },
+          {
+            "at": "2026-11-10T18:31:02+00:00",
+            "level": "info",
+            "text": "Arm? el video con: .venv\\Scripts\\python.exe animar\\armar.py --frames \"<repo>\\app\\var\\media\\cache\\4d3e20b6e3f5\\frames_geocolor_globo_G19_2026-11-10T1730_1f_1400px\""
+          },
+          {
+            "at": "2026-11-10T18:31:02+00:00",
             "level": "info",
             "text": "listo: 1 artefacto(s)"
           }
@@ -3614,213 +3699,251 @@ export default {
         "artifacts": [
           {
             "name": "cuadro_001.webp",
-            "url": "/media/2910edd68cef/cuadro_001.webp",
+            "url": "/media/a0145050deca/cuadro_001.webp",
             "kind": "image",
-            "bytes": 230364
+            "bytes": 431586
           }
         ],
         "plan": [
           "bajando GeoColor de G19 (1 cuadro(s))",
+          "bajando los focos de FIRMS",
           "renderizando 1 cuadro(s) de GeoColor"
         ],
         "error": null
       }
     },
     {
-      "id": "8f11d2eae2af",
+      "id": "4c37ff997d0e",
       "product_id": "goes_truecolor",
       "params": {
         "snapshot": true,
+        "paraguay": false,
+        "margen": 6,
         "satelite": "G19",
-        "encuadre": "globo",
+        "encuadre": "disco",
         "limbo": "completo",
         "nitidez": "maxima",
         "ventana": {
-          "start": "2026-11-03",
-          "end": "2026-11-04"
+          "start": "2026-11-09",
+          "end": "2026-11-10"
         },
-        "hora": 19,
+        "ultimos": false,
+        "ultimos_n": "24",
+        "ultimo": true,
+        "hora": 15,
         "minuto": "00",
-        "resolucion": "1400",
+        "resolucion": "2712",
         "hora_desde": 0,
         "hora_hasta": 24,
         "animar": false,
-        "fps": 8
+        "fps": 8,
+        "firms": true,
+        "firms_fuente": "todos",
+        "firms_alcance": "paraguay",
+        "firms_ventana": "24h"
       },
       "dates": [
-        "2026-11-03",
-        "2026-11-04"
+        "2026-11-09",
+        "2026-11-10"
       ],
       "snapshot": {
-        "id": "8f11d2eae2af",
+        "id": "4c37ff997d0e",
         "product_id": "goes_truecolor",
         "product_name": "GOES - color real (3 bandas)",
         "params": {
           "snapshot": true,
+          "paraguay": false,
+          "margen": 6,
           "satelite": "G19",
-          "encuadre": "globo",
+          "encuadre": "disco",
           "limbo": "completo",
           "nitidez": "maxima",
           "ventana": {
-            "start": "2026-11-03",
-            "end": "2026-11-04"
+            "start": "2026-11-09",
+            "end": "2026-11-10"
           },
-          "hora": 19,
+          "ultimos": false,
+          "ultimos_n": "24",
+          "ultimo": true,
+          "hora": 15,
           "minuto": "00",
-          "resolucion": "1400",
+          "resolucion": "2712",
           "hora_desde": 0,
           "hora_hasta": 24,
           "animar": false,
-          "fps": 8
+          "fps": 8,
+          "firms": true,
+          "firms_fuente": "todos",
+          "firms_alcance": "paraguay",
+          "firms_ventana": "24h"
         },
         "mode": "real",
         "status": "done",
         "progress": 1.0,
         "stage": "resultado precalculado",
-        "created_at": "2026-11-04T19:23:54+00:00",
-        "started_at": "2026-11-04T19:23:54+00:00",
-        "finished_at": "2026-11-04T19:25:21+00:00",
+        "created_at": "2026-11-10T16:32:23+00:00",
+        "started_at": "2026-11-10T16:34:56+00:00",
+        "finished_at": "2026-11-10T16:36:39+00:00",
         "logs": [
           {
-            "at": "2026-11-04T19:23:54+00:00",
+            "at": "2026-11-10T16:34:56+00:00",
             "level": "info",
-            "text": "job 8f11d2eae2af | goes_truecolor | modo=real"
+            "text": "job 4c37ff997d0e | goes_truecolor | modo=real"
           },
           {
-            "at": "2026-11-04T19:23:54+00:00",
+            "at": "2026-11-10T16:34:57+00:00",
             "level": "info",
-            "text": "[1/2] bajando C01+C02+C03 de G19 (1 slot(s))"
+            "text": "[1/3] bajando C01+C02+C03 de G19 (1 slot(s))"
           },
           {
-            "at": "2026-11-04T19:23:54+00:00",
+            "at": "2026-11-10T16:34:57+00:00",
             "level": "info",
-            "text": "  python.exe <repo>\\descargar\\truecolor_goes.py --desde 2026-11-04T19:00 --n 1 --paso 10 --sat G19"
+            "text": "  python.exe <repo>\\descargar\\truecolor_goes.py --desde 2026-11-10T16:20 --n 1 --paso 10 --sat G19"
           },
           {
-            "at": "2026-11-04T19:23:57+00:00",
+            "at": "2026-11-10T16:35:03+00:00",
             "level": "info",
-            "text": "1 slot(s) desde 2026-11-04 19:00 UTC | paso 10 min"
+            "text": "1 slot(s) desde 2026-11-10 16:20 UTC | paso 10 min"
           },
           {
-            "at": "2026-11-04T19:23:57+00:00",
+            "at": "2026-11-10T16:35:03+00:00",
             "level": "info",
             "text": "bandas C01, C02, C03 | satélite G19 | destino <local> era5"
           },
           {
-            "at": "2026-11-04T19:24:34+00:00",
+            "at": "2026-11-10T16:35:04+00:00",
             "level": "info",
-            "text": "[1/1] 2026-11-04 19:00 UTC  C01 85 MB  C02 413 MB  C03 91 MB"
+            "text": "[1/1] 2026-11-10 16:20 UTC  C01 92 MB  C02 432 MB  C03 101 MB"
           },
           {
-            "at": "2026-11-04T19:24:34+00:00",
-            "level": "info",
-            "text": "3 archivo(s) nuevos, 0.59 GB"
-          },
-          {
-            "at": "2026-11-04T19:24:34+00:00",
+            "at": "2026-11-10T16:35:04+00:00",
             "level": "info",
             "text": "Ahora renderizá con:"
           },
           {
-            "at": "2026-11-04T19:24:34+00:00",
+            "at": "2026-11-10T16:35:04+00:00",
             "level": "info",
-            "text": "  .venv\\Scripts\\python.exe prototipos\\poster_goes_truecolor.py --desde 2026-11-04T19:00"
+            "text": "  .venv\\Scripts\\python.exe prototipos\\poster_goes_truecolor.py --desde 2026-11-10T16:20"
           },
           {
-            "at": "2026-11-04T19:24:35+00:00",
+            "at": "2026-11-10T16:35:04+00:00",
             "level": "info",
-            "text": "[2/2] poster color real 1400px"
+            "text": "[2/3] bajando los focos de FIRMS"
           },
           {
-            "at": "2026-11-04T19:24:35+00:00",
+            "at": "2026-11-10T16:35:04+00:00",
             "level": "info",
-            "text": "  python.exe <repo>\\prototipos\\poster_goes_truecolor.py --desde 2026-11-04T19:00 --sat G19 --px 1400 --fondo oscuro --no-lineas --no-fronteras --borde  --centro -75.2 0 --recorte 1.0 --no-mediana --suavizado 0 --out <repo>\\app\\var\\media\\cache\\d8fa7a21aea2\\truecolor_2026-11-04T1900.png"
+            "text": "  python.exe <repo>\\descargar\\firms.py --desde 2026-11-09T16:20 --hasta 2026-11-10T16:31 --fuente todos --out <repo>\\app\\var\\media\\cache\\09f1c021de6f\\firms --margen 0.06"
           },
           {
-            "at": "2026-11-04T19:24:37+00:00",
+            "at": "2026-11-10T16:35:05+00:00",
             "level": "info",
-            "text": "OR_ABI-L2-CMIPF-M6C01_G19_s20263081900212_e20263081909520_c20263081909563.nc"
+            "text": "FIRMS todos | ventana 2026-11-09 16:20 a 2026-11-10 16:31 UTC"
           },
           {
-            "at": "2026-11-04T19:24:37+00:00",
+            "at": "2026-11-10T16:35:05+00:00",
             "level": "info",
-            "text": "slot: 2026-11-04 19:00 UTC | globo 1400 px | centro (-75.2, 0.0) | saturaciÃ³n 1.1 | gamma 0.85"
+            "text": "caja: -63.14543,-28.10433,-53.75557,-18.79657"
           },
           {
-            "at": "2026-11-04T19:24:38+00:00",
+            "at": "2026-11-10T16:35:08+00:00",
+            "level": "info",
+            "text": "  VIIRS_NOAA20_NRT 2026-11-09+2d: 1315 focos"
+          },
+          {
+            "at": "2026-11-10T16:35:10+00:00",
+            "level": "info",
+            "text": "  VIIRS_NOAA21_NRT 2026-11-09+2d: 1059 focos"
+          },
+          {
+            "at": "2026-11-10T16:35:12+00:00",
+            "level": "info",
+            "text": "  VIIRS_SNPP_NRT 2026-11-09+2d: 0 focos"
+          },
+          {
+            "at": "2026-11-10T16:35:13+00:00",
+            "level": "info",
+            "text": "  MODIS_NRT 2026-11-09+2d: 252 focos"
+          },
+          {
+            "at": "2026-11-10T16:35:15+00:00",
+            "level": "info",
+            "text": "  LANDSAT_NRT 2026-11-09+2d: 0 focos"
+          },
+          {
+            "at": "2026-11-10T16:35:15+00:00",
+            "level": "info",
+            "text": "listo: <repo>\\app\\var\\media\\cache\\09f1c021de6f\\firms\\focos_20261109T1620_20261110T1631.csv (2626 focos, 145.1 KB)"
+          },
+          {
+            "at": "2026-11-10T16:35:15+00:00",
+            "level": "info",
+            "text": "[3/3] disco nativo 2712px"
+          },
+          {
+            "at": "2026-11-10T16:35:15+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\prototipos\\poster_goes_disco.py --desde 2026-11-10T16:20 --sat G19 --px 2712 --firms --firms-ventana 24h --firms-alcance paraguay --firms-entrada <repo>\\app\\var\\media\\cache\\09f1c021de6f\\firms --out <repo>\\app\\var\\media\\cache\\09f1c021de6f\\truecolor_nativo_2026-11-10T1620.png"
+          },
+          {
+            "at": "2026-11-10T16:35:18+00:00",
+            "level": "info",
+            "text": "OR_ABI-L2-CMIPF-M6C01_G19_s20263141620206_e20263141629514_c20263141629566.nc"
+          },
+          {
+            "at": "2026-11-10T16:35:18+00:00",
+            "level": "info",
+            "text": "slot: 2026-11-10 16:20 UTC | disco nativo 2712 px | saturación 1.1 | gamma 0.8"
+          },
+          {
+            "at": "2026-11-10T16:35:18+00:00",
             "level": "info",
             "text": "  leyendo C01..."
           },
           {
-            "at": "2026-11-04T19:24:46+00:00",
+            "at": "2026-11-10T16:35:23+00:00",
             "level": "info",
             "text": "  leyendo C02..."
           },
           {
-            "at": "2026-11-04T19:25:06+00:00",
+            "at": "2026-11-10T16:35:34+00:00",
             "level": "info",
             "text": "  leyendo C03..."
           },
           {
-            "at": "2026-11-04T19:25:13+00:00",
+            "at": "2026-11-10T16:35:38+00:00",
             "level": "info",
-            "text": "  franja   256/1400"
+            "text": "  grilla nativa 5424x5424"
           },
           {
-            "at": "2026-11-04T19:25:14+00:00",
+            "at": "2026-11-10T16:36:31+00:00",
             "level": "info",
-            "text": "  franja   512/1400"
+            "text": "  disco 2712 px | 23,037,929 px con dato | declinación -17.1°"
           },
           {
-            "at": "2026-11-04T19:25:14+00:00",
+            "at": "2026-11-10T16:36:37+00:00",
             "level": "info",
-            "text": "  franja   768/1400"
+            "text": "PNG: <repo>\\app\\var\\media\\cache\\09f1c021de6f\\truecolor_nativo_2026-11-10T1620.png  (8.6 MB)"
           },
           {
-            "at": "2026-11-04T19:25:15+00:00",
-            "level": "info",
-            "text": "  franja  1024/1400"
-          },
-          {
-            "at": "2026-11-04T19:25:16+00:00",
-            "level": "info",
-            "text": "  franja  1280/1400"
-          },
-          {
-            "at": "2026-11-04T19:25:16+00:00",
-            "level": "info",
-            "text": "  franja  1400/1400"
-          },
-          {
-            "at": "2026-11-04T19:25:18+00:00",
-            "level": "info",
-            "text": "disco 1400 px | 1,537,076 px con dato"
-          },
-          {
-            "at": "2026-11-04T19:25:19+00:00",
-            "level": "info",
-            "text": "PNG: <repo>\\app\\var\\media\\cache\\d8fa7a21aea2\\truecolor_2026-11-04T1900.png"
-          },
-          {
-            "at": "2026-11-04T19:25:19+00:00",
-            "level": "info",
-            "text": "Serie de cuadros: .venv\\Scripts\\python.exe prototipos\\poster_goes_truecolor.py --frames \"<local> era5\\salidas\\frames_G19_truecolor\" --n 24"
-          },
-          {
-            "at": "2026-11-04T19:25:21+00:00",
+            "at": "2026-11-10T16:36:39+00:00",
             "level": "info",
             "text": "listo: 1 artefacto(s)"
           }
         ],
         "artifacts": [
           {
-            "name": "truecolor_2026-11-04T1900.webp",
-            "url": "/media/8f11d2eae2af/truecolor_2026-11-04T1900.webp",
+            "name": "truecolor_nativo_2026-11-10T1620.webp",
+            "url": "/media/4c37ff997d0e/truecolor_nativo_2026-11-10T1620.webp",
             "kind": "image",
-            "bytes": 396996
+            "bytes": 334404
           }
         ],
-        "plan": [],
+        "plan": [
+          "bajando C01+C02+C03 de G19 (1 slot(s))",
+          "bajando los focos de FIRMS",
+          "disco nativo 2712px"
+        ],
         "error": null
       }
     },
@@ -4226,198 +4349,264 @@ export default {
       }
     },
     {
-      "id": "a9c4c8630e1b",
+      "id": "6808b2dac4cf",
       "product_id": "goes_firetemp",
       "params": {
         "snapshot": true,
+        "paraguay": true,
+        "margen": 6,
         "satelite": "G19",
         "ventana": {
-          "start": "2026-11-04",
-          "end": "2026-11-04"
+          "start": "2026-11-09",
+          "end": "2026-11-10"
         },
         "ultimos": false,
         "ultimos_n": "24",
-        "hora": 19,
+        "ultimo": true,
+        "hora": 15,
         "minuto": "00",
         "resolucion": "2712",
         "hora_desde": 0,
         "hora_hasta": 24,
         "animar": false,
-        "fps": 12
+        "fps": 12,
+        "firms": true,
+        "firms_fuente": "todos",
+        "firms_alcance": "paraguay",
+        "firms_ventana": "24h"
       },
       "dates": [
-        "2026-11-04"
+        "2026-11-09",
+        "2026-11-10"
       ],
       "snapshot": {
-        "id": "a9c4c8630e1b",
+        "id": "6808b2dac4cf",
         "product_id": "goes_firetemp",
         "product_name": "GOES - Fire Temperature RGB",
         "params": {
           "snapshot": true,
+          "paraguay": true,
+          "margen": 6,
           "satelite": "G19",
           "ventana": {
-            "start": "2026-11-04",
-            "end": "2026-11-04"
+            "start": "2026-11-09",
+            "end": "2026-11-10"
           },
           "ultimos": false,
           "ultimos_n": "24",
-          "hora": 19,
+          "ultimo": true,
+          "hora": 15,
           "minuto": "00",
           "resolucion": "2712",
           "hora_desde": 0,
           "hora_hasta": 24,
           "animar": false,
-          "fps": 12
+          "fps": 12,
+          "firms": true,
+          "firms_fuente": "todos",
+          "firms_alcance": "paraguay",
+          "firms_ventana": "24h"
         },
         "mode": "real",
         "status": "done",
         "progress": 1.0,
         "stage": "resultado precalculado",
-        "created_at": "2026-11-04T20:49:51+00:00",
-        "started_at": "2026-11-04T20:49:51+00:00",
-        "finished_at": "2026-11-04T20:50:38+00:00",
+        "created_at": "2026-11-10T18:33:14+00:00",
+        "started_at": "2026-11-10T18:33:15+00:00",
+        "finished_at": "2026-11-10T18:34:12+00:00",
         "logs": [
           {
-            "at": "2026-11-04T20:49:51+00:00",
+            "at": "2026-11-10T18:33:15+00:00",
             "level": "info",
-            "text": "job a9c4c8630e1b | goes_firetemp | modo=real"
+            "text": "job 6808b2dac4cf | goes_firetemp | modo=real"
           },
           {
-            "at": "2026-11-04T20:49:51+00:00",
+            "at": "2026-11-10T18:33:16+00:00",
             "level": "info",
-            "text": "[1/2] bajando firetemp de G19 (1 slot(s))"
+            "text": "[1/3] bajando los últimos 1 slots de firetemp (G19)"
           },
           {
-            "at": "2026-11-04T20:49:51+00:00",
+            "at": "2026-11-10T18:33:16+00:00",
             "level": "info",
-            "text": "  python.exe <repo>\\descargar\\descargar_goes_rgb.py --producto firetemp --sat G19 --desde 2026-11-04T19:00:00 --hasta 2026-11-04T19:10:00 --paso 10"
+            "text": "  python.exe <repo>\\descargar\\descargar_goes_rgb.py --producto firetemp --sat G19 --desde 2026-11-10T18:20:00 --hasta 2026-11-10T18:30:00 --paso 10"
           },
           {
-            "at": "2026-11-04T20:49:54+00:00",
+            "at": "2026-11-10T18:33:19+00:00",
             "level": "info",
-            "text": "G19 firetemp: 1 slots (2026-11-04 19:00:00 -> 2026-11-04 19:00:00 UTC) · bandas C05, C06, C07"
+            "text": "G19 firetemp: 1 slots (2026-11-10 18:20:00 -> 2026-11-10 18:20:00 UTC) · bandas C05, C06, C07"
           },
           {
-            "at": "2026-11-04T20:49:54+00:00",
+            "at": "2026-11-10T18:33:19+00:00",
             "level": "info",
             "text": "  C05: <local> era5\\goes_c05_g19"
           },
           {
-            "at": "2026-11-04T20:49:54+00:00",
+            "at": "2026-11-10T18:33:19+00:00",
             "level": "info",
             "text": "  C06: <local> era5\\goes_c06_g19"
           },
           {
-            "at": "2026-11-04T20:49:54+00:00",
+            "at": "2026-11-10T18:33:19+00:00",
             "level": "info",
             "text": "  C07: <local> era5\\goes_c07_g19"
           },
           {
-            "at": "2026-11-04T20:50:08+00:00",
+            "at": "2026-11-10T18:33:40+00:00",
             "level": "info",
-            "text": "[1/1] 2026-11-04 19:00 UTC  descargados=3 existentes=0 errores=0  tiempo=15s"
+            "text": "[1/1] 2026-11-10 18:20 UTC  descargados=3 existentes=0 errores=0  tiempo=21s"
           },
           {
-            "at": "2026-11-04T20:50:08+00:00",
+            "at": "2026-11-10T18:33:40+00:00",
             "level": "info",
-            "text": "Finalizado en 15s: descargados=3, existentes=0, errores=0"
+            "text": "Finalizado en 21s: descargados=3, existentes=0, errores=0"
           },
           {
-            "at": "2026-11-04T20:50:09+00:00",
+            "at": "2026-11-10T18:33:40+00:00",
             "level": "info",
-            "text": "[2/2] poster firetemp 2712px"
+            "text": "[2/3] bajando los focos de FIRMS"
           },
           {
-            "at": "2026-11-04T20:50:09+00:00",
+            "at": "2026-11-10T18:33:40+00:00",
             "level": "info",
-            "text": "  python.exe <repo>\\prototipos\\poster_goes_rgb.py --producto firetemp --sat G19 --desde 2026-11-04T19:00 --n 1 --paso 10 --px 2712 --centro -75.2 0 --recorte 1.0 --out <repo>\\app\\var\\media\\cache\\298727bb5a29\\G19_firetemp_2026-11-04T1900.png"
+            "text": "  python.exe <repo>\\descargar\\firms.py --desde 2026-11-09T18:20 --hasta 2026-11-10T18:31 --fuente todos --out <repo>\\app\\var\\media\\cache\\3fcd6ded3c54\\firms --margen 0.06"
           },
           {
-            "at": "2026-11-04T20:50:11+00:00",
+            "at": "2026-11-10T18:33:40+00:00",
             "level": "info",
-            "text": "firetemp | slot 2026-11-04 19:00 UTC | globo 2712 px | centro (-75.2, 0.0)"
+            "text": "FIRMS todos | ventana 2026-11-09 18:20 a 2026-11-10 18:31 UTC"
           },
           {
-            "at": "2026-11-04T20:50:20+00:00",
+            "at": "2026-11-10T18:33:40+00:00",
+            "level": "info",
+            "text": "caja: -63.14543,-28.10433,-53.75557,-18.79657"
+          },
+          {
+            "at": "2026-11-10T18:33:43+00:00",
+            "level": "info",
+            "text": "  VIIRS_NOAA20_NRT 2026-11-09+2d: 452 focos"
+          },
+          {
+            "at": "2026-11-10T18:33:45+00:00",
+            "level": "info",
+            "text": "  VIIRS_NOAA21_NRT 2026-11-09+2d: 445 focos"
+          },
+          {
+            "at": "2026-11-10T18:33:47+00:00",
+            "level": "info",
+            "text": "  VIIRS_SNPP_NRT 2026-11-09+2d: 0 focos"
+          },
+          {
+            "at": "2026-11-10T18:33:49+00:00",
+            "level": "info",
+            "text": "  MODIS_NRT 2026-11-09+2d: 252 focos"
+          },
+          {
+            "at": "2026-11-10T18:33:51+00:00",
+            "level": "info",
+            "text": "  LANDSAT_NRT 2026-11-09+2d: 0 focos"
+          },
+          {
+            "at": "2026-11-10T18:33:51+00:00",
+            "level": "info",
+            "text": "listo: <repo>\\app\\var\\media\\cache\\3fcd6ded3c54\\firms\\focos_20261109T1820_20261110T1831.csv (1149 focos, 63.6 KB)"
+          },
+          {
+            "at": "2026-11-10T18:33:51+00:00",
+            "level": "info",
+            "text": "[3/3] poster firetemp 2712px"
+          },
+          {
+            "at": "2026-11-10T18:33:51+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\prototipos\\poster_goes_rgb.py --producto firetemp --sat G19 --desde 2026-11-10T18:20 --n 1 --paso 10 --px 2712 --sombra-borde 0 --centro -58.4505 -23.4505 --recorte 0.0828025 --borde <repo>\\datos\\paraguay_gadm.json --limpio --firms --firms-ventana 24h --firms-alcance paraguay --firms-entrada <repo>\\app\\var\\media\\cache\\3fcd6ded3c54\\firms --out <repo>\\app\\var\\media\\cache\\3fcd6ded3c54\\G19_firetemp_2026-11-10T1820.png"
+          },
+          {
+            "at": "2026-11-10T18:33:54+00:00",
+            "level": "info",
+            "text": "firetemp | slot 2026-11-10 18:20 UTC | globo 2712 px | centro (-58.4505, -23.4505)"
+          },
+          {
+            "at": "2026-11-10T18:34:02+00:00",
             "level": "info",
             "text": "  franja   256/2712"
           },
           {
-            "at": "2026-11-04T20:50:21+00:00",
+            "at": "2026-11-10T18:34:03+00:00",
             "level": "info",
             "text": "  franja   512/2712"
           },
           {
-            "at": "2026-11-04T20:50:22+00:00",
+            "at": "2026-11-10T18:34:04+00:00",
             "level": "info",
             "text": "  franja   768/2712"
           },
           {
-            "at": "2026-11-04T20:50:23+00:00",
+            "at": "2026-11-10T18:34:04+00:00",
             "level": "info",
             "text": "  franja  1024/2712"
           },
           {
-            "at": "2026-11-04T20:50:24+00:00",
+            "at": "2026-11-10T18:34:05+00:00",
             "level": "info",
             "text": "  franja  1280/2712"
           },
           {
-            "at": "2026-11-04T20:50:24+00:00",
+            "at": "2026-11-10T18:34:06+00:00",
             "level": "info",
             "text": "  franja  1536/2712"
           },
           {
-            "at": "2026-11-04T20:50:25+00:00",
+            "at": "2026-11-10T18:34:06+00:00",
             "level": "info",
             "text": "  franja  1792/2712"
           },
           {
-            "at": "2026-11-04T20:50:26+00:00",
+            "at": "2026-11-10T18:34:07+00:00",
             "level": "info",
             "text": "  franja  2048/2712"
           },
           {
-            "at": "2026-11-04T20:50:26+00:00",
+            "at": "2026-11-10T18:34:08+00:00",
             "level": "info",
             "text": "  franja  2304/2712"
           },
           {
-            "at": "2026-11-04T20:50:27+00:00",
+            "at": "2026-11-10T18:34:09+00:00",
             "level": "info",
             "text": "  franja  2560/2712"
           },
           {
-            "at": "2026-11-04T20:50:28+00:00",
+            "at": "2026-11-10T18:34:09+00:00",
             "level": "info",
             "text": "  franja  2712/2712"
           },
           {
-            "at": "2026-11-04T20:50:28+00:00",
+            "at": "2026-11-10T18:34:09+00:00",
             "level": "info",
-            "text": "disco 2712 px | 5,772,176 px con dato"
+            "text": "disco 2712 px | 7,354,944 px con dato"
           },
           {
-            "at": "2026-11-04T20:50:37+00:00",
+            "at": "2026-11-10T18:34:11+00:00",
             "level": "info",
-            "text": "PNG: <repo>\\app\\var\\media\\cache\\298727bb5a29\\G19_firetemp_2026-11-04T1900.png"
+            "text": "PNG: <repo>\\app\\var\\media\\cache\\3fcd6ded3c54\\G19_firetemp_2026-11-10T1820.png"
           },
           {
-            "at": "2026-11-04T20:50:38+00:00",
+            "at": "2026-11-10T18:34:12+00:00",
             "level": "info",
             "text": "listo: 1 artefacto(s)"
           }
         ],
         "artifacts": [
           {
-            "name": "G19_firetemp_2026-11-04T1900.webp",
-            "url": "/media/a9c4c8630e1b/G19_firetemp_2026-11-04T1900.webp",
+            "name": "G19_firetemp_2026-11-10T1820.webp",
+            "url": "/media/6808b2dac4cf/G19_firetemp_2026-11-10T1820.webp",
             "kind": "image",
-            "bytes": 178184
+            "bytes": 174138
           }
         ],
         "plan": [
-          "bajando firetemp de G19 (1 slot(s))",
+          "bajando los últimos 1 slots de firetemp (G19)",
+          "bajando los focos de FIRMS",
           "poster firetemp 2712px"
         ],
         "error": null
@@ -4655,154 +4844,188 @@ export default {
       }
     },
     {
-      "id": "8183969cab6e",
+      "id": "94010b31fb34",
       "product_id": "snapshot_paraguay",
       "params": {
-        "capa": "geocolor",
+        "capa": "terra",
         "ultima": true,
-        "fecha": "2026-11-04",
+        "fecha": "2026-11-10",
         "hora": 15,
         "minuto": "00",
-        "margen": 0,
+        "margen": 6,
         "detalle": "250",
-        "borde": false
+        "borde": true,
+        "firms": true,
+        "firms_fuente": "todos",
+        "firms_alcance": "paraguay",
+        "firms_ventana": "24h"
       },
       "dates": [
-        "2026-11-04"
+        "2026-11-10"
       ],
       "snapshot": {
-        "id": "8183969cab6e",
+        "id": "94010b31fb34",
         "product_id": "snapshot_paraguay",
         "product_name": "Snapshot - Paraguay",
         "params": {
-          "capa": "geocolor",
+          "capa": "terra",
           "ultima": true,
-          "fecha": "2026-11-04",
+          "fecha": "2026-11-10",
           "hora": 15,
           "minuto": "00",
-          "margen": 0,
+          "margen": 6,
           "detalle": "250",
-          "borde": false
+          "borde": true,
+          "firms": true,
+          "firms_fuente": "todos",
+          "firms_alcance": "paraguay",
+          "firms_ventana": "24h"
         },
         "mode": "real",
         "status": "done",
         "progress": 1.0,
         "stage": "resultado precalculado",
-        "created_at": "2026-11-04T20:57:13+00:00",
-        "started_at": "2026-11-04T20:57:13+00:00",
-        "finished_at": "2026-11-04T20:57:29+00:00",
+        "created_at": "2026-11-10T18:32:05+00:00",
+        "started_at": "2026-11-10T18:32:05+00:00",
+        "finished_at": "2026-11-10T18:32:32+00:00",
         "logs": [
           {
-            "at": "2026-11-04T20:57:13+00:00",
+            "at": "2026-11-10T18:32:05+00:00",
             "level": "info",
-            "text": "job 8183969cab6e | snapshot_paraguay | modo=real"
+            "text": "job 94010b31fb34 | snapshot_paraguay | modo=real"
           },
           {
-            "at": "2026-11-04T20:57:13+00:00",
+            "at": "2026-11-10T18:32:05+00:00",
             "level": "info",
-            "text": "[1/2] bajando la captura de GIBS"
+            "text": "[1/3] bajando la captura de GIBS"
           },
           {
-            "at": "2026-11-04T20:57:13+00:00",
+            "at": "2026-11-10T18:32:05+00:00",
             "level": "info",
-            "text": "  python.exe <repo>\\descargar\\snapshot_paraguay.py --capa geocolor --fecha 2026-11-04 --hora 15 --minuto 0 --mpp 250 --margen 0 --ultima --out <repo>\\app\\var\\media\\cache\\86214db86a85\\crudos"
+            "text": "  python.exe <repo>\\descargar\\snapshot_paraguay.py --capa terra --fecha 2026-11-10 --hora 15 --minuto 0 --mpp 250 --margen 0.06 --ultima --out <repo>\\app\\var\\media\\cache\\0b866300546c\\crudos"
           },
           {
-            "at": "2026-11-04T20:57:14+00:00",
+            "at": "2026-11-10T18:32:06+00:00",
             "level": "info",
-            "text": "  aviso: geocolor tiene ~700 m/px: pedir 250 m/px sólo interpola (el archivo pesa más y no agrega detalle)"
+            "text": "Buscando la última captura de terra disponible..."
           },
           {
-            "at": "2026-11-04T20:57:14+00:00",
+            "at": "2026-11-10T18:32:08+00:00",
             "level": "info",
-            "text": "Buscando la última captura de geocolor disponible..."
+            "text": "última disponible: 2026-11-10 UTC"
           },
           {
-            "at": "2026-11-04T20:57:15+00:00",
+            "at": "2026-11-10T18:32:08+00:00",
             "level": "info",
-            "text": "    2026-11-04 20:50 sin gránulo, pruebo 0:10:00 antes"
+            "text": "Snapshot terra 2026-11-10 00:00 UTC | 4181x4181 px"
           },
           {
-            "at": "2026-11-04T20:57:16+00:00",
+            "at": "2026-11-10T18:32:08+00:00",
             "level": "info",
-            "text": "    2026-11-04 20:40 sin gránulo, pruebo 0:10:00 antes"
+            "text": "caja (desde el GeoJSON + margen 0.06): -63.15,-28.10 .. -53.76,-18.80"
           },
           {
-            "at": "2026-11-04T20:57:18+00:00",
+            "at": "2026-11-10T18:32:08+00:00",
             "level": "info",
-            "text": "    2026-11-04 20:30 sin gránulo, pruebo 0:10:00 antes"
+            "text": "fuente: https://wvs.earthdata.nasa.gov/api/v1/snapshot?REQUEST=GetSnapshot&TIME=2026-11-10&BBOX=-28.104329999999997,-63.145428,-18.796570000000003,-53.755572&CRS=EPSG:4326&LAYERS=MODIS_Terra_CorrectedReflectance_TrueColor&FORMAT=image/png&WIDTH=4181&HEIGHT=4181"
           },
           {
-            "at": "2026-11-04T20:57:19+00:00",
+            "at": "2026-11-10T18:32:14+00:00",
             "level": "info",
-            "text": "    2026-11-04 20:20 sin gránulo, pruebo 0:10:00 antes"
+            "text": "listo: <repo>\\app\\var\\media\\cache\\0b866300546c\\crudos\\crudo_snapshot_terra_20261110T0000_4181px.png (35365 KB, 6.6s)"
           },
           {
-            "at": "2026-11-04T20:57:21+00:00",
+            "at": "2026-11-10T18:32:14+00:00",
             "level": "info",
-            "text": "    2026-11-04 20:10 sin gránulo, pruebo 0:10:00 antes"
+            "text": "Ahora componé con: .venv\\Scripts\\python.exe cuadros\\snapshot_paraguay.py --crudo \"<repo>\\app\\var\\media\\cache\\0b866300546c\\crudos\\crudo_snapshot_terra_20261110T0000_4181px.png\""
           },
           {
-            "at": "2026-11-04T20:57:23+00:00",
+            "at": "2026-11-10T18:32:14+00:00",
             "level": "info",
-            "text": "última disponible: 2026-11-04 20:00 UTC"
+            "text": "[2/3] bajando los focos de FIRMS"
           },
           {
-            "at": "2026-11-04T20:57:23+00:00",
+            "at": "2026-11-10T18:32:14+00:00",
             "level": "info",
-            "text": "Snapshot geocolor 2026-11-04 20:00 UTC | 3733x3733 px"
+            "text": "  python.exe <repo>\\descargar\\firms.py --fecha 2026-11-10 --hora 15 --minuto 0 --margen 0.06 --capa terra --fuente todos --ventana 24h --entrada <repo>\\app\\var\\media\\cache\\0b866300546c\\crudos --out <repo>\\app\\var\\media\\cache\\0b866300546c\\crudos --ultima"
           },
           {
-            "at": "2026-11-04T20:57:23+00:00",
+            "at": "2026-11-10T18:32:15+00:00",
             "level": "info",
-            "text": "caja (desde el GeoJSON + margen 0): -62.64,-27.61 .. -54.26,-19.30"
+            "text": "FIRMS todos | captura 2026-11-10 00:00 UTC | ventana 2026-11-09 00:00-2026-11-10 00:01"
           },
           {
-            "at": "2026-11-04T20:57:23+00:00",
+            "at": "2026-11-10T18:32:15+00:00",
             "level": "info",
-            "text": "fuente: https://wvs.earthdata.nasa.gov/api/v1/snapshot?REQUEST=GetSnapshot&TIME=2026-11-04T20:00:00Z&BBOX=-27.6057,-62.6424,-19.2952,-54.2586&CRS=EPSG:4326&LAYERS=GOES-East_ABI_GeoColor&FORMAT=image/png&WIDTH=3733&HEIGHT=3733"
+            "text": "caja: -63.14543,-28.10433,-53.75557,-18.79657"
           },
           {
-            "at": "2026-11-04T20:57:28+00:00",
+            "at": "2026-11-10T18:32:17+00:00",
             "level": "info",
-            "text": "listo: <repo>\\app\\var\\media\\cache\\86214db86a85\\crudos\\crudo_snapshot_geocolor_20261104T2000_3733px.png (3036 KB, 5.2s)"
+            "text": "  VIIRS_NOAA20_NRT 2026-11-09+2d: 930 focos"
           },
           {
-            "at": "2026-11-04T20:57:28+00:00",
+            "at": "2026-11-10T18:32:19+00:00",
             "level": "info",
-            "text": "Ahora componé con: .venv\\Scripts\\python.exe cuadros\\snapshot_paraguay.py --crudo \"<repo>\\app\\var\\media\\cache\\86214db86a85\\crudos\\crudo_snapshot_geocolor_20261104T2000_3733px.png\""
+            "text": "  VIIRS_NOAA21_NRT 2026-11-09+2d: 758 focos"
           },
           {
-            "at": "2026-11-04T20:57:28+00:00",
+            "at": "2026-11-10T18:32:26+00:00",
             "level": "info",
-            "text": "[2/2] componiendo la captura"
+            "text": "  VIIRS_SNPP_NRT 2026-11-09+2d: 0 focos"
           },
           {
-            "at": "2026-11-04T20:57:28+00:00",
+            "at": "2026-11-10T18:32:27+00:00",
             "level": "info",
-            "text": "  python.exe <repo>\\cuadros\\snapshot_paraguay.py --capa geocolor --fecha 2026-11-04 --hora 15 --minuto 0 --mpp 250 --margen 0 --ultima --entrada <repo>\\app\\var\\media\\cache\\86214db86a85\\crudos --salidas <repo>\\app\\var\\media\\cache\\86214db86a85 --sin-borde"
+            "text": "  MODIS_NRT 2026-11-09+2d: 75 focos"
           },
           {
-            "at": "2026-11-04T20:57:29+00:00",
+            "at": "2026-11-10T18:32:29+00:00",
             "level": "info",
-            "text": "Captura: <repo>\\app\\var\\media\\cache\\86214db86a85\\snapshot_paraguay_geocolor_2026-11-04T2000_3733px.png (3733x3733 px, 2340 KB)"
+            "text": "  LANDSAT_NRT 2026-11-09+2d: 0 focos"
           },
           {
-            "at": "2026-11-04T20:57:29+00:00",
+            "at": "2026-11-10T18:32:29+00:00",
+            "level": "info",
+            "text": "listo: <repo>\\app\\var\\media\\cache\\0b866300546c\\crudos\\focos_20261109T0000_20261110T0001.csv (1763 focos, 97.4 KB)"
+          },
+          {
+            "at": "2026-11-10T18:32:29+00:00",
+            "level": "info",
+            "text": "[3/3] componiendo la captura"
+          },
+          {
+            "at": "2026-11-10T18:32:29+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\cuadros\\snapshot_paraguay.py --capa terra --fecha 2026-11-10 --hora 15 --minuto 0 --mpp 250 --margen 0.06 --ultima --entrada <repo>\\app\\var\\media\\cache\\0b866300546c\\crudos --salidas <repo>\\app\\var\\media\\cache\\0b866300546c --firms --firms-ventana 24h --firms-alcance paraguay --firms-entrada <repo>\\app\\var\\media\\cache\\0b866300546c\\crudos"
+          },
+          {
+            "at": "2026-11-10T18:32:29+00:00",
+            "level": "info",
+            "text": "focos FIRMS: 850 (2026-11-09 00:00-2026-11-10 00:01)"
+          },
+          {
+            "at": "2026-11-10T18:32:32+00:00",
+            "level": "info",
+            "text": "Captura: <repo>\\app\\var\\media\\cache\\0b866300546c\\snapshot_paraguay_terra_2026-11-10T0000_4181px_firms.png (4181x4181 px, 20102 KB)"
+          },
+          {
+            "at": "2026-11-10T18:32:32+00:00",
             "level": "info",
             "text": "listo: 1 artefacto(s)"
           }
         ],
         "artifacts": [
           {
-            "name": "snapshot_paraguay_geocolor_2026-11-04T2000_3733px.webp",
-            "url": "/media/8183969cab6e/snapshot_paraguay_geocolor_2026-11-04T2000_3733px.webp",
+            "name": "snapshot_paraguay_terra_2026-11-10T0000_4181px_firms.webp",
+            "url": "/media/94010b31fb34/snapshot_paraguay_terra_2026-11-10T0000_4181px_firms.webp",
             "kind": "image",
-            "bytes": 255526
+            "bytes": 411782
           }
         ],
         "plan": [
           "bajando la captura de GIBS",
+          "bajando los focos de FIRMS",
           "componiendo la captura"
         ],
         "error": null
@@ -5851,6 +6074,137 @@ export default {
         "plan": [
           "bajando true color NOAA-20 (1 dia(s))",
           "renderizando 1 cuadro(s) de NOAA-20"
+        ],
+        "error": null
+      }
+    },
+    {
+      "id": "5bd431576785",
+      "product_id": "pace_truecolor",
+      "params": {
+        "ventana": {
+          "start": "2026-10-29",
+          "end": "2026-11-02"
+        },
+        "resolucion": "2712"
+      },
+      "dates": [
+        "2026-10-29",
+        "2026-10-30",
+        "2026-10-31",
+        "2026-11-01",
+        "2026-11-02"
+      ],
+      "snapshot": {
+        "id": "5bd431576785",
+        "product_id": "pace_truecolor",
+        "product_name": "PACE - color real (OCI)",
+        "params": {
+          "ventana": {
+            "start": "2026-10-29",
+            "end": "2026-11-02"
+          },
+          "resolucion": "2712"
+        },
+        "mode": "real",
+        "status": "done",
+        "progress": 1.0,
+        "stage": "resultado precalculado",
+        "created_at": "2026-11-10T19:13:22+00:00",
+        "started_at": "2026-11-10T19:13:22+00:00",
+        "finished_at": "2026-11-10T19:17:47+00:00",
+        "logs": [
+          {
+            "at": "2026-11-10T19:13:22+00:00",
+            "level": "info",
+            "text": "job 5bd431576785 | pace_truecolor | modo=real"
+          },
+          {
+            "at": "2026-11-10T19:13:22+00:00",
+            "level": "info",
+            "text": "[1/1] compuesto PACE de 5 dia(s) hasta 2026-11-02"
+          },
+          {
+            "at": "2026-11-10T19:13:22+00:00",
+            "level": "info",
+            "text": "  python.exe <repo>\\prototipos\\poster_pace_gibs.py --hasta 2026-11-02 --dias 5 --px 2712 --out <repo>\\app\\var\\media\\cache\\85cabf6239ec\\PACE_truecolor_20261102.png"
+          },
+          {
+            "at": "2026-11-10T19:13:32+00:00",
+            "level": "info",
+            "text": "PACE true color: 5 día(s) hasta 2026-11-02 | nivel 4 (10240x5120 px) | globo 2712 px"
+          },
+          {
+            "at": "2026-11-10T19:14:12+00:00",
+            "level": "info",
+            "text": "  2026-11-02: 180 teselas con dato | cobertura 83.1 %"
+          },
+          {
+            "at": "2026-11-10T19:14:14+00:00",
+            "level": "info",
+            "text": "    acumulado: 83.1 % del planeta con dato"
+          },
+          {
+            "at": "2026-11-10T19:14:58+00:00",
+            "level": "info",
+            "text": "  2026-11-01: 180 teselas con dato | cobertura 83.0 %"
+          },
+          {
+            "at": "2026-11-10T19:15:03+00:00",
+            "level": "info",
+            "text": "    acumulado: 83.4 % del planeta con dato"
+          },
+          {
+            "at": "2026-11-10T19:15:49+00:00",
+            "level": "info",
+            "text": "  2026-10-31: 180 teselas con dato | cobertura 83.2 %"
+          },
+          {
+            "at": "2026-11-10T19:15:52+00:00",
+            "level": "info",
+            "text": "    acumulado: 83.6 % del planeta con dato"
+          },
+          {
+            "at": "2026-11-10T19:16:35+00:00",
+            "level": "info",
+            "text": "  2026-10-30: 180 teselas con dato | cobertura 83.0 %"
+          },
+          {
+            "at": "2026-11-10T19:16:38+00:00",
+            "level": "info",
+            "text": "    acumulado: 83.8 % del planeta con dato"
+          },
+          {
+            "at": "2026-11-10T19:17:22+00:00",
+            "level": "info",
+            "text": "  2026-10-29: 180 teselas con dato | cobertura 83.2 %"
+          },
+          {
+            "at": "2026-11-10T19:17:27+00:00",
+            "level": "info",
+            "text": "    acumulado: 84.0 % del planeta con dato"
+          },
+          {
+            "at": "2026-11-10T19:17:47+00:00",
+            "level": "info",
+            "text": "PNG: <repo>\\app\\var\\media\\cache\\85cabf6239ec\\PACE_truecolor_20261102.png  (12.7 MB)"
+          },
+          {
+            "at": "2026-11-10T19:17:47+00:00",
+            "level": "info",
+            "text": "listo: 1 artefacto(s)"
+          }
+        ],
+        "artifacts": [
+          {
+            "name": "PACE_truecolor_20261102.webp",
+            "url": "/media/5bd431576785/PACE_truecolor_20261102.webp",
+            "kind": "image",
+            "bytes": 540448
+          }
+        ],
+        "plan": [
+          "compuesto PACE de 5 dia(s) hasta 2026-11-02"
         ],
         "error": null
       }
@@ -7079,7 +7433,7 @@ export default {
             "name": "paraguay",
             "label": "Solo Paraguay",
             "kind": "toggle",
-            "default": true,
+            "default": false,
             "options": [],
             "help": "encuadra la captura o la animación en las coordenadas de Paraguay",
             "min": null,
@@ -7091,7 +7445,7 @@ export default {
             "name": "margen",
             "label": "Margen Paraguay (%)",
             "kind": "slider",
-            "default": 10,
+            "default": 6,
             "options": [],
             "help": "aire alrededor del país dentro del encuadre",
             "min": 0.0,
@@ -7129,8 +7483,8 @@ export default {
             "label": "Ventana temporal",
             "kind": "date-range",
             "default": {
-              "start": "2026-11-03",
-              "end": "2026-11-04"
+              "start": "2026-11-09",
+              "end": "2026-11-10"
             },
             "options": [],
             "help": "",
@@ -7202,10 +7556,24 @@ export default {
             }
           },
           {
+            "name": "ultimo",
+            "label": "Último cuadro disponible",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "en snapshot, ignora fecha, hora y minuto y usa el slot más nuevo que la fuente ya publicó",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "snapshot": true
+            }
+          },
+          {
             "name": "hora",
             "label": "Hora del cuadro (UTC)",
             "kind": "hour",
-            "default": 21,
+            "default": 15,
             "options": [],
             "help": "hora UTC, igual que el dataset crudo; Paraguay es UTC-3 (12 UTC = 09:00 local)",
             "min": 0.0,
@@ -7366,6 +7734,138 @@ export default {
             "enabled_when": {
               "snapshot": false
             }
+          },
+          {
+            "name": "firms",
+            "label": "Focos de calor (FIRMS)",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "superpone los focos de NASA FIRMS; necesita el MAP_KEY en datos/firms_map_key.txt",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "firms_fuente",
+            "label": "Sensor FIRMS",
+            "kind": "select",
+            "default": "todos",
+            "options": [
+              {
+                "value": "viirs",
+                "label": "VIIRS NOAA-20 + NOAA-21 (375 m)",
+                "only_when": null
+              },
+              {
+                "value": "modis",
+                "label": "MODIS Aqua + Terra (1 km)",
+                "only_when": null
+              },
+              {
+                "value": "snpp",
+                "label": "Suomi NPP (publica intermitente)",
+                "only_when": null
+              },
+              {
+                "value": "landsat",
+                "label": "Landsat (sólo EE.UU. y Canadá)",
+                "only_when": null
+              },
+              {
+                "value": "todos",
+                "label": "Todos los sensores",
+                "only_when": null
+              }
+            ],
+            "help": "VIIRS es el que tiene sentido a 250 m/px; MODIS detecta menos y Landsat no cubre Sudamérica",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
+            }
+          },
+          {
+            "name": "firms_alcance",
+            "label": "Focos a mostrar",
+            "kind": "select",
+            "default": "completo",
+            "options": [
+              {
+                "value": "completo",
+                "label": "Todos los del área",
+                "only_when": null
+              },
+              {
+                "value": "paraguay",
+                "label": "Sólo los de Paraguay",
+                "only_when": null
+              }
+            ],
+            "help": "en el globo, «sólo Paraguay» evita que miles de focos del hemisferio tapen el disco (y baja mucho menos)",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
+            }
+          },
+          {
+            "name": "firms_ventana",
+            "label": "Ventana de focos",
+            "kind": "select",
+            "default": "24h",
+            "options": [
+              {
+                "value": "dia",
+                "label": "Día UTC completo",
+                "only_when": null
+              },
+              {
+                "value": "3h",
+                "label": "± 3 horas",
+                "only_when": null
+              },
+              {
+                "value": "6h",
+                "label": "± 6 horas",
+                "only_when": null
+              },
+              {
+                "value": "12h",
+                "label": "± 12 horas",
+                "only_when": null
+              },
+              {
+                "value": "24h",
+                "label": "Últimas 24 horas",
+                "only_when": null
+              },
+              {
+                "value": "48h",
+                "label": "Últimos 2 días",
+                "only_when": null
+              },
+              {
+                "value": "72h",
+                "label": "Últimos 3 días",
+                "only_when": null
+              },
+              {
+                "value": "5d",
+                "label": "Últimos 5 días",
+                "only_when": null
+              }
+            ],
+            "help": "el día completo acompaña a los compuestos diarios; ±3 h sigue el paso del satélite; 24 h en adelante es el «time based» de FIRMS",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
+            }
           }
         ],
         "preview": "/previews/geocolor.webp",
@@ -7415,6 +7915,32 @@ export default {
             "enabled_when": null
           },
           {
+            "name": "paraguay",
+            "label": "Solo Paraguay",
+            "kind": "toggle",
+            "default": false,
+            "options": [],
+            "help": "encuadra la captura o la animación en las coordenadas de Paraguay",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "margen",
+            "label": "Margen Paraguay (%)",
+            "kind": "slider",
+            "default": 6,
+            "options": [],
+            "help": "aire alrededor del país dentro del encuadre",
+            "min": 0.0,
+            "max": 20.0,
+            "step": 1.0,
+            "enabled_when": {
+              "paraguay": true
+            }
+          },
+          {
             "name": "satelite",
             "label": "Satelite",
             "kind": "select",
@@ -7446,7 +7972,7 @@ export default {
             "name": "encuadre",
             "label": "Encuadre",
             "kind": "select",
-            "default": "globo",
+            "default": "disco",
             "options": [
               {
                 "value": "globo",
@@ -7516,8 +8042,8 @@ export default {
             "label": "Ventana temporal",
             "kind": "date-range",
             "default": {
-              "start": "2026-11-03",
-              "end": "2026-11-04"
+              "start": "2026-11-09",
+              "end": "2026-11-10"
             },
             "options": [],
             "help": "",
@@ -7529,10 +8055,84 @@ export default {
             }
           },
           {
+            "name": "ultimos",
+            "label": "Últimos datos",
+            "kind": "toggle",
+            "default": false,
+            "options": [],
+            "help": "ignora la ventana de fechas: baja y anima los cuadros más nuevos publicados",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "snapshot": false
+            }
+          },
+          {
+            "name": "ultimos_n",
+            "label": "Cuántos cuadros",
+            "kind": "select",
+            "default": "24",
+            "options": [
+              {
+                "value": "10",
+                "label": "10 cuadros",
+                "only_when": null
+              },
+              {
+                "value": "12",
+                "label": "12 cuadros",
+                "only_when": null
+              },
+              {
+                "value": "24",
+                "label": "24 cuadros",
+                "only_when": null
+              },
+              {
+                "value": "36",
+                "label": "36 cuadros",
+                "only_when": null
+              },
+              {
+                "value": "48",
+                "label": "48 cuadros",
+                "only_when": null
+              },
+              {
+                "value": "60",
+                "label": "60 cuadros",
+                "only_when": null
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "ultimos": true,
+              "snapshot": false
+            }
+          },
+          {
+            "name": "ultimo",
+            "label": "Último cuadro disponible",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "en snapshot, ignora fecha, hora y minuto y usa el slot más nuevo que la fuente ya publicó",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "snapshot": true
+            }
+          },
+          {
             "name": "hora",
             "label": "Hora del cuadro (UTC)",
             "kind": "hour",
-            "default": 19,
+            "default": 15,
             "options": [],
             "help": "hora UTC, igual que el dataset crudo; Paraguay es UTC-3 (12 UTC = 09:00 local)",
             "min": 0.0,
@@ -7591,7 +8191,7 @@ export default {
             "name": "resolucion",
             "label": "Resolucion",
             "kind": "select",
-            "default": "1400",
+            "default": "2712",
             "options": [
               {
                 "value": "1400",
@@ -7692,6 +8292,138 @@ export default {
             "step": 2.0,
             "enabled_when": {
               "snapshot": false
+            }
+          },
+          {
+            "name": "firms",
+            "label": "Focos de calor (FIRMS)",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "superpone los focos de NASA FIRMS; necesita el MAP_KEY en datos/firms_map_key.txt",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "firms_fuente",
+            "label": "Sensor FIRMS",
+            "kind": "select",
+            "default": "todos",
+            "options": [
+              {
+                "value": "viirs",
+                "label": "VIIRS NOAA-20 + NOAA-21 (375 m)",
+                "only_when": null
+              },
+              {
+                "value": "modis",
+                "label": "MODIS Aqua + Terra (1 km)",
+                "only_when": null
+              },
+              {
+                "value": "snpp",
+                "label": "Suomi NPP (publica intermitente)",
+                "only_when": null
+              },
+              {
+                "value": "landsat",
+                "label": "Landsat (sólo EE.UU. y Canadá)",
+                "only_when": null
+              },
+              {
+                "value": "todos",
+                "label": "Todos los sensores",
+                "only_when": null
+              }
+            ],
+            "help": "VIIRS es el que tiene sentido a 250 m/px; MODIS detecta menos y Landsat no cubre Sudamérica",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
+            }
+          },
+          {
+            "name": "firms_alcance",
+            "label": "Focos a mostrar",
+            "kind": "select",
+            "default": "paraguay",
+            "options": [
+              {
+                "value": "completo",
+                "label": "Todos los del área",
+                "only_when": null
+              },
+              {
+                "value": "paraguay",
+                "label": "Sólo los de Paraguay",
+                "only_when": null
+              }
+            ],
+            "help": "en el globo, «sólo Paraguay» evita que miles de focos del hemisferio tapen el disco (y baja mucho menos)",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
+            }
+          },
+          {
+            "name": "firms_ventana",
+            "label": "Ventana de focos",
+            "kind": "select",
+            "default": "24h",
+            "options": [
+              {
+                "value": "dia",
+                "label": "Día UTC completo",
+                "only_when": null
+              },
+              {
+                "value": "3h",
+                "label": "± 3 horas",
+                "only_when": null
+              },
+              {
+                "value": "6h",
+                "label": "± 6 horas",
+                "only_when": null
+              },
+              {
+                "value": "12h",
+                "label": "± 12 horas",
+                "only_when": null
+              },
+              {
+                "value": "24h",
+                "label": "Últimas 24 horas",
+                "only_when": null
+              },
+              {
+                "value": "48h",
+                "label": "Últimos 2 días",
+                "only_when": null
+              },
+              {
+                "value": "72h",
+                "label": "Últimos 3 días",
+                "only_when": null
+              },
+              {
+                "value": "5d",
+                "label": "Últimos 5 días",
+                "only_when": null
+              }
+            ],
+            "help": "el día completo acompaña a los compuestos diarios; ±3 h sigue el paso del satélite; 24 h en adelante es el «time based» de FIRMS",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
             }
           }
         ],
@@ -8439,6 +9171,32 @@ export default {
             "enabled_when": null
           },
           {
+            "name": "paraguay",
+            "label": "Solo Paraguay",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "encuadra la captura o la animación en las coordenadas de Paraguay",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "margen",
+            "label": "Margen Paraguay (%)",
+            "kind": "slider",
+            "default": 6,
+            "options": [],
+            "help": "aire alrededor del país dentro del encuadre",
+            "min": 0.0,
+            "max": 20.0,
+            "step": 1.0,
+            "enabled_when": {
+              "paraguay": true
+            }
+          },
+          {
             "name": "satelite",
             "label": "Satelite",
             "kind": "select",
@@ -8471,8 +9229,8 @@ export default {
             "label": "Ventana temporal",
             "kind": "date-range",
             "default": {
-              "start": "2026-11-04",
-              "end": "2026-11-04"
+              "start": "2026-11-09",
+              "end": "2026-11-10"
             },
             "options": [],
             "help": "",
@@ -8544,10 +9302,24 @@ export default {
             }
           },
           {
+            "name": "ultimo",
+            "label": "Último cuadro disponible",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "en snapshot, ignora fecha, hora y minuto y usa el slot más nuevo que la fuente ya publicó",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "snapshot": true
+            }
+          },
+          {
             "name": "hora",
             "label": "Hora del cuadro (UTC)",
             "kind": "hour",
-            "default": 19,
+            "default": 15,
             "options": [],
             "help": "hora UTC, igual que el dataset crudo; Paraguay es UTC-3 (12 UTC = 09:00 local)",
             "min": 0.0,
@@ -8707,6 +9479,138 @@ export default {
             "step": 2.0,
             "enabled_when": {
               "snapshot": false
+            }
+          },
+          {
+            "name": "firms",
+            "label": "Focos de calor (FIRMS)",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "superpone los focos de NASA FIRMS; necesita el MAP_KEY en datos/firms_map_key.txt",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "firms_fuente",
+            "label": "Sensor FIRMS",
+            "kind": "select",
+            "default": "todos",
+            "options": [
+              {
+                "value": "viirs",
+                "label": "VIIRS NOAA-20 + NOAA-21 (375 m)",
+                "only_when": null
+              },
+              {
+                "value": "modis",
+                "label": "MODIS Aqua + Terra (1 km)",
+                "only_when": null
+              },
+              {
+                "value": "snpp",
+                "label": "Suomi NPP (publica intermitente)",
+                "only_when": null
+              },
+              {
+                "value": "landsat",
+                "label": "Landsat (sólo EE.UU. y Canadá)",
+                "only_when": null
+              },
+              {
+                "value": "todos",
+                "label": "Todos los sensores",
+                "only_when": null
+              }
+            ],
+            "help": "VIIRS es el que tiene sentido a 250 m/px; MODIS detecta menos y Landsat no cubre Sudamérica",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
+            }
+          },
+          {
+            "name": "firms_alcance",
+            "label": "Focos a mostrar",
+            "kind": "select",
+            "default": "paraguay",
+            "options": [
+              {
+                "value": "completo",
+                "label": "Todos los del área",
+                "only_when": null
+              },
+              {
+                "value": "paraguay",
+                "label": "Sólo los de Paraguay",
+                "only_when": null
+              }
+            ],
+            "help": "en el globo, «sólo Paraguay» evita que miles de focos del hemisferio tapen el disco (y baja mucho menos)",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
+            }
+          },
+          {
+            "name": "firms_ventana",
+            "label": "Ventana de focos",
+            "kind": "select",
+            "default": "24h",
+            "options": [
+              {
+                "value": "dia",
+                "label": "Día UTC completo",
+                "only_when": null
+              },
+              {
+                "value": "3h",
+                "label": "± 3 horas",
+                "only_when": null
+              },
+              {
+                "value": "6h",
+                "label": "± 6 horas",
+                "only_when": null
+              },
+              {
+                "value": "12h",
+                "label": "± 12 horas",
+                "only_when": null
+              },
+              {
+                "value": "24h",
+                "label": "Últimas 24 horas",
+                "only_when": null
+              },
+              {
+                "value": "48h",
+                "label": "Últimos 2 días",
+                "only_when": null
+              },
+              {
+                "value": "72h",
+                "label": "Últimos 3 días",
+                "only_when": null
+              },
+              {
+                "value": "5d",
+                "label": "Últimos 5 días",
+                "only_when": null
+              }
+            ],
+            "help": "el día completo acompaña a los compuestos diarios; ±3 h sigue el paso del satélite; 24 h en adelante es el «time based» de FIRMS",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
             }
           }
         ],
@@ -9075,7 +9979,7 @@ export default {
             "name": "capa",
             "label": "Capa",
             "kind": "select",
-            "default": "geocolor",
+            "default": "terra",
             "options": [
               {
                 "value": "truecolor",
@@ -9125,7 +10029,7 @@ export default {
             "name": "fecha",
             "label": "Fecha de la captura",
             "kind": "date",
-            "default": "2026-11-04",
+            "default": "2026-11-10",
             "options": [],
             "help": "",
             "min": null,
@@ -9198,7 +10102,7 @@ export default {
             "name": "margen",
             "label": "Margen (%)",
             "kind": "slider",
-            "default": 0,
+            "default": 6,
             "options": [],
             "help": "aire alrededor del pais dentro del encuadre",
             "min": 0.0,
@@ -9248,13 +10152,145 @@ export default {
             "name": "borde",
             "label": "Dibujar el contorno",
             "kind": "toggle",
-            "default": false,
+            "default": true,
             "options": [],
             "help": "",
             "min": null,
             "max": null,
             "step": null,
             "enabled_when": null
+          },
+          {
+            "name": "firms",
+            "label": "Focos de calor (FIRMS)",
+            "kind": "toggle",
+            "default": true,
+            "options": [],
+            "help": "superpone los focos de NASA FIRMS; necesita el MAP_KEY en datos/firms_map_key.txt",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "firms_fuente",
+            "label": "Sensor FIRMS",
+            "kind": "select",
+            "default": "todos",
+            "options": [
+              {
+                "value": "viirs",
+                "label": "VIIRS NOAA-20 + NOAA-21 (375 m)",
+                "only_when": null
+              },
+              {
+                "value": "modis",
+                "label": "MODIS Aqua + Terra (1 km)",
+                "only_when": null
+              },
+              {
+                "value": "snpp",
+                "label": "Suomi NPP (publica intermitente)",
+                "only_when": null
+              },
+              {
+                "value": "landsat",
+                "label": "Landsat (sólo EE.UU. y Canadá)",
+                "only_when": null
+              },
+              {
+                "value": "todos",
+                "label": "Todos los sensores",
+                "only_when": null
+              }
+            ],
+            "help": "VIIRS es el que tiene sentido a 250 m/px; MODIS detecta menos y Landsat no cubre Sudamérica",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
+            }
+          },
+          {
+            "name": "firms_alcance",
+            "label": "Focos a mostrar",
+            "kind": "select",
+            "default": "paraguay",
+            "options": [
+              {
+                "value": "completo",
+                "label": "Todos los del área",
+                "only_when": null
+              },
+              {
+                "value": "paraguay",
+                "label": "Sólo los de Paraguay",
+                "only_when": null
+              }
+            ],
+            "help": "en el globo, «sólo Paraguay» evita que miles de focos del hemisferio tapen el disco (y baja mucho menos)",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
+            }
+          },
+          {
+            "name": "firms_ventana",
+            "label": "Ventana de focos",
+            "kind": "select",
+            "default": "24h",
+            "options": [
+              {
+                "value": "dia",
+                "label": "Día UTC completo",
+                "only_when": null
+              },
+              {
+                "value": "3h",
+                "label": "± 3 horas",
+                "only_when": null
+              },
+              {
+                "value": "6h",
+                "label": "± 6 horas",
+                "only_when": null
+              },
+              {
+                "value": "12h",
+                "label": "± 12 horas",
+                "only_when": null
+              },
+              {
+                "value": "24h",
+                "label": "Últimas 24 horas",
+                "only_when": null
+              },
+              {
+                "value": "48h",
+                "label": "Últimos 2 días",
+                "only_when": null
+              },
+              {
+                "value": "72h",
+                "label": "Últimos 3 días",
+                "only_when": null
+              },
+              {
+                "value": "5d",
+                "label": "Últimos 5 días",
+                "only_when": null
+              }
+            ],
+            "help": "el día completo acompaña a los compuestos diarios; ±3 h sigue el paso del satélite; 24 h en adelante es el «time based» de FIRMS",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": {
+              "firms": true
+            }
           }
         ],
         "preview": "/previews/snapshot_paraguay.webp",
@@ -10584,6 +11620,82 @@ export default {
           }
         ],
         "preview": "/previews/truecolor_viirs.webp",
+        "previews": [],
+        "command_ready": true,
+        "command": null
+      },
+      {
+        "id": "pace_truecolor",
+        "name": "PACE - color real (OCI)",
+        "group": "satelite",
+        "stage": "prototipos/poster_pace_gibs.py (NASA GIBS)",
+        "summary": "Compuesto de color real del OCI (670/555/443 nm) desde NASA GIBS. PACE es polar y su swath no cubre el planeta de una vez: se combinan varios dias para llenar la grilla. Un solo cuadro, globo completo.",
+        "params": [
+          {
+            "name": "ventana",
+            "label": "Dias del compuesto",
+            "kind": "date-range",
+            "default": {
+              "start": "2026-10-29",
+              "end": "2026-11-02"
+            },
+            "options": [],
+            "help": "el compuesto se arma hacia atras desde el ultimo dia",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          },
+          {
+            "name": "resolucion",
+            "label": "Resolucion",
+            "kind": "select",
+            "default": "2712",
+            "options": [
+              {
+                "value": "1400",
+                "label": "1400",
+                "only_when": null
+              },
+              {
+                "value": "1800",
+                "label": "1800",
+                "only_when": null
+              },
+              {
+                "value": "2000",
+                "label": "2000",
+                "only_when": null
+              },
+              {
+                "value": "2400",
+                "label": "2400",
+                "only_when": null
+              },
+              {
+                "value": "2712",
+                "label": "2712",
+                "only_when": null
+              },
+              {
+                "value": "3200",
+                "label": "3200",
+                "only_when": null
+              },
+              {
+                "value": "4000",
+                "label": "4000",
+                "only_when": null
+              }
+            ],
+            "help": "",
+            "min": null,
+            "max": null,
+            "step": null,
+            "enabled_when": null
+          }
+        ],
+        "preview": "/previews/pace_truecolor.webp",
         "previews": [],
         "command_ready": true,
         "command": null
