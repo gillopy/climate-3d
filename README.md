@@ -199,6 +199,11 @@ dependen del producto:
   publicados. En los GOES la cadencia es de 10 min y la lista es la misma para todos
   (10, 12, 24, 36, 48, 60). GeoColor se resuelve contra GIBS (que contesta una imagen
   negra cuando el slot no existe) y Himawari contra el bucket de NOAA.
+- **Último cuadro disponible**: aparece al prender **Snapshot** y usa lo más nuevo que la
+  fuente ya publicó, sin importar la fecha elegida. En los GOES y en GeoColor es el slot de
+  10 min más reciente; en los productos diarios (color real de VIIRS, MUR) es el último día
+  con compuesto armado, porque el día de hoy devuelve una imagen negra hasta que GIBS lo
+  cierra. Si el pedido es de hace más de 6 h, se respeta tal cual.
 
 El encuadre se calcula en [`comun/paraguay.py`](./comun/paraguay.py) y el margen se
 traduce a `--radio` (grados) o `--recorte` (fracción del hemisferio) según el render.
