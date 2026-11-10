@@ -41,11 +41,13 @@ from paraguay import (CAPAS, CAPA, MARGEN, aviso_de_detalle,  # noqa: E402
                      techo, url_snapshot)
 from rutas import DATOS  # noqa: E402
 
-# El renderizador de GIBS se cuelga de vez en cuando: 25 s por pedido y, si no
-# contesta tres veces seguidas, se corta con un mensaje claro en vez de dejar el
-# job esperando media hora.
+# El renderizador de GIBS se cuelga de vez en cuando. La miniatura de la sonda son
+# ~10 KB, así que espera menos que la descarga real; ante un 5xx, un timeout o un
+# corte se reintenta con backoff y, si el servicio sigue sin contestar, se corta con
+# un mensaje que dice la verdad: no es la fecha, es GIBS.
 TIMEOUT = 25
-FALLOS_DE_RED = 3
+TIMEOUT_SONDA = 10
+FALLOS_DE_RED = 3          # reintentos de la sonda antes de declarar GIBS caído
 RESPALDO = DATOS / "_snapshot"
 
 GEOJSON = RAIZ / "datos" / "paraguay_gadm.json"
@@ -72,11 +74,47 @@ def valida(datos: bytes) -> bool:
     return not bool((pixeles.max(axis=2) < 8).all())
 
 
-def _pedir(t: datetime, caja, px: int, capa: str, timeout: int = TIMEOUT) -> bytes:
-    r = requests.get(url_snapshot(t, caja, px, capa), timeout=timeout,
-                     headers={"User-Agent": "climate3d/1.0"})
-    r.raise_for_status()
-    return r.content
+class GibsCaido(RuntimeError):
+    """GIBS no contesta (5xx, timeout o corte). No es falta de gránulo."""
+
+
+def _transitorio(exc: Exception) -> bool:
+    """True si el error es del servicio y no la falta del gránulo pedido.
+
+    Distinguirlos importa: ante un 4xx se retrocede al gránulo anterior; ante un
+    `503` o un timeout retroceder no sirve de nada y sólo hace perder minutos.
+    """
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+        return True
+    if isinstance(exc, requests.HTTPError):
+        respuesta = exc.response
+        return respuesta is None or respuesta.status_code >= 500 or respuesta.status_code == 429
+    return False
+
+
+def _pedir(t: datetime, caja, px: int, capa: str, timeout: int = TIMEOUT_SONDA) -> bytes:
+    """GET de la miniatura. Reintenta lo transitorio y distingue la caída del hueco.
+
+    Devuelve `b""` si el gránulo no está (el servicio contestó), y lanza
+    `GibsCaido` si el servicio no contesta tras `FALLOS_DE_RED` intentos.
+    """
+    espera = 2.0
+    for intento in range(1, FALLOS_DE_RED + 1):
+        try:
+            r = requests.get(url_snapshot(t, caja, px, capa), timeout=timeout,
+                             headers={"User-Agent": "climate3d/1.0"})
+            r.raise_for_status()
+            return r.content
+        except requests.RequestException as exc:
+            if not _transitorio(exc):
+                return b""                 # el gránulo no está: no es una caída
+            if intento == FALLOS_DE_RED:
+                raise GibsCaido(f"{type(exc).__name__}: {exc}") from exc
+            print(f"    sonda {t:%Y-%m-%d %H:%M}: reintento {intento}/"
+                  f"{FALLOS_DE_RED - 1} ({type(exc).__name__})", flush=True)
+            time.sleep(espera)
+            espera *= 2
+    raise AssertionError("bucle de reintentos sin retorno")
 
 
 def _respaldo(capa: str, px: int) -> Path:
@@ -105,26 +143,15 @@ def ultima_disponible(capa: str, caja, px: int, desde: datetime | None = None,
     t = techo(capa, ahora)
     intervalo = paso(capa)
     limite = intentos(capa)
-    fallos = 0
-    for intento in range(1, limite + 1):
+    for _ in range(limite):
         try:
             datos = _pedir(t, caja, px, capa)
-            fallos = 0          # contesta: el servicio está vivo, sólo falta el gránulo
-        except requests.RequestException as exc:
-            fallos += 1
-            if verbose:
-                print(f"    sonda {t:%Y-%m-%d %H:%M}: {exc}", flush=True)
-            if fallos >= FALLOS_DE_RED:
-                raise SystemExit(
-                    f"GIBS no responde ({type(exc).__name__}: {exc}).\n"
-                    "No es la fecha: el servicio de NASA está caído o saturado. "
-                    "Probá más tarde."
-                ) from exc
-            datos = b""
-        except Exception as exc:
-            if verbose:
-                print(f"    sonda {t:%Y-%m-%d %H:%M}: {exc}", flush=True)
-            datos = b""
+        except (GibsCaido, requests.RequestException) as exc:
+            raise SystemExit(
+                f"GIBS no responde ({exc}).\n"
+                "No es un problema de fecha: el servicio de NASA está caído o "
+                "saturado. Probá de nuevo en unos minutos."
+            ) from exc
         if valida(datos):
             return t
         if verbose:
@@ -295,4 +322,10 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        # Cancelar un job desde la app llegaba como un traceback de 60 líneas
+        # dentro del log del paso: "cancelado" y un código propio, nada más.
+        print("cancelado", flush=True)
+        sys.exit(130)

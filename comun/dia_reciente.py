@@ -11,6 +11,7 @@ vez de varios MB.
 from __future__ import annotations
 
 import io
+import time
 from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
@@ -20,7 +21,23 @@ from PIL import Image
 API = "https://wvs.earthdata.nasa.gov/api/v1/snapshot"
 TIMEOUT = 25
 INTENTOS = 10
+FALLOS_DE_RED = 3
 MIN_BYTES = 2_500
+
+
+def _transitorio(exc: Exception) -> bool:
+    """True si el error es del servicio y no la falta del día pedido.
+
+    Ante un `4xx` el día no existe y hay que retroceder; ante un `503`, un
+    timeout o un corte, retroceder diez días no sirve de nada: hay que decir que
+    el servicio está caído.
+    """
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+        return True
+    if isinstance(exc, requests.HTTPError):
+        respuesta = exc.response
+        return respuesta is None or respuesta.status_code >= 500 or respuesta.status_code == 429
+    return False
 
 
 def _sirve(datos: bytes) -> bool:
@@ -49,15 +66,28 @@ def ultimo_dia(layer: str, caja, desde: datetime | None = None,
         url = (f"{API}?REQUEST=GetSnapshot&TIME={dia:%Y-%m-%d}"
                f"&BBOX={s},{o},{n},{e}&CRS=EPSG:4326&LAYERS={layer}"
                f"&FORMAT=image/png&WIDTH=320&HEIGHT={alto}")
-        try:
-            r = requests.get(url, timeout=TIMEOUT,
-                             headers={"User-Agent": "climate3d/1.0"})
-            r.raise_for_status()
-            datos = r.content
-        except Exception as exc:                       # red o corte del servicio
-            if verbose:
-                print(f"    sonda {dia:%Y-%m-%d}: {exc}", flush=True)
-            datos = b""
+        datos = b""
+        for intento in range(1, FALLOS_DE_RED + 1):
+            try:
+                r = requests.get(url, timeout=TIMEOUT,
+                                 headers={"User-Agent": "climate3d/1.0"})
+                r.raise_for_status()
+                datos = r.content
+                break
+            except Exception as exc:                   # red o corte del servicio
+                if not _transitorio(exc):
+                    datos = b""                        # el día no existe
+                    break
+                if verbose:
+                    print(f"    sonda {dia:%Y-%m-%d}: reintento {intento}/"
+                          f"{FALLOS_DE_RED} ({type(exc).__name__})", flush=True)
+                if intento == FALLOS_DE_RED:
+                    raise SystemExit(
+                        f"GIBS no responde ({type(exc).__name__}: {exc}).\n"
+                        "No es un problema de fecha: el servicio de NASA está "
+                        "caído o saturado. Probá de nuevo en unos minutos."
+                    ) from exc
+                time.sleep(2 * intento)
         if _sirve(datos):
             return dia
         if verbose:

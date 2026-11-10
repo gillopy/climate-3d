@@ -101,6 +101,26 @@ class CorrerUnJob(Base):
         self.assertTrue(trabajo.artifacts[0].url.startswith("/media/"))
         self.assertIn("render ok", [linea.text for linea in trabajo.logs])
 
+    def test_un_corte_por_ctrl_c_termina_cancelado_y_no_como_error(self):
+        # Los scripts salen con 130 cuando los corta un Ctrl+C (el snapshot lo hace
+        # desde que atrapa KeyboardInterrupt). Un corte del usuario no es una falla
+        # del pipeline: la UI tiene que ver `cancelled`, no `error` con un codigo.
+        self.escribir_script(
+            "cortado.py",
+            "import sys\nprint('a medias')\nsys.exit(130)\n",
+        )
+        trabajo = _nuevo_job(self.media)
+        plan = Plan(
+            pasos=[Step(kind="render", label="demo", script="cortado.py", args=[])]
+        )
+        with mock.patch.object(jobs, "planear", return_value=plan):
+            self._correr(trabajo)
+
+        textos = [linea.text for linea in trabajo.logs]
+        self.assertEqual(trabajo.status, "cancelled", trabajo.logs)
+        self.assertIsNone(trabajo.error)
+        self.assertIn("cancelado por el usuario", textos)
+
     def test_informa_el_codigo_de_salida_y_lo_que_imprimio_el_script(self):
         self.escribir_script(
             "falla.py",

@@ -54,6 +54,11 @@ _PESO = {"download": 0.4, "render": 0.5, "animate": 0.1}
 # Cuanto se espera a que cierren los pipes despues de cancelar.
 _GRACIA_CANCEL = 6.0
 
+# Codigos con los que sale un hijo cuando lo corta un Ctrl+C: el propio (130, el
+# que usa `descargar/snapshot_paraguay.py` al atrapar KeyboardInterrupt) y el que
+# deja Windows (0xC000013A). Un corte del usuario no es un error del pipeline.
+_CORTES = {130, -2, 0xC000013A, -1073741510}
+
 
 def _matar_arbol(proc: subprocess.Popen[bytes]) -> None:
     """Mata el proceso y todos sus hijos.
@@ -749,6 +754,12 @@ class JobManager:
             job.proc = None
 
         if job.cancelar.is_set():
+            raise asyncio.CancelledError
+        if codigo in _CORTES:
+            # El corte vino del propio hijo (Ctrl+C), no de `cancelar()`: se
+            # reporta igual que una cancelacion en vez de como un error con el
+            # codigo crudo, que no dice nada en la UI.
+            job.cancelar.set()
             raise asyncio.CancelledError
         return codigo
 
