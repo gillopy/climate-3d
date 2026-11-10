@@ -966,7 +966,9 @@ def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
     if not _bool(params, "borde"):
         args_render.append("--sin-borde")
     if _bool(params, "firms"):
-        args_render += ["--firms", "--firms-ventana", ventana_focos]
+        args_render += ["--firms", "--firms-ventana", ventana_focos,
+                        "--firms-alcance", _firms_alcance(params),
+                        "--firms-entrada", str(crudos)]
     render_step = Step(
         kind="render",
         label="componiendo la captura",

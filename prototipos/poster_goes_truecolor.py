@@ -735,6 +735,10 @@ def main(argv=None) -> int:
                     help="ventana de focos: dia = dia UTC completo (default)")
     ap.add_argument("--firms-entrada",
                     help="carpeta con los CSV de focos (los deja descargar/firms.py)")
+    ap.add_argument("--firms-alcance", default="completo",
+                    choices=("completo", "paraguay"),
+                    help="completo = todos los focos del area; paraguay = solo los "
+                         "que caen dentro del pais")
     args = ap.parse_args(argv)
     args.fuente = args.fuente.replace("{sat}", args.sat)
     if args.firms:
