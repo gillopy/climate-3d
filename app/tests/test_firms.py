@@ -39,6 +39,8 @@ import snapshot_paraguay as snapshot  # noqa: E402
 from PIL import Image  # noqa: E402
 from paraguay import caja_geojson, nombre_captura  # noqa: E402
 
+import numpy as np  # noqa: E402
+
 from app.api import catalog, recipes  # noqa: E402
 
 
@@ -544,6 +546,76 @@ class Agrupado(unittest.TestCase):
         agrupados = firms.agrupar(focos, posiciones, 2.0 * firms.CELDA_FOCO)
         self.assertLess(len(agrupados), 5_000)
         self.assertGreater(len(agrupados), 100)
+
+
+class FocosEnElGloboDeGeocolor(unittest.TestCase):
+    """`_focos_globo` arma posiciones y agrupa antes de dibujar.
+
+    Tuvo un `NameError` (usaba `x`/`y` del póster, que ahí no existen) y ningún test
+    lo vio porque el globo de GeoColor necesita cartopy. Se prueba con un eje falso.
+    """
+
+    def _modulo(self):
+        sys.path.insert(0, str(RAIZ / "cuadros"))
+        import cuadros_geocolor  # noqa: PLC0415 - importa PIL/numpy, cartopy es local
+        return cuadros_geocolor
+
+    def _foco(self, lat, lon):
+        return firms.Foco(lat=lat, lon=lon, frp=10.0, confianza="nominal",
+                          cuando=datetime(2026, 11, 8, 17), satelite="N20",
+                          instrumento="VIIRS", dia_noche="D")
+
+    def _cartopy_falso(self):
+        import types
+
+        cartopy = types.ModuleType("cartopy")
+        crs = types.ModuleType("cartopy.crs")
+        crs.PlateCarree = lambda: "plate"
+        cartopy.crs = crs
+        return {"cartopy": cartopy, "cartopy.crs": crs}
+
+    def test_orto_xy_mapea_el_disco(self):
+        modulo = self._modulo()
+        x, y = modulo._orto_xy(np.array([0.0]), np.array([0.0]), 0.0, 0.0)
+        self.assertAlmostEqual(float(x[0]), 0.0)
+        self.assertAlmostEqual(float(y[0]), 0.0)
+        # 90 grados al este del centro: borde del disco (radio 1).
+        x, y = modulo._orto_xy(np.radians(np.array([90.0])), np.array([0.0]),
+                               0.0, 0.0)
+        self.assertAlmostEqual(float(np.hypot(x[0], y[0])), 1.0, places=6)
+
+    def test_dibuja_solo_la_cara_visible(self):
+        import types
+
+        modulo = self._modulo()
+        llamadas = []
+
+        class Eje:
+            def scatter(self, xs, ys, **_kwargs):
+                llamadas.append(list(xs))
+
+        focos = [self._foco(-23.0, -58.0),    # Paraguay: visible
+                 self._foco(0.0, 100.0)]      # otro lado del planeta
+        args = types.SimpleNamespace(centro=(-75.2, 0.0), px=1400, dpi=140)
+        with mock.patch.dict(sys.modules, self._cartopy_falso()):
+            modulo._focos_globo(Eje(), focos, args)
+        self.assertEqual(len(llamadas), 3)             # halo, cuerpo y núcleo
+        self.assertEqual([len(xs) for xs in llamadas], [1, 1, 1])
+
+    def test_sin_cara_visible_no_dibuja(self):
+        import types
+
+        modulo = self._modulo()
+        llamadas = []
+
+        class Eje:
+            def scatter(self, *_args, **_kwargs):
+                llamadas.append(1)
+
+        args = types.SimpleNamespace(centro=(-75.2, 0.0), px=1400, dpi=140)
+        with mock.patch.dict(sys.modules, self._cartopy_falso()):
+            modulo._focos_globo(Eje(), [self._foco(0.0, 100.0)], args)
+        self.assertEqual(llamadas, [])
 
 
 if __name__ == "__main__":

@@ -170,14 +170,30 @@ def _focos_de(args, t: datetime) -> list:
     return focos
 
 
+def _orto_xy(lon, lat, lon0, lat0):
+    """Coordenadas del disco (-1..1): el mismo espacio que ocupa el globo en el eje.
+
+    Sirve para agrupar por celda. Agrupar en grados no serviría: cerca del limbo un
+    grado ocupa muchos más píxeles que en el centro. Es la proyección orthographic
+    directa, la inversa de la que usa `_warp_ortho`.
+    """
+    x = np.cos(lat) * np.sin(lon - lon0)
+    y = (np.cos(lat0) * np.sin(lat)
+         - np.sin(lat0) * np.cos(lat) * np.cos(lon - lon0))
+    return x, y
+
+
 def _focos_globo(ax, focos, args) -> None:
-    """Marca los focos sobre el globo con la proyecci?n del eje (cartopy)."""
+    """Marca los focos sobre el globo con la proyección del eje (cartopy)."""
     import cartopy.crs as ccrs
 
     lon0, lat0 = np.radians(args.centro[0]), np.radians(args.centro[1])
     lon = np.radians(np.array([foco.lon for foco in focos], dtype=float))
     lat = np.radians(np.array([foco.lat for foco in focos], dtype=float))
-    # S?lo la cara visible: en orthographic los puntos del otro lado se espejan.
+    # Dos cosas distintas: la POSICIÓN sale de `_orto_xy` y la VISIBILIDAD de
+    # `cos_c > 0`. Con sólo `hypot(x, y) <= 1` los puntos del otro lado del planeta
+    # entrarían espejados dentro del disco.
+    x, y = _orto_xy(lon, lat, lon0, lat0)
     cos_c = (np.sin(lat0) * np.sin(lat)
              + np.cos(lat0) * np.cos(lat) * np.cos(lon - lon0))
     visible = cos_c > 1e-6
