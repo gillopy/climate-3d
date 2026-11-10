@@ -4,10 +4,10 @@ Fijan lo que la app promete:
 
   * el CSV de FIRMS se lee con las dos formas de `confidence` (VIIRS `l/n/h` y
     MODIS 0-100) y con `acq_time` sin cero a la izquierda;
-  * la ventana es el día UTC completo por defecto y horas a cada lado para GeoColor;
-  * el foco cae en el píxel que le corresponde (misma proyección que el contorno);
-  * sin MAP_KEY el error dice qué falta y dónde ponerlo;
-  * sin focos la captura sale **idéntica** a la de sin `--firms`;
+  * la ventana es el d�a UTC completo por defecto y horas a cada lado para GeoColor;
+  * el foco cae en el p�xel que le corresponde (misma proyecci�n que el contorno);
+  * sin MAP_KEY el error dice qu� falta y d�nde ponerlo;
+  * sin focos la captura sale **id�ntica** a la de sin `--firms`;
   * la receta mete el paso de FIRMS entre GIBS y el render.
 
     app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
@@ -43,7 +43,7 @@ from app.api import catalog, recipes  # noqa: E402
 
 
 def _descargador():
-    """El script `descargar/firms.py` como módulo (no está en el sys.path)."""
+    """El script `descargar/firms.py` como m�dulo (no est� en el sys.path)."""
     spec = importlib.util.spec_from_file_location(
         "firms_descargar", RAIZ / "descargar" / "firms.py")
     modulo = importlib.util.module_from_spec(spec)
@@ -59,7 +59,7 @@ FILA_MAL = "-24.10,-57.30,318.7,1.79,1.31,2026-13-45,1236,Terra,MODIS,77,6.1NRT,
 
 
 class Parser(unittest.TestCase):
-    """El CSV de FIRMS se lee sin importar de qué sensor venga."""
+    """El CSV de FIRMS se lee sin importar de qu� sensor venga."""
 
     def test_lee_viirs_con_confianza_en_letras(self):
         focos = firms.leer_texto(f"{CABECERA}\n{FILA_VIIRS}\n")
@@ -108,7 +108,7 @@ class Parser(unittest.TestCase):
 
 
 class Ventana(unittest.TestCase):
-    """El día completo por defecto; horas a cada lado para GeoColor."""
+    """El d�a completo por defecto; horas a cada lado para GeoColor."""
 
     def test_el_dia_va_de_medianoche_a_medianoche(self):
         desde, hasta = firms.ventana(datetime(2026, 11, 8, 15, 40), "dia")
@@ -151,7 +151,7 @@ class Filtro(unittest.TestCase):
         self.assertEqual(len(focos), 5)
 
     def test_tres_horas_solo_toma_los_pasos_cercanos(self):
-        # VIIRS pasa ~05 y ~17 UTC: a las 15:00 sólo entra el paso de la tarde.
+        # VIIRS pasa ~05 y ~17 UTC: a las 15:00 s�lo entra el paso de la tarde.
         focos = firms.filtrar(self._focos(), *firms.ventana(
             datetime(2026, 11, 8, 15), "3h"))
         self.assertEqual([f.cuando.hour for f in focos], [12, 17])
@@ -163,7 +163,7 @@ class Filtro(unittest.TestCase):
 
 
 class Clave(unittest.TestCase):
-    """Sin MAP_KEY el mensaje dice qué falta y dónde ponerlo."""
+    """Sin MAP_KEY el mensaje dice qu� falta y d�nde ponerlo."""
 
     def test_la_variable_de_entorno_gana(self):
         with mock.patch.dict(os.environ, {"FIRMS_MAP_KEY": "abc123"}):
@@ -191,7 +191,7 @@ class Clave(unittest.TestCase):
 
 
 class Dibujo(unittest.TestCase):
-    """El foco cae en su píxel y sin focos la captura no cambia."""
+    """El foco cae en su p�xel y sin focos la captura no cambia."""
 
     CAJA = (-63.0, -28.0, -53.0, -18.0)
     LADO = 400
@@ -238,10 +238,12 @@ class CatalogoYReceta(unittest.TestCase):
         nombres = {s.name: s for s in producto.params}
         self.assertIn("firms", nombres)
         self.assertFalse(nombres["firms"].default)
-        for nombre in ("firms_fuente", "firms_ventana"):
+        for nombre in ("firms_fuente", "firms_ventana", "firms_alcance"):
             self.assertEqual(nombres[nombre].enabled_when, {"firms": True}, nombre)
         self.assertEqual([o.value for o in nombres["firms_fuente"].options],
-                         ["viirs", "modis", "snpp", "todos"])
+                         list(firms.FUENTES))
+        self.assertEqual([o.value for o in nombres["firms_alcance"].options],
+                         ["completo", "paraguay"])
         self.assertEqual([o.value for o in nombres["firms_ventana"].options],
                          list(firms.VENTANAS))
 
@@ -270,7 +272,7 @@ class CatalogoYReceta(unittest.TestCase):
 
     def test_una_fuente_desconocida_cae_a_viirs(self):
         plan = recipes.planear("snapshot_paraguay",
-                               self._params(firms=True, firms_fuente="landsat"),
+                               self._params(firms=True, firms_fuente="goes"),
                                Path("C:/tmp/work"))
         args = plan.pasos[1].args
         self.assertEqual(args[args.index("--fuente") + 1], "viirs")
@@ -386,7 +388,7 @@ class Carpeta(unittest.TestCase):
 
 
 class Tajadas(unittest.TestCase):
-    """La API acepta 5 días por pedido: las tajadas no se solapan."""
+    """La API acepta 5 d�as por pedido: las tajadas no se solapan."""
 
     def test_tajadas_de_cinco_dias_sin_solape(self):
         modulo = _descargador()
@@ -446,8 +448,65 @@ class ProductosConFocos(unittest.TestCase):
                                      Path("w"))
         self.assertIn("--firms", flags)
         self.assertEqual(flags[flags.index("--firms-ventana") + 1], "6h")
+        self.assertEqual(flags[flags.index("--firms-alcance") + 1], "completo")
         self.assertEqual(flags[flags.index("--firms-entrada") + 1],
                          str(Path("w") / "firms"))
+
+    def test_el_alcance_paraguay_pide_la_caja_del_pais(self):
+        paso = recipes._paso_firms({"firms": True, "firms_alcance": "paraguay"},
+                                   datetime(2026, 11, 8, 15),
+                                   datetime(2026, 11, 8, 15),
+                                   Path("w"), mundo=True)
+        self.assertNotIn("--mundo", paso.args)
+        self.assertIn("--margen", paso.args)
+        flags = recipes._flags_firms({"firms": True, "firms_alcance": "paraguay"},
+                                     Path("w"))
+        self.assertEqual(flags[flags.index("--firms-alcance") + 1], "paraguay")
+
+
+class Alcance(unittest.TestCase):
+    """«Sólo Paraguay» usa el polígono del país, no la caja."""
+
+    def test_el_centro_y_asuncion_estan_dentro(self):
+        from paraguay import dentro
+
+        self.assertTrue(dentro(-58.0, -23.0))       # centro del Chaco
+        self.assertTrue(dentro(-57.6, -25.3))       # Asunción
+
+    def test_el_brasil_y_la_pampa_quedan_afuera(self):
+        from paraguay import dentro
+
+        self.assertFalse(dentro(-52.0, -22.0))      # Brasil, dentro de la caja
+        self.assertFalse(dentro(-63.0, -19.0))      # Bolivia, dentro de la caja
+
+
+class Gravedad(unittest.TestCase):
+    """El tamaño del marcador sigue el FRP, en cuatro clases."""
+
+    def _foco(self, frp):
+        return firms.Foco(lat=-23.0, lon=-58.0, frp=frp, confianza="alta",
+                          cuando=datetime(2026, 11, 8, 17), satelite="N20",
+                          instrumento="VIIRS", dia_noche="D")
+
+    def test_las_cuatro_clases(self):
+        self.assertEqual([firms.gravedad(self._foco(frp)) for frp in (1, 10, 30, 80)],
+                         ["baja", "moderada", "alta", "extrema"])
+
+    def test_el_factor_crece_con_la_gravedad(self):
+        factores = [firms.factor_gravedad(self._foco(frp)) for frp in (1, 10, 30, 80)]
+        self.assertEqual(factores, sorted(factores))
+        self.assertLess(factores[0], 1.1)
+        self.assertGreater(factores[-1], 1.9)
+
+    def test_el_marcador_es_chico(self):
+        # Antes el radio base era 0.0028 del lado y llegaba a x3; ahora 0.0018 y x1,95.
+        self.assertLessEqual(firms.RADIO_FOCO, 0.0018)
+
+    def test_las_ventanas_relativas_miran_hacia_atras(self):
+        desde, hasta = firms.ventana(datetime(2026, 11, 8, 15), "24h")
+        self.assertEqual(desde, datetime(2026, 11, 7, 15))
+        desde, hasta = firms.ventana(datetime(2026, 11, 8, 15), "5d")
+        self.assertEqual(desde, datetime(2026, 11, 3, 15))
 
 
 if __name__ == "__main__":

@@ -32,10 +32,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
-from firms import (VENTANAS, color_foco, etiqueta, filtrar, leer,  # noqa: E402
-                   nombre_csv, ventana)
+from firms import (RADIO_FOCO, VENTANAS, color_foco, etiqueta,  # noqa: E402
+                   factor_gravedad, filtrar, leer, nombre_csv, ventana)
 from paraguay import (MARGEN, caja_geojson, crudo_mas_nuevo,  # noqa: E402
-                      nombre_captura, px_para_mpp, ts_de_crudo)
+                      nombre_captura, px_para_mpp, solo_paraguay, ts_de_crudo)
 from rutas import SALIDAS  # noqa: E402
 
 GEOJSON = RAIZ / "datos" / "paraguay_gadm.json"
@@ -51,10 +51,9 @@ BORDE_ANCHO = 0.0                      # 0 = automático (1,6 px por cada 1600 p
 SOMBRA_ANCHO = 2.4
 SOMBRA_ALFA = 55
 
-# Focos de FIRMS: color por confianza (paleta compartida en `comun/firms.py`) y
-# tamaño por FRP. El halo oscuro los hace legibles sobre nube blanca y el núcleo
+# Focos de FIRMS: color por confianza y tamaño por gravedad (paleta y escala en
+# `comun/firms.py`). El halo oscuro los hace legibles sobre nube blanca y el núcleo
 # casi blanco marca el centro del píxel.
-FOCO_RADIO = 0.0028                    # radio base como fracción del lado
 
 # Fuentes candidatas para el crédito opcional (si no hay ninguna, no se dibuja).
 FUENTES = (
@@ -143,11 +142,11 @@ def dibujar_focos(imagen: Image.Image, caja, focos, lado: int,
     escala = 2 if max(lado, alto) <= 4000 else 1
     capa = Image.new("RGBA", (lado * escala, alto * escala), (0, 0, 0, 0))
     lapiz = ImageDraw.Draw(capa)
-    base = max(3.0, min(lado, alto) * FOCO_RADIO)
+    base = max(2.5, min(lado, alto) * RADIO_FOCO)
     for foco in focos:
         x, y = _a_pixel(foco.lon, foco.lat, caja, lado, escala, alto)
         # El FRP manda el tamaño, con techo: un foco de 200 MW no tapa la captura.
-        radio = min(base * (1.0 + min(foco.frp, 100.0) ** 0.5 / 8.0), base * 3.0)
+        radio = base * factor_gravedad(foco)
         _punto(lapiz, x, y, radio * escala, color_foco(foco.confianza))
     capa = capa.resize((lado, alto), Image.LANCZOS)
     salida = imagen.convert("RGBA").copy()
@@ -249,6 +248,10 @@ def main(argv=None) -> int:
     ap.add_argument("--firms-ventana", default=VENTANAS[0], choices=VENTANAS,
                     help="ventana de focos: dia = día UTC completo (default), "
                          "o horas a cada lado del slot")
+    ap.add_argument("--firms-alcance", default="completo",
+                    choices=("completo", "paraguay"),
+                    help="completo = todos los focos del área; paraguay = sólo los "
+                         "que caen dentro del país")
     ap.add_argument("--firms-entrada",
                     help="carpeta donde está el CSV de focos "
                          "(por defecto, la misma de --entrada)")
@@ -299,6 +302,8 @@ def main(argv=None) -> int:
             print(f"  aviso: no hay focos en {csv_focos}; la captura sale sin overlay")
         else:
             focos = filtrar(leer(csv_focos), desde, hasta)
+            if args.firms_alcance == "paraguay":
+                focos = solo_paraguay(focos)
             cuando_focos = etiqueta(t, args.firms_ventana)
             print(f"focos FIRMS: {len(focos)} ({cuando_focos})")
             if focos:

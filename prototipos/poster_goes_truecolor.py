@@ -1,50 +1,50 @@
-"""PÃ³ster de **color real** de GOES-19 con el diseÃ±o de `poster_goes_realista`.
+"""Póster de **color real** de GOES-19 con el diseño de `poster_goes_realista`.
 
 Archivo NUEVO: no modifica el pipeline de la C13 (`poster_goes_realista.py`), ni el
 de GeoColor (`cuadros/cuadros_geocolor.py`), ni el de true color de GIBS
-(`cuadros/cuadros_truecolor.py`). Toma el vestuario aprobado del pÃ³ster realista
-â€”fondo blanco, globo Orthographic inscripto, sombra exterior, retÃ­culo tenue,
-costas finas, borde de Paraguayâ€” y le cambia el insumo: en lugar de una banda
-tÃ©rmica coloreada con una rampa, compone **tres canales visibles** en un RGB.
+(`cuadros/cuadros_truecolor.py`). Toma el vestuario aprobado del póster realista
+—fondo blanco, globo Orthographic inscripto, sombra exterior, retículo tenue,
+costas finas, borde de Paraguay— y le cambia el insumo: en lugar de una banda
+térmica coloreada con una rampa, compone **tres canales visibles** en un RGB.
 
-Por quÃ© hacen falta tres bandas y no una:
+Por qué hacen falta tres bandas y no una:
 
   * El ABI no tiene banda verde. Se sintetiza con la receta oficial de CIMSS/Unidata:
-    ``Green = 0.45Â·RED(0.64) + 0.10Â·VEGGIE(0.86) + 0.45Â·BLUE(0.47)``. El peso del
-    0.86 Âµm es **bajo a propÃ³sito**: "veggie" mide clorofila, no luz verde; usarlo al
-    45 % (el error fÃ¡cil de cometer) pinta la vegetaciÃ³n de esmeralda y vuelve verde
+    ``Green = 0.45·RED(0.64) + 0.10·VEGGIE(0.86) + 0.45·BLUE(0.47)``. El peso del
+    0.86 µm es **bajo a propósito**: "veggie" mide clorofila, no luz verde; usarlo al
+    45 % (el error fácil de cometer) pinta la vegetación de esmeralda y vuelve verde
     la Patagonia.
-  * Con una sola banda visible (lo Ãºnico que lleva HRIT) no hay color posible: sÃ³lo
+  * Con una sola banda visible (lo único que lleva HRIT) no hay color posible: sólo
     gris o falso color con un mapa de fondo pegado. Ese es el motivo por el que las
-    imÃ¡genes de GOES por RTL-SDR nunca se ven "naturales".
+    imágenes de GOES por RTL-SDR nunca se ven "naturales".
 
-El pipeline, en orden (cada paso es una decisiÃ³n explÃ­cita, no un ajuste a ojo):
+El pipeline, en orden (cada paso es una decisión explícita, no un ajuste a ojo):
 
-  1. NormalizaciÃ³n solar: la reflectancia se mezcla entre cruda y dividida por
-     cos(cenital solar) segÃºn altura solar. Cerca del terminador la divisiÃ³n amplifica
-     el ruido hasta romper el color (moteado en el limbo), asÃ­ que ahÃ­ manda la cruda.
-  2. Pedestal atmosfÃ©rico (DOS, *dark object subtraction*): se resta a cada canal su
-     percentil bajo sobre los pÃ­xeles iluminados. Es la correcciÃ³n mÃ¡s simple que quita
-     la neblina azul y devuelve el ocÃ©ano oscuro; no pretende ser un Rayleigh completo.
-  3. Verde sintÃ©tico (receta CIMSS) y estirado por luminancia, con percentiles
+  1. Normalización solar: la reflectancia se mezcla entre cruda y dividida por
+     cos(cenital solar) según altura solar. Cerca del terminador la división amplifica
+     el ruido hasta romper el color (moteado en el limbo), así que ahí manda la cruda.
+  2. Pedestal atmosférico (DOS, *dark object subtraction*): se resta a cada canal su
+     percentil bajo sobre los píxeles iluminados. Es la corrección más simple que quita
+     la neblina azul y devuelve el océano oscuro; no pretende ser un Rayleigh completo.
+  3. Verde sintético (receta CIMSS) y estirado por luminancia, con percentiles
      compartidos para no romper el balance de color.
-  4. Mediana 3Ã—3 (mata el pÃ­xel suelto), saturaciÃ³n, gamma y desenfoque sub-pÃ­xel.
+  4. Mediana 3×3 (mata el píxel suelto), saturación, gamma y desenfoque sub-píxel.
   5. Rampa de noche: el disco se apaga del lado sin sol, que es lo que produce el
      terminador de la referencia.
 
-ResoluciÃ³n: el muestreo va **por franjas de filas**. AsÃ­ el pico de memoria no crece
-con el cuadrado del tamaÃ±o y el pÃ³ster se puede sacar a resoluciÃ³n nativa del sensor
-(~8360 px de diÃ¡metro, 1 km por pÃ­xel en las tres bandas) en una mÃ¡quina de 8 GB.
+Resolución: el muestreo va **por franjas de filas**. Así el pico de memoria no crece
+con el cuadrado del tamaño y el póster se puede sacar a resolución nativa del sensor
+(~8360 px de diámetro, 1 km por píxel en las tres bandas) en una máquina de 8 GB.
 
-Reutiliza `comun/goes_lectura.py` (patrÃ³n de nombre), `poster_goes_realista.py`
-(geometrÃ­a geostacionaria, sombreado del borde, relleno de huecos, rÃ³tulos) y
+Reutiliza `comun/goes_lectura.py` (patrón de nombre), `poster_goes_realista.py`
+(geometría geostacionaria, sombreado del borde, relleno de huecos, rótulos) y
 `poster_mur_realista.py` (sombra exterior): una sola fuente por pieza.
 
-Uso (desde la raÃ­z del proyecto):
+Uso (desde la raíz del proyecto):
 
     .venv\\Scripts\\python.exe prototipos\\poster_goes_truecolor.py
     .venv\\Scripts\\python.exe prototipos\\poster_goes_truecolor.py --desde 2026-10-24T16:40
-    .venv\\Scripts\\python.exe prototipos\\poster_goes_truecolor.py --px 1200   # borrador rÃ¡pido
+    .venv\\Scripts\\python.exe prototipos\\poster_goes_truecolor.py --px 1200   # borrador rápido
     .venv\\Scripts\\python.exe prototipos\\poster_goes_truecolor.py --help   # no toca la red
 """
 from __future__ import annotations
@@ -73,31 +73,32 @@ from poster_goes_realista import (  # noqa: E402
     time_label_nc,
 )
 from poster_mur_realista import sombra_exterior  # noqa: E402
-from firms import VENTANAS, color_hex, filtrar, leer_carpeta, ventana  # noqa: E402
+from firms import (RADIO_FOCO, VENTANAS, color_hex, factor_gravedad,  # noqa: E402
+                   filtrar, leer_carpeta, ventana)
 from rutas import DATOS, SALIDAS  # noqa: E402
 
 # ------------------------------------------------------------------------ constantes
 SAT = "G19"
 BANDAS = ("C01", "C02", "C03")          # azul, rojo, veggie
 NOMBRE = {"C01": "azul", "C02": "rojo", "C03": "nir"}   # canal -> componente RGB
-CENTRO = (-71.0, -10.0)                 # mismo encuadre que el pÃ³ster de la C13
+CENTRO = (-71.0, -10.0)                 # mismo encuadre que el póster de la C13
 
-# 8360 px de diÃ¡metro es la resoluciÃ³n nativa de 1 km: el disco visible abarca ~125Â°
-# de Ã¡ngulo central y la grilla de 1 km del ABI tiene 66.7 px por grado. MÃ¡s que eso
-# empieza a interpolar el azul y el verde (el rojo, a 0.5 km, todavÃ­a aguantarÃ­a).
+# 8360 px de diámetro es la resolución nativa de 1 km: el disco visible abarca ~125°
+# de ángulo central y la grilla de 1 km del ABI tiene 66.7 px por grado. Más que eso
+# empieza a interpolar el azul y el verde (el rojo, a 0.5 km, todavía aguantaría).
 PX = 8360
 TOPE = 10848                            # grilla de origen: nativa en C01/C03, 2x en C02
 FILAS = 256                             # alto de franja del muestreo
 ESCALA_Q = 1.5                          # fondo de escala de la reflectancia al cuantizar
 
-# Ajustes del color. Los valores por defecto estÃ¡n pensados para que el pÃ³ster salga
-# "fotogrÃ¡fico" sin tocar nada; todos son ajustables por consola.
+# Ajustes del color. Los valores por defecto están pensados para que el póster salga
+# "fotográfico" sin tocar nada; todos son ajustables por consola.
 SATURACION = 1.10
 GAMMA = 0.85
-PEDESTAL = 0.2                          # percentil del pedestal atmosfÃ©rico
+PEDESTAL = 0.2                          # percentil del pedestal atmosférico
 PCT_LO, PCT_HI = 0.5, 99.5              # estirado por luminancia
 MU_MIN = 0.10                           # piso de cos(cenital) para no amplificar ruido
-MU_ALTO = 0.45                          # sol "alto": ahÃ­ la normalizaciÃ³n pesa entera
+MU_ALTO = 0.45                          # sol "alto": ahí la normalización pesa entera
 MU_NOCHE = 0.12                         # cos(cenital) donde termina la rampa de noche
 SUAVIZADO = 0.8                         # px de desenfoque final (limpia el moteado del limbo)
 
@@ -105,7 +106,7 @@ TITULO = "True color"
 CREDITO = "Graphic by @Gillo97"
 FUENTE = "SOURCE: NOAA/NESDIS {sat} ABI L2 CMIP | B1+B2+B3 COMPOSITE"
 
-# Vestuario, calcado del pÃ³ster realista (misma familia visual).
+# Vestuario, calcado del póster realista (misma familia visual).
 WHITE = "#ffffff"
 INK = "#30353a"
 INK_SOFT = "#6d7378"
@@ -147,12 +148,12 @@ def slots_comunes(desde: datetime | None, n: int, paso: int,
         disponibles.append({fecha_de(f).replace(second=0, microsecond=0)
                             for f in raiz.glob("OR_ABI-L2-CMIP*.nc") if PATRON.search(f.name)})
     if len(disponibles) != len(bandas):
-        raise SystemExit(f"No estÃ¡n todas las bandas bajo {DATOS}. "
+        raise SystemExit(f"No están todas las bandas bajo {DATOS}. "
                          "Bajalas con descargar/truecolor_goes.py.")
     comunes = set.intersection(*disponibles)
     if not comunes:
-        raise SystemExit("NingÃºn slot tiene las tres bandas. "
-                         "BajÃ¡ un slot completo con descargar/truecolor_goes.py.")
+        raise SystemExit("Ningún slot tiene las tres bandas. "
+                         "Bajá un slot completo con descargar/truecolor_goes.py.")
 
     base = desde or max(comunes)
     t = base
@@ -165,7 +166,7 @@ def slots_comunes(desde: datetime | None, n: int, paso: int,
         if (t - base) > timedelta(days=30):
             break
     if not salida:
-        raise SystemExit("Ninguno de los slots pedidos estÃ¡ completo en disco.")
+        raise SystemExit("Ninguno de los slots pedidos está completo en disco.")
     return salida
 
 
@@ -173,9 +174,9 @@ def _plano(nc: Path, tope: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, flo
     """Reflectancia de una banda como ``uint16`` (0..65535) y su grilla de escaneo.
 
     Se lee el ``.nc`` submuestreando con ``paso`` (``TOPE`` es la grilla nativa de
-    C01/C03, asÃ­ que en esas bandas ``paso == 1`` y no hay pÃ©rdida) y se cuantiza en
-    el lugar: el pico de memoria es un plano de origen mÃ¡s su versiÃ³n uint16, no dos
-    copias float64. Devuelve ``(plano, x, y, altura_satÃ©lite, longitud_subpunto)``.
+    C01/C03, así que en esas bandas ``paso == 1`` y no hay pérdida) y se cuantiza en
+    el lugar: el pico de memoria es un plano de origen más su versión uint16, no dos
+    copias float64. Devuelve ``(plano, x, y, altura_satélite, longitud_subpunto)``.
     """
     import xarray as xr
 
@@ -190,9 +191,9 @@ def _plano(nc: Path, tope: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, flo
         if paso == 1:
             crudo = np.asarray(cmi.values, dtype=np.float32)
         else:
-            # Promedio de bloques paso x paso, leído por franjas de filas: el decimado
+            # Promedio de bloques paso x paso, le�do por franjas de filas: el decimado
             # puro (``[::paso]``) aliasa la textura de la tierra y deja un moteado
-            # regular que después el estirado convierte en puntos de color.
+            # regular que despu�s el estirado convierte en puntos de color.
             alto_out = int(np.ceil(cmi.shape[0] / paso))
             ancho_out = int(np.ceil(cmi.shape[1] / paso))
             crudo = np.zeros((alto_out, ancho_out), dtype=np.float32)
@@ -215,12 +216,12 @@ def _plano(nc: Path, tope: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, flo
     return plano, x, y, h, lon0
 
 
-# ------------------------------------------------------------------------ geometrÃ­a
+# ------------------------------------------------------------------------ geometría
 def _orto_franja(px: int, escala: float, centro: tuple[float, float], f0: int, f1: int):
     """(lon, lat, rho, dentro) de las filas ``f0:f1`` del disco.
 
-    Misma proyecciÃ³n inversa que ``poster_goes_realista._orto_inverso``; acÃ¡ se pide
-    sÃ³lo una franja de filas para que los temporales en float64 no crezcan con ``px``.
+    Misma proyección inversa que ``poster_goes_realista._orto_inverso``; acá se pide
+    sólo una franja de filas para que los temporales en float64 no crezcan con ``px``.
     """
     lon0, lat0 = np.radians(centro[0]), np.radians(centro[1])
     y = np.linspace(1.0, -1.0, px)[f0:f1]
@@ -229,7 +230,7 @@ def _orto_franja(px: int, escala: float, centro: tuple[float, float], f0: int, f
     rho = np.hypot(X, Y)
     # Con zoom (`escala < 1`) el borde visible del disco cae FUERA del cuadro: el
     # encuadre regional entra completo y no quedan esquinas negras. Con escala = 1
-    # (globo completo) el círculo inscripto recorta las esquinas, como siempre.
+    # (globo completo) el c�rculo inscripto recorta las esquinas, como siempre.
     dentro = (rho * escala) <= 1.0
     rho_s = np.where(dentro & (rho > 1e-12), rho, 1.0)
     sin_c = np.clip(rho_s * escala, 0.0, 1.0)
@@ -245,10 +246,10 @@ def _orto_franja(px: int, escala: float, centro: tuple[float, float], f0: int, f
 
 
 def _alfa(rho, px: int, escala: float = 1.0):
-    """Alfa geométrico del disco: antialias de ~1.5 px sobre el borde visible.
+    """Alfa geom�trico del disco: antialias de ~1.5 px sobre el borde visible.
 
-    El borde visible está en `rho * escala = 1`. Con el globo completo (`escala=1`)
-    es el círculo inscripto; con zoom cae fuera del cuadro y toda la imagen queda
+    El borde visible est� en `rho * escala = 1`. Con el globo completo (`escala=1`)
+    es el c�rculo inscripto; con zoom cae fuera del cuadro y toda la imagen queda
     opaca.
     """
     return np.clip((1.0 - rho * escala) * (px / 2.0) / 1.5, 0.0, 1.0)
@@ -258,8 +259,8 @@ def _muestrear(plano, x, y, lon0: float, h: float, lon, lat):
     """Reflectancia muestreada en el disco para una franja; NaN donde no hay dato.
 
     Bilineal sobre la grilla de escaneo, igual que ``componer_disco``, pero recibiendo
-    ``lon``/``lat`` ya calculados (la trigonometrÃ­a se hace una sola vez por franja) y
-    tocando sÃ³lo los vecinos de la franja: nunca se copia el plano entero.
+    ``lon``/``lat`` ya calculados (la trigonometría se hace una sola vez por franja) y
+    tocando sólo los vecinos de la franja: nunca se copia el plano entero.
     """
     xs, ys = _geo_scan(lon, lat, lon0, h)
     dx = float(x[1] - x[0])
@@ -280,7 +281,7 @@ def _muestrear(plano, x, y, lon0: float, h: float, lon, lat):
     v10, v11 = plano[f0 + 1, c0], plano[f0 + 1, c0 + 1]
     valores = ((v00 * (1 - fc) + v01 * fc) * (1 - ff)
                + (v10 * (1 - fc) + v11 * fc) * ff)
-    # El plano trae 0 en el espacio: si algÃºn vecino del entorno es 0, el pÃ­xel estÃ¡ en
+    # El plano trae 0 en el espacio: si algún vecino del entorno es 0, el píxel está en
     # la franja mezclada del limbo y no se usa.
     valido = np.minimum(np.minimum(v00, v01), np.minimum(v10, v11)) > 0
     valores *= ESCALA_Q / 65535.0
@@ -289,10 +290,10 @@ def _muestrear(plano, x, y, lon0: float, h: float, lon, lat):
 
 # ------------------------------------------------------------------------ sol
 def cos_cenital(lon, lat, t: datetime):
-    """cos(Ã¡ngulo cenital solar) por pÃ­xel (serie de Fourier de NOAA/Spencer).
+    """cos(ángulo cenital solar) por píxel (serie de Fourier de NOAA/Spencer).
 
-    Error tÃ­pico < 0.5Â° en la posiciÃ³n del terminador, suficiente para un pÃ³ster y
-    sin dependencias externas. Devuelve tambiÃ©n la declinaciÃ³n usada (para el rÃ³tulo).
+    Error típico < 0.5° en la posición del terminador, suficiente para un póster y
+    sin dependencias externas. Devuelve también la declinación usada (para el rótulo).
     """
     doy = t.timetuple().tm_yday
     frac = (t.hour + t.minute / 60.0) / 24.0
@@ -310,13 +311,13 @@ def cos_cenital(lon, lat, t: datetime):
 
 
 def _suave(x, a: float, b: float):
-    """Rampa 0..1 con derivada nula en los extremos (terminador sin escalÃ³n)."""
+    """Rampa 0..1 con derivada nula en los extremos (terminador sin escalón)."""
     u = np.clip((x - a) / (b - a), 0.0, 1.0)
     return u * u * (3.0 - 2.0 * u)
 
 
 def _factor_solar(mu, args):
-    """Peso de la normalizaciÃ³n solar: 1 con sol alto, 0 pegado al terminador."""
+    """Peso de la normalización solar: 1 con sol alto, 0 pegado al terminador."""
     mu_ef = np.clip(mu, args.mu_min, 1.0)
     peso = _suave(mu, args.mu_min, args.mu_alto)
     return (1.0 - peso) + peso / mu_ef
@@ -324,7 +325,7 @@ def _factor_solar(mu, args):
 
 # ------------------------------------------------------------------------ color
 def _verde(rojo, nir, azul):
-    """Verde sintÃ©tico del ABI (receta CIMSS/Unidata). El peso del NIR es 0.10."""
+    """Verde sintético del ABI (receta CIMSS/Unidata). El peso del NIR es 0.10."""
     return 0.45 * rojo + 0.10 * nir + 0.45 * azul
 
 
@@ -351,7 +352,7 @@ def _parametros(refs, valido, mu, args) -> dict:
 
 
 def _componer(refs, mu, params, args):
-    """Reflectancias -> RGB float 0..1 (pedestal, verde, estirado, saturaciÃ³n, noche)."""
+    """Reflectancias -> RGB float 0..1 (pedestal, verde, estirado, saturación, noche)."""
     rojo = np.clip(refs["rojo"] - params["base"]["rojo"], 0.0, None)
     nir = np.clip(refs["nir"] - params["base"]["nir"], 0.0, None)
     azul = np.clip(refs["azul"] - params["base"]["azul"], 0.0, None)
@@ -368,11 +369,11 @@ def _componer(refs, mu, params, args):
 
 
 def _mediana(rgb: np.ndarray) -> np.ndarray:
-    """Mediana 3x3 por canal: mata el pÃ­xel suelto sin tocar bordes de nubes.
+    """Mediana 3x3 por canal: mata el píxel suelto sin tocar bordes de nubes.
 
-    Sobre ocÃ©ano oscuro y en el limbo el ABI entrega seÃ±al muy baja, y el estirado
-    convierte cada pÃ­xel fuera de rango en un punto de color. La mediana los elimina
-    de raÃ­z (un desenfoque no: promedia y deja el punto).
+    Sobre océano oscuro y en el limbo el ABI entrega señal muy baja, y el estirado
+    convierte cada píxel fuera de rango en un punto de color. La mediana los elimina
+    de raíz (un desenfoque no: promedia y deja el punto).
     """
     from PIL import Image as _Image, ImageFilter as _Filter
 
@@ -388,7 +389,7 @@ def _desenfoque(rgb: np.ndarray, radio: float) -> np.ndarray:
     """Desenfoque gaussiano por canal de un RGB uint8 (PIL, sin scipy).
 
     Pillow no soporta ``GaussianBlur`` sobre modo ``F``: se desenfoca el RGB ya
-    cuantizado a 8 bits, que es la profundidad final del pÃ³ster.
+    cuantizado a 8 bits, que es la profundidad final del póster.
     """
     from PIL import Image as _Image, ImageFilter as _Filter
 
@@ -406,7 +407,7 @@ def componer_disco(planos, escala, centro, px: int, t: datetime, args):
 
     Dos pasadas: la primera muestrea una malla gruesa para fijar pedestales y
     percentiles (que son globales), la segunda recorre el disco completo y escribe el
-    RGBA. AsÃ­ el pico de memoria no depende de ``px``.
+    RGBA. Así el pico de memoria no depende de ``px``.
     """
     pm = int(np.clip(px // 8, 256, 1400))
     lon, lat, rho, dentro = _orto_franja(pm, escala, centro, 0, pm)
@@ -447,7 +448,7 @@ def componer_disco(planos, escala, centro, px: int, t: datetime, args):
         rgb = _rellenar_huecos(rgb, valido)
     if args.suavizado > 0:
         rgb = _desenfoque(rgb, args.suavizado * px / 2400.0)
-    # RGBA: sin el canal alfa el recuadro negro del array taparÃ­a el halo y el fondo.
+    # RGBA: sin el canal alfa el recuadro negro del array taparía el halo y el fondo.
     return np.dstack([rgb, alfa]), alfa, params
 
 
@@ -476,10 +477,10 @@ def render(nc_bandas: dict[str, Path], args) -> tuple:
 
 
 def _geometria(px: int, dpi: int | None):
-    """Layout del pÃ³ster: el disco llena el ancho y deja el pie para los crÃ©ditos.
+    """Layout del póster: el disco llena el ancho y deja el pie para los créditos.
 
-    El disco queda al 93 % del ancho (no al 96.5 % del pÃ³ster tÃ©rmico): sin tarjeta de
-    leyenda, el margen superior es lo Ãºnico que separa el planeta del tÃ­tulo.
+    El disco queda al 93 % del ancho (no al 96.5 % del póster térmico): sin tarjeta de
+    leyenda, el margen superior es lo único que separa el planeta del título.
     """
     ancho_in, alto_in = 10.4, 11.0
     lado_in = 0.93 * ancho_in
@@ -492,7 +493,7 @@ _CACHE_FOCOS: dict[str, list] = {}
 
 
 def _focos_de(args, cuando: datetime) -> list:
-    """Focos de FIRMS de este cuadro, o [] si el toggle está apagado.
+    """Focos de FIRMS de este cuadro, o [] si el toggle est� apagado.
 
     El CSV se lee una sola vez por carpeta: una serie de 24 cuadros no vuelve a
     abrir el archivo 24 veces.
@@ -503,14 +504,19 @@ def _focos_de(args, cuando: datetime) -> list:
     if carpeta not in _CACHE_FOCOS:
         _CACHE_FOCOS[carpeta] = leer_carpeta(carpeta)
     desde, hasta = ventana(cuando, getattr(args, "firms_ventana", "dia"))
-    return filtrar(_CACHE_FOCOS[carpeta], desde, hasta)
+    focos = filtrar(_CACHE_FOCOS[carpeta], desde, hasta)
+    if getattr(args, "firms_alcance", "completo") == "paraguay":
+        from paraguay import dentro
+
+        focos = [foco for foco in focos if dentro(foco.lon, foco.lat)]
+    return focos
 
 
 def _pintar_focos(ax, focos, centro, escala, px: int, dpi: float) -> None:
-    """Marca los focos sobre el globo con la misma proyección que el contorno.
+    """Marca los focos sobre el globo con la misma proyecci�n que el contorno.
 
-    `px` es el diámetro del disco en píxeles y el eje va de -1 a 1: el marcador se
-    calcula en puntos, así se ve igual a cualquier `--px`.
+    `px` es el di�metro del disco en p�xeles y el eje va de -1 a 1: el marcador se
+    calcula en puntos, as� se ve igual a cualquier `--px`.
     """
     if not focos:
         return
@@ -518,22 +524,24 @@ def _pintar_focos(ax, focos, centro, escala, px: int, dpi: float) -> None:
                          np.array([f.lat for f in focos], dtype=float),
                          centro, escala)
     x, y = np.asarray(x), np.asarray(y)
-    # Fuera del disco visible no se dibuja: ese foco está del otro lado del planeta.
+    # Fuera del disco visible no se dibuja: ese foco est� del otro lado del planeta.
     visible = np.hypot(x, y) <= 1.0
     if not visible.any():
         return
     colores = [color_hex(f.confianza) for f, dentro in zip(focos, visible) if dentro]
-    diametro = max(4.0, px * 0.0085) * 72.0 / dpi
-    ax.scatter(x[visible], y[visible], s=(diametro * 1.75) ** 2, c="#000000",
-               alpha=0.30, linewidths=0, zorder=8.6)
-    ax.scatter(x[visible], y[visible], s=diametro ** 2, c=colores,
+    factores = np.array([factor_gravedad(f) for f, dentro in zip(focos, visible)
+                         if dentro])
+    diametro = max(3.0, px * RADIO_FOCO * 2) * 72.0 / dpi
+    ax.scatter(x[visible], y[visible], s=((diametro * 1.75) * factores) ** 2,
+               c="#000000", alpha=0.30, linewidths=0, zorder=8.6)
+    ax.scatter(x[visible], y[visible], s=(diametro * factores) ** 2, c=colores,
                alpha=0.90, linewidths=0, zorder=9)
-    ax.scatter(x[visible], y[visible], s=(diametro * 0.42) ** 2, c="#fff8dc",
-               alpha=0.92, linewidths=0, zorder=9.1)
+    ax.scatter(x[visible], y[visible], s=((diametro * 0.42) * factores) ** 2,
+               c="#fff8dc", alpha=0.92, linewidths=0, zorder=9.1)
 
 
 def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
-    """Dibuja el globo con el diseÃ±o del pÃ³ster realista (sin tarjeta: no hay escala)."""
+    """Dibuja el globo con el diseño del póster realista (sin tarjeta: no hay escala)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -543,8 +551,8 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
     ancho_in, alto_in, dpi, gx, gy, gw, gh = _geometria(px, args.dpi)
 
     if getattr(args, "limpio", False):
-        # Modo "captura limpia": sin halo, sin sombreado de borde y sin rótulos.
-        # El recorte entra de borde a borde y sólo queda la imagen (y el contorno).
+        # Modo "captura limpia": sin halo, sin sombreado de borde y sin r�tulos.
+        # El recorte entra de borde a borde y s�lo queda la imagen (y el contorno).
         fig = plt.figure(figsize=(px / dpi, px / dpi), dpi=dpi)
         fig.patch.set_facecolor(WHITE)
         ax = fig.add_axes([0, 0, 1, 1])
@@ -553,7 +561,7 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
         ax.set_aspect("equal")
         ax.set_axis_off()
         ax.set_facecolor("none")
-        # El RGB puede pedir bilinear: sin filo que rescatar, lanczos sumaría
+        # El RGB puede pedir bilinear: sin filo que rescatar, lanczos sumar�a
         # un anillo brillante (por defecto, lanczos como siempre).
         interp = getattr(args, "interp", "lanczos")
         ax.imshow(disco, origin="upper", extent=[-1, 1, -1, 1],
@@ -637,11 +645,11 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
 
     _pintar_focos(ax, focos, centro, escala, px, dpi)
 
-    # Sin aro de limbo: en un pÃ³ster de color real el borde lo define el alfa del disco.
-    # El cÃ­rculo del pÃ³ster tÃ©rmico, sobre el negro de la noche, se leÃ­a como un aro
+    # Sin aro de limbo: en un póster de color real el borde lo define el alfa del disco.
+    # El círculo del póster térmico, sobre el negro de la noche, se leía como un aro
     # blanco flotando fuera del planeta.
     # Marca de agua sobre el margen inferior del globo, no encima del disco: en color
-    # real la mitad sur del planeta es océano casi negro y el texto desaparecía.
+    # real la mitad sur del planeta es oc�ano casi negro y el texto desaparec�a.
     if args.credito:
         fig.text(0.5, gy - 0.010, " ".join(args.credito.upper()), ha="center",
                  va="center", fontsize=8.6, color=(0.31, 0.35, 0.39, 0.40),
@@ -662,12 +670,12 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
 # ------------------------------------------------------------------------ CLI
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        description="PÃ³ster de color real (globo Orthographic, fondo blanco) de GOES-19 "
+        description="Póster de color real (globo Orthographic, fondo blanco) de GOES-19 "
                     "compuesto con las bandas visibles B1+B2+B3.")
-    ap.add_argument("--desde", help="slot UTC ISO (por defecto, el Ãºltimo completo)")
-    ap.add_argument("--sat", default=SAT, help=f"satÃ©lite (por defecto {SAT})")
+    ap.add_argument("--desde", help="slot UTC ISO (por defecto, el último completo)")
+    ap.add_argument("--sat", default=SAT, help=f"satélite (por defecto {SAT})")
     ap.add_argument("--px", type=int, default=PX,
-                    help=f"diÃ¡metro del globo en px (por defecto {PX}, la resoluciÃ³n "
+                    help=f"diámetro del globo en px (por defecto {PX}, la resolución "
                          "nativa de 1 km)")
     ap.add_argument("--dpi", type=int, default=None, help="dpi; si se omite se deduce de --px")
     ap.add_argument("--tope", type=int, default=TOPE,
@@ -676,22 +684,22 @@ def main(argv=None) -> int:
     ap.add_argument("--centro", nargs=2, type=float, metavar=("LON", "LAT"),
                     default=list(CENTRO), help=f"centro del globo (por defecto {CENTRO})")
     ap.add_argument("--recorte", type=float, default=None,
-                    help="fuerza la fracciÃ³n del radio visible (por defecto se deduce "
+                    help="fuerza la fracción del radio visible (por defecto se deduce "
                          "del centro para no tocar la franja estirada del limbo)")
     ap.add_argument("--saturacion", type=float, default=SATURACION,
-                    help=f"saturaciÃ³n del color, 1 = neutra (por defecto {SATURACION})")
+                    help=f"saturación del color, 1 = neutra (por defecto {SATURACION})")
     ap.add_argument("--gamma", type=float, default=GAMMA,
                     help=f"gamma del RGB (por defecto {GAMMA})")
     ap.add_argument("--pedestal", type=float, default=PEDESTAL,
-                    help=f"percentil del pedestal atmosfÃ©rico (por defecto {PEDESTAL})")
+                    help=f"percentil del pedestal atmosférico (por defecto {PEDESTAL})")
     ap.add_argument("--pct-lo", type=float, default=PCT_LO,
                     help=f"percentil bajo del estirado (por defecto {PCT_LO})")
     ap.add_argument("--pct-hi", type=float, default=PCT_HI,
                     help=f"percentil alto del estirado (por defecto {PCT_HI})")
     ap.add_argument("--mu-min", type=float, default=MU_MIN,
-                    help=f"piso de cos(cenital) en la normalizaciÃ³n solar (por defecto {MU_MIN})")
+                    help=f"piso de cos(cenital) en la normalización solar (por defecto {MU_MIN})")
     ap.add_argument("--mu-alto", type=float, default=MU_ALTO,
-                    help=f"cos(cenital) con sol alto: normalizaciÃ³n completa "
+                    help=f"cos(cenital) con sol alto: normalización completa "
                          f"(por defecto {MU_ALTO})")
     ap.add_argument("--mu-noche", type=float, default=MU_NOCHE,
                     help=f"cos(cenital) donde termina la rampa de noche (por defecto {MU_NOCHE})")
@@ -699,17 +707,17 @@ def main(argv=None) -> int:
                     help=f"desenfoque final en px del disco de 2400 (por defecto {SUAVIZADO}); "
                          "0 lo apaga")
     ap.add_argument("--mediana", action=argparse.BooleanOptionalAction, default=True,
-                    help="mediana 3x3 contra el pÃ­xel suelto (por defecto, sÃ­)")
+                    help="mediana 3x3 contra el píxel suelto (por defecto, sí)")
     ap.add_argument("--sombra-borde", type=float, default=0.18,
                     help="profundidad del borde 0..0.8 (por defecto 0.18)")
-    ap.add_argument("--titulo", default=TITULO, help="tÃ­tulo del pÃ³ster")
-    ap.add_argument("--fuente", default=FUENTE, help="lÃ­nea de fuente al pie")
-    ap.add_argument("--credito", default=CREDITO, help="crÃ©dito al pie; vacÃ­o = sin crÃ©dito")
+    ap.add_argument("--titulo", default=TITULO, help="título del póster")
+    ap.add_argument("--fuente", default=FUENTE, help="línea de fuente al pie")
+    ap.add_argument("--credito", default=CREDITO, help="crédito al pie; vacío = sin crédito")
     ap.add_argument("--borde", nargs="?", const=str(BORDE_SA), default=str(BORDE_SA),
                     help="contorno destacado sobre el globo (por defecto, Paraguay); "
-                         "pasÃ¡ --borde \"\" para sacarlo")
+                         "pasá --borde \"\" para sacarlo")
     ap.add_argument("--fronteras", action=argparse.BooleanOptionalAction, default=True,
-                    help="lÃ­mites polÃ­ticos punteados (por defecto, sÃ­)")
+                    help="límites políticos punteados (por defecto, sí)")
     ap.add_argument("--limpio", action="store_true",
                     help="captura limpia: sin titulos, creditos, halo ni sombreado de borde")
     ap.add_argument("--out", help="PNG de salida (por defecto, en comun.rutas.SALIDAS)")
@@ -733,7 +741,7 @@ def main(argv=None) -> int:
         args.fuente = f"{args.fuente} | FIRMS hotspots"
 
     if args.fondo == "oscuro":
-        # Mismo póster, tinta invertida: sobre negro la tinta oscura no se lee.
+        # Mismo p�ster, tinta invertida: sobre negro la tinta oscura no se lee.
         global WHITE, INK, INK_SOFT, COAST, BORDER, GRID
         WHITE = "#000000"
         INK = "#eef2f5"
@@ -753,7 +761,7 @@ def main(argv=None) -> int:
     t0 = fecha_de(nc_bandas["C01"])
     print(f"{Path(nc_bandas['C01']).name}\nslot: {t0:%Y-%m-%d %H:%M} UTC | "
           f"globo {args.px} px | centro {tuple(args.centro)} | "
-          f"saturaciÃ³n {args.saturacion} | gamma {args.gamma}", flush=True)
+          f"saturación {args.saturacion} | gamma {args.gamma}", flush=True)
 
     fig, _rgba, _alfa, stats = render(nc_bandas, args)
     print(f"disco {stats['px']} px | {stats['validos']:,} px con dato")
@@ -774,7 +782,7 @@ def main(argv=None) -> int:
 
 
 def _serie(lista: list[dict[str, Path]], args) -> int:
-    """Renderiza una serie de cuadros con el mismo diseÃ±o (insumo de la animaciÃ³n)."""
+    """Renderiza una serie de cuadros con el mismo diseño (insumo de la animación)."""
     salida = Path(args.frames)
     salida.mkdir(parents=True, exist_ok=True)
     print(f"{len(lista)} cuadros desde {fecha_de(lista[0]['C01']):%Y-%m-%d %H:%M} UTC "
@@ -792,7 +800,7 @@ def _serie(lista: list[dict[str, Path]], args) -> int:
         print(f"  [{i}/{len(lista)}] {fecha_de(nc_bandas['C01']):%Y-%m-%d %H:%M} UTC",
               flush=True)
     print(f"Cuadros en {salida}")
-    print(f"ArmÃ¡ el video con: .venv\\Scripts\\python.exe animar\\armar.py --frames "
+    print(f"Armá el video con: .venv\\Scripts\\python.exe animar\\armar.py --frames "
           f"\"{salida}\"")
     return 0
 

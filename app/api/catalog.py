@@ -209,9 +209,24 @@ def _params_firms(por_defecto: str = "dia") -> list[ParamSpec]:
                 ParamOption(value="viirs", label="VIIRS NOAA-20 + NOAA-21 (375 m)"),
                 ParamOption(value="modis", label="MODIS Aqua + Terra (1 km)"),
                 ParamOption(value="snpp", label="Suomi NPP (publica intermitente)"),
+                ParamOption(value="landsat", label="Landsat (sólo EE.UU. y Canadá)"),
                 ParamOption(value="todos", label="Todos los sensores"),
             ],
-            help="VIIRS es el que tiene sentido a 250 m/px; MODIS detecta menos",
+            help="VIIRS es el que tiene sentido a 250 m/px; MODIS detecta menos y "
+                 "Landsat no cubre Sudamérica",
+            enabled_when={"firms": True},
+        ),
+        ParamSpec(
+            name="firms_alcance",
+            label="Focos a mostrar",
+            kind="select",
+            default="completo",
+            options=[
+                ParamOption(value="completo", label="Todos los del área"),
+                ParamOption(value="paraguay", label="Sólo los de Paraguay"),
+            ],
+            help="en el globo, «sólo Paraguay» evita que miles de focos del hemisferio "
+                 "tapen el disco (y baja mucho menos)",
             enabled_when={"firms": True},
         ),
         ParamSpec(
@@ -224,9 +239,13 @@ def _params_firms(por_defecto: str = "dia") -> list[ParamSpec]:
                 ParamOption(value="3h", label="± 3 horas"),
                 ParamOption(value="6h", label="± 6 horas"),
                 ParamOption(value="12h", label="± 12 horas"),
+                ParamOption(value="24h", label="Últimas 24 horas"),
+                ParamOption(value="48h", label="Últimos 2 días"),
+                ParamOption(value="72h", label="Últimos 3 días"),
+                ParamOption(value="5d", label="Últimos 5 días"),
             ],
-            help="el día completo acompaña a los compuestos diarios; ±3 h hace que "
-                 "los focos sigan el paso del satélite (VIIRS pasa ~05 y ~17 UTC)",
+            help="el día completo acompaña a los compuestos diarios; ±3 h sigue el paso "
+                 "del satélite; 24 h en adelante es el «time based» de FIRMS",
             enabled_when={"firms": True},
         ),
     ]

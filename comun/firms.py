@@ -29,20 +29,38 @@ API = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
 
 #: Fuentes NRT agrupadas por sensor. S-NPP publica de forma intermitente (medido:
 #: 200 focos el 2026-11-01 y 0 el 06 y el 10), así que no es el default; S-NPP y
-#: MODIS quedan como opción explícita.
+#: MODIS quedan como opción explícita. LANDSAT sólo cubre EE.UU. y Canadá: fuera de
+#: ahí la API contesta la cabecera sin filas.
 FUENTES = {
     "viirs": ("VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"),
-    "snpp": ("VIIRS_SNPP_NRT",),
     "modis": ("MODIS_NRT",),
-    "todos": ("VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "VIIRS_SNPP_NRT", "MODIS_NRT"),
+    "snpp": ("VIIRS_SNPP_NRT",),
+    "landsat": ("LANDSAT_NRT",),
+    "todos": ("VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "VIIRS_SNPP_NRT",
+              "MODIS_NRT", "LANDSAT_NRT"),
 }
 FUENTE = "viirs"
 
 #: Ventanas ofrecidas por la UI. `dia` es el día UTC completo de la captura y es el
-#: default porque los True Color son compuestos diarios; las demás son horas a cada
-#: lado del slot, para GeoColor.
-VENTANAS = ("dia", "3h", "6h", "12h")
+#: default porque los True Color son compuestos diarios; `3h/6h/12h` son horas a cada
+#: lado del cuadro (para una serie, los focos siguen el paso del satélite) y
+#: `24h/48h/72h/5d` son el "time based" de FIRMS: las últimas N horas hasta el cuadro.
+VENTANAS = ("dia", "3h", "6h", "12h", "24h", "48h", "72h", "5d")
 VENTANA = "dia"
+
+_RELATIVAS = {"24h": timedelta(hours=24), "48h": timedelta(hours=48),
+              "72h": timedelta(hours=72), "5d": timedelta(days=5)}
+
+#: Tamaño del marcador como fracción del lado corto de la imagen. Chico a propósito:
+#: un foco marca una celda de ~375 m, no una mancha; el halo y el color ya lo hacen
+#: visible sobre la nube.
+RADIO_FOCO = 0.0018
+
+#: Gravedad por potencia radiativa (MW), como la escala del visor de FIRMS. El color
+#: sigue la confianza del sensor; el tamaño, la energía del incendio.
+_CORTES_FRP = (5.0, 20.0, 50.0)
+_GRAVEDAD = ("baja", "moderada", "alta", "extrema")
+_FACTOR_GRAVEDAD = (1.0, 1.3, 1.6, 1.95)
 
 #: Días que FIRMS deja pedir de una sola vez.
 MAX_DIAS = 5
@@ -129,8 +147,9 @@ def ventana(cuando: datetime, modo: str = VENTANA) -> tuple[datetime, datetime]:
     """Intervalo `[desde, hasta)` de focos que corresponde a la captura.
 
     `dia` es el día UTC completo: los True Color de GIBS son un compuesto diario, así
-    que media hora de fuegos no representa la imagen. Las ventanas en horas son para
-    GeoColor, que sí es un slot de 10 minutos.
+    que media hora de fuegos no representa la imagen. `Nh` son horas a cada lado del
+    cuadro (GeoColor es un slot de 10 minutos). `24h/48h/72h/5d` miran hacia atrás,
+    como el "time based" de FIRMS.
     """
     if modo not in VENTANAS:
         modo = VENTANA
@@ -138,8 +157,23 @@ def ventana(cuando: datetime, modo: str = VENTANA) -> tuple[datetime, datetime]:
     if modo == "dia":
         inicio = base.replace(hour=0, minute=0)
         return inicio, inicio + timedelta(days=1)
+    if modo in _RELATIVAS:
+        return base - _RELATIVAS[modo], base + timedelta(minutes=1)
     horas = int(modo.removesuffix("h"))
     return base - timedelta(hours=horas), base + timedelta(hours=horas)
+
+
+def gravedad(foco: "Foco") -> str:
+    """Clase de gravedad del foco según su FRP (misma escala que el visor de FIRMS)."""
+    for corte, clase in zip(_CORTES_FRP, _GRAVEDAD):
+        if foco.frp < corte:
+            return clase
+    return _GRAVEDAD[-1]
+
+
+def factor_gravedad(foco: "Foco") -> float:
+    """Multiplicador del tamaño del marcador: 1,0 (baja) a 1,95 (extrema)."""
+    return _FACTOR_GRAVEDAD[_GRAVEDAD.index(gravedad(foco))]
 
 
 def nombre_csv_rango(desde: datetime, hasta: datetime) -> str:

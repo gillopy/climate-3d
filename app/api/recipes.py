@@ -1736,32 +1736,46 @@ def _firms_fuente(params: dict[str, Any]) -> str:
     return fuente if fuente in _FUENTES_FIRMS else "viirs"
 
 
+def _ventana_focos():
+    """`comun.firms.ventana`, importado al usarlo (evita acoplar la carga del módulo)."""
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from firms import ventana  # noqa: PLC0415 - ver `_receta_rgb`
+
+    return ventana
+
+
+def _firms_alcance(params: dict[str, Any]) -> str:
+    alcance = str(params.get("firms_alcance", "completo"))
+    return alcance if alcance in ("completo", "paraguay") else "completo"
+
+
 def _paso_firms(params: dict[str, Any], desde: datetime, hasta: datetime,
                 work: Path, mundo: bool, caja=None) -> Step | None:
     """Paso que baja los focos de la ventana que cubre los cuadros.
 
-    `mundo` es para los pósters de globo: el disco entero puede mostrar incendios
-    fuera de Paraguay, así que recortar a la caja del país los perdería. `caja` es
-    para el caso intermedio: el hemisferio que baja un producto concreto.
+    `mundo` es para los pósters de globo sin encuadre: el disco entero puede mostrar
+    incendios fuera de Paraguay. Con `firms_alcance=paraguay` se pide la caja del
+    país (mucho menos) y el render filtra por el polígono; `caja` es el caso
+    intermedio: el hemisferio que baja un producto concreto.
     """
     if not _bool(params, "firms"):
         return None
     modo = _firms_modo(params)
-    # Con `dia` el CSV cubre días completos; con horas, se abre a cada lado para
-    # que el primer y el último cuadro tengan focos.
-    margen = (timedelta(0) if modo == "dia"
-              else timedelta(hours=int(modo.removesuffix("h"))))
-    inicio, fin = min(desde, hasta) - margen, max(desde, hasta) + margen
-    if modo == "dia":
-        inicio = inicio.replace(hour=0, minute=0, second=0, microsecond=0)
-        fin = fin.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    # La ventana de cada cuadro manda: la unión cubre primero y último.
+    ventana = _ventana_focos()
+    inicio = ventana(min(desde, hasta), modo)[0]
+    fin = ventana(max(desde, hasta), modo)[1]
     args = [
         "--desde", inicio.strftime("%Y-%m-%dT%H:%M"),
         "--hasta", fin.strftime("%Y-%m-%dT%H:%M"),
         "--fuente", _firms_fuente(params),
         "--out", str(_firms_carpeta(work)),
     ]
-    if mundo:
+    if _firms_alcance(params) == "paraguay":
+        args += ["--margen", f"{_margen_paraguay(params):g}"]
+    elif mundo:
         args.append("--mundo")
     elif caja:
         args += ["--caja", *[f"{float(valor):g}" for valor in caja]]
@@ -1781,6 +1795,7 @@ def _flags_firms(params: dict[str, Any], work: Path) -> list[str]:
     if not _bool(params, "firms"):
         return []
     return ["--firms", "--firms-ventana", _firms_modo(params),
+            "--firms-alcance", _firms_alcance(params),
             "--firms-entrada", str(_firms_carpeta(work))]
 
 
