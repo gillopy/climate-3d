@@ -119,7 +119,13 @@ CUADROS_ULTIMOS = (10, 12, 24, 36, 48, 60)
 
 
 def _ultimos(params: dict[str, Any]) -> int:
-    """Cuántos cuadros recientes se pidieron (0 = usar la ventana de fechas)."""
+    """Cuántos cuadros recientes se pidieron (0 = usar la ventana de fechas).
+
+    "Último cuadro disponible" (el check del snapshot) es este mismo camino con N=1:
+    así todos los productos que ya resuelven "últimos" lo heredan sin código nuevo.
+    """
+    if _snapshot(params) and _bool(params, "ultimo"):
+        return 1
     if not _bool(params, "ultimos") or _snapshot(params):
         return 0
     try:

@@ -16,7 +16,10 @@ Uso (desde la raíz del proyecto):
 from __future__ import annotations
 
 import argparse
+import contextlib
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -43,14 +46,43 @@ def cuadros_numerados(frames_dir: Path) -> list[int]:
     return sorted(nums)
 
 
-def verificar_contiguos(nums: list[int]) -> None:
-    """Aborta si la secuencia no es 1..N: ffmpeg cortaría en el primer hueco."""
+def huecos(nums: list[int]) -> list[int]:
+    """Números que faltan entre 1 y el último.
+
+    No es un error: GIBS y NOAA dejan huecos (gránulos que todavía no publicaron o
+    que esa pasada no tiene), y la animación se arma igual con lo que hay.
+    """
     presentes = set(nums)
     ultimo = nums[-1] if nums else 0
-    faltan = [i for i in range(1, ultimo + 1) if i not in presentes]
-    if faltan:
-        raise SystemExit(f"La secuencia no es contigua: faltan {len(faltan)} cuadros "
-                         f"({faltan[:12]}...). Volvé a renderizarlos o descargarlos.")
+    return [i for i in range(1, ultimo + 1) if i not in presentes]
+
+
+@contextlib.contextmanager
+def secuencia_contigua(frames_dir: Path, nums: list[int]):
+    """Carpeta con los cuadros renumerados 1..N, o la misma si ya es contigua.
+
+    ffmpeg lee `cuadro_%03d.png` y corta en el primer índice faltante, así que un
+    hueco en el medio truncaría la animación en silencio. Se arma una carpeta al
+    lado (mismo volumen, enlaces duros; copia si el enlace no se puede) y se borra
+    al salir.
+    """
+    if nums == list(range(1, len(nums) + 1)):
+        yield frames_dir
+        return
+    temporal = frames_dir.parent / f".{frames_dir.name}_contiguos"
+    shutil.rmtree(temporal, ignore_errors=True)
+    temporal.mkdir(parents=True, exist_ok=True)
+    try:
+        for destino, numero in enumerate(nums, start=1):
+            origen = frames_dir / (PATRON % numero)
+            objetivo = temporal / (PATRON % destino)
+            try:
+                os.link(origen, objetivo)
+            except OSError:
+                shutil.copy2(origen, objetivo)
+        yield temporal
+    finally:
+        shutil.rmtree(temporal, ignore_errors=True)
 
 
 def etiqueta_salida(frames_dir: Path, n_real: int) -> str:
@@ -116,7 +148,10 @@ def main(argv=None) -> int:
     nums = cuadros_numerados(frames_dir)
     if not nums:
         raise SystemExit(f"No hay cuadro_NNN.png en {frames_dir}.")
-    verificar_contiguos(nums)
+    faltan = huecos(nums)
+    if faltan:
+        print(f"  aviso: faltan {len(faltan)} cuadro(s) ({faltan[:12]}...); "
+              f"se arman los {len(nums)} disponibles", flush=True)
     n_real = len(nums)
     etiqueta = etiqueta_salida(frames_dir, n_real)
 
@@ -135,10 +170,12 @@ def main(argv=None) -> int:
     print(f"{n_real} cuadros en {frames_dir} -> {etiqueta}")
 
     if "mp4" in destinos:
-        mp4 = armar_mp4(frames_dir, destinos["mp4"], args.fps)
+        with secuencia_contigua(frames_dir, nums) as carpeta:
+            mp4 = armar_mp4(carpeta, destinos["mp4"], args.fps)
         print(f"MP4: {mp4} ({mp4.stat().st_size / 1e6:.2f} MB)")
     if "gif" in destinos:
-        gif = armar_gif(sorted(frames_dir.glob("cuadro_*.png")), destinos["gif"], args.fps)
+        gif = armar_gif([frames_dir / (PATRON % numero) for numero in nums],
+                        destinos["gif"], args.fps)
         print(f"GIF: {gif} ({gif.stat().st_size / 1e6:.2f} MB)")
     return 0
 

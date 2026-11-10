@@ -501,7 +501,9 @@ def main(argv=None) -> int:
     if len(faltan) == args.n:
         raise SystemExit(
             f"No hay ningún crudo en {frames_dir}. Generálos con:\n"
-            f"  {_comando_descarga(t0, args)}")
+            f"  {_comando_descarga(t0, args)}\n"
+            "Si el slot elegido todavía no está publicado (GIBS publica con retraso), "
+            "marcá «Último cuadro disponible».")
     if faltan:
         # GIBS tiene huecos de 10-20 min: se saltean esos cuadros en vez de tirar
         # abajo la animación entera.

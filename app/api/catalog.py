@@ -1105,7 +1105,34 @@ def _con_paraguay(producto: Product) -> Product:
     return producto
 
 
-PRODUCTS = [_con_snapshot(_con_paraguay(p)) for p in PRODUCTS]
+def _con_ultimo(producto: Product) -> Product:
+    """Suma "último cuadro disponible" a los productos que ya resuelven los últimos.
+
+    Es la misma maquinaria de `ultimos`, pero para un snapshot: un solo cuadro, el
+    más nuevo que la fuente ya publicó. Sin esto, elegir una hora que GIBS todavía
+    no tiene hace fallar el job, y no hay forma de saberlo antes de pedirla.
+    """
+    nombres = {spec.name for spec in producto.params}
+    if "ultimos" not in nombres or "snapshot" not in nombres:
+        return producto
+    indice = max(i for i, spec in enumerate(producto.params)
+                 if spec.name in ("ultimos", "ultimos_n")) + 1
+    producto.params.insert(
+        indice,
+        ParamSpec(
+            name="ultimo",
+            label="Último cuadro disponible",
+            kind="toggle",
+            default=False,
+            help="en snapshot, ignora fecha, hora y minuto y usa el slot más nuevo "
+                 "que la fuente ya publicó",
+            enabled_when={"snapshot": True},
+        ),
+    )
+    return producto
+
+
+PRODUCTS = [_con_ultimo(_con_snapshot(_con_paraguay(p))) for p in PRODUCTS]
 
 #: Orden del rail. Los productos se definen en bloques de codigo por familia,
 #: pero la UI los muestra en este orden; lo que no figure aca va al final.
