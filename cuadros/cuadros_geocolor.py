@@ -183,7 +183,7 @@ def _focos_globo(ax, focos, args) -> None:
     if not visible.any():
         return
     dentro_disco = [foco for foco, ok in zip(focos, visible) if ok]
-    # El tama�o sigue la gravedad del incendio, no la cantidad de puntos.
+    # El tamaño sigue la gravedad del incendio, no la cantidad de puntos.
     factores = np.array([factor_gravedad(foco) for foco in dentro_disco])
     diametro = max(3.0, args.px * RADIO_FOCO * 2) * 72.0 / args.dpi
     for tamano, color, alpha, orden in (

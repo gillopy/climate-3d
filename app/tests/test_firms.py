@@ -4,10 +4,10 @@ Fijan lo que la app promete:
 
   * el CSV de FIRMS se lee con las dos formas de `confidence` (VIIRS `l/n/h` y
     MODIS 0-100) y con `acq_time` sin cero a la izquierda;
-  * la ventana es el d�a UTC completo por defecto y horas a cada lado para GeoColor;
-  * el foco cae en el p�xel que le corresponde (misma proyecci�n que el contorno);
-  * sin MAP_KEY el error dice qu� falta y d�nde ponerlo;
-  * sin focos la captura sale **id�ntica** a la de sin `--firms`;
+  * la ventana es el día UTC completo por defecto y horas a cada lado para GeoColor;
+  * el foco cae en el píxel que le corresponde (misma proyección que el contorno);
+  * sin MAP_KEY el error dice qué falta y dónde ponerlo;
+  * sin focos la captura sale **idéntica** a la de sin `--firms`;
   * la receta mete el paso de FIRMS entre GIBS y el render.
 
     app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
@@ -43,7 +43,7 @@ from app.api import catalog, recipes  # noqa: E402
 
 
 def _descargador():
-    """El script `descargar/firms.py` como m�dulo (no est� en el sys.path)."""
+    """El script `descargar/firms.py` como módulo (no está en el sys.path)."""
     spec = importlib.util.spec_from_file_location(
         "firms_descargar", RAIZ / "descargar" / "firms.py")
     modulo = importlib.util.module_from_spec(spec)
@@ -59,7 +59,7 @@ FILA_MAL = "-24.10,-57.30,318.7,1.79,1.31,2026-13-45,1236,Terra,MODIS,77,6.1NRT,
 
 
 class Parser(unittest.TestCase):
-    """El CSV de FIRMS se lee sin importar de qu� sensor venga."""
+    """El CSV de FIRMS se lee sin importar de qué sensor venga."""
 
     def test_lee_viirs_con_confianza_en_letras(self):
         focos = firms.leer_texto(f"{CABECERA}\n{FILA_VIIRS}\n")
@@ -108,7 +108,7 @@ class Parser(unittest.TestCase):
 
 
 class Ventana(unittest.TestCase):
-    """El d�a completo por defecto; horas a cada lado para GeoColor."""
+    """El día completo por defecto; horas a cada lado para GeoColor."""
 
     def test_el_dia_va_de_medianoche_a_medianoche(self):
         desde, hasta = firms.ventana(datetime(2026, 11, 8, 15, 40), "dia")
@@ -151,7 +151,7 @@ class Filtro(unittest.TestCase):
         self.assertEqual(len(focos), 5)
 
     def test_tres_horas_solo_toma_los_pasos_cercanos(self):
-        # VIIRS pasa ~05 y ~17 UTC: a las 15:00 s�lo entra el paso de la tarde.
+        # VIIRS pasa ~05 y ~17 UTC: a las 15:00 sólo entra el paso de la tarde.
         focos = firms.filtrar(self._focos(), *firms.ventana(
             datetime(2026, 11, 8, 15), "3h"))
         self.assertEqual([f.cuando.hour for f in focos], [12, 17])
@@ -163,7 +163,7 @@ class Filtro(unittest.TestCase):
 
 
 class Clave(unittest.TestCase):
-    """Sin MAP_KEY el mensaje dice qu� falta y d�nde ponerlo."""
+    """Sin MAP_KEY el mensaje dice qué falta y dónde ponerlo."""
 
     def test_la_variable_de_entorno_gana(self):
         with mock.patch.dict(os.environ, {"FIRMS_MAP_KEY": "abc123"}):
@@ -191,7 +191,7 @@ class Clave(unittest.TestCase):
 
 
 class Dibujo(unittest.TestCase):
-    """El foco cae en su p�xel y sin focos la captura no cambia."""
+    """El foco cae en su píxel y sin focos la captura no cambia."""
 
     CAJA = (-63.0, -28.0, -53.0, -18.0)
     LADO = 400
@@ -388,7 +388,7 @@ class Carpeta(unittest.TestCase):
 
 
 class Tajadas(unittest.TestCase):
-    """La API acepta 5 d�as por pedido: las tajadas no se solapan."""
+    """La API acepta 5 días por pedido: las tajadas no se solapan."""
 
     def test_tajadas_de_cinco_dias_sin_solape(self):
         modulo = _descargador()

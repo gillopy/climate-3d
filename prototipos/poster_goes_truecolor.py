@@ -191,9 +191,9 @@ def _plano(nc: Path, tope: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, flo
         if paso == 1:
             crudo = np.asarray(cmi.values, dtype=np.float32)
         else:
-            # Promedio de bloques paso x paso, le�do por franjas de filas: el decimado
+            # Promedio de bloques paso x paso, leído por franjas de filas: el decimado
             # puro (``[::paso]``) aliasa la textura de la tierra y deja un moteado
-            # regular que despu�s el estirado convierte en puntos de color.
+            # regular que después el estirado convierte en puntos de color.
             alto_out = int(np.ceil(cmi.shape[0] / paso))
             ancho_out = int(np.ceil(cmi.shape[1] / paso))
             crudo = np.zeros((alto_out, ancho_out), dtype=np.float32)
@@ -230,7 +230,7 @@ def _orto_franja(px: int, escala: float, centro: tuple[float, float], f0: int, f
     rho = np.hypot(X, Y)
     # Con zoom (`escala < 1`) el borde visible del disco cae FUERA del cuadro: el
     # encuadre regional entra completo y no quedan esquinas negras. Con escala = 1
-    # (globo completo) el c�rculo inscripto recorta las esquinas, como siempre.
+    # (globo completo) el círculo inscripto recorta las esquinas, como siempre.
     dentro = (rho * escala) <= 1.0
     rho_s = np.where(dentro & (rho > 1e-12), rho, 1.0)
     sin_c = np.clip(rho_s * escala, 0.0, 1.0)
@@ -246,10 +246,10 @@ def _orto_franja(px: int, escala: float, centro: tuple[float, float], f0: int, f
 
 
 def _alfa(rho, px: int, escala: float = 1.0):
-    """Alfa geom�trico del disco: antialias de ~1.5 px sobre el borde visible.
+    """Alfa geométrico del disco: antialias de ~1.5 px sobre el borde visible.
 
-    El borde visible est� en `rho * escala = 1`. Con el globo completo (`escala=1`)
-    es el c�rculo inscripto; con zoom cae fuera del cuadro y toda la imagen queda
+    El borde visible está en `rho * escala = 1`. Con el globo completo (`escala=1`)
+    es el círculo inscripto; con zoom cae fuera del cuadro y toda la imagen queda
     opaca.
     """
     return np.clip((1.0 - rho * escala) * (px / 2.0) / 1.5, 0.0, 1.0)
@@ -493,7 +493,7 @@ _CACHE_FOCOS: dict[str, list] = {}
 
 
 def _focos_de(args, cuando: datetime) -> list:
-    """Focos de FIRMS de este cuadro, o [] si el toggle est� apagado.
+    """Focos de FIRMS de este cuadro, o [] si el toggle está apagado.
 
     El CSV se lee una sola vez por carpeta: una serie de 24 cuadros no vuelve a
     abrir el archivo 24 veces.
@@ -513,10 +513,10 @@ def _focos_de(args, cuando: datetime) -> list:
 
 
 def _pintar_focos(ax, focos, centro, escala, px: int, dpi: float) -> None:
-    """Marca los focos sobre el globo con la misma proyecci�n que el contorno.
+    """Marca los focos sobre el globo con la misma proyección que el contorno.
 
-    `px` es el di�metro del disco en p�xeles y el eje va de -1 a 1: el marcador se
-    calcula en puntos, as� se ve igual a cualquier `--px`.
+    `px` es el diámetro del disco en píxeles y el eje va de -1 a 1: el marcador se
+    calcula en puntos, así se ve igual a cualquier `--px`.
     """
     if not focos:
         return
@@ -524,7 +524,7 @@ def _pintar_focos(ax, focos, centro, escala, px: int, dpi: float) -> None:
                          np.array([f.lat for f in focos], dtype=float),
                          centro, escala)
     x, y = np.asarray(x), np.asarray(y)
-    # Fuera del disco visible no se dibuja: ese foco est� del otro lado del planeta.
+    # Fuera del disco visible no se dibuja: ese foco está del otro lado del planeta.
     visible = np.hypot(x, y) <= 1.0
     if not visible.any():
         return
@@ -551,8 +551,8 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
     ancho_in, alto_in, dpi, gx, gy, gw, gh = _geometria(px, args.dpi)
 
     if getattr(args, "limpio", False):
-        # Modo "captura limpia": sin halo, sin sombreado de borde y sin r�tulos.
-        # El recorte entra de borde a borde y s�lo queda la imagen (y el contorno).
+        # Modo "captura limpia": sin halo, sin sombreado de borde y sin rótulos.
+        # El recorte entra de borde a borde y sólo queda la imagen (y el contorno).
         fig = plt.figure(figsize=(px / dpi, px / dpi), dpi=dpi)
         fig.patch.set_facecolor(WHITE)
         ax = fig.add_axes([0, 0, 1, 1])
@@ -561,7 +561,7 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
         ax.set_aspect("equal")
         ax.set_axis_off()
         ax.set_facecolor("none")
-        # El RGB puede pedir bilinear: sin filo que rescatar, lanczos sumar�a
+        # El RGB puede pedir bilinear: sin filo que rescatar, lanczos sumaría
         # un anillo brillante (por defecto, lanczos como siempre).
         interp = getattr(args, "interp", "lanczos")
         ax.imshow(disco, origin="upper", extent=[-1, 1, -1, 1],
@@ -649,7 +649,7 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
     # El círculo del póster térmico, sobre el negro de la noche, se leía como un aro
     # blanco flotando fuera del planeta.
     # Marca de agua sobre el margen inferior del globo, no encima del disco: en color
-    # real la mitad sur del planeta es oc�ano casi negro y el texto desaparec�a.
+    # real la mitad sur del planeta es océano casi negro y el texto desaparecía.
     if args.credito:
         fig.text(0.5, gy - 0.010, " ".join(args.credito.upper()), ha="center",
                  va="center", fontsize=8.6, color=(0.31, 0.35, 0.39, 0.40),
@@ -741,7 +741,7 @@ def main(argv=None) -> int:
         args.fuente = f"{args.fuente} | FIRMS hotspots"
 
     if args.fondo == "oscuro":
-        # Mismo p�ster, tinta invertida: sobre negro la tinta oscura no se lee.
+        # Mismo póster, tinta invertida: sobre negro la tinta oscura no se lee.
         global WHITE, INK, INK_SOFT, COAST, BORDER, GRID
         WHITE = "#000000"
         INK = "#eef2f5"
