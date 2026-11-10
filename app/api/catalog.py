@@ -181,6 +181,76 @@ def _params_ultimos() -> list[ParamSpec]:
     ]
 
 
+def _params_firms(por_defecto: str = "dia") -> list[ParamSpec]:
+    """Toggle de focos de FIRMS + sus dos selectores.
+
+    `por_defecto` es la ventana que propone la UI: `dia` para una captura suelta
+    (el compuesto diario ES ese día) y `3h` para una animación, donde los focos
+    aparecen cuando pasa el satélite en vez de quedar fijos todo el día.
+
+    Se arma por producto (no se comparte el objeto) por la misma razón que
+    `_params_ultimos`: `_con_snapshot` ajusta `enabled_when` en cada instancia.
+    """
+    return [
+        ParamSpec(
+            name="firms",
+            label="Focos de calor (FIRMS)",
+            kind="toggle",
+            default=False,
+            help="superpone los focos de NASA FIRMS; necesita el MAP_KEY en "
+                 "datos/firms_map_key.txt",
+        ),
+        ParamSpec(
+            name="firms_fuente",
+            label="Sensor FIRMS",
+            kind="select",
+            default="viirs",
+            options=[
+                ParamOption(value="viirs", label="VIIRS NOAA-20 + NOAA-21 (375 m)"),
+                ParamOption(value="modis", label="MODIS Aqua + Terra (1 km)"),
+                ParamOption(value="snpp", label="Suomi NPP (publica intermitente)"),
+                ParamOption(value="landsat", label="Landsat (sólo EE.UU. y Canadá)"),
+                ParamOption(value="todos", label="Todos los sensores"),
+            ],
+            help="VIIRS es el que tiene sentido a 250 m/px; MODIS detecta menos y "
+                 "Landsat no cubre Sudamérica",
+            enabled_when={"firms": True},
+        ),
+        ParamSpec(
+            name="firms_alcance",
+            label="Focos a mostrar",
+            kind="select",
+            default="completo",
+            options=[
+                ParamOption(value="completo", label="Todos los del área"),
+                ParamOption(value="paraguay", label="Sólo los de Paraguay"),
+            ],
+            help="en el globo, «sólo Paraguay» evita que miles de focos del hemisferio "
+                 "tapen el disco (y baja mucho menos)",
+            enabled_when={"firms": True},
+        ),
+        ParamSpec(
+            name="firms_ventana",
+            label="Ventana de focos",
+            kind="select",
+            default=por_defecto,
+            options=[
+                ParamOption(value="dia", label="Día UTC completo"),
+                ParamOption(value="3h", label="± 3 horas"),
+                ParamOption(value="6h", label="± 6 horas"),
+                ParamOption(value="12h", label="± 12 horas"),
+                ParamOption(value="24h", label="Últimas 24 horas"),
+                ParamOption(value="48h", label="Últimos 2 días"),
+                ParamOption(value="72h", label="Últimos 3 días"),
+                ParamOption(value="5d", label="Últimos 5 días"),
+            ],
+            help="el día completo acompaña a los compuestos diarios; ±3 h sigue el paso "
+                 "del satélite; 24 h en adelante es el «time based» de FIRMS",
+            enabled_when={"firms": True},
+        ),
+    ]
+
+
 def _receta_rgb(producto: str) -> dict:
     """Receta RGB oficial (bandas, rangos y guía) desde `comun/rgb_goes.py`.
 
@@ -195,7 +265,7 @@ def _receta_rgb(producto: str) -> dict:
     return RECETAS[producto]
 
 
-def _producto_rgb(pid: str, nombre: str, producto: str) -> Product:
+def _producto_rgb(pid: str, nombre: str, producto: str, extras=()) -> Product:
     """Un producto RGB: mismos controles que `goes_banda`, sin banda ni paleta."""
     receta = _receta_rgb(producto)
     from rgb_goes import etiqueta_canal  # noqa: PLC0415 - ver `_receta_rgb`
@@ -252,6 +322,7 @@ def _producto_rgb(pid: str, nombre: str, producto: str) -> Product:
                       enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider",
                       default=12, min=4, max=30, step=2),
+            *extras,
         ],
     )
 
@@ -406,6 +477,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
                       enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=8, min=4, max=30, step=2),
+            *_params_firms(por_defecto="3h"),
         ],
     ),
     Product(
@@ -477,7 +549,8 @@ PRODUCTS: list[Product] = [
     ),
     _producto_rgb("goes_dust", "GOES - Dust RGB", "dust"),
     _producto_rgb("goes_airmass", "GOES - Air Mass RGB", "airmass"),
-    _producto_rgb("goes_firetemp", "GOES - Fire Temperature RGB", "firetemp"),
+    _producto_rgb("goes_firetemp", "GOES - Fire Temperature RGB", "firetemp",
+                  extras=_params_firms(por_defecto="3h")),
     Product(
         id="goes_sandwich",
         name="GOES - Sandwich (visible + IR realzado)",
@@ -596,6 +669,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
                       enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=8, min=4, max=30, step=2),
+            *_params_firms(por_defecto="3h"),
         ],
     ),
     Product(
@@ -899,6 +973,7 @@ PRODUCTS: list[Product] = [
                 help="250 m/px es el detalle real de VIIRS; por debajo solo interpola",
             ),
             ParamSpec(name="borde", label="Dibujar el contorno", kind="toggle", default=True),
+            *_params_firms(),
         ],
     ),
     Product(
@@ -1049,7 +1124,43 @@ def _con_paraguay(producto: Product) -> Product:
     return producto
 
 
-PRODUCTS = [_con_snapshot(_con_paraguay(p)) for p in PRODUCTS]
+#: Productos diarios sin "últimos datos" que resuelven el último día con la sonda de
+#: GIBS (`comun/dia_reciente.py`). Los modelos ECMWF no van acá: su "último" es la
+#: corrida, que ya se ajusta por otro camino.
+_ULTIMO_DIARIO = {"truecolor_viirs", "mur_sst", "mur_realista"}
+
+
+def _con_ultimo(producto: Product) -> Product:
+    """Suma "último cuadro disponible" a los productos que saben resolverlo.
+
+    Es la misma maquinaria de `ultimos` (un solo cuadro, el más nuevo publicado) y,
+    para los productos diarios, la sonda de GIBS. Sin esto, elegir un día u hora que
+    la fuente todavía no tiene hace fallar el job, y no hay forma de saberlo antes.
+    """
+    nombres = {spec.name for spec in producto.params}
+    if "snapshot" not in nombres:
+        return producto
+    if "ultimos" not in nombres and producto.id not in _ULTIMO_DIARIO:
+        return producto
+    indices = [i for i, spec in enumerate(producto.params)
+               if spec.name in ("ultimos", "ultimos_n")]
+    indice = (max(indices) + 1) if indices else 1
+    producto.params.insert(
+        indice,
+        ParamSpec(
+            name="ultimo",
+            label="Último cuadro disponible",
+            kind="toggle",
+            default=False,
+            help="en snapshot, ignora fecha, hora y minuto y usa el slot más nuevo "
+                 "que la fuente ya publicó",
+            enabled_when={"snapshot": True},
+        ),
+    )
+    return producto
+
+
+PRODUCTS = [_con_ultimo(_con_snapshot(_con_paraguay(p))) for p in PRODUCTS]
 
 #: Orden del rail. Los productos se definen en bloques de codigo por familia,
 #: pero la UI los muestra en este orden; lo que no figure aca va al final.

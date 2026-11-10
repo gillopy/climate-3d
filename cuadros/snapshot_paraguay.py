@@ -4,6 +4,10 @@ Sin globo, sin rótulos, sin barra de color: la captura es la imagen. El contorn
 sale del mismo GeoJSON que define la cobertura, así el borde cae exactamente donde
 está el país en el recorte.
 
+Con `--firms` se superponen además los focos de calor de NASA FIRMS que dejó
+`descargar/firms.py` en la carpeta de crudos. La proyección es la misma del
+contorno (la imagen es EPSG:4326), así que el foco cae en su píxel sin reproyectar.
+
 La línea se dibuja a 2x y se reduce con LANCZOS: a 2000 px una línea de 1 px queda
 escalonada si se dibuja directo.
 
@@ -11,9 +15,10 @@ Uso (desde la raíz del proyecto):
 
     .venv\\Scripts\\python.exe cuadros\\snapshot_paraguay.py --fecha 2026-11-01 --hora 15
     .venv\\Scripts\\python.exe cuadros\\snapshot_paraguay.py --fecha 2026-11-01 --hora 15 --sin-borde
+    .venv\\Scripts\\python.exe cuadros\\snapshot_paraguay.py --fecha 2026-11-01 --hora 15 --firms
     .venv\\Scripts\\python.exe cuadros\\snapshot_paraguay.py --help   # no toca la red
 
-Salida: `snapshot_paraguay_<AAAA-MM-DDTHHMM>_<PX>px.png`.
+Salida: `snapshot_paraguay_<AAAA-MM-DDTHHMM>_<PX>px[_firms].png`.
 """
 from __future__ import annotations
 
@@ -27,8 +32,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
-from paraguay import (MARGEN, caja_geojson, nombre_captura,  # noqa: E402
-                     px_para_mpp, ts_de_crudo)
+from firms import (CELDA_FOCO, RADIO_FOCO, VENTANAS, agrupar,  # noqa: E402
+                   color_foco, etiqueta, factor_gravedad, filtrar, leer,
+                   nombre_csv, ventana)
+from paraguay import (MARGEN, caja_geojson, crudo_mas_nuevo,  # noqa: E402
+                      nombre_captura, px_para_mpp, solo_paraguay, ts_de_crudo)
 from rutas import SALIDAS  # noqa: E402
 
 GEOJSON = RAIZ / "datos" / "paraguay_gadm.json"
@@ -43,6 +51,10 @@ BORDE_COLOR = "#000000"
 BORDE_ANCHO = 0.0                      # 0 = automático (1,6 px por cada 1600 px de lado)
 SOMBRA_ANCHO = 2.4
 SOMBRA_ALFA = 55
+
+# Focos de FIRMS: color por confianza y tamaño por gravedad (paleta y escala en
+# `comun/firms.py`). El halo oscuro los hace legibles sobre nube blanca y el núcleo
+# casi blanco marca el centro del píxel.
 
 # Fuentes candidatas para el crédito opcional (si no hay ninguna, no se dibuja).
 FUENTES = (
@@ -64,11 +76,17 @@ def _anillos(geometria) -> list[list[tuple[float, float]]]:
     return anillos
 
 
-def _a_pixel(lon: float, lat: float, caja, lado: int, escala: int) -> tuple[float, float]:
-    """Proyección lineal lon/lat -> píxel (la imagen de GIBS es EPSG:4326)."""
+def _a_pixel(lon: float, lat: float, caja, lado: int, escala: int,
+             alto: int | None = None) -> tuple[float, float]:
+    """Proyección lineal lon/lat -> píxel (la imagen de GIBS es EPSG:4326).
+
+    `lado` es el ancho; `alto` sólo hace falta cuando la captura no es cuadrada
+    (GeoColor recorta a la caja, que no lo es).
+    """
     o, s, e, n = caja
+    alto = alto or lado
     x = (lon - o) / (e - o) * lado * escala
-    y = (n - lat) / (n - s) * lado * escala
+    y = (n - lat) / (n - s) * alto * escala
     return x, y
 
 
@@ -104,28 +122,79 @@ def dibujar_borde(imagen: Image.Image, caja, geojson: Path, lado: int,
     return salida.convert("RGB")
 
 
-def _credito(imagen: Image.Image, texto: str, lado: int) -> Image.Image:
-    """Crédito discreto abajo a la derecha (opcional)."""
-    fuente = None
+def _punto(lapiz: ImageDraw.ImageDraw, x: float, y: float, radio: float,
+           color: tuple[int, int, int]) -> None:
+    """Un foco: halo oscuro, cuerpo por confianza y núcleo casi blanco."""
+    halo = radio * 1.7
+    lapiz.ellipse([x - halo, y - halo, x + halo, y + halo], fill=(0, 0, 0, 60))
+    lapiz.ellipse([x - radio, y - radio, x + radio, y + radio], fill=(*color, 215))
+    nucleo = max(1.0, radio * 0.45)
+    lapiz.ellipse([x - nucleo, y - nucleo, x + nucleo, y + nucleo],
+                  fill=(255, 248, 220, 235))
+
+
+def dibujar_focos(imagen: Image.Image, caja, focos, lado: int,
+                  alto: int | None = None) -> Image.Image:
+    """Superpone los focos de calor sobre la captura, con la misma proyección.
+
+    Lo usan el Snapshot (imagen cuadrada) y GeoColor (recorte rectangular).
+    """
+    alto = alto or lado
+    escala = 2 if max(lado, alto) <= 4000 else 1
+    capa = Image.new("RGBA", (lado * escala, alto * escala), (0, 0, 0, 0))
+    lapiz = ImageDraw.Draw(capa)
+    base = max(2.5, min(lado, alto) * RADIO_FOCO)
+    posiciones = [_a_pixel(foco.lon, foco.lat, caja, lado, escala, alto)
+                  for foco in focos]
+    celda = max(3.0, min(lado, alto) * CELDA_FOCO) * escala
+    for foco, x, y in agrupar(focos, posiciones, celda):
+        # El FRP manda el tamaño, con techo: un foco de 200 MW no tapa la captura.
+        radio = base * factor_gravedad(foco)
+        _punto(lapiz, x, y, radio * escala, color_foco(foco.confianza))
+    capa = capa.resize((lado, alto), Image.LANCZOS)
+    salida = imagen.convert("RGBA").copy()
+    salida.alpha_composite(capa)
+    return salida.convert("RGB")
+
+
+def _fuente(lado: int):
+    """Fuente del crédito y de la leyenda; `None` si no hay ninguna instalada."""
     for ruta in FUENTES:
         if Path(ruta).is_file():
-            fuente = ImageFont.truetype(ruta, max(12, round(lado * 0.011)))
-            break
+            return ImageFont.truetype(ruta, max(12, round(lado * 0.011)))
+    return None
+
+
+def _texto(imagen: Image.Image, texto: str, lado: int,
+           izquierda: bool) -> Image.Image:
+    """Texto con sombra abajo, alineado a la izquierda o a la derecha."""
+    fuente = _fuente(lado)
     if fuente is None:
         return imagen
     dibujo = ImageDraw.Draw(imagen)
     margen = round(lado * 0.012)
     caja = dibujo.textbbox((0, 0), texto, font=fuente)
-    x = lado - margen - (caja[2] - caja[0])
+    x = margen if izquierda else lado - margen - (caja[2] - caja[0])
     y = lado - margen - (caja[3] - caja[1])
     dibujo.text((x + 2, y + 2), texto, font=fuente, fill=(0, 0, 0, 170))
     dibujo.text((x, y), texto, font=fuente, fill=(255, 255, 255, 235))
     return imagen
 
 
+def _credito(imagen: Image.Image, texto: str, lado: int) -> Image.Image:
+    """Crédito discreto abajo a la derecha (opcional)."""
+    return _texto(imagen, texto, lado, izquierda=False)
+
+
+def _leyenda(imagen: Image.Image, texto: str, lado: int) -> Image.Image:
+    """Leyenda de los focos abajo a la izquierda, para no pisar el crédito."""
+    return _texto(imagen, texto, lado, izquierda=True)
+
+
 def componer(crudo: Path, caja, geojson: Path, lado: int, borde: bool = True,
              color: str = BORDE_COLOR, ancho: float = BORDE_ANCHO,
-             sombra: bool = False, credito: str = "") -> Image.Image:
+             sombra: bool = False, credito: str = "", focos=(),
+             rotulo: str = "") -> Image.Image:
     with Image.open(crudo) as origen:
         imagen = origen.convert("RGB")
     if imagen.size != (lado, lado):
@@ -133,6 +202,10 @@ def componer(crudo: Path, caja, geojson: Path, lado: int, borde: bool = True,
                          f"se esperaba {lado}x{lado}. Revisá --px/margen.")
     if borde:
         imagen = dibujar_borde(imagen, caja, geojson, lado, color, ancho, sombra)
+    if focos:
+        imagen = dibujar_focos(imagen, caja, focos, lado)
+    if rotulo:
+        imagen = _leyenda(imagen, rotulo, lado)
     if credito:
         imagen = _credito(imagen, credito, lado)
     return imagen
@@ -172,6 +245,19 @@ def main(argv=None) -> int:
     ap.add_argument("--sombra", action="store_true",
                     help="filo oscuro debajo del contorno (para líneas claras)")
     ap.add_argument("--credito", default="", help="texto de crédito (opcional)")
+    ap.add_argument("--firms", action="store_true",
+                    help="superpone los focos de calor de NASA FIRMS "
+                         "(los deja descargar/firms.py en la carpeta de entrada)")
+    ap.add_argument("--firms-ventana", default=VENTANAS[0], choices=VENTANAS,
+                    help="ventana de focos: dia = día UTC completo (default), "
+                         "o horas a cada lado del slot")
+    ap.add_argument("--firms-alcance", default="completo",
+                    choices=("completo", "paraguay"),
+                    help="completo = todos los focos del área; paraguay = sólo los "
+                         "que caen dentro del país")
+    ap.add_argument("--firms-entrada",
+                    help="carpeta donde está el CSV de focos "
+                         "(por defecto, la misma de --entrada)")
     ap.add_argument("--salidas", help="carpeta de salida (por defecto comun.rutas.SALIDAS)")
     ap.add_argument("--out", help="alias de --salidas")
     args = ap.parse_args(argv)
@@ -189,19 +275,18 @@ def main(argv=None) -> int:
     salidas = Path(args.salidas or args.out or SALIDAS)
     salidas.mkdir(parents=True, exist_ok=True)
 
+    entrada = Path(args.entrada) if args.entrada else salidas
     if args.crudo:
         crudo = Path(args.crudo)
     else:
-        entrada = Path(args.entrada) if args.entrada else salidas
-        candidatos = sorted(
-            entrada.glob(f"crudo_snapshot_{args.capa}_*_{args.px}px.png"))
-        if not candidatos:
+        encontrado = crudo_mas_nuevo(entrada, args.capa, args.px)
+        if encontrado is None:
             raise SystemExit(
                 f"No hay crudos en {entrada}. Corré primero:\n"
                 f"  .venv\\Scripts\\python.exe descargar\\snapshot_paraguay.py "
                 f"--fecha {args.fecha} --hora {args.hora} --px {args.px} "
                 f"--out \"{entrada}\"")
-        crudo = candidatos[-1]
+        crudo = encontrado
 
     if getattr(args, "ultima", False):
         # Sin --ultima el instante es el que pidió el usuario; con --ultima manda
@@ -210,12 +295,30 @@ def main(argv=None) -> int:
         if del_crudo is not None:
             t = del_crudo
 
+    focos = []
+    rotulo = ""
+    if args.firms:
+        desde, hasta = ventana(t, args.firms_ventana)
+        carpeta_focos = (Path(args.firms_entrada) if args.firms_entrada else entrada)
+        csv_focos = carpeta_focos / nombre_csv(t, args.firms_ventana)
+        if not csv_focos.is_file():
+            print(f"  aviso: no hay focos en {csv_focos}; la captura sale sin overlay")
+        else:
+            focos = filtrar(leer(csv_focos), desde, hasta)
+            if args.firms_alcance == "paraguay":
+                focos = solo_paraguay(focos)
+            cuando_focos = etiqueta(t, args.firms_ventana)
+            print(f"focos FIRMS: {len(focos)} ({cuando_focos})")
+            if focos:
+                rotulo = f"Focos FIRMS · {cuando_focos} · {len(focos)}"
+
     imagen = componer(crudo, caja, Path(args.geojson), args.px,
                       borde=not args.sin_borde, color=args.borde_color,
                       ancho=args.borde_ancho, sombra=args.sombra,
-                      credito=args.credito)
+                      credito=args.credito, focos=focos, rotulo=rotulo)
 
-    destino = salidas / nombre_captura(args.capa, t, args.px)
+    destino = salidas / nombre_captura(args.capa, t, args.px,
+                                       "firms" if args.firms else "")
     tmp = destino.with_suffix(".png.parcial")
     imagen.save(tmp, format="PNG")
     tmp.replace(destino)

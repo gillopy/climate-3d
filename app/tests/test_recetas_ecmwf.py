@@ -708,7 +708,10 @@ class SnapshotDeUnCuadro(unittest.TestCase):
     def test_con_snapshot_no_se_agrega_la_animacion(self):
         plan = recipes.planear(
             "goes_banda",
-            {"animar": True, "snapshot": True, "satelite": "G19", "banda": "C13"},
+            # Fecha fija: con la de hoy el slot de las 15:00 UTC todavía no está
+            # publicado y el test cambiaría según la hora a la que se corra.
+            {"animar": True, "snapshot": True, "satelite": "G19", "banda": "C13",
+             "ventana": {"start": "2026-11-05", "end": "2026-11-05"}},
             Path("x"),
         )
 

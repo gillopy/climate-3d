@@ -119,7 +119,13 @@ CUADROS_ULTIMOS = (10, 12, 24, 36, 48, 60)
 
 
 def _ultimos(params: dict[str, Any]) -> int:
-    """Cuántos cuadros recientes se pidieron (0 = usar la ventana de fechas)."""
+    """Cuántos cuadros recientes se pidieron (0 = usar la ventana de fechas).
+
+    "Último cuadro disponible" (el check del snapshot) es este mismo camino con N=1:
+    así todos los productos que ya resuelven "últimos" lo heredan sin código nuevo.
+    """
+    if _snapshot(params) and _bool(params, "ultimo"):
+        return 1
     if not _bool(params, "ultimos") or _snapshot(params):
         return 0
     try:
@@ -521,6 +527,33 @@ def _piso_slot(t: datetime, paso: int = _PASO_SLOT) -> datetime:
 #: Hora UTC que propone el formulario para un snapshot (mediodía en Paraguay).
 _HORA_SNAPSHOT = 15
 
+#: Ventana en la que se duda de que el slot pedido exista: GIBS y NOAA publican con
+#: retraso (a veces > 1 h). Fuera de esta ventana la fecha se respeta tal cual.
+_RESPALDO_SNAPSHOT = timedelta(hours=6)
+
+
+def _slot_snapshot(params: dict[str, Any], fin: date, resolver) -> datetime:
+    """Instante del snapshot, con respaldo automático al más nuevo publicado.
+
+    El usuario elige una hora; la fuente puede no tenerla todavía y el job moría sin
+    crudo ("No hay ningún crudo..."). Si el pedido es reciente y cae después de lo
+    último publicado, se usa lo último: la diferencia se ve en el `--desde` del plan
+    y en la primera línea del descargador. Una fecha vieja se respeta siempre.
+    """
+    desde = _slot_pedido(params, fin)
+    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+    if desde <= ahora - _RESPALDO_SNAPSHOT:
+        return desde
+    try:
+        nuevos = resolver(1)
+    except Exception:  # noqa: BLE001 - sin red se intenta el slot pedido igual
+        return desde
+    if nuevos and desde > nuevos[0]:
+        print(f"  aviso: {desde:%Y-%m-%d %H:%M} UTC todavía no está publicado; "
+              f"uso {nuevos[0]:%Y-%m-%d %H:%M} UTC", flush=True)
+        return nuevos[0]
+    return desde
+
 
 def _slot_pedido(params: dict[str, Any], dia: date) -> datetime:
     """Instante exacto del snapshot: la hora y el minuto que eligió el usuario.
@@ -632,7 +665,8 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         desde, n, paso, falta = disponibles_slots[0], len(disponibles_slots), _PASO_SLOT, True
     elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes(sat, banda, k)), 1, _PASO_SLOT, True
     else:
         disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
         lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
@@ -709,6 +743,8 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
 # --- MUR: SST descargada ya renderizada por GIBS ------------------------
 def _mur(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango_de_la_corrida(params)
+    if _pide_ultimo_dia(params):
+        inicio = fin = _ultimo_dia(_GIBS_MUR)
     dias = max(1, (fin - inicio).days + 1)
     paso = max(1, int(math.ceil(dias / 8)))
     px = _px(params, 1200)
@@ -736,6 +772,30 @@ def _mur(params: dict[str, Any], work: Path) -> Plan:
     )
     pasos = [descarga, render_step]  # el origen se consulta siempre
     return Plan(pasos=pasos, descarga=descarga)
+
+
+# --- "Último día disponible" para los productos diarios ------------------
+#: Capas de GIBS de los productos diarios que no tienen "últimos datos": el compuesto
+#: de color real de VIIRS y la anomalía de SST de MUR. Mismas constantes que
+#: `descargar/truecolor.py` y `descargar/mur_sst.py`.
+_GIBS_TRUECOLOR = "VIIRS_NOAA20_CorrectedReflectance_TrueColor"
+_GIBS_MUR = "GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies"
+_GIBS_GLOBAL = (-180.0, -90.0, 180.0, 90.0)
+
+
+def _ultimo_dia(layer: str, caja=_GIBS_GLOBAL) -> date:
+    """El día más nuevo que GIBS ya publica para esa capa diaria."""
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from dia_reciente import ultimo_dia  # noqa: PLC0415 - ver `_receta_rgb`
+
+    return ultimo_dia(layer, caja)
+
+
+def _pide_ultimo_dia(params: dict[str, Any]) -> bool:
+    """True si el snapshot pidió usar el último día publicado."""
+    return _snapshot(params) and _bool(params, "ultimo")
 
 
 # --- ECMWF: precipitacion y anomalia ------------------------------------
@@ -842,6 +902,16 @@ except Exception:  # pragma: no cover
     _CAPAS_SNAPSHOT = {k: None for k in ("truecolor", "snpp", "aqua", "terra",
                                          "geocolor")}
 
+# La lista de sensores y de ventanas de FIRMS manda desde `comun/firms.py`: la UI
+# no puede ofrecer un valor que el descargador no entienda.
+try:
+    from comun.firms import FUENTES as _FUENTES_FIRMS
+    from comun.firms import VENTANAS as _VENTANAS_FIRMS
+except Exception:  # pragma: no cover
+    _FUENTES_FIRMS = {k: None for k in ("viirs", "modis", "snpp", "todos")}
+    _VENTANAS_FIRMS = ("dia", "3h", "6h", "12h")
+
+
 def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
     inicio, _ = _rango(params)
     hora = max(0, min(23, int(params.get("hora", 15) or 0)))
@@ -886,9 +956,45 @@ def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
         args=[*comun, "--out", str(crudos)],
         expected=1,
     )
+
+    # Los focos van después de GIBS: con --ultima el instante recién se conoce
+    # cuando el crudo está en disco, y la ventana de focos depende de ese instante.
+    ventana_focos = str(params.get("firms_ventana", "dia"))
+    if ventana_focos not in _VENTANAS_FIRMS:
+        ventana_focos = "dia"
+    pasos = [descarga]
+    if _bool(params, "firms"):
+        fuente = str(params.get("firms_fuente", "viirs"))
+        if fuente not in _FUENTES_FIRMS:
+            fuente = "viirs"
+        args_firms = [
+            "--fecha", inicio.isoformat(),
+            "--hora", str(hora),
+            "--minuto", str(minuto),
+            "--margen", f"{margen:g}",
+            "--capa", capa,
+            "--fuente", fuente,
+            "--ventana", ventana_focos,
+            "--entrada", str(crudos),
+            "--out", str(crudos),
+        ]
+        if _bool(params, "ultima"):
+            args_firms.append("--ultima")
+        pasos.append(Step(
+            kind="download",
+            label="bajando los focos de FIRMS",
+            script="descargar/firms.py",
+            args=args_firms,
+            expected=2,
+        ))
+
     args_render = [*comun, "--entrada", str(crudos), "--salidas", str(work)]
     if not _bool(params, "borde"):
         args_render.append("--sin-borde")
+    if _bool(params, "firms"):
+        args_render += ["--firms", "--firms-ventana", ventana_focos,
+                        "--firms-alcance", _firms_alcance(params),
+                        "--firms-entrada", str(crudos)]
     render_step = Step(
         kind="render",
         label="componiendo la captura",
@@ -896,7 +1002,8 @@ def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
         args=args_render,
         expected=1,
     )
-    return Plan(pasos=[descarga, render_step], descarga=descarga)
+    pasos.append(render_step)
+    return Plan(pasos=pasos, descarga=descarga)
 
 
 # --- VIENTO: 250 mb + extremos de MSLP ----------------------------------
@@ -1020,7 +1127,8 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
         )
     elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes(sat, C02, k)), 1, _PASO_SLOT, True
     else:
         disponibles = [s for s in _slots_goes(sat, "C02") if inicio <= s.date() <= fin]
         cenital = _slot_cenital(inicio, lon_sub)
@@ -1043,6 +1151,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
         expected=max(1, n),
     )
 
+    firms_flags = _flags_firms(params, work)
     if disco:
         render_step = Step(
             kind="render",
@@ -1052,6 +1161,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                 "--desde", slot,
                 "--sat", sat,
                 "--px", str(px),
+                *firms_flags,
                 "--out", str(work / f"truecolor_nativo_{desde:%Y-%m-%dT%H%M}.png"),
             ],
             expected=1,
@@ -1084,7 +1194,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                     "--fondo", "oscuro",
                     "--no-lineas", "--no-fronteras", "--borde", _borde_paraguay(params),
                     *(["--limpio"] if _bool(params, "paraguay") else []),
-                    *centro,
+                    *centro, *firms_flags,
                     "--n", str(n),
                     "--paso", str(paso),
                     "--frames", str(work / "frames"),
@@ -1103,19 +1213,23 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                     "--fondo", "oscuro",
                     "--no-lineas", "--no-fronteras", "--borde", _borde_paraguay(params),
                     *(["--limpio"] if _bool(params, "paraguay") else []),
-                    *centro,
+                    *centro, *firms_flags,
                     "--out", str(work / f"truecolor_{desde:%Y-%m-%dT%H%M}.png"),
                 ],
                 expected=1,
             )
 
-    pasos = [descarga, render_step]  # el origen se consulta en cada corrida
+    focos = _paso_firms(params, desde, desde + timedelta(minutes=paso * n),
+                        work, mundo=not _bool(params, "paraguay"))
+    pasos = [descarga, *([focos] if focos else []), render_step]  # el origen se consulta en cada corrida
     return Plan(pasos=pasos, descarga=descarga)
 
 
 # --- MUR: poster realista ----------------------------------------------
 def _mur_realista(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango_de_la_corrida(params)
+    if _pide_ultimo_dia(params):
+        inicio = fin = _ultimo_dia(_GIBS_MUR)
     dias = max(1, (fin - inicio).days + 1)
     paso = max(1, int(math.ceil(dias / 12)))
     px = _px(params, 2000)
@@ -1203,7 +1317,8 @@ def _himawari(params: dict[str, Any], work: Path) -> Plan:
         )
     elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, _ultimos_himawari), 1, _PASO_SLOT, True
     else:
         disponibles = [s for s in _slots_himawari() if inicio <= s.date() <= fin]
         cenital = _slot_cenital(inicio, _LON_SUBSAT["H09"])
@@ -1268,7 +1383,8 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
         desde, n, paso, falta = slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True
     elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes(sat, banda, k)), 1, _PASO_SLOT, True
     else:
         disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
         lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
@@ -1350,7 +1466,8 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
         desde, n, paso = slots[0], len(slots), _PASO_SLOT
     elif _snapshot(params):
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
-        desde, n, paso = _slot_pedido(params, fin), 1, _PASO_SLOT
+        desde, n, paso = _slot_snapshot(
+            params, fin, lambda k: _ultimos_geocolor(sat, k)), 1, _PASO_SLOT
     else:
         ventana = _ventana_animacion(
             inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
@@ -1397,6 +1514,7 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
         args=comunes,
         expected=max(1, n),
     )
+    firms_flags = _flags_firms(params, work)
     render_step = Step(
         kind="render",
         label=f"renderizando {n} cuadro(s) de GeoColor",
@@ -1408,11 +1526,17 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
             *([] if py else ["--centro", f"{lon_sub:g}", "0"]),
             "--geojson", _borde_paraguay(params),
             *(["--sin-fecha"] if py else []),
+            *firms_flags,
         ],
         expected=n,
     )
 
-    pasos = [descarga, render_step]  # el origen se consulta siempre
+    # Los focos cubren la ventana de los cuadros: el país con margen o el mismo
+    # hemisferio que baja la descarga.
+    focos = _paso_firms(
+        params, desde, desde + timedelta(minutes=paso * n), work, mundo=False,
+        caja=None if py else [lon_sub - 90.0, -80.0, lon_sub + 90.0, 80.0])
+    pasos = [descarga, *([focos] if focos else []), render_step]  # el origen se consulta siempre
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -1422,7 +1546,10 @@ def _truecolor_viirs(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango_de_la_corrida(params)
     px = _px(params, 2000)
     animar = _bool(params, "animar") and not _snapshot(params)
-    capa = str(params.get("capa", "VIIRS_NOAA20_CorrectedReflectance_TrueColor"))
+    capa = str(params.get("capa", _GIBS_TRUECOLOR))
+    if _pide_ultimo_dia(params):
+        # Un solo día: el más nuevo que GIBS ya tiene armado.
+        inicio = fin = _ultimo_dia(capa)
 
     # La capa es una composicion DIARIA: un cuadro por dia, sin horarios.
     dias = max(1, (fin - inicio).days + 1)
@@ -1555,7 +1682,8 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
         slots_nuevos = _ultimos_goes_rgb(sat, producto, n_ultimos)
         desde, n, paso, falta = slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True
     elif _snapshot(params):
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes_rgb(sat, producto, k)), 1, _PASO_SLOT, True
     else:
         disponibles = [
             s for s in _slots_goes_rgb(sat, bandas) if inicio <= s.date() <= fin
@@ -1600,6 +1728,7 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
         "--borde", _borde_paraguay(params),
         *(["--limpio"] if _bool(params, "paraguay") else []),
     ]
+    comunes += _flags_firms(params, work)
     if animar and n > 1:
         render_step = Step(
             kind="render",
@@ -1617,7 +1746,89 @@ def _goes_rgb(params: dict[str, Any], work: Path, producto: str) -> Plan:
             expected=1,
         )
 
-    return Plan(pasos=[descarga, render_step], descarga=descarga)
+    focos = _paso_firms(params, desde, desde + timedelta(minutes=paso * n),
+                        work, mundo=not _bool(params, "paraguay"))
+    pasos = [descarga, *([focos] if focos else []), render_step]
+    return Plan(pasos=pasos, descarga=descarga)
+
+
+# --- FIRMS: los focos de calor de una captura o de una serie --------------
+def _firms_carpeta(work: Path) -> Path:
+    """Carpeta de los CSV de focos: el render la recibe como `--firms-entrada`."""
+    return work / "firms"
+
+
+def _firms_modo(params: dict[str, Any]) -> str:
+    modo = str(params.get("firms_ventana", "dia"))
+    return modo if modo in _VENTANAS_FIRMS else "dia"
+
+
+def _firms_fuente(params: dict[str, Any]) -> str:
+    fuente = str(params.get("firms_fuente", "viirs"))
+    return fuente if fuente in _FUENTES_FIRMS else "viirs"
+
+
+def _ventana_focos():
+    """`comun.firms.ventana`, importado al usarlo (evita acoplar la carga del módulo)."""
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from firms import ventana  # noqa: PLC0415 - ver `_receta_rgb`
+
+    return ventana
+
+
+def _firms_alcance(params: dict[str, Any]) -> str:
+    alcance = str(params.get("firms_alcance", "completo"))
+    return alcance if alcance in ("completo", "paraguay") else "completo"
+
+
+def _paso_firms(params: dict[str, Any], desde: datetime, hasta: datetime,
+                work: Path, mundo: bool, caja=None) -> Step | None:
+    """Paso que baja los focos de la ventana que cubre los cuadros.
+
+    `mundo` es para los pósters de globo sin encuadre: el disco entero puede mostrar
+    incendios fuera de Paraguay. Con `firms_alcance=paraguay` se pide la caja del
+    país (mucho menos) y el render filtra por el polígono; `caja` es el caso
+    intermedio: el hemisferio que baja un producto concreto.
+    """
+    if not _bool(params, "firms"):
+        return None
+    modo = _firms_modo(params)
+    # La ventana de cada cuadro manda: la unión cubre primero y último.
+    ventana = _ventana_focos()
+    inicio = ventana(min(desde, hasta), modo)[0]
+    fin = ventana(max(desde, hasta), modo)[1]
+    args = [
+        "--desde", inicio.strftime("%Y-%m-%dT%H:%M"),
+        "--hasta", fin.strftime("%Y-%m-%dT%H:%M"),
+        "--fuente", _firms_fuente(params),
+        "--out", str(_firms_carpeta(work)),
+    ]
+    if _firms_alcance(params) == "paraguay":
+        args += ["--margen", f"{_margen_paraguay(params):g}"]
+    elif mundo:
+        args.append("--mundo")
+    elif caja:
+        args += ["--caja", *[f"{float(valor):g}" for valor in caja]]
+    else:
+        args += ["--margen", f"{_margen_paraguay(params):g}"]
+    return Step(
+        kind="download",
+        label="bajando los focos de FIRMS",
+        script="descargar/firms.py",
+        args=args,
+        expected=2,
+    )
+
+
+def _flags_firms(params: dict[str, Any], work: Path) -> list[str]:
+    """Banderas del render para dibujar los focos, o [] si el toggle está apagado."""
+    if not _bool(params, "firms"):
+        return []
+    return ["--firms", "--firms-ventana", _firms_modo(params),
+            "--firms-alcance", _firms_alcance(params),
+            "--firms-entrada", str(_firms_carpeta(work))]
 
 
 # --- GOES: Sandwich (visible + IR realzado) ----------------------------
@@ -1638,7 +1849,8 @@ def _goes_sandwich(params: dict[str, Any], work: Path) -> Plan:
         slots_nuevos = _ultimos_goes_bandas(sat, _SANDWICH_BANDAS, n_ultimos)
         desde, n, paso, falta = slots_nuevos[0], len(slots_nuevos), _PASO_SLOT, True
     elif _snapshot(params):
-        desde, n, paso, falta = _slot_pedido(params, fin), 1, _PASO_SLOT, True
+        desde, n, paso, falta = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes_bandas(sat, _SANDWICH_BANDAS, k)), 1, _PASO_SLOT, True
     else:
         disponibles = [
             s for s in _slots_goes_rgb(sat, _SANDWICH_BANDAS)
