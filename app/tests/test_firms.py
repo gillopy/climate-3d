@@ -396,19 +396,30 @@ class Tajadas(unittest.TestCase):
         self.assertEqual(sum(dias for _, dias in trozos), 12)
 
 
-class PosterGoes(unittest.TestCase):
-    """Fire Temperature y color real llevan el toggle; los otros RGB no."""
+class ProductosConFocos(unittest.TestCase):
+    """Cada producto que dibuja focos los expone; el resto queda intacto."""
 
-    def test_los_dos_posteres_lo_exponen(self):
-        for pid in ("goes_firetemp", "goes_truecolor"):
+    SERIE = ("goes_firetemp", "goes_truecolor", "geocolor")
+
+    def test_los_productos_de_serie_lo_exponen(self):
+        for pid in self.SERIE:
             nombres = {s.name: s for s in catalog.get_product(pid).params}
             self.assertIn("firms", nombres, pid)
             self.assertFalse(nombres["firms"].default, pid)
             self.assertEqual(nombres["firms_ventana"].enabled_when,
                              {"firms": True}, pid)
 
-    def test_los_demas_rgb_quedan_intactos(self):
-        for pid in ("goes_dust", "goes_airmass", "goes_sandwich", "goes_c13"):
+    def test_una_animacion_propone_tres_horas_y_una_captura_el_dia(self):
+        for pid in self.SERIE:
+            nombres = {s.name: s for s in catalog.get_product(pid).params}
+            self.assertEqual(nombres["firms_ventana"].default, "3h", pid)
+        snapshot_params = {s.name: s
+                           for s in catalog.get_product("snapshot_paraguay").params}
+        self.assertEqual(snapshot_params["firms_ventana"].default, "dia")
+
+    def test_los_demas_productos_quedan_intactos(self):
+        for pid in ("goes_dust", "goes_airmass", "goes_sandwich", "goes_c13",
+                    "himawari", "viento_250"):
             nombres = {s.name for s in catalog.get_product(pid).params}
             self.assertNotIn("firms", nombres, pid)
 

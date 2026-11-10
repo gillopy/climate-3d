@@ -1447,6 +1447,7 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
         args=comunes,
         expected=max(1, n),
     )
+    firms_flags = _flags_firms(params, work)
     render_step = Step(
         kind="render",
         label=f"renderizando {n} cuadro(s) de GeoColor",
@@ -1458,11 +1459,17 @@ def _geocolor(params: dict[str, Any], work: Path) -> Plan:
             *([] if py else ["--centro", f"{lon_sub:g}", "0"]),
             "--geojson", _borde_paraguay(params),
             *(["--sin-fecha"] if py else []),
+            *firms_flags,
         ],
         expected=n,
     )
 
-    pasos = [descarga, render_step]  # el origen se consulta siempre
+    # Los focos cubren la ventana de los cuadros: el país con margen o el mismo
+    # hemisferio que baja la descarga.
+    focos = _paso_firms(
+        params, desde, desde + timedelta(minutes=paso * n), work, mundo=False,
+        caja=None if py else [lon_sub - 90.0, -80.0, lon_sub + 90.0, 80.0])
+    pasos = [descarga, *([focos] if focos else []), render_step]  # el origen se consulta siempre
     return Plan(pasos=pasos, descarga=descarga)
 
 
@@ -1691,11 +1698,12 @@ def _firms_fuente(params: dict[str, Any]) -> str:
 
 
 def _paso_firms(params: dict[str, Any], desde: datetime, hasta: datetime,
-                work: Path, mundo: bool) -> Step | None:
+                work: Path, mundo: bool, caja=None) -> Step | None:
     """Paso que baja los focos de la ventana que cubre los cuadros.
 
     `mundo` es para los pósters de globo: el disco entero puede mostrar incendios
-    fuera de Paraguay, así que recortar a la caja del país los perdería.
+    fuera de Paraguay, así que recortar a la caja del país los perdería. `caja` es
+    para el caso intermedio: el hemisferio que baja un producto concreto.
     """
     if not _bool(params, "firms"):
         return None
@@ -1716,6 +1724,8 @@ def _paso_firms(params: dict[str, Any], desde: datetime, hasta: datetime,
     ]
     if mundo:
         args.append("--mundo")
+    elif caja:
+        args += ["--caja", *[f"{float(valor):g}" for valor in caja]]
     else:
         args += ["--margen", f"{_margen_paraguay(params):g}"]
     return Step(

@@ -178,6 +178,8 @@ def main(argv=None) -> int:
     ap.add_argument("--hasta", help="fin ISO de la ventana (para una serie)")
     ap.add_argument("--mundo", action="store_true",
                     help="caja `world`: todo el planeta, para un póster de disco")
+    ap.add_argument("--caja", nargs=4, type=float, metavar=("O", "S", "E", "N"),
+                    help="caja explícita (por defecto, la de Paraguay + margen)")
     ap.add_argument("--out", help="carpeta donde dejar el CSV (por defecto --entrada)")
     ap.add_argument("--clave", help="MAP_KEY (por defecto, entorno o datos/firms_map_key.txt)")
     ap.add_argument("--reintentos", type=int, default=REINTENTOS,
@@ -199,7 +201,9 @@ def main(argv=None) -> int:
 
     entrada = Path(args.entrada) if args.entrada else Path(args.out or ".")
     salida = Path(args.out) if args.out else entrada
-    caja = "world" if args.mundo else caja_geojson(Path(args.geojson), args.margen)
+    caja = ("world" if args.mundo
+            else list(args.caja) if args.caja
+            else caja_geojson(Path(args.geojson), args.margen))
 
     if args.desde or args.hasta:
         # Ventana explícita (series): el render filtra cuadro por cuadro.

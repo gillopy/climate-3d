@@ -28,7 +28,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
+from firms import (VENTANAS, color_foco, color_hex, filtrar,  # noqa: E402
+                   leer_carpeta, ventana)
 from rutas import SALIDAS  # noqa: E402
+from snapshot_paraguay import dibujar_focos  # noqa: E402
 
 # Sudamérica + Caribe: Paraguay entra cómodo y el terminador barre el dominio entero.
 BBOX = (-85.0, -40.0, -35.0, 15.0)      # oeste, sur, este, norte
@@ -143,6 +146,51 @@ def _borde_plano(img: Image.Image, caja, ruta, color=(255, 255, 255),
     return Image.alpha_composite(base, capa).convert("RGB")
 
 
+_CACHE_FOCOS: dict[str, list] = {}
+
+
+def _focos_de(args, t: datetime) -> list:
+    """Focos de FIRMS del cuadro `t`, o [] si el toggle está apagado.
+
+    La ventana se filtra **por cuadro**: en una animación con `3h`, los focos
+    aparecen cuando el satélite pasa, no quedan fijos todo el día.
+    """
+    carpeta = getattr(args, "firms_entrada", None)
+    if not getattr(args, "firms", False) or not carpeta:
+        return []
+    if carpeta not in _CACHE_FOCOS:
+        _CACHE_FOCOS[carpeta] = leer_carpeta(carpeta)
+    return filtrar(_CACHE_FOCOS[carpeta],
+                   *ventana(t, getattr(args, "firms_ventana", "dia")))
+
+
+def _focos_globo(ax, focos, args) -> None:
+    """Marca los focos sobre el globo con la proyección del eje (cartopy)."""
+    import cartopy.crs as ccrs
+
+    lon0, lat0 = np.radians(args.centro[0]), np.radians(args.centro[1])
+    lon = np.radians(np.array([foco.lon for foco in focos], dtype=float))
+    lat = np.radians(np.array([foco.lat for foco in focos], dtype=float))
+    # Sólo la cara visible: en orthographic los puntos del otro lado se espejan.
+    cos_c = (np.sin(lat0) * np.sin(lat)
+             + np.cos(lat0) * np.cos(lat) * np.cos(lon - lon0))
+    visible = cos_c > 1e-6
+    if not visible.any():
+        return
+    dentro = [foco for foco, ok in zip(focos, visible) if ok]
+    diametro = max(4.0, args.px * 0.0085) * 72.0 / args.dpi
+    for tamano, color, alpha, orden in (
+        (diametro * 1.75, "#000000", 0.28, 7.6),
+        (diametro, None, 0.90, 8.0),
+        (diametro * 0.42, "#fff8dc", 0.92, 8.1),
+    ):
+        ax.scatter([foco.lon for foco in dentro], [foco.lat for foco in dentro],
+                   s=tamano ** 2,
+                   c=(color if color else [color_hex(f.confianza) for f in dentro]),
+                   alpha=alpha, linewidths=0,
+                   transform=ccrs.PlateCarree(), zorder=orden)
+
+
 def _estilo_poster():
     """Constantes del póster del repo, compartidas en `comun/estilo.py`."""
     from estilo import BG, MONTHS_EN, TXT, TXT_DIM, WM_COLOR
@@ -253,7 +301,8 @@ def _warp_ortho(rgb, bbox, centro, lado, banda=256):
     return salida
 
 
-def render_globo(crudo: Path, t: datetime, args, destino: Path) -> Path:
+def render_globo(crudo: Path, t: datetime, args, destino: Path,
+                 focos=()) -> Path:
     """Reproyecta el snapshot (lat/lon) a Orthographic, con el vestuario del póster.
 
     El snapshot llega en EPSG:4326 (plano lon/lat) y `_warp_ortho` lo lleva al disco
@@ -297,6 +346,8 @@ def render_globo(crudo: Path, t: datetime, args, destino: Path) -> Path:
     except Exception as exc:
         print(f"AVISO: costas omitidas ({exc})")
     _borde_geojson(ax, args.geojson, args.borde_color, args.borde_ancho)
+    if focos:
+        _focos_globo(ax, focos, args)
 
     # Referencia: la animación de 720 px del repo, pero sub-lineal (ver ESCALA_TEXTO).
     esc = ESCALA_TEXTO * (args.px / 720.0) ** 0.45
@@ -390,6 +441,12 @@ def main(argv=None) -> int:
     ap.add_argument("--credito", default=CREDITO, help="crédito de la marca de agua")
     ap.add_argument("--sin-fecha", action="store_true",
                     help="no estampar la fecha/hora en el cuadro")
+    ap.add_argument("--firms", action="store_true",
+                    help="superpone los focos de calor de NASA FIRMS")
+    ap.add_argument("--firms-ventana", default=VENTANAS[0], choices=VENTANAS,
+                    help="ventana de focos alrededor de cada cuadro")
+    ap.add_argument("--firms-entrada",
+                    help="carpeta con los CSV de focos (los deja descargar/firms.py)")
     ap.add_argument("--out", help="carpeta de salida (por defecto, comun.rutas.SALIDAS)")
     args = ap.parse_args(argv)
 
@@ -463,11 +520,15 @@ def main(argv=None) -> int:
         if destino.exists() and destino.stat().st_mtime >= crudo.stat().st_mtime:
             pass                       # ya renderizado con estos parámetros
         elif args.globo:
-            render_globo(crudo, t, args, destino)
+            render_globo(crudo, t, args, destino, _focos_de(args, t))
         else:
             img = Image.open(crudo)
             img = img if args.sin_fecha else etiquetar(img, t, args.credito)
             img = _borde_plano(img, args.bbox, args.geojson)
+            focos = _focos_de(args, t)
+            if focos:
+                img = dibujar_focos(img, tuple(args.bbox), focos,
+                                    img.width, img.height)
             parcial = destino.with_suffix(".png.parcial")
             img.convert("RGB").save(parcial, format="PNG")
             parcial.replace(destino)

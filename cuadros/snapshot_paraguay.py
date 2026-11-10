@@ -76,11 +76,17 @@ def _anillos(geometria) -> list[list[tuple[float, float]]]:
     return anillos
 
 
-def _a_pixel(lon: float, lat: float, caja, lado: int, escala: int) -> tuple[float, float]:
-    """Proyección lineal lon/lat -> píxel (la imagen de GIBS es EPSG:4326)."""
+def _a_pixel(lon: float, lat: float, caja, lado: int, escala: int,
+             alto: int | None = None) -> tuple[float, float]:
+    """Proyección lineal lon/lat -> píxel (la imagen de GIBS es EPSG:4326).
+
+    `lado` es el ancho; `alto` sólo hace falta cuando la captura no es cuadrada
+    (GeoColor recorta a la caja, que no lo es).
+    """
     o, s, e, n = caja
+    alto = alto or lado
     x = (lon - o) / (e - o) * lado * escala
-    y = (n - lat) / (n - s) * lado * escala
+    y = (n - lat) / (n - s) * alto * escala
     return x, y
 
 
@@ -127,18 +133,23 @@ def _punto(lapiz: ImageDraw.ImageDraw, x: float, y: float, radio: float,
                   fill=(255, 248, 220, 235))
 
 
-def dibujar_focos(imagen: Image.Image, caja, focos, lado: int) -> Image.Image:
-    """Superpone los focos de calor sobre la captura, con la misma proyección."""
-    escala = 2 if lado <= 4000 else 1
-    capa = Image.new("RGBA", (lado * escala, lado * escala), (0, 0, 0, 0))
+def dibujar_focos(imagen: Image.Image, caja, focos, lado: int,
+                  alto: int | None = None) -> Image.Image:
+    """Superpone los focos de calor sobre la captura, con la misma proyección.
+
+    Lo usan el Snapshot (imagen cuadrada) y GeoColor (recorte rectangular).
+    """
+    alto = alto or lado
+    escala = 2 if max(lado, alto) <= 4000 else 1
+    capa = Image.new("RGBA", (lado * escala, alto * escala), (0, 0, 0, 0))
     lapiz = ImageDraw.Draw(capa)
-    base = max(3.0, lado * FOCO_RADIO)
+    base = max(3.0, min(lado, alto) * FOCO_RADIO)
     for foco in focos:
-        x, y = _a_pixel(foco.lon, foco.lat, caja, lado, escala)
+        x, y = _a_pixel(foco.lon, foco.lat, caja, lado, escala, alto)
         # El FRP manda el tamaño, con techo: un foco de 200 MW no tapa la captura.
         radio = min(base * (1.0 + min(foco.frp, 100.0) ** 0.5 / 8.0), base * 3.0)
         _punto(lapiz, x, y, radio * escala, color_foco(foco.confianza))
-    capa = capa.resize((lado, lado), Image.LANCZOS)
+    capa = capa.resize((lado, alto), Image.LANCZOS)
     salida = imagen.convert("RGBA").copy()
     salida.alpha_composite(capa)
     return salida.convert("RGB")

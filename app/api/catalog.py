@@ -181,8 +181,12 @@ def _params_ultimos() -> list[ParamSpec]:
     ]
 
 
-def _params_firms() -> list[ParamSpec]:
+def _params_firms(por_defecto: str = "dia") -> list[ParamSpec]:
     """Toggle de focos de FIRMS + sus dos selectores.
+
+    `por_defecto` es la ventana que propone la UI: `dia` para una captura suelta
+    (el compuesto diario ES ese día) y `3h` para una animación, donde los focos
+    aparecen cuando pasa el satélite en vez de quedar fijos todo el día.
 
     Se arma por producto (no se comparte el objeto) por la misma razón que
     `_params_ultimos`: `_con_snapshot` ajusta `enabled_when` en cada instancia.
@@ -214,15 +218,15 @@ def _params_firms() -> list[ParamSpec]:
             name="firms_ventana",
             label="Ventana de focos",
             kind="select",
-            default="dia",
+            default=por_defecto,
             options=[
                 ParamOption(value="dia", label="Día UTC completo"),
                 ParamOption(value="3h", label="± 3 horas"),
                 ParamOption(value="6h", label="± 6 horas"),
                 ParamOption(value="12h", label="± 12 horas"),
             ],
-            help="el día completo acompaña a los compuestos diarios; las horas "
-                 "son para el slot exacto (VIIRS pasa ~05 y ~17 UTC)",
+            help="el día completo acompaña a los compuestos diarios; ±3 h hace que "
+                 "los focos sigan el paso del satélite (VIIRS pasa ~05 y ~17 UTC)",
             enabled_when={"firms": True},
         ),
     ]
@@ -454,7 +458,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
                       enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=8, min=4, max=30, step=2),
-            *_params_firms(),
+            *_params_firms(por_defecto="3h"),
         ],
     ),
     Product(
@@ -527,7 +531,7 @@ PRODUCTS: list[Product] = [
     _producto_rgb("goes_dust", "GOES - Dust RGB", "dust"),
     _producto_rgb("goes_airmass", "GOES - Air Mass RGB", "airmass"),
     _producto_rgb("goes_firetemp", "GOES - Fire Temperature RGB", "firetemp",
-                  extras=_params_firms()),
+                  extras=_params_firms(por_defecto="3h")),
     Product(
         id="goes_sandwich",
         name="GOES - Sandwich (visible + IR realzado)",
@@ -646,6 +650,7 @@ PRODUCTS: list[Product] = [
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
                       enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=8, min=4, max=30, step=2),
+            *_params_firms(por_defecto="3h"),
         ],
     ),
     Product(
