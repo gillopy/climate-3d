@@ -28,11 +28,27 @@ for ruta in (RAIZ, RAIZ / "comun", RAIZ / "cuadros"):
     if str(ruta) not in sys.path:
         sys.path.insert(0, str(ruta))
 
+import contextlib  # noqa: E402
+import importlib.util  # noqa: E402
+import io  # noqa: E402
+
+import requests  # noqa: E402
+
 import firms  # noqa: E402
 import snapshot_paraguay as snapshot  # noqa: E402
 from PIL import Image  # noqa: E402
+from paraguay import caja_geojson, nombre_captura  # noqa: E402
 
 from app.api import catalog, recipes  # noqa: E402
+
+
+def _descargador():
+    """El script `descargar/firms.py` como módulo (no está en el sys.path)."""
+    spec = importlib.util.spec_from_file_location(
+        "firms_descargar", RAIZ / "descargar" / "firms.py")
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    return modulo
 
 CABECERA = ("latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,"
             "satellite,instrument,confidence,version,bright_ti5,frp,daynight")
@@ -258,6 +274,95 @@ class CatalogoYReceta(unittest.TestCase):
                                Path("C:/tmp/work"))
         args = plan.pasos[1].args
         self.assertEqual(args[args.index("--fuente") + 1], "viirs")
+
+
+class Credencial(unittest.TestCase):
+    """La MAP_KEY viaja en la URL: no puede terminar escrita en el log del job.
+
+    `requests` arma sus excepciones con la URL completa, y el job guarda todo lo que
+    el script imprime. Un corte de red no puede publicar la credencial.
+    """
+
+    CLAVE = "SECRETO_DE_PRUEBA_123"
+
+    def test_un_fallo_de_red_no_imprime_la_clave(self):
+        modulo = _descargador()
+
+        def falla(url, *args, **kwargs):
+            raise requests.exceptions.ConnectionError(
+                "HTTPSConnectionPool(host='firms.modaps.eosdis.nasa.gov', port=443): "
+                f"Max retries exceeded with url: {url}")
+
+        carpeta = Path(tempfile.mkdtemp(prefix="firms-"))
+        try:
+            salida = io.StringIO()
+            with mock.patch.object(modulo.requests, "get", falla), \
+                    mock.patch.object(modulo.time, "sleep", lambda _: None), \
+                    contextlib.redirect_stdout(salida):
+                modulo.descargar((-63, -28, -53, -18), datetime(2026, 11, 8, 15),
+                                 carpeta / "focos.csv", fuente="viirs",
+                                 modo="dia", clave=self.CLAVE, reintentos=2)
+        finally:
+            shutil.rmtree(carpeta, ignore_errors=True)
+        self.assertIn("aviso", salida.getvalue())
+        self.assertNotIn(self.CLAVE, salida.getvalue())
+
+    def test_una_clave_invalida_tampoco_se_imprime(self):
+        modulo = _descargador()
+
+        class Respuesta:
+            status_code = 400
+            text = "Invalid MAP_KEY."
+
+        carpeta = Path(tempfile.mkdtemp(prefix="firms-"))
+        try:
+            salida = io.StringIO()
+            with mock.patch.object(modulo.requests, "get",
+                                   lambda *a, **k: Respuesta()), \
+                    contextlib.redirect_stdout(salida), \
+                    self.assertRaises(SystemExit) as contexto:
+                modulo.descargar((-63, -28, -53, -18), datetime(2026, 11, 8, 15),
+                                 carpeta / "focos.csv", clave=self.CLAVE,
+                                 reintentos=1)
+        finally:
+            shutil.rmtree(carpeta, ignore_errors=True)
+        self.assertNotIn(self.CLAVE, salida.getvalue())
+        self.assertNotIn(self.CLAVE, str(contexto.exception))
+
+    def test_la_receta_nunca_pasa_la_clave_por_argv(self):
+        params = {s.name: s.default
+                  for s in catalog.get_product("snapshot_paraguay").params}
+        params.update({"firms": True, "ultima": False, "fecha": "2026-11-08"})
+        for paso in recipes.planear("snapshot_paraguay", params, Path("x")).pasos:
+            self.assertNotIn("--clave", paso.args)
+            self.assertNotIn("FIRMS_MAP_KEY", " ".join(paso.args))
+
+
+class DiasQueSePiden(unittest.TestCase):
+    """S6: una ventana que cruza la medianoche no pide de menos."""
+
+    def test_los_dias_salen_de_la_ventana(self):
+        modulo = _descargador()
+        casos = [("dia", datetime(2026, 11, 8, 15), 1),
+                 ("3h", datetime(2026, 11, 8, 0), 2),
+                 ("6h", datetime(2026, 11, 8, 23, 59), 2),
+                 ("12h", datetime(2026, 11, 8, 15), 2)]
+        for modo, cuando, esperado in casos:
+            desde, hasta = firms.ventana(cuando, modo)
+            self.assertEqual(modulo._dias(desde, hasta), esperado, (modo, cuando))
+
+
+class CapturaApagada(unittest.TestCase):
+    """S1/S3: con el toggle apagado no cambia ni el plan ni el nombre."""
+
+    def test_el_nombre_no_lleva_sufijo(self):
+        self.assertEqual(nombre_captura("truecolor", datetime(2026, 11, 8, 15), 200),
+                         "snapshot_paraguay_truecolor_2026-11-08T1500_200px.png")
+
+    def test_la_caja_es_la_del_snapshot(self):
+        caja = caja_geojson(RAIZ / "datos" / "paraguay_gadm.json", 0.06)
+        self.assertEqual(tuple(round(v, 3) for v in caja),
+                         (-63.145, -28.104, -53.756, -18.797))
 
 
 if __name__ == "__main__":

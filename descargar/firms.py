@@ -47,7 +47,16 @@ def _aviso(texto: str) -> None:
     print(f"  aviso: {texto}", flush=True)
 
 
-def _pedir(url: str, reintentos: int = REINTENTOS) -> str:
+def _sin_clave(texto: str, clave: str) -> str:
+    """Borra la MAP_KEY de un mensaje antes de imprimirlo.
+
+    `requests` mete la URL entera en sus excepciones y la clave viaja en la URL: sin
+    esto, un corte de red dejaría la credencial escrita en el log del job.
+    """
+    return texto.replace(clave, "***") if clave else texto
+
+
+def _pedir(url: str, reintentos: int = REINTENTOS, clave: str = "") -> str:
     """GET con backoff. Devuelve el texto o lanza la última excepción."""
     espera = 2.0
     for intento in range(1, reintentos + 1):
@@ -66,7 +75,8 @@ def _pedir(url: str, reintentos: int = REINTENTOS) -> str:
         except Exception as exc:                       # red, rate-limit o corte
             if intento == reintentos:
                 raise
-            print(f"    reintento {intento}/{reintentos - 1} ({exc})", flush=True)
+            print(f"    reintento {intento}/{reintentos - 1} "
+                  f"({type(exc).__name__}: {_sin_clave(str(exc), clave)})", flush=True)
             time.sleep(espera)
             espera *= 2
     raise AssertionError("bucle de reintentos sin retorno")
@@ -107,11 +117,11 @@ def descargar(caja, instante: datetime, destino: Path, fuente: str = FUENTE,
     for nombre in FUENTES.get(fuente, FUENTES[FUENTE]):
         url = url_focos(clave, nombre, caja, desde.date(), dias)
         try:
-            texto = _pedir(url, reintentos)
+            texto = _pedir(url, reintentos, clave)
         except SystemExit:
             raise
         except Exception as exc:
-            _aviso(f"{nombre}: {type(exc).__name__}: {exc}")
+            _aviso(f"{nombre}: {type(exc).__name__}: {_sin_clave(str(exc), clave)}")
             continue
         encontrados = leer_texto(texto)
         en_ventana = filtrar(encontrados, desde, hasta)
