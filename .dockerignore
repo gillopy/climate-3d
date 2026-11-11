@@ -1,0 +1,53 @@
+# Contexto de build: todo lo que NO tiene que viajar a la imagen.
+
+# Git y tooling local
+.git
+.gitignore
+.atl
+.agents
+.codex
+.codegraph
+.impeccable
+.playwright-mcp
+odd
+skills-lock.json
+
+# Entornos virtuales y cachés de Python
+.venv
+app/.venv
+**/__pycache__
+**/*.py[cod]
+
+# Node y su salida: el frontend se compila en su propio stage
+app/web/node_modules
+app/web/dist
+
+# Estado de la app en runtime
+app/var
+
+# Documentación y demo congelada: no las necesita el contenedor
+docs
+demo
+logs
+/*.png
+/*.jpg
+
+# Datos y salidas: viven en el volumen /data, nunca en la imagen
+datos/firms_map_key.txt
+datos/salidas
+**/*.nc
+**/*.grib
+**/*.grib2
+**/AHI-L1b-FLDK
+poster_*.png
+animacion_*.png
+vista_*.png
+frames_*/
+*.gif
+*.mp4
+*.log
+
+# Configuración local y credenciales
+.env
+.env.*
+env.example
