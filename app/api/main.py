@@ -6,6 +6,7 @@ del repo.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -143,10 +144,23 @@ def revelar_carpeta(job_id: str) -> dict[str, str]:
 
     Solo abre la carpeta que el servidor calculó para ese job: no acepta rutas
     del cliente, así que no sirve para abrir cualquier cosa del disco.
+
+    En el contenedor no hay escritorio: se explica cómo bajar el artefacto en vez
+    de fallar con el error de un `explorer`/`xdg-open` que no existe.
     """
     job = gestor.obtener(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job desconocido")
+
+    if os.environ.get("CLIMATE3D_CONTENEDOR") == "1":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "En modo contenedor no hay escritorio que abrir: "
+                "descargá el artefacto desde el panel."
+            ),
+        )
+
     destino = job.work
     if not destino.is_dir():
         raise HTTPException(status_code=409, detail="La carpeta todavia no existe")
