@@ -1,0 +1,1088 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Despiece Terra — Climate 3D</title>
+<style>
+  /* Fuente del repo (Archivo variable). Si el archivo se mueve, cae al stack del sistema. */
+  @font-face {
+    font-family: "Archivo";
+    src: url("../app/web/src/fonts/archivo-latin.woff2") format("woff2");
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  :root {
+    --paper: #f4f4f1;
+    --card: #fbfbf9;
+    --ink: #1c1e21;
+    --ink-66: rgba(28, 30, 33, 0.78);
+    --ink-52: rgba(28, 30, 33, 0.62);
+    --hair: rgba(28, 30, 33, 0.14);
+    --hair-strong: rgba(28, 30, 33, 0.26);
+    --iris: #5e6ad2;
+    --sans: "Archivo", "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 13.5px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    caret-color: var(--iris);
+    overflow: hidden;
+  }
+
+  ::selection { background: var(--iris); color: #fff; }
+
+  :focus-visible {
+    outline: 2px solid var(--iris);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  * { scrollbar-width: thin; scrollbar-color: rgba(28, 30, 33, 0.28) transparent; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(28, 30, 33, 0.24);
+    border-radius: 999px;
+    border: 3px solid var(--card);
+  }
+  *::-webkit-scrollbar-track { background: transparent; }
+
+  .stage { position: fixed; inset: 0; }
+
+  .canvas {
+    position: absolute;
+    inset: 0;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+  .canvas.arrastrando { cursor: grabbing; }
+  .canvas svg { display: block; width: 100%; height: 100%; }
+
+  /* ---- bloque de título ---- */
+  .titulo {
+    position: absolute;
+    top: 22px;
+    left: 26px;
+    pointer-events: none;
+    max-width: min(560px, calc(100vw - 52px));
+  }
+  .titulo h1 {
+    margin: 0 0 6px;
+    font: 600 26px/1.1 var(--sans);
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+  .titulo .bajada {
+    margin: 0 0 3px;
+    font-size: 13px;
+    color: var(--ink-66);
+    text-wrap: pretty;
+  }
+  .titulo .specs {
+    margin: 0;
+    font: 400 11px/1.4 var(--mono);
+    color: var(--ink-52);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- ficha técnica (convención de plano) ---- */
+  .ficha {
+    position: absolute;
+    right: 22px;
+    bottom: 22px;
+    pointer-events: none;
+    border-top: 1px solid var(--hair-strong);
+    padding-top: 8px;
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 2px 14px;
+    font: 400 10px/1.6 var(--mono);
+    color: var(--ink-52);
+    font-variant-numeric: tabular-nums;
+  }
+  .ficha dt {
+    font-family: var(--sans);
+    font-size: 8.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-52);
+  }
+  .ficha dd { margin: 0; color: var(--ink-66); }
+
+  /* ---- barra de controles ---- */
+  .barra {
+    position: absolute;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    background: var(--card);
+    border: 1px solid var(--hair);
+    border-radius: 999px;
+    box-shadow:
+      0 1px 2px rgba(28, 30, 33, 0.08),
+      0 10px 30px rgba(28, 30, 33, 0.12);
+    z-index: 10;
+  }
+
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    height: 40px;
+    background: rgba(28, 30, 33, 0.05);
+    border-radius: 999px;
+  }
+  .seg button {
+    height: 36px;
+    min-width: 40px;
+    padding: 0 13px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink-66);
+    font: 500 12.5px/1 var(--sans);
+    cursor: pointer;
+    transition-property: background-color, color, box-shadow, transform;
+    transition-duration: 140ms, 140ms, 140ms, 110ms;
+    transition-timing-function: var(--ease);
+  }
+  .seg button:hover { color: var(--ink); }
+  .seg button[aria-checked="true"] {
+    background: var(--card);
+    color: var(--ink);
+    box-shadow:
+      0 1px 1px rgba(28, 30, 33, 0.06),
+      0 2px 6px rgba(28, 30, 33, 0.10);
+  }
+  .seg button:active { transform: scale(0.96); }
+
+  .sep {
+    width: 1px;
+    height: 16px;
+    margin: 0 4px;
+    background: var(--hair);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 40px;
+    min-width: 40px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font: 500 12.5px/1 var(--sans);
+    cursor: pointer;
+    transition-property: background-color, transform, opacity;
+    transition-duration: 140ms, 110ms, 140ms;
+    transition-timing-function: var(--ease);
+  }
+  .btn:hover { background: rgba(28, 30, 33, 0.07); }
+  .btn:active { transform: scale(0.96); }
+  .btn:disabled { opacity: 0.35; cursor: default; background: transparent; }
+  .btn svg { flex: none; }
+
+  .zoom-out {
+    width: 46px;
+    text-align: center;
+    font: 500 12px/1 var(--mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-66);
+  }
+
+  /* ---- popover de piezas ---- */
+  .pop {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 80px;
+    width: min(360px, calc(100vw - 24px));
+    max-height: min(520px, 62vh);
+    overflow: auto;
+    padding: 6px;
+    background: var(--card);
+    border: 1px solid var(--hair-strong);
+    border-radius: 14px;
+    box-shadow:
+      0 2px 6px rgba(28, 30, 33, 0.10),
+      0 18px 44px rgba(28, 30, 33, 0.16);
+  }
+  .pop[hidden] { display: none; }
+
+  .pop .pop-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 7px 9px 6px;
+    font: 500 11px/1.4 var(--sans);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-52);
+  }
+  .pop .pop-head span:last-child {
+    font-family: var(--mono);
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pop ul { list-style: none; margin: 0; padding: 0; }
+
+  .pop .fila {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    align-items: center;
+    gap: 0 8px;
+    width: 100%;
+    padding: 7px 9px;
+    border: 0;
+    border-left: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    color: var(--ink);
+    transition-property: background-color, border-color;
+    transition-duration: 130ms;
+    transition-timing-function: var(--ease);
+  }
+  .pop .fila:hover { background: rgba(28, 30, 33, 0.05); }
+  .pop .fila:focus-visible { outline-offset: -2px; border-radius: 8px; }
+  .pop .fila[aria-current="true"] {
+    background: rgba(28, 30, 33, 0.05);
+    border-left-color: var(--iris);
+  }
+  .pop .num {
+    font: 600 11px/1 var(--mono);
+    color: var(--ink-52);
+    font-variant-numeric: tabular-nums;
+    grid-row: span 2;
+  }
+  .pop .nom { font: 600 12.5px/1.25 var(--sans); letter-spacing: -0.01em; }
+  .pop .det {
+    font: 400 11px/1.35 var(--mono);
+    color: var(--ink-52);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 1180px) {
+    .ficha { display: none; }
+  }
+  @media (max-width: 720px) {
+    .titulo { top: 16px; left: 16px; }
+    .titulo h1 { font-size: 20px; }
+    .titulo .specs { display: none; }
+    .barra {
+      bottom: 12px;
+      width: calc(100vw - 24px);
+      border-radius: 20px;
+      padding: 6px;
+      row-gap: 4px;
+    }
+    .pop { bottom: 132px; }
+    .btn .txt { display: none; }
+    .btn { padding: 0 11px; }
+    .seg button { padding: 0 10px; }
+  }
+
+  @media (pointer: coarse) {
+    .btn, .seg button { min-width: 44px; height: 44px; }
+    .seg { height: 44px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      transition-delay: 0ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<main class="stage" id="stage">
+
+  <div class="canvas" id="canvas" role="region"
+       aria-label="Dibujo del satélite Terra. Usa más y menos para acercar o alejar, y cero para ajustar.">
+    <svg id="drawing" viewBox="0 0 960 640" data-view="despiezado" role="group"
+         aria-labelledby="dibujo-titulo" preserveAspectRatio="xMidYMid meet">
+      <title id="dibujo-titulo">Despiece del satélite Terra (EOS AM-1)</title>
+
+      <style>
+        /* Todo el estilo del dibujo vive dentro del SVG para que la descarga sea autocontenida. */
+        .part {
+          cursor: pointer;
+          transform: translate(var(--dx, 0px), var(--dy, 0px));
+          transition-property: transform, opacity;
+          transition-duration: 550ms, 150ms;
+          transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1), ease-out;
+          transition-delay: calc(var(--i) * 40ms), 0ms;
+        }
+        svg[data-view="armado"] .part {
+          transform: translate(0px, 0px);
+          transition-delay: calc(var(--i) * 22ms), 0ms;
+        }
+
+        .face { stroke: #1c1e21; stroke-linejoin: round; }
+        .f-front, .f-side { stroke-width: 0.9; }
+        .f-top { stroke-width: 0.55; }
+        .f-front { fill: #d7d8d4; }
+        .f-top { fill: #e6e6e3; }
+        .f-side { fill: #bfc0be; }
+
+        .ln { fill: none; stroke: #1c1e21; stroke-linecap: round; stroke-linejoin: round; }
+        .ln-edge { stroke-width: 0.55; }
+        .ln-detail { stroke-width: 0.32; }
+        .ln-tex { stroke-width: 0.22; opacity: 0.5; }
+
+        .part:hover .f-front, .part.is-hot .f-front { fill: #cbccc8; }
+        .part:hover .f-side, .part.is-hot .f-side { fill: #b2b3b1; }
+
+        .part:focus { outline: none; }
+        .part:focus-visible .face, .part:focus-visible .ln,
+        .part.is-selected .face, .part.is-selected .ln { stroke: #5e6ad2; }
+        .part:focus-visible .f-front, .part.is-selected .f-front { fill: #d3d6ea; }
+        .part:focus-visible .f-top, .part.is-selected .f-top { fill: #e6e8f2; }
+        .part:focus-visible .f-side, .part.is-selected .f-side { fill: #c2c7e4; }
+
+        .has-selection .part:not(.is-selected) { opacity: 0.35; }
+
+        .callout { pointer-events: none; }
+        .co-line {
+          fill: none;
+          stroke: #1c1e21;
+          stroke-width: 0.45;
+          stroke-dasharray: 1;
+          stroke-dashoffset: 1;
+          transition: stroke-dashoffset 160ms ease-out;
+        }
+        .co-dot, .co-badge, .co-num, .co-name, .co-spec {
+          opacity: 0;
+          transition: opacity 120ms ease-out;
+        }
+        .co-dot { fill: #1c1e21; }
+        .co-badge { fill: #fbfbf9; stroke: #1c1e21; stroke-width: 0.45; }
+        .co-num {
+          font: 600 8.5px/1 ui-monospace, "Cascadia Mono", Consolas, monospace;
+          fill: #1c1e21;
+          text-anchor: middle;
+          font-variant-numeric: tabular-nums;
+        }
+        .co-name {
+          font: 600 11.5px/1 "Archivo", "Segoe UI", system-ui, sans-serif;
+          fill: #1c1e21;
+          letter-spacing: -0.01em;
+        }
+        .co-spec {
+          font: 400 8.5px/1 ui-monospace, "Cascadia Mono", Consolas, monospace;
+          fill: rgba(28, 30, 33, 0.66);
+          font-variant-numeric: tabular-nums;
+        }
+
+        svg[data-view="despiezado"] .co-line {
+          stroke-dashoffset: 0;
+          transition: stroke-dashoffset 500ms cubic-bezier(0.23, 1, 0.32, 1) calc(var(--i) * 45ms + 100ms);
+        }
+        svg[data-view="despiezado"] .co-dot,
+        svg[data-view="despiezado"] .co-badge,
+        svg[data-view="despiezado"] .co-num {
+          opacity: 1;
+          transition: opacity 200ms ease-out calc(var(--i) * 45ms + 430ms);
+        }
+        svg[data-view="despiezado"] .co-name,
+        svg[data-view="despiezado"] .co-spec {
+          opacity: 1;
+          transition: opacity 220ms ease-out calc(var(--i) * 45ms + 480ms);
+        }
+
+        .has-selection .callout:not(.is-sel) { opacity: 0.22; }
+
+        @media (prefers-reduced-motion: reduce) {
+          .part, .co-line, .co-dot, .co-badge, .co-num, .co-name, .co-spec {
+            transition-duration: 0.01ms !important;
+            transition-delay: 0ms !important;
+          }
+        }
+
+        /* En pantallas angostas el dibujo se ve más chico: se compensa el rótulo. */
+        @media (max-width: 720px) {
+          .co-name { font-size: 15px; }
+          .co-spec { font-size: 10.5px; }
+          .co-num { font-size: 11px; }
+        }
+      </style>
+
+      <g id="lienzo">
+
+        <defs>
+          <pattern id="tex-celdas" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(-8.9)">
+            <path d="M0 0H7M0 0V7" fill="none" stroke="#1c1e21" stroke-opacity="0.22" stroke-width="0.18"/>
+          </pattern>
+          <pattern id="tex-lamas" width="4.5" height="4.5" patternUnits="userSpaceOnUse">
+            <path d="M0 4.5H4.5" stroke="#1c1e21" stroke-opacity="0.30" stroke-width="0.2"/>
+          </pattern>
+          <pattern id="tex-mli" width="16" height="11" patternUnits="userSpaceOnUse">
+            <path d="M0 0H16M0 11H16M8 0V11" fill="none" stroke="#1c1e21" stroke-opacity="0.10" stroke-width="0.4"/>
+          </pattern>
+        </defs>
+
+        <!-- 01 · Plataforma EOS -->
+        <g class="part" data-part="bus" style="--dx:0px;--dy:0px;--i:0"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="01, Plataforma EOS, módulo de servicio y mantas térmicas">
+          <polygon class="face f-top" points="420,250 560,250 607,223 467,223"/>
+          <polygon class="face f-side" points="560,250 607,223 607,325 560,352"/>
+          <rect class="face f-front" x="420" y="250" width="140" height="102"/>
+          <polygon points="420,250 560,250 607,223 467,223" fill="url(#tex-mli)" stroke="none"/>
+          <polygon points="560,250 607,223 607,325 560,352" fill="url(#tex-mli)" stroke="none"/>
+          <rect x="420" y="250" width="140" height="102" fill="url(#tex-mli)" stroke="none"/>
+          <rect class="ln ln-edge" x="426" y="256" width="128" height="90"/>
+          <path class="ln ln-detail" d="M432,344H552 M548,268V340"/>
+          <g class="ln ln-detail">
+            <circle cx="432" cy="344" r="1.2"/><circle cx="452" cy="344" r="1.2"/><circle cx="472" cy="344" r="1.2"/>
+            <circle cx="492" cy="344" r="1.2"/><circle cx="512" cy="344" r="1.2"/><circle cx="532" cy="344" r="1.2"/>
+            <circle cx="556" cy="292" r="1.2"/><circle cx="556" cy="304" r="1.2"/><circle cx="556" cy="316" r="1.2"/>
+            <circle cx="556" cy="328" r="1.2"/>
+          </g>
+          <rect class="ln ln-edge" x="532" y="284" width="26" height="22"/>
+          <path class="ln ln-detail" d="M532,284L558,306 M532,306L558,284"/>
+          <rect class="ln ln-edge" x="532" y="310" width="26" height="22"/>
+          <path class="ln ln-detail" d="M532,310L558,332 M532,332L558,310"/>
+          <rect class="ln ln-edge" x="532" y="336" width="26" height="10"/>
+          <path class="ln ln-edge" d="M430,250V210"/>
+          <circle class="ln ln-detail" cx="430" cy="209" r="1.5"/>
+          <rect class="ln ln-detail" x="425" y="244" width="10" height="6"/>
+          <path class="ln ln-detail" d="M430,348C470,342 510,350 552,346"/>
+          <rect class="face f-front" x="424" y="238" width="18" height="9"/>
+          <polygon class="face f-top" points="424,238 442,238 446,235 428,235"/>
+          <circle class="ln ln-detail" cx="433" cy="242" r="2"/>
+          <rect class="face f-front" x="446" y="234" width="18" height="9"/>
+          <polygon class="face f-top" points="446,234 464,234 468,231 450,231"/>
+          <circle class="ln ln-detail" cx="455" cy="238" r="2"/>
+          <polygon class="face f-side" points="450,352 458,352 456,361 451,361"/>
+          <polygon class="face f-side" points="466,352 474,352 472,361 467,361"/>
+          <polygon class="face f-side" points="482,352 490,352 488,361 483,361"/>
+          <circle class="ln ln-detail" cx="502" cy="356" r="3"/>
+        </g>
+
+        <!-- 02 · Radiadores -->
+        <g class="part" data-part="radiadores" style="--dx:0px;--dy:-52px;--i:1"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="02, Radiadores, disipan el calor del bus">
+          <polygon class="face f-top" points="468,244 508,244 536,227 496,227"/>
+          <polygon points="468,244 508,244 536,227 496,227" fill="url(#tex-lamas)" stroke="none"/>
+          <polygon class="face f-top" points="516,244 548,244 576,227 544,227"/>
+          <polygon points="516,244 548,244 576,227 544,227" fill="url(#tex-lamas)" stroke="none"/>
+          <path class="ln ln-edge" d="M472,241.5L532,228.5 M520,241.5L572,228.5"/>
+          <path class="ln ln-detail" d="M470,236L534,222 M518,236L574,222"/>
+        </g>
+
+        <!-- 03 · MODIS -->
+        <g class="part" data-part="modis" style="--dx:-44px;--dy:100px;--i:2"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="03, MODIS, espectrorradiómetro de 36 bandas">
+          <polygon class="face f-top" points="428,258 484,258 490,254 434,254"/><polygon class="face f-side" points="484,258 490,254 490,294 484,298"/><rect class="face f-front" x="428" y="258" width="56" height="40"/>
+          <path class="ln ln-detail" d="M428,294H484"/>
+          <circle class="ln ln-edge" cx="456" cy="278" r="13"/>
+          <circle class="ln ln-detail" cx="456" cy="278" r="9.5"/>
+          <circle class="ln ln-detail" cx="456" cy="278" r="6"/>
+          <circle class="ln ln-detail" cx="456" cy="278" r="2"/>
+          <path class="ln ln-detail" d="M456,265V270 M456,286V291 M443,278H448 M464,278H469 M447,269L450,272 M465,287L462,284 M465,269L462,272 M447,287L450,284"/>
+          <rect class="ln ln-detail" x="476" y="262" width="6" height="10"/>
+          <circle class="ln ln-detail" cx="432" cy="298" r="1.6"/>
+          <circle class="ln ln-detail" cx="440" cy="298" r="1.6"/>
+        </g>
+
+        <!-- 04 · ASTER -->
+        <g class="part" data-part="aster" style="--dx:8px;--dy:122px;--i:3"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="04, ASTER, radiómetro térmico de 14 bandas">
+          <polygon class="face f-top" points="490,258 520,258 526,254 496,254"/><polygon class="face f-side" points="520,258 526,254 526,280 520,284"/><rect class="face f-front" x="490" y="258" width="30" height="26"/>
+          <rect class="ln ln-edge" x="494" y="262" width="9" height="8"/>
+          <rect class="ln ln-edge" x="505" y="262" width="9" height="8"/>
+          <circle class="ln ln-edge" cx="509" cy="276" r="4.5"/>
+          <circle class="ln ln-detail" cx="509" cy="276" r="2"/>
+          <path class="ln ln-detail" d="M490,283H520"/>
+        </g>
+
+        <!-- 05 · CERES -->
+        <g class="part" data-part="ceres" style="--dx:30px;--dy:140px;--i:4"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="05, CERES, tres radiómetros de balance radiativo">
+          <polygon class="face f-top" points="526,258 554,258 560,254 532,254"/><polygon class="face f-side" points="554,258 560,254 560,278 554,282"/><rect class="face f-front" x="526" y="258" width="28" height="24"/>
+          <circle class="ln ln-edge" cx="534" cy="268" r="4.2"/>
+          <circle class="ln ln-edge" cx="542" cy="268" r="4.2"/>
+          <circle class="ln ln-edge" cx="550" cy="268" r="4.2"/>
+          <circle class="ln ln-detail" cx="534" cy="268" r="1.6"/>
+          <circle class="ln ln-detail" cx="542" cy="268" r="1.6"/>
+          <circle class="ln ln-detail" cx="550" cy="268" r="1.6"/>
+          <path class="ln ln-detail" d="M526,278H554"/>
+        </g>
+
+        <!-- 06 · MISR -->
+        <g class="part" data-part="misr" style="--dx:-96px;--dy:128px;--i:5"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="06, MISR, nueve cámaras en ángulos distintos">
+          <polygon class="face f-top" points="428,306 476,306 482,302 434,302"/><polygon class="face f-side" points="476,306 482,302 482,336 476,340"/><rect class="face f-front" x="428" y="306" width="48" height="34"/>
+          <circle class="ln ln-edge" cx="438" cy="320" r="4.6"/>
+          <circle class="ln ln-edge" cx="452" cy="320" r="4.6"/>
+          <circle class="ln ln-edge" cx="466" cy="320" r="4.6"/>
+          <circle class="ln ln-detail" cx="438" cy="320" r="1.8"/>
+          <circle class="ln ln-detail" cx="452" cy="320" r="1.8"/>
+          <circle class="ln ln-detail" cx="466" cy="320" r="1.8"/>
+          <path class="ln ln-detail" d="M428,330H476 M434,336H470"/>
+        </g>
+
+        <!-- 07 · MOPITT -->
+        <g class="part" data-part="mopitt" style="--dx:-6px;--dy:152px;--i:6"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="07, MOPITT, monóxido de carbono y metano">
+          <polygon class="face f-top" points="484,306 528,306 534,302 490,302"/><polygon class="face f-side" points="528,306 534,302 534,336 528,340"/><rect class="face f-front" x="484" y="306" width="44" height="34"/>
+          <circle class="ln ln-edge" cx="506" cy="322" r="10"/>
+          <circle class="ln ln-detail" cx="506" cy="322" r="6"/>
+          <path class="ln ln-detail" d="M506,312V316 M506,328V332 M496,322H500 M512,322H516"/>
+          <rect class="ln ln-detail" x="490" y="310" width="8" height="6"/>
+          <rect class="ln ln-detail" x="520" y="334" width="6" height="4"/>
+        </g>
+
+        <!-- 08 · Ala solar -->
+        <g class="part" data-part="ala" style="--dx:-30px;--dy:10px;--i:7"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="08, Ala solar, cinco paneles">
+          <polygon class="face f-front" points="288.6,325.8 42.6,297.8 49.4,238.2 295.4,266.2"/>
+          <polygon points="288.6,325.8 42.6,297.8 49.4,238.2 295.4,266.2" fill="url(#tex-celdas)" stroke="none"/>
+          <path class="ln ln-edge" d="M288.6,325.8L42.6,297.8 M49.4,238.2L295.4,266.2"/>
+          <path class="ln ln-detail" d="M285,317.9L45.6,290.1 M53,246.3L292,274.1"/>
+          <path class="ln ln-edge" d="M246.2,260.6L239.4,320.2 M197,255L190.2,314.6 M147.8,249.4L141,309 M98.6,243.8L91.8,303.4"/>
+          <path class="ln ln-detail" d="M247.4,260L240.6,319.6 M245,261.2L238.2,320.8 M198.2,254.4L191.4,314 M195.8,255.6L189,315.2 M149,248.8L142.2,308.4 M146.6,250L139.8,309.6 M99.8,243.2L93,302.8 M97.4,244.4L90.6,304"/>
+          <path class="ln ln-tex" d="M292.6,282.1L46.6,254.1 M290.4,309.9L44.4,281.9"/>
+          <polygon class="face f-side" points="295.4,266.2 49.4,238.2 49.4,232.6 295.4,260.6"/>
+          <path class="ln ln-detail" d="M270,262.5V266.5 M240,259.1V263.1 M210,255.7V259.7 M180,252.3V256.3 M150,248.9V252.9 M120,245.5V249.5 M90,242.1V246.1"/>
+          <rect class="ln ln-edge" x="276" y="292" width="16" height="12"/>
+          <circle class="ln ln-detail" cx="281" cy="298" r="1.4"/>
+          <circle class="ln ln-detail" cx="288" cy="298" r="1.4"/>
+        </g>
+
+        <!-- 09 · Articulación y mástil de celosía -->
+        <g class="part" data-part="yoke" style="--dx:-16px;--dy:-34px;--i:8"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="09, Boom y articulación, sostiene y gira el ala">
+          <path class="ln ln-edge" d="M420,290H306 M420,300H306 M428,284L314,284"/>
+          <path class="ln ln-detail" d="M420,290L397,300 M397,300L374,290 M374,290L351,300 M351,300L328,290 M328,290L306,300 M397,290L405,284 M351,290L359,284 M374,290L382,284"/>
+          <rect class="face f-front" x="296" y="278" width="14" height="32"/>
+          <ellipse class="face f-side" cx="310" cy="294" rx="5" ry="16"/>
+          <circle class="ln ln-edge" cx="303" cy="294" r="7"/>
+          <circle class="ln ln-detail" cx="303" cy="294" r="3"/>
+        </g>
+
+        <!-- 10 · Antena de alta ganancia -->
+        <g class="part" data-part="hga" style="--dx:0px;--dy:-64px;--i:9"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="10, Antena de alta ganancia, enlace en banda X">
+          <path class="ln ln-edge" d="M452,250V214"/>
+          <circle class="ln ln-edge" cx="452" cy="213" r="3.5"/>
+          <rect class="face f-front" x="446" y="166" width="11" height="46"/>
+          <rect class="face f-front" x="470" y="166" width="9" height="40"/>
+          <rect class="face f-front" x="446" y="166" width="33" height="8"/>
+          <ellipse class="face f-front" cx="426" cy="190" rx="20" ry="11.5" transform="rotate(-14 426 190)"/>
+          <ellipse class="ln ln-edge" cx="426" cy="190" rx="20" ry="11.5" transform="rotate(-14 426 190)"/>
+          <ellipse class="ln ln-detail" cx="426" cy="190" rx="13" ry="7" transform="rotate(-14 426 190)"/>
+          <path class="ln ln-detail" d="M426,184L426,196 M413,187L439,193 M415,198L437,182"/>
+          <path class="ln ln-edge" d="M446,190L440,190"/>
+          <rect class="face f-front" x="392" y="183" width="12" height="7"/>
+          <ellipse class="ln ln-edge" cx="392" cy="186.5" rx="2.6" ry="3.6"/>
+          <path class="ln ln-detail" d="M404,186L412,188"/>
+        </g>
+
+        <!-- 11 · Propulsores -->
+        <g class="part" data-part="propulsores" style="--dx:54px;--dy:16px;--i:10"
+           role="button" tabindex="0" aria-pressed="false"
+           aria-label="11, Propulsores, mantenimiento de la órbita">
+          <polygon class="face f-front" points="566,262 584,252 601,242 601,314 584,326 566,336"/>
+          <polygon points="566,262 584,252 601,242 601,314 584,326 566,336" fill="url(#tex-mli)" stroke="none"/>
+          <g class="ln ln-detail">
+            <circle cx="576" cy="266" r="1.4"/><circle cx="588" cy="258" r="1.4"/><circle cx="597" cy="252" r="1.4"/>
+            <circle cx="597" cy="296" r="1.4"/><circle cx="591" cy="312" r="1.4"/><circle cx="580" cy="322" r="1.4"/>
+            <circle cx="572" cy="312" r="1.4"/><circle cx="570" cy="290" r="1.4"/>
+          </g>
+          <polygon class="face f-side" points="570,330 580,326 578,338 572,340"/>
+          <polygon class="face f-side" points="586,322 596,318 594,330 588,332"/>
+          <polygon class="face f-side" points="592,316 600,312 599,322 593,324"/>
+          <rect class="ln ln-detail" x="582" y="270" width="8" height="5"/>
+          <circle class="ln ln-detail" cx="586" cy="272" r="1.2"/>
+          <path class="ln ln-detail" d="M568,282C576,280 582,284 590,282 M568,300C576,298 582,302 590,300"/>
+        </g>
+
+        <!-- Llamadas: posiciones del estado despiezado -->
+        <g class="callouts">
+
+          <g class="callout" data-for="bus" style="--i:0">
+            <path class="co-line" pathLength="1" d="M596,232L690,104"/>
+            <circle class="co-dot" cx="596" cy="232" r="2"/>
+            <circle class="co-badge" cx="700" cy="96" r="8.5"/>
+            <text class="co-num" x="700" y="99">01</text>
+            <text class="co-name" x="716" y="93">Plataforma EOS</text>
+            <text class="co-spec" x="716" y="105">módulo de servicio · MLI</text>
+          </g>
+
+          <g class="callout" data-for="radiadores" style="--i:1">
+            <path class="co-line" pathLength="1" d="M558,190L632,190"/>
+            <circle class="co-dot" cx="558" cy="190" r="2"/>
+            <circle class="co-badge" cx="640" cy="190" r="8.5"/>
+            <text class="co-num" x="640" y="193">02</text>
+            <text class="co-name" x="656" y="187">Radiadores</text>
+            <text class="co-spec" x="656" y="199">disipan el calor del bus</text>
+          </g>
+
+          <g class="callout" data-for="modis" style="--i:2">
+            <path class="co-line" pathLength="1" d="M398,392L340,538L309,545"/>
+            <circle class="co-dot" cx="398" cy="392" r="2"/>
+            <circle class="co-badge" cx="300" cy="548" r="8.5"/>
+            <text class="co-num" x="300" y="551">03</text>
+            <text class="co-name" x="316" y="545">MODIS</text>
+            <text class="co-spec" x="316" y="557">36 bandas · 250 m · 2 330 km</text>
+          </g>
+
+          <g class="callout" data-for="aster" style="--i:3">
+            <path class="co-line" pathLength="1" d="M498,406L470,430L465,437"/>
+            <circle class="co-dot" cx="498" cy="406" r="2"/>
+            <circle class="co-badge" cx="456" cy="438" r="8.5"/>
+            <text class="co-num" x="456" y="441">04</text>
+            <text class="co-name" x="472" y="432">ASTER</text>
+            <text class="co-spec" x="472" y="444">14 bandas · 15 m · estéreo</text>
+          </g>
+
+          <g class="callout" data-for="ceres" style="--i:4">
+            <path class="co-line" pathLength="1" d="M584,414L628,482L631,485"/>
+            <circle class="co-dot" cx="584" cy="414" r="2"/>
+            <circle class="co-badge" cx="640" cy="486" r="8.5"/>
+            <text class="co-num" x="640" y="489">05</text>
+            <text class="co-name" x="656" y="480">CERES</text>
+            <text class="co-spec" x="656" y="492">3 radiómetros · balance</text>
+          </g>
+
+          <g class="callout" data-for="misr" style="--i:5">
+            <path class="co-line" pathLength="1" d="M334,450L240,466L239,469"/>
+            <circle class="co-dot" cx="334" cy="450" r="2"/>
+            <circle class="co-badge" cx="230" cy="470" r="8.5"/>
+            <text class="co-num" x="230" y="473">06</text>
+            <text class="co-name" x="246" y="464">MISR</text>
+            <text class="co-spec" x="246" y="476">9 cámaras · multiángulo</text>
+          </g>
+
+          <g class="callout" data-for="mopitt" style="--i:6">
+            <path class="co-line" pathLength="1" d="M478,482L440,514L429,519"/>
+            <circle class="co-dot" cx="478" cy="482" r="2"/>
+            <circle class="co-badge" cx="420" cy="520" r="8.5"/>
+            <text class="co-num" x="420" y="523">07</text>
+            <text class="co-name" x="436" y="517">MOPITT</text>
+            <text class="co-spec" x="436" y="529">CO y CH₄ · 22 km</text>
+          </g>
+
+          <g class="callout" data-for="ala" style="--i:7">
+            <path class="co-line" pathLength="1" d="M170,252L128,160"/>
+            <circle class="co-dot" cx="170" cy="252" r="2"/>
+            <circle class="co-badge" cx="120" cy="150" r="8.5"/>
+            <text class="co-num" x="120" y="153">08</text>
+            <text class="co-name" x="136" y="147">Ala solar</text>
+            <text class="co-spec" x="136" y="159">5 paneles · celdas de silicio</text>
+          </g>
+
+          <g class="callout" data-for="yoke" style="--i:8">
+            <path class="co-line" pathLength="1" d="M344,261L322,214L309,198"/>
+            <circle class="co-dot" cx="344" cy="261" r="2"/>
+            <circle class="co-badge" cx="300" cy="196" r="8.5"/>
+            <text class="co-num" x="300" y="199">09</text>
+            <text class="co-name" x="316" y="193">Boom y articulación</text>
+            <text class="co-spec" x="316" y="205">sostiene y gira el ala</text>
+          </g>
+
+          <g class="callout" data-for="hga" style="--i:9">
+            <path class="co-line" pathLength="1" d="M479,150L492,116"/>
+            <circle class="co-dot" cx="479" cy="150" r="2"/>
+            <circle class="co-badge" cx="500" cy="110" r="8.5"/>
+            <text class="co-num" x="500" y="113">10</text>
+            <text class="co-name" x="516" y="107">Antena HGA</text>
+            <text class="co-spec" x="516" y="119">banda X · alta ganancia</text>
+          </g>
+
+          <g class="callout" data-for="propulsores" style="--i:10">
+            <path class="co-line" pathLength="1" d="M655,300L682,300"/>
+            <circle class="co-dot" cx="655" cy="300" r="2"/>
+            <circle class="co-badge" cx="690" cy="300" r="8.5"/>
+            <text class="co-num" x="690" y="303">11</text>
+            <text class="co-name" x="706" y="297">Propulsores</text>
+            <text class="co-spec" x="706" y="309">mantenimiento de órbita</text>
+          </g>
+
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <header class="titulo">
+    <h1>Despiece Terra</h1>
+    <p class="bajada">Satélite de observación de la NASA · EOS AM-1</p>
+    <p class="specs">5 instrumentos · órbita polar ~705 km · en vuelo desde 1999</p>
+  </header>
+
+  <aside class="ficha" aria-hidden="true">
+    <dt>Dibujo</dt><dd>Terra · EOS AM-1</dd>
+    <dt>Escala</dt><dd>esquemática · no a escala</dd>
+    <dt>Fuente</dt><dd>NASA · 3D Resources</dd>
+  </aside>
+
+  <div class="pop" id="pop" hidden>
+    <div class="pop-head"><span>Piezas</span><span>11</span></div>
+      <ul>
+        <li><button class="fila" type="button" data-part="bus"><span class="num">01</span><span class="nom">Plataforma EOS</span><span class="det">módulo de servicio · MLI</span></button></li>
+        <li><button class="fila" type="button" data-part="radiadores"><span class="num">02</span><span class="nom">Radiadores</span><span class="det">disipan el calor del bus</span></button></li>
+        <li><button class="fila" type="button" data-part="modis"><span class="num">03</span><span class="nom">MODIS</span><span class="det">36 bandas · 250 m · 2 330 km</span></button></li>
+        <li><button class="fila" type="button" data-part="aster"><span class="num">04</span><span class="nom">ASTER</span><span class="det">14 bandas · 15 m · estéreo</span></button></li>
+        <li><button class="fila" type="button" data-part="ceres"><span class="num">05</span><span class="nom">CERES</span><span class="det">3 radiómetros · balance</span></button></li>
+        <li><button class="fila" type="button" data-part="misr"><span class="num">06</span><span class="nom">MISR</span><span class="det">9 cámaras · multiángulo</span></button></li>
+        <li><button class="fila" type="button" data-part="mopitt"><span class="num">07</span><span class="nom">MOPITT</span><span class="det">CO y CH₄ · 22 km</span></button></li>
+        <li><button class="fila" type="button" data-part="ala"><span class="num">08</span><span class="nom">Ala solar</span><span class="det">5 paneles · celdas de silicio</span></button></li>
+        <li><button class="fila" type="button" data-part="yoke"><span class="num">09</span><span class="nom">Boom y articulación</span><span class="det">sostiene y gira el ala</span></button></li>
+        <li><button class="fila" type="button" data-part="hga"><span class="num">10</span><span class="nom">Antena HGA</span><span class="det">banda X · alta ganancia</span></button></li>
+        <li><button class="fila" type="button" data-part="propulsores"><span class="num">11</span><span class="nom">Propulsores</span><span class="det">mantenimiento de órbita</span></button></li>
+      </ul>
+  </div>
+
+  <div class="barra" id="barra" role="toolbar" aria-label="Controles del dibujo">
+
+    <div class="seg" role="radiogroup" aria-label="Vista">
+      <button type="button" role="radio" aria-checked="true" tabindex="0" data-view="despiezado">Despiezado</button>
+      <button type="button" role="radio" aria-checked="false" tabindex="-1" data-view="armado">Armado</button>
+    </div>
+
+    <span class="sep" aria-hidden="true"></span>
+
+    <button class="btn" type="button" id="zoom-out" aria-label="Alejar">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <output class="zoom-out" id="zoom-level" aria-live="polite">100%</output>
+    <button class="btn" type="button" id="zoom-in" aria-label="Acercar">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M3.5 8h9M8 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+    <span class="sep" aria-hidden="true"></span>
+
+    <button class="btn" type="button" id="parts-btn" aria-expanded="false" aria-controls="pop">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="m8 2 5.5 3L8 8 2.5 5 8 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="m2.5 8.5 5.5 3 5.5-3" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+      <span class="txt">Piezas</span>
+    </button>
+
+    <span class="sep" aria-hidden="true"></span>
+
+    <button class="btn" type="button" id="download-btn">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M8 2v8m0 0 3-3m-3 3L5 7M3 12.5h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="txt">Descargar</span>
+    </button>
+
+  </div>
+
+</main>
+
+<script>
+  const svg = document.getElementById("drawing");
+  const canvas = document.getElementById("canvas");
+  const stage = document.getElementById("stage");
+  const out = document.getElementById("zoom-level");
+  const pop = document.getElementById("pop");
+  const popBtn = document.getElementById("parts-btn");
+  const zoomInBtn = document.getElementById("zoom-in");
+  const zoomOutBtn = document.getElementById("zoom-out");
+
+  const VW = 960;
+  const VH = 640;
+  const ZMIN = 0.6;
+  const ZMAX = 5;
+
+  let zoom = 1;
+  let cx = VW / 2;
+  let cy = VH / 2;
+  let selected = null;
+
+  function currentBox() {
+    const w = VW / zoom;
+    const h = VH / zoom;
+    return { x: cx - w / 2, y: cy - h / 2, w, h };
+  }
+
+  function applyView() {
+    const b = currentBox();
+    svg.setAttribute("viewBox", b.x + " " + b.y + " " + b.w + " " + b.h);
+    out.textContent = Math.round(zoom * 100) + "%";
+    zoomOutBtn.disabled = zoom <= ZMIN + 0.001;
+    zoomInBtn.disabled = zoom >= ZMAX - 0.001;
+  }
+
+  function setZoom(next, anchor) {
+    const clamped = Math.min(ZMAX, Math.max(ZMIN, next));
+    if (anchor) {
+      const b = currentBox();
+      const fx = (anchor.x - b.x) / b.w;
+      const fy = (anchor.y - b.y) / b.h;
+      zoom = clamped;
+      const w = VW / zoom;
+      const h = VH / zoom;
+      cx = anchor.x + w * (0.5 - fx);
+      cy = anchor.y + h * (0.5 - fy);
+    } else {
+      zoom = clamped;
+    }
+    applyView();
+  }
+
+  function fit() {
+    zoom = 1;
+    cx = VW / 2;
+    cy = VH / 2;
+    applyView();
+  }
+
+  function toSvg(clientX, clientY) {
+    const m = svg.getScreenCTM();
+    if (!m) return null;
+    const p = svg.createSVGPoint();
+    p.x = clientX;
+    p.y = clientY;
+    return p.matrixTransform(m.inverse());
+  }
+
+  /* ---- vista despiezado / armado ---- */
+  const viewBtns = Array.from(document.querySelectorAll(".seg [role='radio']"));
+
+  function setView(view) {
+    svg.setAttribute("data-view", view);
+    for (const b of viewBtns) {
+      const on = b.dataset.view === view;
+      b.setAttribute("aria-checked", on ? "true" : "false");
+      b.tabIndex = on ? 0 : -1;
+    }
+  }
+
+  for (const b of viewBtns) {
+    b.addEventListener("click", function () { setView(b.dataset.view); });
+  }
+
+  document.querySelector(".seg").addEventListener("keydown", function (e) {
+    let step = 0;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") step = 1;
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") step = -1;
+    if (!step) return;
+    e.preventDefault();
+    const i = viewBtns.findIndex(function (b) { return b.getAttribute("aria-checked") === "true"; });
+    const next = viewBtns[(i + step + viewBtns.length) % viewBtns.length];
+    setView(next.dataset.view);
+    next.focus();
+  });
+
+  /* ---- selección de pieza ---- */
+  function selectPart(id) {
+    selected = selected === id ? null : id;
+
+    for (const el of svg.querySelectorAll(".part")) {
+      const on = el.dataset.part === selected;
+      el.classList.toggle("is-selected", on);
+      el.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    stage.classList.toggle("has-selection", !!selected);
+    for (const c of svg.querySelectorAll(".callout")) {
+      c.classList.toggle("is-sel", c.dataset.for === selected);
+    }
+    for (const row of pop.querySelectorAll("[data-part]")) {
+      if (row.dataset.part === selected) row.setAttribute("aria-current", "true");
+      else row.removeAttribute("aria-current");
+    }
+  }
+
+  /* ---- arrastre y clic ---- */
+  let drag = null;
+  let suppressClick = false;
+
+  svg.addEventListener("pointerdown", function (e) {
+    if (e.button !== 0) return;
+    drag = { x: e.clientX, y: e.clientY, cx: cx, cy: cy, moved: false };
+    svg.setPointerCapture(e.pointerId);
+  });
+
+  svg.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) > 4) {
+      drag.moved = true;
+      canvas.classList.add("arrastrando");
+    }
+    if (!drag.moved) return;
+    const m = svg.getScreenCTM();
+    const upp = m ? 1 / (m.a || 1) : 1;
+    cx = drag.cx - dx * upp;
+    cy = drag.cy - dy * upp;
+    applyView();
+  });
+
+  function endDrag() {
+    if (drag && drag.moved) {
+      suppressClick = true;
+      setTimeout(function () { suppressClick = false; }, 0);
+    }
+    drag = null;
+    canvas.classList.remove("arrastrando");
+  }
+  svg.addEventListener("pointerup", endDrag);
+  svg.addEventListener("pointercancel", endDrag);
+
+  svg.addEventListener("click", function (e) {
+    if (suppressClick) return;
+    const part = e.target.closest(".part");
+    if (part) selectPart(part.dataset.part);
+    else if (selected) selectPart(null);
+  });
+
+  svg.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const part = e.target.closest(".part");
+    if (!part) return;
+    e.preventDefault();
+    selectPart(part.dataset.part);
+  });
+
+  /* ---- zoom ---- */
+  canvas.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    const p = toSvg(e.clientX, e.clientY);
+    if (!p) return;
+    setZoom(zoom * (e.deltaY < 0 ? 1.18 : 1 / 1.18), p);
+  }, { passive: false });
+
+  zoomInBtn.addEventListener("click", function () { setZoom(zoom * 1.25); });
+  zoomOutBtn.addEventListener("click", function () { setZoom(zoom / 1.25); });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === "+" || e.key === "=") {
+      e.preventDefault();
+      setZoom(zoom * 1.25);
+    } else if (e.key === "-" || e.key === "_") {
+      e.preventDefault();
+      setZoom(zoom / 1.25);
+    } else if (e.key === "0") {
+      e.preventDefault();
+      fit();
+    } else if (e.key === "Escape") {
+      if (!pop.hidden) closePop();
+      else if (selected) selectPart(null);
+    }
+  });
+
+  /* ---- popover de piezas ---- */
+  function openPop() {
+    pop.hidden = false;
+    popBtn.setAttribute("aria-expanded", "true");
+    const first = pop.querySelector(".fila");
+    if (first) first.focus();
+  }
+  function closePop(refocus) {
+    pop.hidden = true;
+    popBtn.setAttribute("aria-expanded", "false");
+    if (refocus !== false) popBtn.focus();
+  }
+  popBtn.addEventListener("click", function () {
+    if (pop.hidden) openPop();
+    else closePop();
+  });
+
+  document.addEventListener("pointerdown", function (e) {
+    if (pop.hidden) return;
+    if (pop.contains(e.target) || popBtn.contains(e.target)) return;
+    closePop(false);
+  });
+
+  pop.addEventListener("click", function (e) {
+    const row = e.target.closest("[data-part]");
+    if (!row) return;
+    selectPart(row.dataset.part);
+    closePop(false);
+  });
+
+  pop.addEventListener("pointerover", function (e) {
+    const row = e.target.closest("[data-part]");
+    if (!row) return;
+    const el = svg.querySelector('.part[data-part="' + row.dataset.part + '"]');
+    if (el) el.classList.add("is-hot");
+  });
+  pop.addEventListener("pointerout", function (e) {
+    const row = e.target.closest("[data-part]");
+    if (!row) return;
+    const el = svg.querySelector('.part[data-part="' + row.dataset.part + '"]');
+    if (el) el.classList.remove("is-hot");
+  });
+
+  /* ---- descarga del SVG ---- */
+  document.getElementById("download-btn").addEventListener("click", function () {
+    const clone = svg.cloneNode(true);
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("width", "1920");
+    clone.setAttribute("height", "1280");
+    for (const el of clone.querySelectorAll(".is-hot")) el.classList.remove("is-hot");
+    const data = new XMLSerializer().serializeToString(clone);
+    const url = URL.createObjectURL(new Blob([data], { type: "image/svg+xml" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "terra-despiece.svg";
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+  });
+
+  applyView();
+
+  /* En pantallas angostas arrancamos con el satélite legible; el resto se recorre con arrastre y zoom. */
+  if (window.matchMedia("(max-width: 720px)").matches) {
+    zoom = 1.5;
+    cx = 480;
+    cy = 330;
+    applyView();
+  }
+</script>
+
+</body>
+</html>

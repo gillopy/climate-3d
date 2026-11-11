@@ -16,6 +16,7 @@ así que funcionan sin conexión.
 | `poster_pace_gibs.py` | Póster de **color real de PACE/OCI** desde el compuesto de GIBS |
 | `poster_follaje.py` | Póster global de **follaje de otoño** (PACE/OCI LANDVI) |
 | `vista_paraguay.py` | **Cuadro fijo** del globo centrado en Paraguay |
+| `teardown_terra.html` | **Despiece interactivo** de Terra (EOS AM-1) en SVG; se abre en el navegador |
 | `notebooks/` | Los prototipos originales: ver [`notebooks/README.md`](./notebooks/README.md) |
 
 ---
@@ -229,6 +230,26 @@ Dos caminos al **color real de PACE/OCI**:
 
 PACE es polar: un día suelto deja huecos. `--dias` rellena por prioridad temporal (el primer
 píxel con dato gana). Los `NaN` se leen como zonas sin dato, no como error de render.
+
+---
+
+## `teardown_goes.html`
+
+Plano interactivo del **GOES-R** (serie GOES-16/18/19): un SVG autocontenido, sin build ni
+dependencias, que se abre con doble clic en el navegador.
+
+- **Despiezado / Armado**: separa las diez piezas (bus, EPP, ABI, GLM, ala solar, SPP, SUVI,
+  EXIS, antenas y boom del magnetómetro) o las vuelve a montar, con las llamadas dibujándose
+  en escalonado.
+- **Zoom** con la barra, la rueda o las teclas `+` `-` `0`; **arrastre** para desplazar.
+- **Piezas** abre la leyenda; al elegir una fila se resalta la pieza en el plano.
+- **Descargar** baja el SVG tal como está dibujado.
+- Clic en una pieza (o `Enter` con foco) la selecciona; `Esc` limpia.
+
+La geometría es **esquemática, no a escala**: se apoya en el modelo 3D oficial de
+[NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) (`3D Models/Geostationary
+Operational Environmental Satellites`) y en los datos de NOAA/NASA (6,1 × 5,6 × 3,9 m,
+2 857 kg en seco, bus A2100, ABI de 16 bandas, GLM en 777,4 nm, ala solar de 5 paneles).
 
 ---
 
