@@ -141,12 +141,12 @@ docker compose config --quiet || fallar 'docker-compose.yml no valida con el .en
 ok 'la configuración es válida.'
 
 if [ "$SOLO_CONFIGURAR" -eq 1 ]; then
-    printf '\nListo: configuré .env. Para levantar la app: docker compose up -d --build\n'
+    printf '\nListo: configuré .env. Para levantar la app: docker compose up -d\n'
     exit 0
 fi
 
-paso '[6/6] Levantando la app (el primer build tarda varios minutos)'
-docker compose up -d --build || fallar 'el build o el arranque falló: mirá la salida de arriba.'
+paso '[6/6] Levantando la app (si la imagen no está, se compila o se baja)'
+docker compose up -d || fallar 'el build o el arranque falló: mirá la salida de arriba.'
 
 url="http://127.0.0.1:$PORT_IN"
 

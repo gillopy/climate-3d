@@ -193,13 +193,13 @@ if ($LASTEXITCODE -ne 0) {
 Ok 'la configuración es válida.'
 
 if ($SoloConfigurar) {
-    Write-Host "`nListo: configuré .env. Para levantar la app: docker compose up -d --build" -ForegroundColor Green
+    Write-Host "`nListo: configuré .env. Para levantar la app: docker compose up -d" -ForegroundColor Green
     exit 0
 }
 
 
-Paso '[6/6] Levantando la app (el primer build tarda varios minutos)'
-& docker compose up -d --build
+Paso '[6/6] Levantando la app (si la imagen no está, se compila o se baja)'
+& docker compose up -d
 if ($LASTEXITCODE -ne 0) {
     Fallar 'el build o el arranque falló: mirá la salida de arriba.'
 }
