@@ -1,0 +1,34 @@
+# Climate 3D en Docker: un servicio, un volumen de datos.
+#
+# El puerto se publica en loopback porque la API no tiene autenticación y ejecuta
+# subprocesos: no la expongas a la red abriéndola en 0.0.0.0.
+name: climate3d
+
+services:
+  app:
+    build:
+      context: .
+    image: climate3d:local
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:${PORT:-8080}:8000"
+    volumes:
+      # Los .nc, las salidas y el estado de los jobs viven en tu disco, no en la imagen.
+      - "${DATA_DIR:?falta DATA_DIR: corré setup.ps1 o setup.sh, o copiá env.example a .env}:/data"
+      # Los artefactos de los jobs sobreviven a un rebuild de la imagen.
+      - "${DATA_DIR}/.media:/app/app/var/media"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 40s
+      retries: 5
+    # Los renders son pesados a propósito: usan todos los núcleos que encuentren.
+    # Si necesitás acotarlos, descomentá:
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 8g

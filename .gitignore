@@ -29,6 +29,9 @@ frames_*/
 # Credenciales locales (la MAP_KEY de NASA FIRMS)
 /datos/firms_map_key.txt
 
+# Configuración local del contenedor (genera setup.ps1/setup.sh: incluye credenciales)
+/.env
+
 # OS
 Thumbs.db
 desktop.ini
