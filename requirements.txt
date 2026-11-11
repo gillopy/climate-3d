@@ -10,6 +10,17 @@ imageio-ffmpeg==0.6.*
 eccodes==2.50.*
 # Lectura directa del NetCDF/HDF5 de ERA5 (t2m) sin xarray.
 h5py==3.16.*
+# Lo usan comun/goes_lectura.py y tres prototipos (poster_goes, poster_anomalia,
+# vista_paraguay). Faltaba acá: estaba instalado a mano en el .venv, así que un
+# entorno limpio fallaba al abrir los NetCDF de GOES.
+xarray==2025.12.*
+# Backend que xarray usa para abrir esos NetCDF (`engine="h5netcdf"` en
+# comun/goes_lectura.py y cinco prototipos). Sin esto, xarray falla con
+# "unrecognized engine 'h5netcdf' must be one of your download engines: ['store']".
+h5netcdf==1.8.*
+# Motor que pide `xr.open_dataset(..., engine="h5netcdf")` en goes_lectura.py y en
+# cinco prototipos. Sin este paquete xarray no reconoce el motor y el render muere.
+h5netcdf==1.8.*
 # Deformación de imágenes de cartopy (`imshow` con `transform=`): pykdtree o scipy.
 pykdtree==1.4.*
 # Opcional: solo `descargar/descargar_era5.py` (Copernicus CDS + ~/.cdsapirc).

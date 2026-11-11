@@ -22,19 +22,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CLIMATE3D_DATOS=/data \
     CLIMATE3D_PYTHON=/app/.venv/bin/python
 
-# cartopy: GEOS y PROJ quedan para el caso de que algún paquete venga sin wheel.
-#   `proj-data` (los grids de ~600 MB) no va: pyproj trae los suyos y estas
-#   proyecciones no necesitan rejillas de datum. Si alguna se queja, agregalo.
-# eccodes necesita la librería C de ECMWF: el wheel de Python no la trae.
-# ffmpeg NO va acá: lo baja imageio-ffmpeg en build time, más abajo.
+# `cartopy`, `shapely`, `pyproj`, `h5py`, `pykdtree` y `eccodes` llegan como wheels
+# con sus bibliotecas adentro: NO hace falta el toolchain de desarrollo. Instalar
+# `libeccodes-dev` arrastra gcc-14, gfortran y cpp-14 (~200 MB) sin ninguna ganancia;
+# probado que `import eccodes` funciona solo con `libeccodes0` + `libeccodes-data`.
+# ffmpeg tampoco va acá: lo baja imageio-ffmpeg en build time, más abajo.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
       passwd \
-      libgeos-dev \
-      libproj-dev \
-      libeccodes-dev \
+      libeccodes0 \
+      libeccodes-data \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
