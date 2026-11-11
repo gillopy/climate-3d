@@ -203,6 +203,60 @@ class RecetaApp(unittest.TestCase):
         self.assertEqual(render.args[render.args.index("--n") + 1], "12")
         self.assertIn("animate", [p.kind for p in plan.pasos])
 
+    def test_la_resolucion_elegida_llega_al_render(self):
+        # El selector ofrece hasta 4000 px: la receta no puede recortarla a 2712,
+        # que era el techo viejo y dejaba el render más blando que lo pedido.
+        plan = recipes._goes_rgb({
+            "satelite": "G19", "ventana": self.DIA, "snapshot": True,
+            "hora": 15, "minuto": "40", "resolucion": "4000",
+        }, Path("C:/tmp/work"), "dust")
+        render = [p for p in plan.pasos if p.kind == "render"][0]
+        self.assertEqual(render.args[render.args.index("--px") + 1], "4000")
+
+    def test_el_disco_de_color_real_respeta_la_resolucion(self):
+        slot = datetime(2026, 11, 3, 15, 40)
+        with mock.patch.object(
+            recipes, "_slot_snapshot", return_value=slot,
+        ):
+            plan = recipes._goes_truecolor({
+                "satelite": "G19", "encuadre": "disco", "snapshot": True,
+                "hora": 15, "minuto": "40", "resolucion": "4000",
+                "ventana": {"start": "2026-11-03", "end": "2026-11-03"},
+            }, Path("C:/tmp/work"))
+        render = [p for p in plan.pasos if p.kind == "render"][0]
+        self.assertEqual(render.script, "prototipos/poster_goes_disco.py")
+        self.assertEqual(render.args[render.args.index("--px") + 1], "4000")
+
+    def test_el_disco_apaga_la_mediana_y_el_desenfoque(self):
+        # El globo ya lo hacía; el disco se había quedado con la mediana 3x3 y
+        # el desenfoque de 0.8 px, y salía notablemente más blando.
+        slot = datetime(2026, 11, 3, 15, 40)
+        with mock.patch.object(
+            recipes, "_slot_snapshot", return_value=slot,
+        ):
+            plan = recipes._goes_truecolor({
+                "satelite": "G19", "encuadre": "disco", "snapshot": True,
+                "hora": 15, "minuto": "40", "resolucion": "2712",
+                "ventana": {"start": "2026-11-03", "end": "2026-11-03"},
+            }, Path("C:/tmp/work"))
+        render = [p for p in plan.pasos if p.kind == "render"][0]
+        self.assertIn("--no-mediana", render.args)
+        self.assertEqual(render.args[render.args.index("--suavizado") + 1], "0")
+
+    def test_el_look_suave_conserva_la_mediana(self):
+        slot = datetime(2026, 11, 3, 15, 40)
+        with mock.patch.object(
+            recipes, "_slot_snapshot", return_value=slot,
+        ):
+            plan = recipes._goes_truecolor({
+                "satelite": "G19", "encuadre": "disco", "snapshot": True,
+                "hora": 15, "minuto": "40", "resolucion": "2712",
+                "nitidez": "suave",
+                "ventana": {"start": "2026-11-03", "end": "2026-11-03"},
+            }, Path("C:/tmp/work"))
+        render = [p for p in plan.pasos if p.kind == "render"][0]
+        self.assertNotIn("--no-mediana", render.args)
+
     def test_los_slots_piden_todas_las_bandas(self):
         def por_banda(_sat, banda):
             completo = [datetime(2026, 11, 4, 18, 0), datetime(2026, 11, 4, 18, 10)]

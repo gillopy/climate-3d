@@ -92,10 +92,13 @@ def _rango(params: dict[str, Any]) -> tuple[date, date]:
     return inicio, fin
 
 
-def _px(params: dict[str, Any], por_defecto: int = 1400, tope: int = 2712) -> int:
-    """Resoluci?n pedida, acotada al techo del producto.
+def _px(params: dict[str, Any], por_defecto: int = 1400, tope: int = 4000) -> int:
+    """Resolución pedida, acotada a lo que ofrece el catálogo.
 
-    El globo no pasa de 2712 px (el disco nativo); la captura plana s? admite m?s.
+    El selector llega hasta 4000 px. Antes el techo era 2712 y elegir 3200 o 4000
+    no hacía nada: el render salía en 2712 y se veía más blando. Cada renderer
+    tiene su propio TOPE nativo y recorta si hace falta (el disco de color real
+    llega a 5424 y el globo a 10848).
     """
     try:
         return max(400, min(int(params.get("resolucion", por_defecto)), tope))
@@ -1152,6 +1155,14 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
     )
 
     firms_flags = _flags_firms(params, work)
+    # La mediana 3x3 y el desenfoque de 0.8 px borronean las nubes: a 2712 px se
+    # nota. Se apagan salvo que se pida el look suave, en las dos ramas (el disco
+    # se habia quedado sin esto y salia mas blando que el globo).
+    nitidez_flags = (
+        ["--no-mediana", "--suavizado", "0"]
+        if str(params.get("nitidez", "maxima")) == "maxima"
+        else []
+    )
     if disco:
         render_step = Step(
             kind="render",
@@ -1161,6 +1172,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                 "--desde", slot,
                 "--sat", sat,
                 "--px", str(px),
+                *nitidez_flags,
                 *firms_flags,
                 "--out", str(work / f"truecolor_nativo_{desde:%Y-%m-%dT%H%M}.png"),
             ],
@@ -1178,10 +1190,7 @@ def _goes_truecolor(params: dict[str, Any], work: Path) -> Plan:
                 # Sin esto el script corta en 73.3 grados y deja afuera el 6 %
                 # del disco: el limite visible real del satelite esta en 81.3.
                 centro += ["--recorte", "1.0"]
-        if str(params.get("nitidez", "maxima")) == "maxima":
-            # La mediana 3x3 y el desenfoque de 0.8 px borronean las nubes:
-            # a 2712 px se nota. Se apagan salvo que se pida el look suave.
-            centro += ["--no-mediana", "--suavizado", "0"]
+        centro += nitidez_flags
         if animar and n > 1:
             render_step = Step(
                 kind="render",
