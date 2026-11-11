@@ -97,10 +97,16 @@ if ($DataDir.StartsWith('//')) {
 
 foreach ($od in @($env:OneDrive, $env:OneDriveCommercial, $env:OneDriveConsumer)) {
     if ([string]::IsNullOrWhiteSpace($od)) { continue }
-    $odPosix = ($od -replace '\\', '/').TrimEnd('/')
-    if ($DataDir.ToLowerInvariant().StartsWith($odPosix.ToLowerInvariant())) {
+    $odPosix = ($od -replace '\\', '/').TrimEnd('/').ToLowerInvariant()
+    $destino = $DataDir.ToLowerInvariant()
+    if ($destino -eq $odPosix -or $destino.StartsWith($odPosix + '/')) {
         Fallar 'esa carpeta está dentro de OneDrive. OneDrive intentaría sincronizar varios GB y se va a trabar: elegí una carpeta fuera de la nube.'
     }
+}
+# Respaldo por si la carpeta está redirigida y las variables de OneDrive no lo dicen:
+# un segmento exacto, no una subcadena (D:/onedrive-archivo es válido).
+if ($DataDir -match '(?i)/(onedrive)(/|$)') {
+    Fallar 'esa carpeta está dentro de OneDrive. Elegí una carpeta fuera de la nube: son varios GB.'
 }
 
 $rutaWin = $DataDir -replace '/', '\'

@@ -66,8 +66,11 @@ esac
 
 case "$DATA_DIR" in
     //*) fallar "no puedo montar una ruta de red como volumen ('$DATA_DIR'). Usá un disco local." ;;
-    *[Oo]ne[Dd]rive*) fallar 'esa carpeta está sincronizada con OneDrive. Elegí una carpeta fuera de la nube: son varios GB.' ;;
 esac
+# Un segmento exacto del camino: /mnt/onedrive-archive no es OneDrive, /home/x/OneDrive sí.
+if printf '%s' "$DATA_DIR" | grep -qiE '/(onedrive[^/]*)(/|$)'; then
+    fallar 'esa carpeta está dentro de OneDrive. Elegí una carpeta fuera de la nube: son varios GB.'
+fi
 
 if [ -d "$DATA_DIR" ]; then
     ok "usa $DATA_DIR (ya existía)"
@@ -113,7 +116,7 @@ if [ -z "$FIRMS_MAP_KEY$CDSAPI_KEY$EARTHDATA_USER" ]; then
             printf '  FIRMS MAP_KEY: ';       read -r FIRMS_MAP_KEY || true
             printf '  Copernicus CDS key: ';  read -r CDSAPI_KEY || true
             printf '  Earthdata usuario: ';   read -r EARTHDATA_USER || true
-            printf '  Earthdata clave: ';     read -r EARTHDATA_PASSWORD || true
+            printf '  Earthdata clave: ';     read -r -s EARTHDATA_PASSWORD || true; printf '\n'
             ;;
     esac
 fi
@@ -146,6 +149,13 @@ paso '[6/6] Levantando la app (el primer build tarda varios minutos)'
 docker compose up -d --build || fallar 'el build o el arranque falló: mirá la salida de arriba.'
 
 url="http://127.0.0.1:$PORT_IN"
+
+if ! command -v curl >/dev/null 2>&1; then
+    printf '  !  no hay curl en este host, así que no puedo esperar a la API.\n'
+    printf '     Abrí %s cuando "docker compose logs app" muestre que arrancó.\n' "$url"
+    exit 0
+fi
+
 printf '  esperando a que la API responda...\n'
 salud=''
 limite=$(( $(date +%s) + 360 ))

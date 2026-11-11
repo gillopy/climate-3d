@@ -46,6 +46,11 @@ RUN python -m venv /app/.venv \
  && /app/.venv/bin/pip install --upgrade pip \
  && /app/.venv/bin/pip install -r requirements.txt -r app/requirements.txt
 
+# `cdsapi` queda solo en la imagen. El repo lo deja fuera a propósito porque el .nc de
+# ERA5 ya suele estar bajado; acá quien llega puede no tenerlo, y el asistente ofrece
+# la clave del CDS. Sin esto, `descargar_era5.py` muere con ModuleNotFoundError.
+RUN /app/.venv/bin/pip install cdsapi
+
 # ffmpeg queda horneado: el primer render no depende de la red.
 RUN /app/.venv/bin/python -c \
       "import imageio_ffmpeg; print('ffmpeg listo:', imageio_ffmpeg.get_ffmpeg_exe())"
