@@ -6,7 +6,6 @@ boton que no hace nada es peor que un boton ausente.
 """
 from __future__ import annotations
 
-import os
 import re
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -16,6 +15,13 @@ from .recipes import repo_listo
 from .schemas import ParamOption, ParamSpec, PreviewVariant, Product
 
 RAIZ_REPO = Path(__file__).resolve().parents[2]
+
+# `comun` es un paquete implícito (no tiene `__init__.py`): para importarlo hace falta
+# la raíz del repo en `sys.path`, igual que hacen los scripts del pipeline.
+if str(RAIZ_REPO) not in sys.path:
+    sys.path.insert(0, str(RAIZ_REPO))
+
+from comun.rutas import DATOS as _DATOS  # noqa: E402  (necesita RAIZ_REPO de arriba)
 
 def _paleta(
     value: str, label: str, banda: str | list[str] | None = None
@@ -1278,8 +1284,8 @@ def productos_disponibles() -> list[Product]:
 
 
 def data_root() -> Path:
-    """Misma regla que ``comun/rutas.py``: una sola variable de entorno."""
-    return Path(os.environ.get("CLIMATE3D_DATOS") or r"D:\Users\guill\dataset era5")
+    """Raíz de datos: la define ``comun/rutas.py``, acá no se repite."""
+    return _DATOS
 
 
 def data_root_exists() -> bool:

@@ -11,17 +11,42 @@ con la descarga que queda guardada en ``Plan.descarga``.
 from __future__ import annotations
 
 import math
+import os
 import re
 import sys
 import urllib.error
 import urllib.request
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 RAIZ_REPO = Path(__file__).resolve().parents[2]
-PYTHON_REPO = RAIZ_REPO / ".venv" / "Scripts" / "python.exe"
+
+#: Dónde puede estar el intérprete del pipeline dentro del repo. En Windows el venv
+#: deja `Scripts/python.exe`; en POSIX, `bin/python`.
+_VENV_RELATIVOS = ((".venv", "Scripts", "python.exe"), (".venv", "bin", "python"))
+
+
+def _python_repo(entorno: Mapping[str, str] | None = None) -> Path:
+    """Intérprete que corre los scripts del pipeline.
+
+    ``CLIMATE3D_PYTHON`` manda: es lo que usa el contenedor, donde el venv vive en
+    ``/app/.venv`` y no tiene sentido adivinar la distribución de carpetas.
+    """
+    valor = ((os.environ if entorno is None else entorno)
+             .get("CLIMATE3D_PYTHON") or "").strip()
+    if valor:
+        return Path(valor)
+    for relativo in _VENV_RELATIVOS:
+        candidato = RAIZ_REPO.joinpath(*relativo)
+        if candidato.is_file():
+            return candidato
+    return RAIZ_REPO.joinpath(*_VENV_RELATIVOS[0 if os.name == "nt" else 1])
+
+
+PYTHON_REPO = _python_repo()
 
 # Tabla de fuentes de pronóstico (copiada del propio descargador).
 _BASE_ECMWF = "https://data.ecmwf.int/forecasts/{ymd}/{ciclo}z/{ruta}/{ymd}{ciclo}0000-{paso}.index"

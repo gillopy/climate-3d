@@ -429,8 +429,8 @@ def construir_o_cargar_climatologia(args) -> tuple[np.ndarray, np.ndarray, np.nd
     ruta = find_data_file(DATOS, args.era5_nc)
     if ruta is None:
         raise SystemExit(
-            "No encontré el NetCDF de ERA5. Pasalo con --era5-nc o dejalo en "
-            f"{DATOS} / D:\\Users\\guill\\Desktop.")
+            "No encontré el NetCDF de ERA5. Pasalo con --era5-nc, dejalo en "
+            f"{DATOS} o configurá CLIMATE3D_EXTRA_DIRS.")
     print(f"Construyendo climatología diurna desde {ruta} "
           f"({ruta.stat().st_size / 1e9:.2f} GB)...")
     inicio = time.time()
