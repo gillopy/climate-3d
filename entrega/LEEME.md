@@ -29,10 +29,14 @@ adentro.
 Se abre una ventana negra que hace todo sola:
 
 1. Verifica que Docker esté encendido (si está apagado, lo arranca y espera).
-2. Te pregunta **dónde guardar los datos**.
-3. Pregunta si querés cargar las claves de NASA FIRMS, Copernicus CDS y Earthdata.
+2. La **primera vez** carga la aplicación desde `climate3d-image.tar` (tarda un minuto,
+   no necesita internet). Las veces siguientes se lo saltea.
+3. Te pregunta **dónde guardar los datos**.
+4. Pregunta si querés cargar las claves de NASA FIRMS, Copernicus CDS y Earthdata.
    Si no las tenés, apretá **Enter** y listo.
-4. Levanta la aplicación y abre el navegador.
+5. Levanta la aplicación y abre el navegador.
+
+No hace falta escribir ningún comando: el lanzador se encarga de cargar la imagen.
 
 Si Windows muestra un cartel azul de "Windows protegió tu PC", tocá **Más información**
 → **Ejecutar de todas formas**. Es normal con archivos que vienen de otra PC.
@@ -85,5 +89,5 @@ Tus datos y tus imágenes **no se borran**: quedan en la carpeta que elegiste.
 | --- | --- |
 | `ARRANCAR.bat` | **el que tenés que usar** |
 | `APAGAR.bat` | para apagarla |
-| `climate3d-image.tar` | la aplicación (274 MB). No lo borres. |
+| `climate3d-image.tar` | la aplicación (274 MB). No lo borres: el lanzador lo carga la primera vez. |
 | `docker-compose.yml`, `setup.ps1`, `env.example` | configuración; no hace falta tocarlos |
