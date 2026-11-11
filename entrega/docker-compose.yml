@@ -9,9 +9,11 @@ name: climate3d
 
 services:
   app:
-    # Cambiá USUARIO por tu cuenta de GitHub. Pinneá una versión (`:1.0.0`) en vez
-    # de `:latest` cuando quieras que todos corran exactamente lo mismo.
-    image: ${IMAGE:-ghcr.io/USUARIO/climate3d:latest}
+    # La imagen viene en `climate3d-image.tar`: se carga una vez con
+    #   docker load -i climate3d-image.tar
+    # Si en cambio la publicás en un registry, poné en el .env:
+    #   IMAGE=ghcr.io/TU_USUARIO/climate3d:1.0.0
+    image: ${IMAGE:-climate3d:local}
     env_file:
       - .env
     ports:
