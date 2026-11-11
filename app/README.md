@@ -17,6 +17,9 @@ Dos decisiones que definen el resultado:
 
 ## Cómo correrlo
 
+> ¿Solo querés usarla? Con Docker no hace falta nada de lo que sigue: corré `.\setup.ps1`
+> desde la raíz del repo y listo. Ver [`../docs/DOCKER.md`](../docs/DOCKER.md).
+
 Todo se corre en PowerShell **desde la raíz del repo** (`climate 3d\`), salvo
 donde se aclare otra carpeta. No hace falta activar ningún entorno virtual: se
 llama al `python.exe` del entorno directo, así que la política de ejecución de

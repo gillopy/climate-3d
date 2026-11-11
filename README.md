@@ -57,6 +57,27 @@ Si tus datos están en otro lado, no toques código:
 $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 ```
 
+Dentro de un contenedor la ruta es siempre `/data` y no hace falta exportar nada: lo
+configura el volumen. Ver [Correr en Docker](#correr-en-docker).
+
+## Correr en Docker
+
+La consola y el pipeline enteros en un contenedor, para que otra persona los use sin
+instalar Python ni Node:
+
+```powershell
+.\setup.ps1      # Windows
+```
+
+```bash
+./setup.sh       # Linux / macOS
+```
+
+El asistente pregunta dónde viven los datos, valida la carpeta, pide las credenciales
+opcionales, escribe `.env` y levanta la app en **http://127.0.0.1:8080**. El detalle
+completo —qué hay adentro, credenciales, problemas comunes, cómo publicar la imagen— está
+en [`docs/DOCKER.md`](./docs/DOCKER.md).
+
 ## Qué se puede lograr
 
 Quince salidas del mismo pipeline, todas con datos reales. En
