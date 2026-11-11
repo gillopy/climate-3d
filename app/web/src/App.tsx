@@ -12,7 +12,7 @@ import {
 import { JobPanel } from "./components/JobPanel";
 import { Reloj } from "./components/controls/Clock";
 import { RecipeForm } from "./components/RecipeForm";
-import { valorAjustado } from "./opciones";
+import { ajustarFechas, valorAjustado } from "./opciones";
 import type {
   CatalogResponse,
   DatesResponse,
@@ -405,7 +405,8 @@ export default function App() {
                     const ajustado = valorAjustado(spec, siguiente);
                     if (ajustado !== null) siguiente[spec.name] = ajustado;
                   }
-                  return siguiente;
+                  // Y si el satélite nuevo no cubre la fecha elegida, se corre sola.
+                  return ajustarFechas(siguiente);
                 })
               }
               onSubmit={generar}

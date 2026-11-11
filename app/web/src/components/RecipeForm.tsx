@@ -9,7 +9,7 @@ import type {
 import { Select } from "./controls/Select";
 import { FechaUnica, VentanaTemporal } from "./controls/Window";
 import { formatearFecha, formatearRango } from "./controls/Calendar";
-import { opcionesVisibles } from "../opciones";
+import { opcionesVisibles, pisoDeSatelite } from "../opciones";
 
 // La fecha y la hora van siempre al final del formulario y en este orden, sea
 // cual sea el producto: primero se eligen las opciones, después el momento.
@@ -164,6 +164,8 @@ export function RecipeForm({
   const disponibles = new Set(
     dates?.source === "descubierto" ? dates.dates : [],
   );
+  // Hasta dónde puede irse atrás el calendario si no hay datos en disco.
+  const pisoFecha = pisoDeSatelite(params);
   // La placa muestra el render de la opcion elegida: satelite, paleta, modelo...
   // Los toggles se comparan serializados ("true"/"false") porque el contrato
   // de variantes viaja en el nombre del archivo.
@@ -359,6 +361,7 @@ export function RecipeForm({
           <FechaUnica
             value={String(valor ?? spec.default)}
             disponibles={disponibles}
+            piso={pisoFecha}
             disabled={!habilitado}
             onChange={(iso) => onChange(spec.name, iso)}
           />
@@ -378,6 +381,7 @@ export function RecipeForm({
           <VentanaTemporal
             value={rango}
             disponibles={disponibles}
+            piso={pisoFecha}
             disabled={!habilitado}
             onChange={(siguiente) => onChange(spec.name, siguiente)}
           />

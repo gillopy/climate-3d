@@ -1340,6 +1340,68 @@ code {
   margin-bottom: 7px;
 }
 
+/* Salto directo: escribir la fecha es más rápido que pasar meses de a uno. */
+.cal__salto {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 7px;
+}
+
+.cal__salto input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: var(--void);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  transition: border-color 120ms var(--ease);
+}
+
+.cal__salto input::placeholder {
+  color: var(--ash);
+}
+
+.cal__salto input:hover {
+  border-color: var(--line-strong);
+}
+
+.cal__salto input:focus-visible {
+  outline: none;
+  border-color: var(--iris);
+}
+
+.cal__ir {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: var(--slate);
+  color: var(--mist);
+  font-family: var(--narrow);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+
+.cal__ir:hover:not(:disabled) {
+  background: var(--raised);
+  color: var(--paper);
+}
+
+.cal__ir:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .cal__paso {
   position: relative;
   width: 26px;
@@ -2601,8 +2663,23 @@ input[type="range"]:disabled {
     flex: 1;
   }
 
-  .datepick__pop {
+  /* El popover se ancla al botón (`position: relative` del stop): en una columna
+     angosta eso lo aplasta al ancho del botón y, del lado derecho, se sale del
+     viewport. En móvil se cuelga de la fila completa. */
+  .datepick {
+    position: relative;
+  }
+
+  .datepick__stop {
+    position: static;
+  }
+
+  .datepick__pop,
+  .datepick__pop--der {
+    left: 0;
+    right: auto;
     width: 100%;
+    max-width: 100%;
   }
 }
 

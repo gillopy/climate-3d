@@ -91,6 +91,25 @@ function etiquetaDia(iso: string): string {
   return `${Number(dia)} de ${MESES[Number(mes) - 1].toLowerCase()} de ${anio}`;
 }
 
+function fechaValida(anio: number, mes: number, dia: number): string | null {
+  if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  // Descarta 31/02 y compañía: si el calendario la corrió, no existía.
+  if (fecha.getUTCMonth() !== mes - 1 || fecha.getUTCDate() !== dia) return null;
+  return `${anio}-${dosDigitos(mes)}-${dosDigitos(dia)}`;
+}
+
+/** "2024-05-03", "03/05/2024" o "3-5-2024" → "2024-05-03". */
+export function normalizarFecha(texto: string): string | null {
+  const limpio = texto.trim();
+  if (!limpio) return null;
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(limpio);
+  if (iso) return fechaValida(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  const dmy = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(limpio);
+  if (dmy) return fechaValida(Number(dmy[3]), Number(dmy[2]), Number(dmy[1]));
+  return null;
+}
+
 interface Props {
   modo: "range" | "single";
   /** Primer día del rango (o el día elegido, en modo simple). */
@@ -101,6 +120,8 @@ interface Props {
   disponibles: Set<string>;
   /** Piso del calendario: los días anteriores quedan bloqueados (fin del rango). */
   minimo?: string;
+  /** Arranque de datos de la selección (el satélite): hasta dónde se puede ir atrás. */
+  piso?: string;
   disabled?: boolean;
   onElegir: (iso: string) => void;
 }
@@ -118,23 +139,27 @@ export function Calendario({
   fin,
   disponibles,
   minimo,
+  piso: pisoDato,
   disabled,
   onElegir,
 }: Props) {
   const hoy = hoyUTC();
   const tope = mesDe(hoy) as string;
-  // Se navega entre el primer dato (o un año atrás) y el mes en curso.
+  // Hasta dónde se puede ir atrás: primero el arranque de datos de la selección
+  // (el satélite), después el primer día que haya en disco y, si no hay ninguna
+  // de las dos, un año — el calendario es sólo una referencia.
   const piso = useMemo(() => {
-    let minimoMes = mesDe(inicio) ?? tope;
+    let minimoMes = mesDe(pisoDato ?? "") ?? mesDe(inicio) ?? null;
     for (const fecha of disponibles) {
       const mes = mesDe(fecha);
-      if (mes && mes < minimoMes) minimoMes = mes;
+      if (mes && (!minimoMes || mes < minimoMes)) minimoMes = mes;
     }
-    const anioAtras = correrMes(tope, -12);
-    return minimoMes < anioAtras ? minimoMes : anioAtras;
-  }, [inicio, disponibles, tope]);
+    if (minimoMes) return minimoMes;
+    return correrMes(tope, -12);
+  }, [pisoDato, inicio, disponibles, tope]);
 
   const [visible, setVisible] = useState(() => mesDe(inicio) ?? tope);
+  const [salto, setSalto] = useState("");
 
   // Si el rango cambia de mes desde afuera (input o nuevo producto), se sigue.
   const mesInicio = mesDe(inicio);
@@ -163,7 +188,9 @@ export function Calendario({
     const partes = ["cal__d"];
     const enRango = iso >= inicioRango && iso <= finRango;
     const borde = iso === inicioRango || iso === finRango;
-    const bloqueado = Boolean(minimo) && iso < (minimo as string);
+    const bloqueado =
+      (Boolean(minimo) && iso < (minimo as string)) ||
+      (Boolean(pisoDato) && iso < (pisoDato as string));
     if (modo === "single") {
       if (iso === inicio) partes.push("cal__d--borde");
     } else if (borde) {
@@ -181,7 +208,23 @@ export function Calendario({
   }
 
   function inactivo(iso: string) {
-    return disabled || iso > hoy || (Boolean(minimo) && iso < (minimo as string));
+    return (
+      disabled ||
+      iso > hoy ||
+      (Boolean(minimo) && iso < (minimo as string)) ||
+      (Boolean(pisoDato) && iso < (pisoDato as string))
+    );
+  }
+
+  function irA(texto: string) {
+    const escrito = normalizarFecha(texto);
+    if (!escrito) return false;
+    // Antes del arranque de datos no hay nada que pedir: se acomoda al primero
+    // que existe, en vez de dejar la fecha escrita tirada.
+    const iso = pisoDato && escrito < pisoDato ? pisoDato : escrito;
+    setVisible(mesDe(iso) as string);
+    if (!inactivo(iso)) onElegir(iso);
+    return true;
   }
 
   return (
@@ -207,6 +250,36 @@ export function Calendario({
           onClick={() => setVisible((mes) => correrMes(mes, 1))}
         >
           ›
+        </button>
+      </div>
+
+      {/* Sin <form>: esto vive dentro del formulario de la receta y un form
+          anidado es HTML inválido — Enter terminaba enviando la receta entera. */}
+      <div className="cal__salto">
+        <input
+          type="text"
+          value={salto}
+          onChange={(evento) => setSalto(evento.target.value)}
+          onKeyDown={(evento) => {
+            if (evento.key !== "Enter") return;
+            evento.preventDefault();
+            evento.stopPropagation();
+            irA(salto);
+          }}
+          placeholder="aaaa-mm-dd"
+          aria-label="Ir a una fecha: aaaa-mm-dd o dd/mm/aaaa"
+          disabled={disabled}
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          className="cal__ir"
+          onClick={() => irA(salto)}
+          disabled={disabled || !salto.trim()}
+          aria-label="Ir a la fecha escrita"
+        >
+          Ir
         </button>
       </div>
 

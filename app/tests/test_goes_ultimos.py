@@ -158,7 +158,10 @@ class HorasEnUtc(unittest.TestCase):
         self.assertEqual(desde.minute, 0)
 
     def test_cerrar_el_dia_termina_a_medianoche_utc(self):
-        dia = ahora_utc().date() - timedelta(days=1)
+        # Un día atrás no sirve: entre las 00:00 y las 00:20 UTC el cierre del día
+        # se recorta al último slot publicado (23:50) y el test se caía solo por
+        # la hora a la que se corría.
+        dia = ahora_utc().date() - timedelta(days=3)
         _, hasta = recipes._ventana_animacion(dia, dia, 0, 24)
         self.assertEqual(hasta, datetime.combine(dia + timedelta(days=1), datetime.min.time()))
 

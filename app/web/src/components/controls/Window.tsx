@@ -63,6 +63,8 @@ function Extremo({
 interface VentanaProps {
   value: RangoFechas;
   disponibles: Set<string>;
+  /** Arranque de datos de la selección (el satélite): hasta dónde irse atrás. */
+  piso?: string;
   disabled?: boolean;
   onChange: (rango: RangoFechas) => void;
 }
@@ -77,6 +79,7 @@ interface VentanaProps {
 export function VentanaTemporal({
   value,
   disponibles,
+  piso,
   disabled,
   onChange,
 }: VentanaProps) {
@@ -134,6 +137,7 @@ export function VentanaTemporal({
               inicio={inicio}
               fin={fin}
               disponibles={disponibles}
+              piso={piso}
               disabled={disabled}
               onElegir={elegirInicio}
             />
@@ -166,6 +170,7 @@ export function VentanaTemporal({
               inicio={inicio}
               fin={fin}
               disponibles={disponibles}
+              piso={piso}
               minimo={inicio}
               disabled={disabled}
               onElegir={elegirFin}
@@ -188,6 +193,8 @@ export function VentanaTemporal({
 interface FechaProps {
   value: string;
   disponibles: Set<string>;
+  /** Arranque de datos de la selección (el satélite): hasta dónde irse atrás. */
+  piso?: string;
   disabled?: boolean;
   onChange: (iso: string) => void;
 }
@@ -196,6 +203,7 @@ interface FechaProps {
 export function FechaUnica({
   value,
   disponibles,
+  piso,
   disabled,
   onChange,
 }: FechaProps) {
@@ -259,6 +267,7 @@ export function FechaUnica({
             inicio={dia}
             fin={dia}
             disponibles={disponibles}
+            piso={piso}
             disabled={disabled}
             onElegir={(iso) => {
               onChange(iso);
