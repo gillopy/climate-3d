@@ -1,6 +1,0 @@
-node_modules/
-.wrangler/
-
-# Sitio generado por tools/export_demo.py: se reconstruye y se sube con
-# `npm run deploy:pages`. No se versiona para no inflar el repo con binarios.
-site/
