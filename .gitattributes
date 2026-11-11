@@ -1,0 +1,12 @@
+# Archivos que corren dentro de Linux: LF siempre, incluso al hacer checkout en
+# Windows. Un CRLF en el shebang rompe el contenedor ("bad interpreter") y un CRLF
+# al final de una línea con `\` rompe el Dockerfile.
+*.sh                text eol=lf
+*.bash              text eol=lf
+Dockerfile          text eol=lf
+*.dockerfile        text eol=lf
+docker-compose.yml  text eol=lf
+.dockerignore       text eol=lf
+
+# PowerShell: CRLF es lo natural en Windows.
+*.ps1               text eol=crlf
