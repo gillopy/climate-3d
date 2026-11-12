@@ -3078,6 +3078,103 @@ input[type="range"]:disabled {
   color: var(--ash);
 }
 
+.nisar__render {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.nisar__render h3 {
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.nisar__render .nisar__sub {
+  margin: 0 0 8px;
+}
+
+.nisar__render-ctrl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.nisar__render-ctrl label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.nisar__render-ctrl select {
+  height: 26px;
+  min-width: 0;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  background: var(--obsidian);
+  color: var(--mist);
+  font: inherit;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.nisar__job {
+  margin-top: 10px;
+}
+
+.nisar__job-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--fog);
+}
+
+.nisar__bar {
+  height: 4px;
+  margin: 5px 0 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--slate);
+}
+
+.nisar__bar i {
+  display: block;
+  height: 100%;
+  background: var(--iris-hi);
+  transition: width 200ms var(--ease);
+}
+
+.nisar__logs {
+  max-height: 104px;
+  margin: 0 0 8px;
+  padding: 0 0 0 12px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--ash);
+}
+
+.nisar__logs li {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nisar__job .nisar__imagen {
+  margin-top: 8px;
+}
+
 /* Leaflet sobre el mundo oscuro de la consola. */
 .nisar .leaflet-container {
   background: #0b0c0d;

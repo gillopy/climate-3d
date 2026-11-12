@@ -10,6 +10,7 @@ conexión** a partir de lo que ya está descargado.
 | `descargar_himawari.py` | Himawari-9 AHI banda 13 en HSD, decodificada a `.npz` | Bucket público NOAA S3 | `DATOS/himawari_b13_h09/` |
 | `truecolor_goes.py` | Bandas visibles C01 / C02 / C03 del GOES-R ABI | Bucket público NOAA S3 | `DATOS/goes_c0{1,2,3}_<sat>/` |
 | `pace_landvi.py` | PACE OCI L3M LANDVI diario (`.nc`) | OB.DAAC (**Earthdata Login**) | `DATOS/pace_landvi/` |
+| `nisar.py` | NISAR GCOV por escena (`.h5`), reanudable | ASF (**Earthdata Login**) | `DATOS/nisar/<coleccion>/<granulo>.h5` |
 | `geocolor.py` | GeoColor (GOES-East), ya rasterizado | NASA GIBS | `SALIDAS/frames_<etiqueta>/crudo_NNN.jpg` |
 | `mur_sst.py` | GHRSST MUR L4 SST Anomalies (globo), ya rasterizado | NASA GIBS | `SALIDAS/frames_mur_globo_<...>/crudo_NNN.jpg` |
 | `truecolor.py` | True Color (MODIS/VIIRS) diario, ya rasterizado | NASA GIBS | `SALIDAS/frames_truecolor_<sensor>_globo_<...>/crudo_NNN.jpg` |

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import type { FeatureCollection } from "geojson";
 
+import { cancelJob, createJob, subscribeJob } from "../api";
 import { getNisarCatalog, getParaguay, searchNisar } from "../nisar";
 import type { Caja, NisarCatalog, NisarGranule, NisarSearch } from "../nisar";
+import type { Job } from "../types";
 
 const CENTRO_PARAGUAY: L.LatLngTuple = [-23.4, -58.4];
 const COLOR = "#5e6ad2";
@@ -52,6 +54,11 @@ export function NisarView() {
   const [imagen, setImagen] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Render de la caja: descarga del .h5 + recorte de alta calidad.
+  const [pol, setPol] = useState("auto");
+  const [modo, setModo] = useState("gris");
+  const [px, setPx] = useState("2400");
+  const [trabajo, setTrabajo] = useState<Job | null>(null);
 
   const elegirGranulo = useCallback((granulo: NisarGranule) => {
     setSeleccion(granulo);
@@ -263,6 +270,81 @@ export function NisarView() {
     }
   }, [resultado, seleccion, elegirGranulo]);
 
+  // El job de descarga+render se sigue por SSE, igual que la consola.
+  const trabajoId = trabajo?.id ?? null;
+  useEffect(() => {
+    if (!trabajoId) return;
+    let vigente = true;
+    const corte = subscribeJob(trabajoId, {
+      onSnapshot: (job) => {
+        if (vigente) setTrabajo(job);
+      },
+      onLog: (linea) =>
+        setTrabajo((previo) =>
+          previo && previo.id === trabajoId
+            ? { ...previo, logs: [...previo.logs, linea].slice(-400) }
+            : previo,
+        ),
+      onProgress: (progress, stage) =>
+        setTrabajo((previo) =>
+          previo && previo.id === trabajoId ? { ...previo, progress, stage } : previo,
+        ),
+      onArtifact: (artefacto) =>
+        setTrabajo((previo) => {
+          if (!previo || previo.id !== trabajoId) return previo;
+          if (previo.artifacts.some((arte) => arte.url === artefacto.url)) return previo;
+          return { ...previo, artifacts: [...previo.artifacts, artefacto] };
+        }),
+      onFallo: (mensaje) => {
+        if (vigente) setError(mensaje);
+      },
+    });
+    return () => {
+      vigente = false;
+      corte();
+    };
+  }, [trabajoId]);
+
+  const enMarcha = trabajo?.status === "queued" || trabajo?.status === "running";
+
+  async function renderizar() {
+    if (!seleccion || !caja) return;
+    setError(null);
+    const polFinal =
+      pol !== "auto" && !seleccion.polarization.includes(pol.toUpperCase())
+        ? "auto"
+        : pol;
+    const modoFinal =
+      modo === "color" && seleccion.polarization.length < 2 ? "gris" : modo;
+    try {
+      const job = await createJob("nisar_render", {
+        granulo: seleccion.id,
+        url: seleccion.download,
+        coleccion: seleccion.collection,
+        bbox: `${caja.oeste},${caja.sur},${caja.este},${caja.norte}`,
+        pol: polFinal,
+        modo: modoFinal,
+        px: Number(px),
+      });
+      setTrabajo(job);
+    } catch (exc) {
+      setError(
+        exc instanceof Error ? exc.message : "No se pudo crear el trabajo NISAR.",
+      );
+    }
+  }
+
+  async function cancelarRender() {
+    if (!trabajo) return;
+    try {
+      setTrabajo(await cancelJob(trabajo.id));
+    } catch (exc) {
+      setError(
+        exc instanceof Error ? exc.message : "No se pudo cancelar el trabajo.",
+      );
+    }
+  }
+
   function limpiar() {
     setCaja(null);
     setResultado(null);
@@ -449,6 +531,102 @@ export function NisarView() {
               <a className="btn" href={seleccion.download} target="_blank" rel="noreferrer">
                 Descargar .h5 (Earthdata)
               </a>
+            </div>
+
+            <div className="nisar__render">
+              <h3>Render de la caja</h3>
+              <p className="nisar__sub">
+                Baja el .h5 a {catalogo?.data_root ?? "la carpeta de datos"} y recorta
+                esta caja en la grilla de la escena.
+                {seleccion.size_mb !== null
+                  ? ` Pesa ~${seleccion.size_mb} MB.`
+                  : ""}
+              </p>
+              <div className="nisar__render-ctrl">
+                <label>
+                  Polarización
+                  <select value={pol} onChange={(evento) => setPol(evento.target.value)}>
+                    <option value="auto">Auto</option>
+                    {seleccion.polarization.map((valor) => (
+                      <option key={valor} value={valor.toLowerCase()}>
+                        {valor}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Modo
+                  <select value={modo} onChange={(evento) => setModo(evento.target.value)}>
+                    <option value="gris">Gris (dB)</option>
+                    <option value="color" disabled={seleccion.polarization.length < 2}>
+                      Color HH/HV
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  Tamaño
+                  <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                    <option value="1600">1600 px</option>
+                    <option value="2400">2400 px</option>
+                    <option value="3200">3200 px</option>
+                    <option value="4096">4096 px</option>
+                  </select>
+                </label>
+              </div>
+
+              {!catalogo?.earthdata_configured ? (
+                <p className="nisar__aviso">
+                  Falta EARTHDATA_USER y EARTHDATA_PASSWORD en .env para bajar el .h5.
+                </p>
+              ) : null}
+
+              <div className="nisar__acciones">
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  disabled={!caja || enMarcha || !catalogo?.earthdata_configured}
+                  onClick={() => void renderizar()}
+                >
+                  Descargar y renderizar
+                </button>
+                {enMarcha ? (
+                  <button type="button" className="btn" onClick={() => void cancelarRender()}>
+                    Cancelar
+                  </button>
+                ) : null}
+              </div>
+
+              {trabajo ? (
+                <div className="nisar__job">
+                  <div className="nisar__job-head">
+                    <span>{trabajo.stage}</span>
+                    <span>{Math.round(trabajo.progress * 100)} %</span>
+                  </div>
+                  <div className="nisar__bar">
+                    <i style={{ width: `${Math.round(trabajo.progress * 100)}%` }} />
+                  </div>
+                  {trabajo.logs.length > 0 ? (
+                    <ul className="nisar__logs">
+                      {trabajo.logs.slice(-6).map((linea, indice) => (
+                        <li key={`${linea.at}-${indice}`}>{linea.text}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {trabajo.error ? (
+                    <p className="nisar__aviso">{trabajo.error}</p>
+                  ) : null}
+                  {trabajo.artifacts
+                    .filter((arte) => arte.kind === "image")
+                    .map((arte) => (
+                      <img
+                        key={arte.url}
+                        className="nisar__imagen"
+                        src={arte.url}
+                        alt="Recorte NISAR renderizado"
+                      />
+                    ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}

@@ -1195,7 +1195,21 @@ _ORDEN = (
 _POSICION = {producto_id: posicion for posicion, producto_id in enumerate(_ORDEN)}
 PRODUCTS.sort(key=lambda producto: _POSICION.get(producto.id, len(_ORDEN)))
 
-_BY_ID = {p.id: p for p in PRODUCTS}
+#: Producto interno del visor NISAR. No aparece en el rail: la vista NISAR arma
+#: sus propios parametros y el JobManager lo resuelve por id.
+NISAR_PRODUCTS = [
+    Product(
+        id="nisar_render",
+        name="NISAR - recorte de escena",
+        group="radar",
+        stage="descargar/nisar.py + prototipos/poster_nisar.py",
+        summary="Descarga la escena .h5 desde ASF y renderiza la caja elegida "
+        "en alta calidad. Requiere Earthdata Login.",
+        params=[],
+    )
+]
+
+_BY_ID = {p.id: p for p in [*PRODUCTS, *NISAR_PRODUCTS]}
 
 
 def get_product(product_id: str) -> Product | None:

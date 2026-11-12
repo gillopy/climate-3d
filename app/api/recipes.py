@@ -1952,6 +1952,77 @@ def _goes_sandwich(params: dict[str, Any], work: Path) -> Plan:
     return Plan(pasos=[*descargas, render_step], descarga=descargas[0])
 
 
+# --- NISAR (visor): descarga del .h5 + recorte de la caja ----------------
+def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
+    """Plan del visor: baja la escena a DATOS/nisar y renderiza la caja.
+
+    La descarga es reanudable y saltea el archivo si ya esta: cambiar la
+    polarizacion, el modo o el tamano no vuelve a bajar 1.9 GB.
+    """
+    granulo = str(params.get("granulo") or "").strip()
+    url = str(params.get("url") or "").strip()
+    coleccion = str(params.get("coleccion") or "NISAR_L2_GCOV_V1").strip()
+    bbox = str(params.get("bbox") or "").strip()
+
+    for valor, nombre in ((granulo, "granulo"), (coleccion, "coleccion")):
+        if not valor or any(c in valor for c in '\\/:*?"<>|'):
+            raise ValueError(f"Parametro NISAR invalido: {nombre}")
+    if not url.startswith("https://"):
+        raise ValueError("La escena NISAR no trae una URL https de descarga.")
+    try:
+        oeste, sur, este, norte = [float(v) for v in bbox.split(",")]
+    except (AttributeError, ValueError) as exc:
+        raise ValueError("La caja NISAR debe ser oeste,sur,este,norte") from exc
+    if not (-180 <= oeste < este <= 180 and -90 <= sur < norte <= 90):
+        raise ValueError("La caja NISAR esta fuera de rango o invertida.")
+
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from rutas import DATOS  # import local: igual que los otros helpers
+
+    pol = str(params.get("pol") or "auto").lower()
+    if pol not in ("auto", "hh", "hv", "vv", "vh"):
+        pol = "auto"
+    modo = str(params.get("modo") or "gris").lower()
+    if modo not in ("gris", "color"):
+        modo = "gris"
+    try:
+        px = max(800, min(int(params.get("px", 2400)), 4096))
+    except (TypeError, ValueError):
+        px = 2400
+
+    h5 = DATOS / "nisar" / coleccion / f"{granulo}.h5"
+    descarga = Step(
+        kind="download",
+        label=f"descargando {granulo[-24:]}",
+        script="descargar/nisar.py",
+        args=[
+            "--url", url,
+            "--granulo", granulo,
+            "--destino", str(DATOS / "nisar"),
+            "--coleccion", coleccion,
+        ],
+        expected=40,
+    )
+    render = Step(
+        kind="render",
+        label=f"renderizando la caja a {px} px",
+        script="prototipos/poster_nisar.py",
+        args=[
+            "--h5", str(h5),
+            "--bbox", f"{oeste:g},{sur:g},{este:g},{norte:g}",
+            "--pol", pol,
+            "--modo", modo,
+            "--px", str(px),
+            "--out", str(work / f"nisar_{modo}_{pol}_{px}.png"),
+            "--geojson", str(RAIZ_REPO / "datos" / "paraguay_gadm.json"),
+        ],
+        expected=6,
+    )
+    return Plan(pasos=[descarga, render])
+
+
 _CONSTRUCTORES = {
     "goes_c13": _goes,
     "goes_truecolor": _goes_truecolor,
@@ -1971,6 +2042,7 @@ _CONSTRUCTORES = {
     "snapshot_paraguay": _snapshot_paraguay,
     "follaje": _follaje,
     "himawari": _himawari,
+    "nisar_render": _nisar_render,
 }
 
 

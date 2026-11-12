@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -80,6 +81,7 @@ class NisarCatalog(BaseModel):
     default_bbox: list[float]
     default_days: int
     earthdata_configured: bool
+    data_root: str
 
 
 class GranuleImage(BaseModel):
@@ -235,16 +237,31 @@ def _url_browse(valor: str) -> str:
     return valor
 
 
+def _destino_final_permitido(url: str) -> bool:
+    """ASF sirve el browse directo o via su CDN firmado (CloudFront/S3).
+
+    El redirect no puede sacarnos del browse de NISAR: se acepta el host de ASF
+    y los hosts de AWS cuyo path sea el bucket `nisar-browse`.
+    """
+    partes = urllib.parse.urlsplit(url)
+    if partes.scheme != "https":
+        return False
+    host = partes.hostname or ""
+    if host == BROWSE_HOST:
+        return partes.path.startswith(BROWSE_PREFIX)
+    if host.endswith(".cloudfront.net") or host.endswith(".amazonaws.com"):
+        return "nisar-browse" in partes.path
+    return False
+
+
 def _descargar_png(url: str) -> bytes:
     pedido = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(pedido, timeout=60) as respuesta:
-            # Un redirect no puede sacarnos del host de browse de ASF.
-            final = urllib.parse.urlsplit(respuesta.geturl())
-            if final.hostname != BROWSE_HOST or not final.path.startswith(BROWSE_PREFIX):
+            if not _destino_final_permitido(respuesta.geturl()):
                 raise HTTPException(
                     status_code=502,
-                    detail="ASF redirigio fuera del host de browse permitido",
+                    detail="ASF redirigio fuera del browse permitido",
                 )
             datos = respuesta.read(MAX_BROWSE_BYTES + 1)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
@@ -373,6 +390,16 @@ def _entero(valor: Any) -> int | None:
         return None
 
 
+def _datos() -> Path:
+    """Raiz de datos del pipeline (``CLIMATE3D_DATOS`` o el default)."""
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from rutas import DATOS
+
+    return DATOS
+
+
 def _earthdata_configurada() -> bool:
     if os.environ.get("EARTHDATA_USER"):
         return True
@@ -398,6 +425,7 @@ def catalogo() -> NisarCatalog:
         default_bbox=CAJA_PARAGUAY,
         default_days=30,
         earthdata_configured=_earthdata_configurada(),
+        data_root=str(_datos()),
     )
 
 

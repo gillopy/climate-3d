@@ -23,7 +23,9 @@ try:
     from fastapi.testclient import TestClient
 
     from app.api import nisar
+    from app.api.catalog import get_product, productos_disponibles
     from app.api.main import app
+    from app.api.recipes import planear
 except ImportError:  # pragma: no cover - faltan dependencias del venv de la app
     TestClient = None
     nisar = None
@@ -170,6 +172,22 @@ class VisorNisar(unittest.TestCase):
         self.assertEqual(http.status_code, 400)
         self.assertIn("https", http.json()["detail"])
 
+    def test_redirect_de_browse_acepta_solo_el_cdn_de_nisar(self):
+        cdn = (
+            "https://d1mv8zhcvry6x4.cloudfront.net/s3-abc/"
+            "sds-n-cumulus-prod-nisar-browse.s3.us-west-2.amazonaws.com/x.png?Signature=1"
+        )
+        self.assertTrue(nisar._destino_final_permitido(cdn))
+        self.assertTrue(
+            nisar._destino_final_permitido(f"{BASE_BROWSE}_LATLON.png")
+        )
+        self.assertFalse(nisar._destino_final_permitido("https://evil.example/x.png"))
+        self.assertFalse(
+            nisar._destino_final_permitido(
+                "http://d1mv8zhcvry6x4.cloudfront.net/nisar-browse/x.png"
+            )
+        )
+
     def test_proxy_sirve_y_cachea_el_png(self):
         with tempfile.TemporaryDirectory() as carpeta:
             with (
@@ -184,6 +202,52 @@ class VisorNisar(unittest.TestCase):
                 self.assertEqual(respuesta.headers["content-type"], "image/png")
                 self.assertEqual(respuesta.content, PNG)
                 self.assertEqual(len(list(Path(carpeta).glob("*.png"))), 1)
+
+    def test_producto_nisar_es_interno_y_arma_descarga_mas_render(self):
+        ids = [producto.id for producto in productos_disponibles()]
+        self.assertNotIn("nisar_render", ids)
+        self.assertIsNotNone(get_product("nisar_render"))
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "granulo": GRANULO,
+                    "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "pol": "auto",
+                    "modo": "color",
+                    "px": 2400,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/poster_nisar.py"],
+        )
+        self.assertEqual(plan.pasos[0].kind, "download")
+        self.assertEqual(plan.pasos[1].kind, "render")
+        self.assertIn("--bbox", plan.pasos[1].args)
+        self.assertTrue(plan.pasos[1].args[-1].endswith("paraguay_gadm.json"))
+        self.assertIn("nisar", plan.pasos[0].args[-3])
+
+    def test_receta_nisar_rechaza_una_caja_invertida(self):
+        with self.assertRaises(ValueError):
+            planear(
+                "nisar_render",
+                {
+                    "granulo": GRANULO,
+                    "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.2,-23.9,-55.6,-24.5",
+                    "pol": "auto",
+                    "modo": "gris",
+                    "px": 2400,
+                },
+                Path("."),
+            )
 
     def test_paraguay_sale_del_geojson_del_repo(self):
         respuesta = self.cliente.get("/api/nisar/paraguay")

@@ -553,7 +553,7 @@ mientras otro no valga lo esperado: en Snapshot, encender `ultima` deja en gris 
 - **Nada de 800 px.** La tipografía del póster se superpone por debajo de
   ~1400 px; el mínimo ofrecido es 1400.
 
-## Visor NISAR (Fase 1)
+## Visor NISAR
 
 La barra superior tiene dos vistas: **Consola** (las recetas) y **NISAR**. NISAR
 no entra al catálogo: es un visor de búsqueda, no una receta.
@@ -564,10 +564,27 @@ no entra al catálogo: es un visor de búsqueda, no una receta.
   lat/lon y polarizaciones HH/HV). El backend las proxya y las cachea en
   `app/var/nisar/cache`; solo acepta URLs
   `https://nisar.asf.earthdatacloud.nasa.gov/BROWSE/…`.
-- No se bajan los `.h5`: un GCOV pesa ~1.9 GB y exige Earthdata Login. Eso queda
-  para la Fase 2.
+- La búsqueda y el browse no piden credenciales. La descarga del `.h5` sí:
+  un GCOV pesa ~1.9 GB y exige Earthdata Login.
 - Endpoints: `GET /api/nisar/catalog`, `/api/nisar/search`, `/api/nisar/browse`
   y `/api/nisar/paraguay`.
+
+### Descarga y render (Fase 2)
+
+Con una escena seleccionada y una caja, **Descargar y renderizar** crea un job
+`nisar_render` que:
+
+1. Baja el `.h5` desde ASF a `DATOS/nisar/<coleccion>/<granulo>.h5` con
+   `descargar/nisar.py`. Es reanudable por `.parcial` y saltea el archivo si ya
+   está: cambiar polarización, modo o tamaño no vuelve a bajar 1.9 GB.
+2. Recorta la caja en la grilla nativa de la escena con
+   `prototipos/poster_nisar.py`, pasa a dB y escribe un PNG de hasta 4096 px
+   (gris o color HH/HV), con escala, pie y el contorno de Paraguay.
+
+Las credenciales salen de `EARTHDATA_USER`/`EARTHDATA_PASSWORD` (entorno o
+`.env`), de `~/.netrc`, o de cookies del navegador (`--cookies`). Sin
+credenciales el visor avisa y el job falla con un mensaje claro. La descarga se
+guarda en la raíz de datos del pipeline (`CLIMATE3D_DATOS`).
 
 ## Caché de renders
 
@@ -634,11 +651,13 @@ Qué cubre:
 - `test_api.py` — contrato HTTP: health, catálogo, y los 400/404 con motivo.
 - `test_nisar.py` — visor NISAR con ASF mockeado: búsqueda, caja válida, proxy
   restringido a ASF, caché del browse y GeoJSON de Paraguay.
+- `test_nisar_render.py` — render de un GCOV sintético con la estructura real:
+  recorte, paso a dB, PNG color/gris y caja fuera de la escena.
 - `test_recetas_ecmwf.py`, `test_goes_rgb.py`, `test_goes_ultimos.py`,
   `test_paraguay_ultimos.py`, `test_descargadores_gibs.py` — recetas, bandas,
   encuadre y descargadores.
 
-Resultado esperado al día de hoy: **290 tests, OK**. Si ves `skipped`, falta
+Resultado esperado al día de hoy: **294 tests, OK**. Si ves `skipped`, falta
 alguna dependencia de `requirements-dev.txt`; el mensaje del skip dice cuál.
 
 ## Límites conocidos

@@ -21,6 +21,7 @@ export interface NisarCatalog {
   default_bbox: number[];
   default_days: number;
   earthdata_configured: boolean;
+  data_root: string;
 }
 
 export interface NisarImage {

@@ -599,7 +599,7 @@ class JobManager:
                 # Excepción: el snapshot de Paraguay es UNA sola imagen; seguir
                 # sin crudo garantiza fallar en la composición con un error
                 # confuso. Se aborta directo.
-                if paso.script == "descargar/snapshot_paraguay.py":
+                if paso.script in ("descargar/snapshot_paraguay.py", "descargar/nisar.py"):
                     raise RuntimeError(
                         f"`{paso.script}` salio con codigo {codigo}. "
                         f"Mira el log de arriba."
