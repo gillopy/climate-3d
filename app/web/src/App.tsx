@@ -10,6 +10,7 @@ import {
   subscribeJob,
 } from "./api";
 import { JobPanel } from "./components/JobPanel";
+import { NisarView } from "./components/NisarView";
 import { Reloj } from "./components/controls/Clock";
 import { RecipeForm } from "./components/RecipeForm";
 import { ajustarFechas, valorAjustado } from "./opciones";
@@ -50,6 +51,8 @@ export default function App() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState("");
+  // Dos vistas en la misma app: la consola de recetas y el visor NISAR.
+  const [vista, setVista] = useState<"consola" | "nisar">("consola");
 
   const satelite = typeof params.satelite === "string" ? params.satelite : "";
   const banda = typeof params.banda === "string" ? params.banda : "";
@@ -258,6 +261,28 @@ export default function App() {
             <span className="brand__sub">render console</span>
           </span>
         </div>
+        <nav className="vista-switch" aria-label="Vista">
+          <button
+            type="button"
+            className={`vista-switch__btn${
+              vista === "consola" ? " vista-switch__btn--on" : ""
+            }`}
+            aria-pressed={vista === "consola"}
+            onClick={() => setVista("consola")}
+          >
+            Consola
+          </button>
+          <button
+            type="button"
+            className={`vista-switch__btn${
+              vista === "nisar" ? " vista-switch__btn--on" : ""
+            }`}
+            aria-pressed={vista === "nisar"}
+            onClick={() => setVista("nisar")}
+          >
+            NISAR
+          </button>
+        </nav>
         <div className="health">
           <span className="health__item health__item--count">
             {catalogo ? `${catalogo.products.length} productos` : "leyendo catalogo"}
@@ -289,7 +314,10 @@ export default function App() {
         </p>
       ) : null}
 
-      <main className="layout">
+      {vista === "nisar" ? (
+        <NisarView />
+      ) : (
+        <main className="layout">
         <section className="rail" aria-label="Productos disponibles">
           <div className="rail__head">
             <div className="rail__top">
@@ -423,7 +451,8 @@ export default function App() {
           onCancel={cancelar}
           onReveal={revelar}
         />
-      </main>
+        </main>
+      )}
     </div>
   );
 }

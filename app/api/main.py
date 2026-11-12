@@ -25,6 +25,7 @@ from .catalog import (
     productos_disponibles,
 )
 from .jobs import JobManager
+from .nisar import router as nisar_router
 from .recipes import python_repo, repo_listo
 from .schemas import (
     CatalogResponse,
@@ -53,6 +54,9 @@ app.add_middleware(
 )
 
 gestor = JobManager(MEDIA)
+
+# Visor NISAR: busqueda y browse publico, separado del catalogo de recetas.
+app.include_router(nisar_router, prefix="/api/nisar", tags=["nisar"])
 
 app.mount("/media", StaticFiles(directory=MEDIA), name="media")
 

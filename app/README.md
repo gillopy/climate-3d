@@ -553,6 +553,22 @@ mientras otro no valga lo esperado: en Snapshot, encender `ultima` deja en gris 
 - **Nada de 800 px.** La tipografía del póster se superpone por debajo de
   ~1400 px; el mínimo ofrecido es 1400.
 
+## Visor NISAR (Fase 1)
+
+La barra superior tiene dos vistas: **Consola** (las recetas) y **NISAR**. NISAR
+no entra al catálogo: es un visor de búsqueda, no una receta.
+
+- Se dibuja una caja sobre Paraguay y se consulta ASF por `bbox`, ventana y nivel.
+- Niveles: **GCOV** (backscatter RTC, el de imágenes), GSLC, GUNW y SME2.
+- Cada escena trae su polígono, miniatura y las imágenes browse públicas (mapa
+  lat/lon y polarizaciones HH/HV). El backend las proxya y las cachea en
+  `app/var/nisar/cache`; solo acepta URLs
+  `https://nisar.asf.earthdatacloud.nasa.gov/BROWSE/…`.
+- No se bajan los `.h5`: un GCOV pesa ~1.9 GB y exige Earthdata Login. Eso queda
+  para la Fase 2.
+- Endpoints: `GET /api/nisar/catalog`, `/api/nisar/search`, `/api/nisar/browse`
+  y `/api/nisar/paraguay`.
+
 ## Caché de renders
 
 La carpeta de trabajo es `app/var/media/cache/<firma>/`, donde la firma es un
@@ -616,11 +632,13 @@ Qué cubre:
 - `test_jobs_subprocess.py` — regresión del loop Selector de Windows
   (`uvicorn --reload`): el job tiene que correr igual.
 - `test_api.py` — contrato HTTP: health, catálogo, y los 400/404 con motivo.
+- `test_nisar.py` — visor NISAR con ASF mockeado: búsqueda, caja válida, proxy
+  restringido a ASF, caché del browse y GeoJSON de Paraguay.
 - `test_recetas_ecmwf.py`, `test_goes_rgb.py`, `test_goes_ultimos.py`,
   `test_paraguay_ultimos.py`, `test_descargadores_gibs.py` — recetas, bandas,
   encuadre y descargadores.
 
-Resultado esperado al día de hoy: **149 tests, OK**. Si ves `skipped`, falta
+Resultado esperado al día de hoy: **290 tests, OK**. Si ves `skipped`, falta
 alguna dependencia de `requirements-dev.txt`; el mensaje del skip dice cuál.
 
 ## Límites conocidos

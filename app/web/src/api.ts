@@ -8,7 +8,7 @@ import type {
   Params,
 } from "./types";
 
-async function leer<T>(res: Response): Promise<T> {
+export async function leer<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detalle = `${res.status} ${res.statusText}`;
     try {
