@@ -327,6 +327,33 @@ class VisorNisar(unittest.TestCase):
         )
         self.assertIn("--modo", plan.pasos[1].args)
 
+    def test_receta_fusion_optica(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "fusion",
+                    "granulo": GRANULO,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1200,
+                    "dias": 15,
+                    "nubes": 40,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_fusion.py"],
+        )
+        self.assertIn("--dias", plan.pasos[1].args)
+        self.assertIn("--nubes", plan.pasos[1].args)
+
     def test_receta_agua(self):
         with tempfile.TemporaryDirectory() as carpeta:
             plan = planear(

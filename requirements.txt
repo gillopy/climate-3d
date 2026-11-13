@@ -29,3 +29,8 @@ pykdtree==1.4.*
 
 # GeoTIFF de los recortes NISAR sin GDAL (prototipos/nisar_geotiff.py).
 tifffile==2026.11.*
+
+# Fusion optica: Sentinel-2 L2A desde Planetary Computer (prototipos/nisar_fusion.py).
+rasterio==1.5.*
+pystac-client==0.9.*
+planetary-computer==1.*

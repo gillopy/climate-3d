@@ -544,6 +544,8 @@ def guardar_geotiff(
     ]
     ruta = Path(salida)
     ruta.parent.mkdir(parents=True, exist_ok=True)
+    # El tag TIFF solo acepta ASCII de 7 bits.
+    descripcion = str(descripcion).encode("ascii", "replace").decode("ascii")
     tifffile.imwrite(
         ruta,
         datos,

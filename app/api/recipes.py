@@ -1998,7 +1998,7 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
     """
     producto = str(params.get("producto") or "recorte").strip().lower()
     if producto not in (
-        "recorte", "rvi", "cambio", "serie", "geotiff", "agua", "incendio"
+        "recorte", "rvi", "cambio", "serie", "geotiff", "agua", "incendio", "fusion"
     ):
         raise ValueError(f"Producto NISAR desconocido: {producto}")
 
@@ -2070,6 +2070,31 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                 "--geojson", geojson,
             ],
             expected=5,
+        )
+    elif producto == "fusion":
+        try:
+            dias = max(1, min(int(params.get("dias", 15)), 60))
+        except (TypeError, ValueError):
+            dias = 15
+        try:
+            nubes = max(0.0, min(float(params.get("nubes", 40.0)), 100.0))
+        except (TypeError, ValueError):
+            nubes = 40.0
+        px_fusion = max(800, min(px, 2000))
+        render = Step(
+            kind="render",
+            label=f"fusionando Sentinel-2 (±{dias} días)",
+            script="prototipos/nisar_fusion.py",
+            args=[
+                "--h5", str(h5),
+                "--bbox", bbox_final,
+                "--px", str(px_fusion),
+                "--dias", str(dias),
+                "--nubes", f"{nubes:g}",
+                "--out", str(work / "nisar_fusion"),
+                "--geojson", geojson,
+            ],
+            expected=15,
         )
     elif producto in ("cambio", "incendio"):
         antes_granulo = _nisar_nombre(

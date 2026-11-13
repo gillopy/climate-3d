@@ -68,6 +68,8 @@ export function NisarView() {
   const [hhMax, setHhMax] = useState("-20");
   const [hvMax, setHvMax] = useState("-25");
   const [firms, setFirms] = useState(true);
+  const [dias, setDias] = useState("15");
+  const [nubes, setNubes] = useState("40");
 
   const elegirGranulo = useCallback((granulo: NisarGranule) => {
     setSeleccion(granulo);
@@ -398,6 +400,9 @@ export function NisarView() {
     } else if (producto === "agua") {
       params.hh_max = Number(hhMax);
       params.hv_max = Number(hvMax);
+    } else if (producto === "fusion") {
+      params.dias = Number(dias);
+      params.nubes = Number(nubes);
     } else if (producto === "serie") {
       if (seleccion.path === null || seleccion.frame === null) {
         setError("La escena no declara track/frame; no puedo armar la serie.");
@@ -649,7 +654,9 @@ export function NisarView() {
                           ? "Máscara de agua abierta: HH y HV bajos. Reporta hectáreas y porcentaje."
                           : producto === "incendio"
                             ? "Cicatriz por caída de HV entre dos fechas, con focos FIRMS opcionales."
-                            : `Baja el .h5 a ${catalogo?.data_root ?? "la carpeta de datos"} y recorta esta caja.`}
+                            : producto === "fusion"
+                              ? "Compone Sentinel-2 L2A (NDVI sin nubes) sobre la caja y la cruza con HV. Clasificación rule-based, no un modelo entrenado."
+                              : `Baja el .h5 a ${catalogo?.data_root ?? "la carpeta de datos"} y recorta esta caja.`}
                 {seleccion.size_mb !== null
                   ? ` Pesa ~${seleccion.size_mb} MB.`
                   : ""}
@@ -668,6 +675,7 @@ export function NisarView() {
                     <option value="geotiff">GeoTIFF (GIS)</option>
                     <option value="agua">Agua / inundación</option>
                     <option value="incendio">Incendio (cicatriz + FIRMS)</option>
+                    <option value="fusion">Fusión óptica (Sentinel-2)</option>
                   </select>
                 </label>
 
@@ -754,6 +762,27 @@ export function NisarView() {
                         value={hvMax}
                         onChange={(evento) => setHvMax(evento.target.value)}
                       />
+                    </label>
+                  </>
+                ) : null}
+
+                {producto === "fusion" ? (
+                  <>
+                    <label>
+                      Días ópticos
+                      <select value={dias} onChange={(evento) => setDias(evento.target.value)}>
+                        <option value="7">±7 días</option>
+                        <option value="15">±15 días</option>
+                        <option value="30">±30 días</option>
+                      </select>
+                    </label>
+                    <label>
+                      Nubes máx.
+                      <select value={nubes} onChange={(evento) => setNubes(evento.target.value)}>
+                        <option value="20">20 %</option>
+                        <option value="40">40 %</option>
+                        <option value="60">60 %</option>
+                      </select>
                     </label>
                   </>
                 ) : null}
@@ -912,7 +941,9 @@ export function NisarView() {
                             ? "Detectar agua"
                             : producto === "incendio"
                               ? "Detectar cicatriz"
-                              : "Descargar y renderizar"}
+                              : producto === "fusion"
+                                ? "Fusionar óptico"
+                                : "Descargar y renderizar"}
                 </button>
                 {enMarcha ? (
                   <button type="button" className="btn" onClick={() => void cancelarRender()}>

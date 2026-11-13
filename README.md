@@ -14,7 +14,7 @@ El repo está separado por **rol**, y se lee en el orden en que se usa:
 | Carpeta | Qué hace | ¿Internet? |
 | --- | --- | --- |
 | [`descargar/`](./descargar) | Baja los datasets (NOAA S3, Copernicus CDS, NASA GIBS) | **Sí** |
-| [`prototipos/`](./prototipos) | Pósteres e imágenes fijas, y los notebooks originales | No |
+| [`prototipos/`](./prototipos) | Pósteres e imágenes fijas, y los notebooks originales | No (salvo `nisar_fusion.py`) |
 | [`cuadros/`](./cuadros) | Renderiza una animación cuadro por cuadro | No |
 | [`animar/`](./animar) | Junta los cuadros en un MP4 o un GIF | No |
 
@@ -23,7 +23,7 @@ El repo está separado por **rol**, y se lee en el orden en que se usa:
 | Etapa | Scripts |
 | --- | --- |
 | `descargar/` | `descargar_goes.py`, `descargar_era5.py`, `descargar_himawari.py`, `truecolor_goes.py`, `geocolor.py`, `mur_sst.py`, `truecolor.py`, `sandwich.py`, `pace_landvi.py`, `nisar.py`, `precipitacion_ecmwf.py`, `anomalia_2t_ecmwf.py`, `viento_250_mslp.py` |
-| `prototipos/` | `poster_goes.py`, `poster_goes_realista.py`, `poster_goes_truecolor.py`, `poster_goes_disco.py`, `poster_mur_realista.py`, `animar_mur_realista.py`, `poster_pace.py`, `poster_pace_gibs.py`, `poster_anomalia.py`, `poster_follaje.py`, `poster_nisar.py`, `nisar_rvi.py`, `nisar_cambio.py`, `nisar_serie.py`, `nisar_geotiff.py`, `nisar_agua.py`, `nisar_incendio.py`, `vista_paraguay.py` |
+| `prototipos/` | `poster_goes.py`, `poster_goes_realista.py`, `poster_goes_truecolor.py`, `poster_goes_disco.py`, `poster_mur_realista.py`, `animar_mur_realista.py`, `poster_pace.py`, `poster_pace_gibs.py`, `poster_anomalia.py`, `poster_follaje.py`, `poster_nisar.py`, `nisar_rvi.py`, `nisar_cambio.py`, `nisar_serie.py`, `nisar_geotiff.py`, `nisar_agua.py`, `nisar_incendio.py`, `nisar_fusion.py`, `vista_paraguay.py` |
 | `cuadros/` | `cuadros_goes.py`, `cuadros_c13_ir.py`, `cuadros_himawari_ir.py`, `cuadros_geocolor.py`, `cuadros_mur.py`, `cuadros_truecolor.py`, `cuadros_sandwich.py`, `cuadros_follaje.py`, `cuadros_follaje_globo.py`, `cuadros_precipitacion.py`, `cuadros_anomalia_2t.py`, `cuadros_viento_250.py` |
 | `animar/` | `armar.py` |
 
@@ -36,11 +36,12 @@ serie `.npz` y su render la convierte en globo.
 `--modelo {ifs,aifs-ens,aifs-single}`; `descargar/anomalia_2t_ecmwf.py` y
 `cuadros/cuadros_anomalia_2t.py` aceptan `--modelo {ifs,aifs-single}`.
 
-Aparte, [`comun/`](./comun) guarda lo compartido (rutas, constantes de estilo y el kit
-NISAR `comun/nisar.py`), también sin red.
+Aparte, [`comun/`](./comun) guarda lo compartido (rutas, constantes de estilo, el kit
+NISAR `comun/nisar.py` y las funciones ópticas `comun/optico.py`).
 
-**Sólo `descargar/` necesita conexión.** Todo lo demás trabaja sobre lo ya bajado, así que
-podés renderizar y animar sin internet.
+**Sólo `descargar/` y la fusión óptica necesitan conexión** (`prototipos/nisar_fusion.py`
+consulta Sentinel-2 en Planetary Computer). Todo lo demás trabaja sobre lo ya bajado, así
+que podés renderizar y animar sin internet.
 
 Si es tu primera vez, andá a [`GUIA.md`](./GUIA.md): ahí está el flujo completo explicado paso
 a paso.

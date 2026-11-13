@@ -610,9 +610,16 @@ El job `nisar_render` despacha por `producto`:
 - **Incendio** (`nisar_incendio.py`): cicatriz por caída de HV y, opcionalmente,
   focos FIRMS del intervalo entre las dos fechas. El radar ve la cicatriz, no el
   fuego activo. Si falta el MAP_KEY de FIRMS, el producto sigue sin focos.
+- **Fusión óptica** (`nisar_fusion.py`): busca Sentinel-2 L2A en Planetary
+  Computer (±días, nubes máximas), enmascara nubes con SCL, compone NDVI mediano
+  y lo reproyecta a la grilla NISAR. Genera figuras de HV/NDVI/RGB/clases, un
+  GeoTIFF de NDVI y JSON. La clasificación es rule-based (agua/bosque/cultivo/
+  suelo), no un modelo entrenado. Suma `rasterio`, `pystac-client` y
+  `planetary-computer` al `.venv` del repo.
 
 El motor común vive en `comun/nisar.py` (abrir escena, recortar, máscara, dB,
-RVI, normalizar, PNG con escala/pie). Un producto nuevo es un script chico.
+RVI, normalizar, PNG con escala/pie) y `comun/optico.py` (NDVI, SCL, compuesto
+mediano y clasificación). Un producto nuevo es un script chico.
 
 **Candado de colección:** las dos fechas de un cambio tienen que ser de la misma
 colección (`NISAR_L2_GCOV_V1` o `NISAR_L2_GCOV_PROVISIONAL_V1`). Mezclar
@@ -690,11 +697,12 @@ Qué cubre:
   recorte, paso a dB, PNG color/gris, caja fuera de escena, RVI y cambio con un
   par sintético que tiene un parche de pérdida, serie/CUSUM de tres fechas,
   GeoTIFF con EPSG, agua y cicatriz de incendio.
+- `test_optico.py` — NDVI, máscara SCL, compuesto mediano y clasificación rule-based.
 - `test_recetas_ecmwf.py`, `test_goes_rgb.py`, `test_goes_ultimos.py`,
   `test_paraguay_ultimos.py`, `test_descargadores_gibs.py` — recetas, bandas,
   encuadre y descargadores.
 
-Resultado esperado al día de hoy: **308 tests, OK**. Si ves `skipped`, falta
+Resultado esperado al día de hoy: **313 tests, OK**. Si ves `skipped`, falta
 alguna dependencia de `requirements-dev.txt`; el mensaje del skip dice cuál.
 
 ## Límites conocidos
