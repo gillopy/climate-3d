@@ -164,10 +164,14 @@ def _norm(db: np.ndarray, vmin: float, vmax: float) -> np.ndarray:
 
 
 def _dimensiones(ancho: int, alto: int, px: int) -> tuple[int, int]:
-    px = max(800, min(int(px), 4096))
+    """Tamano de salida: el pedido, pero nunca mayor que el recorte nativo."""
+    objetivo = max(1, min(int(px), 4096))
+    ancho = max(1, int(ancho))
+    alto = max(1, int(alto))
+    lado = min(objetivo, max(ancho, alto))
     if ancho >= alto:
-        return px, max(1, round(px * alto / ancho))
-    return max(1, round(px * ancho / alto)), px
+        return lado, max(1, round(lado * alto / ancho))
+    return max(1, round(lado * ancho / alto)), lado
 
 
 def _fuente(tamano: int) -> ImageFont.FreeTypeFont:
@@ -266,18 +270,17 @@ def _dibujar_borde(
 def _pie(
     img: Image.Image,
     lineas: list[str],
-    px: int,
 ) -> Image.Image:
     ancho, alto = img.size
-    alto_pie = max(58, int(px * 0.05))
+    alto_pie = max(44, int(ancho * 0.05))
     lienzo = Image.new("RGB", (ancho, alto + alto_pie), FONDO)
     lienzo.paste(img, (0, 0))
     dibujo = ImageDraw.Draw(lienzo)
     dibujo.line([(0, alto), (ancho, alto)], fill=(42, 44, 49), width=1)
-    fuente1 = _fuente(max(14, int(px * 0.012)))
-    fuente2 = _fuente(max(11, int(px * 0.009)))
-    margen = max(14, int(px * 0.014))
-    y = alto + max(10, int(px * 0.009))
+    fuente1 = _fuente(max(12, int(ancho * 0.012)))
+    fuente2 = _fuente(max(10, int(ancho * 0.009)))
+    margen = max(10, int(ancho * 0.014))
+    y = alto + max(8, int(ancho * 0.009))
     for indice, texto in enumerate(lineas[:2]):
         dibujo.text(
             (margen, y),
@@ -285,7 +288,7 @@ def _pie(
             font=fuente1 if indice == 0 else fuente2,
             fill=TINTA if indice == 0 else TENUE,
         )
-        y += max(18, int(px * 0.016))
+        y += max(16, int(ancho * 0.016))
     return lienzo
 
 
@@ -418,7 +421,7 @@ def main() -> int:
         )
         if fecha:
             pie2 += f" · {fecha}"
-        img = _pie(img, [pie1, pie2], px)
+        img = _pie(img, [pie1, pie2])
         img.save(salida, "PNG", optimize=True)
 
     meta = {

@@ -191,7 +191,11 @@ def main() -> int:
         mejor_caida = np.where(mejores, caida, mejor_caida)
         mejor_corte = np.where(mejores, corte, mejor_corte)
 
-    pre_bosque = np.isfinite(hv_pila[0]) & (nisar.a_db(np.nanmean(hv_pila[:1], axis=0)) > hv_min)
+    # La mascara de bosque sale del promedio en potencia de las dos primeras
+    # fechas: una sola escena tiene demasiado speckle para decidir donde hay
+    # dosel.
+    base = np.nanmean(hv_pila[: min(2, n)], axis=0)
+    pre_bosque = np.isfinite(base) & (nisar.a_db(base) > hv_min)
     cambio = (
         nisar.mayoria3(
             valido & pre_bosque & np.isfinite(mejor_caida) & (mejor_caida < -umbral)

@@ -365,13 +365,15 @@ def main() -> int:
         if par.sum() > 10:
             correlacion = float(np.corrcoef(hv_db[par], ndvi_comp[par])[0, 1])
 
-        clases = optico.clasificar(
-            hv_db,
-            ndvi_comp,
-            ndvi_bosque=float(args.ndvi_bosque),
-            ndvi_cultivo=float(args.ndvi_cultivo),
-            hv_bosque=float(args.hv_bosque),
-            hv_agua=float(args.hv_agua),
+        clases = optico.suavizar_clases(
+            optico.clasificar(
+                hv_db,
+                ndvi_comp,
+                ndvi_bosque=float(args.ndvi_bosque),
+                ndvi_cultivo=float(args.ndvi_cultivo),
+                hv_bosque=float(args.hv_bosque),
+                hv_agua=float(args.hv_agua),
+            )
         )
         conteo = np.bincount(clases.ravel(), minlength=5)
         areas = {

@@ -1,0 +1,64 @@
+"""Kit de render NISAR: tamano de salida y barra de escala.
+
+El visor sirve el PNG como overlay; agrandarlo por encima del recorte nativo no
+agrega detalle y desalinea la barra de escala respecto de los metros por pixel
+del recorte. Estas pruebas corren con el Python del repo (el de los scripts),
+igual que ``test_nisar_render``, porque ``comun.nisar`` necesita h5py.
+"""
+from __future__ import annotations
+
+import subprocess
+import sys
+import unittest
+from pathlib import Path
+
+RAIZ = Path(__file__).resolve().parents[2]
+if str(RAIZ) not in sys.path:
+    sys.path.insert(0, str(RAIZ))
+
+try:
+    from app.api.recipes import python_repo
+except ImportError:  # pragma: no cover
+    python_repo = None
+
+CODIGO = r'''
+import tempfile
+from pathlib import Path
+
+import numpy as np
+
+from comun import nisar
+
+# 1213x1755 es el recorte real de una caja de 24x35 km a 20 m.
+assert nisar.dimensiones(1213, 1755, 2400) == (1213, 1755), "agrando un recorte chico"
+assert nisar.dimensiones(4000, 3000, 1000) == (1000, 750), "no redujo al pedido"
+assert nisar.dimensiones(1, 1000, 2400) == (1, 1000), "rompio el aspecto"
+assert nisar.dimensiones(1, 1, 2400) == (1, 1), "devolvio cero"
+
+with tempfile.TemporaryDirectory() as carpeta:
+    salida = Path(carpeta) / "caja.png"
+    rgb = np.full((100, 80, 3), 128, dtype=np.uint8)
+    ancho, alto = nisar.guardar(rgb, salida, ["uno", "dos", "tres"], 20.0, 2400)
+    assert ancho == 80, f"ancho {ancho}"
+    assert 100 <= alto < 200, f"alto {alto}"
+    assert salida.is_file(), "no escribio el PNG"
+'''
+
+
+@unittest.skipIf(
+    python_repo is None or not python_repo().is_file(),
+    "hace falta el Python del repo para el kit de render",
+)
+class KitNisar(unittest.TestCase):
+    def test_dimensiones_y_guardar_no_agrandan(self):
+        corrida = subprocess.run(
+            [str(python_repo()), "-c", CODIGO],
+            capture_output=True,
+            text=True,
+            cwd=str(RAIZ),
+        )
+        self.assertEqual(corrida.returncode, 0, corrida.stderr + corrida.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()

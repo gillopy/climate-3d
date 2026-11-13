@@ -55,6 +55,38 @@ class OpticoPuro(unittest.TestCase):
 
         np.testing.assert_array_equal(clases, [[1, 2, 3, 4, 0]])
 
+    def test_suavizado_de_clases_quita_un_pixel_aislado(self):
+        clases = np.array(
+            [
+                [2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2],
+                [2, 2, 3, 2, 2],
+                [2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2],
+            ],
+            dtype=np.uint8,
+        )
+
+        salida = optico.suavizar_clases(clases)
+
+        np.testing.assert_array_equal(salida, np.full((5, 5), 2, dtype=np.uint8))
+
+    def test_suavizado_conserva_un_bloque_y_el_fondo(self):
+        clases = np.array(
+            [
+                [0, 0, 0, 0, 0],
+                [0, 2, 2, 2, 0],
+                [0, 2, 2, 2, 0],
+                [0, 2, 2, 2, 0],
+                [0, 0, 0, 0, 0],
+            ],
+            dtype=np.uint8,
+        )
+
+        salida = optico.suavizar_clases(clases)
+
+        np.testing.assert_array_equal(salida, clases)
+
 
 if __name__ == "__main__":
     unittest.main()

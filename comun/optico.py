@@ -84,3 +84,36 @@ def clasificar(
     clases[cultivo] = 3
     clases[suelo] = 4
     return clases
+
+
+def suavizar_clases(clases: np.ndarray, minimo: int = 5) -> np.ndarray:
+    """Filtro de moda 3x3 sobre el mapa de clases.
+
+    Un pixel cuya clase aparece menos de ``minimo`` veces en su entorno 3x3 pasa
+    a la clase dominante. Quita el sal y pimienta de los umbrales por pixel sin
+    borrar parches grandes. El fondo (clase 0) no se toca.
+    """
+    mapa = np.asarray(clases)
+    if mapa.size == 0:
+        return mapa.copy()
+    alto, ancho = mapa.shape
+    relleno = np.pad(mapa, 1, mode="edge")
+    conteo: dict[int, np.ndarray] = {}
+    for clase in (1, 2, 3, 4):
+        mascara = (relleno == clase).astype(np.uint8)
+        suma = np.zeros((alto, ancho), dtype=np.uint8)
+        for dy in range(3):
+            for dx in range(3):
+                suma += mascara[dy : dy + alto, dx : dx + ancho]
+        conteo[clase] = suma
+    propio = np.zeros((alto, ancho), dtype=np.uint8)
+    dominante = np.zeros((alto, ancho), dtype=np.uint8)
+    dominante_n = np.zeros((alto, ancho), dtype=np.uint8)
+    for clase, suma in conteo.items():
+        propio = np.where(mapa == clase, suma, propio)
+        gana = suma > dominante_n
+        dominante = np.where(gana, clase, dominante).astype(np.uint8)
+        dominante_n = np.where(gana, suma, dominante_n)
+    cambiar = (mapa > 0) & (mapa < 5) & (propio < minimo) & (dominante_n >= minimo)
+    salida = np.where(cambiar, dominante, mapa)
+    return salida.astype(mapa.dtype)

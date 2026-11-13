@@ -326,10 +326,18 @@ def paleta(nombre: str, valores: np.ndarray) -> np.ndarray:
 
 
 def dimensiones(ancho: int, alto: int, px: int) -> tuple[int, int]:
-    px = max(800, min(int(px), 4096))
+    """Tamano de salida: el pedido, pero nunca mayor que el recorte nativo.
+
+    Agrandar por encima del nativo no agrega detalle y desalinea la barra de
+    escala; el visor ya escala el PNG al mapa.
+    """
+    objetivo = max(1, min(int(px), 4096))
+    ancho = max(1, int(ancho))
+    alto = max(1, int(alto))
+    lado = min(objetivo, max(ancho, alto))
     if ancho >= alto:
-        return px, max(1, round(px * alto / ancho))
-    return max(1, round(px * ancho / alto)), px
+        return lado, max(1, round(lado * alto / ancho))
+    return max(1, round(lado * ancho / alto)), lado
 
 
 def _fuente(tamano: int) -> ImageFont.FreeTypeFont:
@@ -415,17 +423,17 @@ def _dibujar_borde(
                 dibujo.line(puntos, fill=(255, 255, 255), width=grosor, joint="curve")
 
 
-def _pie(img: Image.Image, lineas: list[str], px: int) -> Image.Image:
+def _pie(img: Image.Image, lineas: list[str]) -> Image.Image:
     ancho, alto = img.size
-    alto_pie = max(78, int(px * 0.068)) if len(lineas) >= 3 else max(58, int(px * 0.05))
+    alto_pie = max(56, int(ancho * 0.068)) if len(lineas) >= 3 else max(44, int(ancho * 0.05))
     lienzo = Image.new("RGB", (ancho, alto + alto_pie), FONDO)
     lienzo.paste(img, (0, 0))
     dibujo = ImageDraw.Draw(lienzo)
     dibujo.line([(0, alto), (ancho, alto)], fill=(42, 44, 49), width=1)
-    fuente1 = _fuente(max(14, int(px * 0.012)))
-    fuente2 = _fuente(max(11, int(px * 0.009)))
-    margen = max(14, int(px * 0.014))
-    y = alto + max(10, int(px * 0.009))
+    fuente1 = _fuente(max(12, int(ancho * 0.012)))
+    fuente2 = _fuente(max(10, int(ancho * 0.009)))
+    margen = max(10, int(ancho * 0.014))
+    y = alto + max(8, int(ancho * 0.009))
     for indice, texto in enumerate(lineas[:3]):
         dibujo.text(
             (margen, y),
@@ -433,7 +441,7 @@ def _pie(img: Image.Image, lineas: list[str], px: int) -> Image.Image:
             font=fuente1 if indice == 0 else fuente2,
             fill=TINTA if indice == 0 else TENUE,
         )
-        y += max(18, int(px * 0.016))
+        y += max(16, int(ancho * 0.016))
     return lienzo
 
 
@@ -492,15 +500,18 @@ def guardar(
     ancho_salida, alto_salida = dimensiones(ancho, alto, px)
     img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB")
     img = img.resize((ancho_salida, alto_salida), Image.LANCZOS)
+    # La escala se dibuja sobre el PNG final: si hubo resize, los metros por
+    # pixel de salida no son los del recorte nativo.
+    mpp_salida = metros_por_px * ancho / max(1, ancho_salida)
     if metros_por_px > 0:
-        _dibujar_escala(img, metros_por_px)
+        _dibujar_escala(img, mpp_salida)
     if geojson and epsg is not None and None not in (x0, x1, y0, y1):
         _dibujar_borde(img, Path(geojson), epsg, float(x0), float(x1), float(y0), float(y1))
     if focos and epsg is not None and None not in (x0, x1, y0, y1):
         _dibujar_focos(
             img, focos, epsg, float(x0), float(x1), float(y0), float(y1)
         )
-    img = _pie(img, lineas, px)
+    img = _pie(img, lineas)
     img.save(salida, "PNG", optimize=True)
     return img.size
 
