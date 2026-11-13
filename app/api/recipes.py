@@ -1952,21 +1952,58 @@ def _goes_sandwich(params: dict[str, Any], work: Path) -> Plan:
     return Plan(pasos=[*descargas, render_step], descarga=descargas[0])
 
 
-# --- NISAR (visor): descarga del .h5 + recorte de la caja ----------------
-def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
-    """Plan del visor: baja la escena a DATOS/nisar y renderiza la caja.
+# --- NISAR (visor): descarga del .h5 + producto de analisis --------------
+def _nisar_nombre(valor: str, nombre: str) -> str:
+    if not valor or any(c in valor for c in '\\/:*?"<>|'):
+        raise ValueError(f"Parametro NISAR invalido: {nombre}")
+    return valor
 
-    La descarga es reanudable y saltea el archivo si ya esta: cambiar la
-    polarizacion, el modo o el tamano no vuelve a bajar 1.9 GB.
+
+def _nisar_coleccion(url: str, valor: str) -> str:
+    """La URL de ASF manda: `.../NISAR/<coleccion>/<granulo>/...`.
+
+    Los gránulos provisionales viven en `NISAR_L2_GCOV_PROVISIONAL_V1` y el
+    `collectionName` del JSON puede venir vacío. Deducirla de la URL evita un
+    404 al bajar una fecha anterior.
     """
-    granulo = str(params.get("granulo") or "").strip()
-    url = str(params.get("url") or "").strip()
-    coleccion = str(params.get("coleccion") or "NISAR_L2_GCOV_V1").strip()
-    bbox = str(params.get("bbox") or "").strip()
+    coleccion = (valor or "").strip()
+    if not coleccion and "/NISAR/" in url:
+        coleccion = url.split("/NISAR/", 1)[1].split("/", 1)[0]
+    return _nisar_nombre(coleccion or "NISAR_L2_GCOV_V1", "coleccion")
 
-    for valor, nombre in ((granulo, "granulo"), (coleccion, "coleccion")):
-        if not valor or any(c in valor for c in '\\/:*?"<>|'):
-            raise ValueError(f"Parametro NISAR invalido: {nombre}")
+
+def _nisar_descarga(
+    granulo: str, url: str, coleccion: str, raiz_datos: Path, etiqueta: str
+) -> Step:
+    return Step(
+        kind="download",
+        label=f"descargando {etiqueta} {granulo[-24:]}",
+        script="descargar/nisar.py",
+        args=[
+            "--url", url,
+            "--granulo", granulo,
+            "--destino", str(raiz_datos / "nisar"),
+            "--coleccion", coleccion,
+        ],
+        expected=40,
+    )
+
+
+def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
+    """Plan del visor: descarga la/s escena/s y corre el producto elegido.
+
+    Productos: ``recorte`` (poster actual), ``rvi`` y ``cambio``. La descarga es
+    reanudable y saltea el archivo si ya esta: cambiar de producto no vuelve a
+    bajar 1.9 GB por escena.
+    """
+    producto = str(params.get("producto") or "recorte").strip().lower()
+    if producto not in ("recorte", "rvi", "cambio"):
+        raise ValueError(f"Producto NISAR desconocido: {producto}")
+
+    granulo = _nisar_nombre(str(params.get("granulo") or "").strip(), "granulo")
+    url = str(params.get("url") or "").strip()
+    coleccion = _nisar_coleccion(url, str(params.get("coleccion") or ""))
+    bbox = str(params.get("bbox") or "").strip()
     if not url.startswith("https://"):
         raise ValueError("La escena NISAR no trae una URL https de descarga.")
     try:
@@ -1981,46 +2018,109 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
         sys.path.insert(0, str(comun))
     from rutas import DATOS  # import local: igual que los otros helpers
 
-    pol = str(params.get("pol") or "auto").lower()
-    if pol not in ("auto", "hh", "hv", "vv", "vh"):
-        pol = "auto"
-    modo = str(params.get("modo") or "gris").lower()
-    if modo not in ("gris", "color"):
-        modo = "gris"
     try:
         px = max(800, min(int(params.get("px", 2400)), 4096))
     except (TypeError, ValueError):
         px = 2400
 
-    h5 = DATOS / "nisar" / coleccion / f"{granulo}.h5"
-    descarga = Step(
-        kind="download",
-        label=f"descargando {granulo[-24:]}",
-        script="descargar/nisar.py",
-        args=[
-            "--url", url,
-            "--granulo", granulo,
-            "--destino", str(DATOS / "nisar"),
-            "--coleccion", coleccion,
-        ],
-        expected=40,
-    )
-    render = Step(
-        kind="render",
-        label=f"renderizando la caja a {px} px",
-        script="prototipos/poster_nisar.py",
-        args=[
-            "--h5", str(h5),
-            "--bbox", f"{oeste:g},{sur:g},{este:g},{norte:g}",
-            "--pol", pol,
-            "--modo", modo,
-            "--px", str(px),
-            "--out", str(work / f"nisar_{modo}_{pol}_{px}.png"),
-            "--geojson", str(RAIZ_REPO / "datos" / "paraguay_gadm.json"),
-        ],
-        expected=6,
-    )
-    return Plan(pasos=[descarga, render])
+    raiz_nisar = DATOS / "nisar"
+    h5 = raiz_nisar / coleccion / f"{granulo}.h5"
+    pasos: list[Step] = [
+        _nisar_descarga(granulo, url, coleccion, DATOS, "escena"),
+    ]
+    geojson = str(RAIZ_REPO / "datos" / "paraguay_gadm.json")
+    bbox_final = f"{oeste:g},{sur:g},{este:g},{norte:g}"
+
+    if producto == "rvi":
+        render = Step(
+            kind="render",
+            label=f"calculando RVI a {px} px",
+            script="prototipos/nisar_rvi.py",
+            args=[
+                "--h5", str(h5),
+                "--bbox", bbox_final,
+                "--px", str(px),
+                "--out", str(work / f"nisar_rvi_{px}.png"),
+                "--geojson", geojson,
+            ],
+            expected=5,
+        )
+    elif producto == "cambio":
+        antes_granulo = _nisar_nombre(
+            str(params.get("antes_granulo") or "").strip(), "antes_granulo"
+        )
+        antes_url = str(params.get("antes_url") or "").strip()
+        if not antes_url.startswith("https://"):
+            raise ValueError("La escena anterior no trae una URL https de descarga.")
+        antes_coleccion = _nisar_coleccion(
+            antes_url, str(params.get("antes_coleccion") or "")
+        )
+        if antes_granulo == granulo:
+            raise ValueError("La fecha anterior no puede ser la misma escena.")
+        if antes_coleccion != coleccion:
+            raise ValueError(
+                "Para comparar fechas, las dos escenas tienen que ser de la misma "
+                "coleccion. No mezcles PROVISIONAL con VALIDATED: el cambio puede "
+                "venir del procesamiento, no del terreno."
+            )
+        h5_antes = raiz_nisar / antes_coleccion / f"{antes_granulo}.h5"
+        pasos.append(
+            _nisar_descarga(antes_granulo, antes_url, antes_coleccion, DATOS, "anterior")
+        )
+
+        modo_cambio = str(params.get("modo_cambio") or "mascara").lower()
+        if modo_cambio not in ("delta", "mascara", "rgb"):
+            modo_cambio = "mascara"
+        try:
+            umbral = max(0.5, min(abs(float(params.get("umbral", 3.0))), 20.0))
+        except (TypeError, ValueError):
+            umbral = 3.0
+        try:
+            hv_min = max(-30.0, min(float(params.get("hv_min", -15.5)), 0.0))
+        except (TypeError, ValueError):
+            hv_min = -15.5
+        render = Step(
+            kind="render",
+            label=f"comparando fechas a {px} px",
+            script="prototipos/nisar_cambio.py",
+            args=[
+                "--antes", str(h5_antes),
+                "--despues", str(h5),
+                "--bbox", bbox_final,
+                "--px", str(px),
+                "--modo", modo_cambio,
+                "--umbral", f"{umbral:g}",
+                "--hv-min", f"{hv_min:g}",
+                "--out", str(work / f"nisar_cambio_{modo_cambio}_{px}.png"),
+                "--geojson", geojson,
+            ],
+            expected=8,
+        )
+    else:
+        pol = str(params.get("pol") or "auto").lower()
+        if pol not in ("auto", "hh", "hv", "vv", "vh"):
+            pol = "auto"
+        modo = str(params.get("modo") or "gris").lower()
+        if modo not in ("gris", "color"):
+            modo = "gris"
+        render = Step(
+            kind="render",
+            label=f"renderizando la caja a {px} px",
+            script="prototipos/poster_nisar.py",
+            args=[
+                "--h5", str(h5),
+                "--bbox", bbox_final,
+                "--pol", pol,
+                "--modo", modo,
+                "--px", str(px),
+                "--out", str(work / f"nisar_{modo}_{pol}_{px}.png"),
+                "--geojson", geojson,
+            ],
+            expected=6,
+        )
+
+    pasos.append(render)
+    return Plan(pasos=pasos)
 
 
 _CONSTRUCTORES = {

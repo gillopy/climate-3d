@@ -361,6 +361,12 @@ def _granulo(feature: dict[str, Any]) -> Granule:
         pol = [pol]
 
     granulo_id = str(props.get("fileID") or props.get("sceneName") or "")
+    coleccion = str(props.get("collectionName") or "")
+    if not coleccion:
+        # El JSON de ASF puede dejar collectionName vacio; la URL manda.
+        url = str(props.get("url") or "")
+        if "/NISAR/" in url:
+            coleccion = url.split("/NISAR/", 1)[1].split("/", 1)[0]
     return Granule(
         id=granulo_id,
         level=str(props.get("processingLevel") or ""),
@@ -370,7 +376,7 @@ def _granulo(feature: dict[str, Any]) -> Granule:
         path=_entero(props.get("pathNumber")),
         frame=_entero(props.get("frameNumber")),
         polarization=[str(valor) for valor in pol],
-        collection=str(props.get("collectionName") or ""),
+        collection=coleccion,
         size_mb=_tamano_mb(props),
         footprint=huella,
         thumbnail=_proxy(miniatura) if miniatura else None,

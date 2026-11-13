@@ -586,6 +586,26 @@ Las credenciales salen de `EARTHDATA_USER`/`EARTHDATA_PASSWORD` (entorno o
 credenciales el visor avisa y el job falla con un mensaje claro. La descarga se
 guarda en la raíz de datos del pipeline (`CLIMATE3D_DATOS`).
 
+### Productos de análisis (Fase 3)
+
+El job `nisar_render` despacha por `producto`:
+
+- **Recorte** (`poster_nisar.py`): el PNG de la caja en dB, gris o color HH/HV.
+- **RVI** (`nisar_rvi.py`): índice de vegetación radar
+  `sqrt(HH/(HH+HV)) * 4·HV/(HH+HV)`, calculado en potencia lineal, con media,
+  percentiles y hectáreas.
+- **Cambio de cobertura** (`nisar_cambio.py`): ΔHV entre dos fechas del mismo
+  track/frame. Aplica una mayoría 3×3, marca pérdida/ganancia y reporta
+  hectáreas, porcentaje del área y del bosque.
+
+El motor común vive en `comun/nisar.py` (abrir escena, recortar, máscara, dB,
+RVI, normalizar, PNG con escala/pie). Un producto nuevo es un script chico.
+
+**Candado de colección:** las dos fechas de un cambio tienen que ser de la misma
+colección (`NISAR_L2_GCOV_V1` o `NISAR_L2_GCOV_PROVISIONAL_V1`). Mezclar
+PROVISIONAL con VALIDATED puede inventar cambios por el procesamiento. La UI
+filtra las fechas por track/frame/colección y el backend rechaza la mezcla.
+
 ## Caché de renders
 
 La carpeta de trabajo es `app/var/media/cache/<firma>/`, donde la firma es un
@@ -652,12 +672,13 @@ Qué cubre:
 - `test_nisar.py` — visor NISAR con ASF mockeado: búsqueda, caja válida, proxy
   restringido a ASF, caché del browse y GeoJSON de Paraguay.
 - `test_nisar_render.py` — render de un GCOV sintético con la estructura real:
-  recorte, paso a dB, PNG color/gris y caja fuera de la escena.
+  recorte, paso a dB, PNG color/gris, caja fuera de escena, RVI y cambio con un
+  par sintético que tiene un parche de pérdida.
 - `test_recetas_ecmwf.py`, `test_goes_rgb.py`, `test_goes_ultimos.py`,
   `test_paraguay_ultimos.py`, `test_descargadores_gibs.py` — recetas, bandas,
   encuadre y descargadores.
 
-Resultado esperado al día de hoy: **294 tests, OK**. Si ves `skipped`, falta
+Resultado esperado al día de hoy: **301 tests, OK**. Si ves `skipped`, falta
 alguna dependencia de `requirements-dev.txt`; el mensaje del skip dice cuál.
 
 ## Límites conocidos

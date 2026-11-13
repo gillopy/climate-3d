@@ -1200,11 +1200,11 @@ PRODUCTS.sort(key=lambda producto: _POSICION.get(producto.id, len(_ORDEN)))
 NISAR_PRODUCTS = [
     Product(
         id="nisar_render",
-        name="NISAR - recorte de escena",
+        name="NISAR - analisis de escena",
         group="radar",
-        stage="descargar/nisar.py + prototipos/poster_nisar.py",
-        summary="Descarga la escena .h5 desde ASF y renderiza la caja elegida "
-        "en alta calidad. Requiere Earthdata Login.",
+        stage="descargar/nisar.py + prototipos/nisar_{rvi,cambio}.py",
+        summary="Descarga la escena .h5 desde ASF y corre un producto: recorte, "
+        "RVI o cambio de cobertura. Requiere Earthdata Login.",
         params=[],
     )
 ]

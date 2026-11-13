@@ -8,6 +8,7 @@ mano contra la API publica.
 """
 from __future__ import annotations
 
+import copy
 import json
 import sys
 import tempfile
@@ -245,6 +246,130 @@ class VisorNisar(unittest.TestCase):
                     "pol": "auto",
                     "modo": "gris",
                     "px": 2400,
+                },
+                Path("."),
+            )
+
+    def test_receta_rvi_descarga_y_calcula_el_indice(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "rvi",
+                    "granulo": GRANULO,
+                    "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 2400,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_rvi.py"],
+        )
+        self.assertEqual(plan.pasos[1].kind, "render")
+
+    def test_receta_cambio_descarga_dos_fechas_y_compara(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "cambio",
+                    "granulo": GRANULO,
+                    "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "antes_granulo": "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_20261017T214920_20261017T214955_P05023_N_F_J_001",
+                    "antes_url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/ANTES/ANTES.h5",
+                    "antes_coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 2400,
+                    "modo_cambio": "mascara",
+                    "umbral": 3,
+                    "hv_min": -15.5,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "descargar/nisar.py", "prototipos/nisar_cambio.py"],
+        )
+        self.assertIn("--antes", plan.pasos[2].args)
+        self.assertIn("--despues", plan.pasos[2].args)
+
+    def test_receta_deriva_la_coleccion_provisional_de_la_url(self):
+        url = (
+            "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+            "NISAR_L2_GCOV_PROVISIONAL_V1/GRAN/GRAN.h5"
+        )
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "rvi",
+                    "granulo": "GRAN",
+                    "url": url,
+                    "coleccion": "",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1200,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(plan.pasos[0].args[-1], "NISAR_L2_GCOV_PROVISIONAL_V1")
+
+    def test_receta_cambio_rechaza_la_misma_fecha(self):
+        with self.assertRaises(ValueError):
+            planear(
+                "nisar_render",
+                {
+                    "producto": "cambio",
+                    "granulo": GRANULO,
+                    "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "antes_granulo": GRANULO,
+                    "antes_url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/ANTES/ANTES.h5",
+                    "antes_coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 2400,
+                },
+                Path("."),
+            )
+
+    def test_granulo_deriva_la_coleccion_desde_la_url(self):
+        copia = copy.deepcopy(FEATURE)
+        copia["properties"]["collectionName"] = ""
+        copia["properties"]["url"] = (
+            "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+            "NISAR_L2_GCOV_PROVISIONAL_V1/GRAN/GRAN.h5"
+        )
+
+        granulo = nisar._granulo(copia)
+
+        self.assertEqual(granulo.collection, "NISAR_L2_GCOV_PROVISIONAL_V1")
+
+    def test_receta_cambio_rechaza_mezclar_colecciones(self):
+        with self.assertRaises(ValueError):
+            planear(
+                "nisar_render",
+                {
+                    "producto": "cambio",
+                    "granulo": GRANULO,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "antes_granulo": "ANTES",
+                    "antes_url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        "NISAR_L2_GCOV_PROVISIONAL_V1/ANTES/ANTES.h5"
+                    ),
+                    "antes_coleccion": "NISAR_L2_GCOV_PROVISIONAL_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1200,
                 },
                 Path("."),
             )

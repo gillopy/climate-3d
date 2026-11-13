@@ -5,7 +5,7 @@ import type { FeatureCollection } from "geojson";
 import { cancelJob, createJob, subscribeJob } from "../api";
 import { getNisarCatalog, getParaguay, searchNisar } from "../nisar";
 import type { Caja, NisarCatalog, NisarGranule, NisarSearch } from "../nisar";
-import type { Job } from "../types";
+import type { Job, Params } from "../types";
 
 const CENTRO_PARAGUAY: L.LatLngTuple = [-23.4, -58.4];
 const COLOR = "#5e6ad2";
@@ -59,6 +59,11 @@ export function NisarView() {
   const [modo, setModo] = useState("gris");
   const [px, setPx] = useState("2400");
   const [trabajo, setTrabajo] = useState<Job | null>(null);
+  const [producto, setProducto] = useState("recorte");
+  const [antesId, setAntesId] = useState("");
+  const [modoCambio, setModoCambio] = useState("mascara");
+  const [umbral, setUmbral] = useState("3");
+  const [hvMin, setHvMin] = useState("-15.5");
 
   const elegirGranulo = useCallback((granulo: NisarGranule) => {
     setSeleccion(granulo);
@@ -305,6 +310,43 @@ export function NisarView() {
     };
   }, [trabajoId]);
 
+  // Fechas del mismo track/frame para comparar.
+  const candidatos = (resultado?.granules ?? [])
+    .filter(
+      (granulo) =>
+        granulo.id !== seleccion?.id &&
+        granulo.path !== null &&
+        granulo.path === seleccion?.path &&
+        granulo.frame === seleccion?.frame &&
+        granulo.collection === seleccion?.collection,
+    )
+    .sort((a, b) => b.start.localeCompare(a.start));
+  const antes = candidatos.find((granulo) => granulo.id === antesId) ?? null;
+
+  useEffect(() => {
+    if (!seleccion) {
+      setAntesId("");
+      return;
+    }
+    const lista = (resultado?.granules ?? [])
+      .filter(
+        (granulo) =>
+          granulo.id !== seleccion.id &&
+          granulo.path !== null &&
+          granulo.path === seleccion.path &&
+          granulo.frame === seleccion.frame &&
+          granulo.collection === seleccion.collection,
+      )
+      .sort((a, b) => b.start.localeCompare(a.start));
+    if (lista.length === 0) {
+      setAntesId("");
+      return;
+    }
+    if (lista.some((granulo) => granulo.id === antesId)) return;
+    const previas = lista.filter((granulo) => granulo.start < seleccion.start);
+    setAntesId((previas[0] ?? lista[0]).id);
+  }, [seleccion, resultado, antesId]);
+
   const enMarcha = trabajo?.status === "queued" || trabajo?.status === "running";
 
   async function renderizar() {
@@ -316,16 +358,31 @@ export function NisarView() {
         : pol;
     const modoFinal =
       modo === "color" && seleccion.polarization.length < 2 ? "gris" : modo;
+    const params: Params = {
+      producto,
+      granulo: seleccion.id,
+      url: seleccion.download,
+      coleccion: seleccion.collection,
+      bbox: `${caja.oeste},${caja.sur},${caja.este},${caja.norte}`,
+      px: Number(px),
+    };
+    if (producto === "recorte") {
+      params.pol = polFinal;
+      params.modo = modoFinal;
+    } else if (producto === "cambio") {
+      if (!antes) {
+        setError("Elegí una fecha anterior del mismo track/frame.");
+        return;
+      }
+      params.antes_granulo = antes.id;
+      params.antes_url = antes.download;
+      params.antes_coleccion = antes.collection;
+      params.modo_cambio = modoCambio;
+      params.umbral = Number(umbral);
+      params.hv_min = Number(hvMin);
+    }
     try {
-      const job = await createJob("nisar_render", {
-        granulo: seleccion.id,
-        url: seleccion.download,
-        coleccion: seleccion.collection,
-        bbox: `${caja.oeste},${caja.sur},${caja.este},${caja.norte}`,
-        pol: polFinal,
-        modo: modoFinal,
-        px: Number(px),
-      });
+      const job = await createJob("nisar_render", params);
       setTrabajo(job);
     } catch (exc) {
       setError(
@@ -352,6 +409,9 @@ export function NisarView() {
     setImagen(null);
     setDibujando(false);
     setError(null);
+    setTrabajo(null);
+    setProducto("recorte");
+    setAntesId("");
   }
 
   function alternarCaja() {
@@ -534,35 +594,61 @@ export function NisarView() {
             </div>
 
             <div className="nisar__render">
-              <h3>Render de la caja</h3>
+              <h3>Análisis de la caja</h3>
               <p className="nisar__sub">
-                Baja el .h5 a {catalogo?.data_root ?? "la carpeta de datos"} y recorta
-                esta caja en la grilla de la escena.
+                {producto === "cambio"
+                  ? "Compara HV entre esta fecha y otra del mismo track/frame. Pérdida = caída de HV."
+                  : producto === "rvi"
+                    ? "Índice de vegetación radar (HH/HV) de esta fecha."
+                    : `Baja el .h5 a ${catalogo?.data_root ?? "la carpeta de datos"} y recorta esta caja.`}
                 {seleccion.size_mb !== null
                   ? ` Pesa ~${seleccion.size_mb} MB.`
                   : ""}
               </p>
               <div className="nisar__render-ctrl">
-                <label>
-                  Polarización
-                  <select value={pol} onChange={(evento) => setPol(evento.target.value)}>
-                    <option value="auto">Auto</option>
-                    {seleccion.polarization.map((valor) => (
-                      <option key={valor} value={valor.toLowerCase()}>
-                        {valor}
-                      </option>
-                    ))}
+                <label className="nisar__ancho">
+                  Producto
+                  <select
+                    value={producto}
+                    onChange={(evento) => setProducto(evento.target.value)}
+                  >
+                    <option value="recorte">Recorte (dB / color)</option>
+                    <option value="rvi">RVI (vegetación)</option>
+                    <option value="cambio">Cambio de cobertura</option>
                   </select>
                 </label>
-                <label>
-                  Modo
-                  <select value={modo} onChange={(evento) => setModo(evento.target.value)}>
-                    <option value="gris">Gris (dB)</option>
-                    <option value="color" disabled={seleccion.polarization.length < 2}>
-                      Color HH/HV
-                    </option>
-                  </select>
-                </label>
+
+                {producto === "recorte" ? (
+                  <>
+                    <label>
+                      Polarización
+                      <select
+                        value={pol}
+                        onChange={(evento) => setPol(evento.target.value)}
+                      >
+                        <option value="auto">Auto</option>
+                        {seleccion.polarization.map((valor) => (
+                          <option key={valor} value={valor.toLowerCase()}>
+                            {valor}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Modo
+                      <select
+                        value={modo}
+                        onChange={(evento) => setModo(evento.target.value)}
+                      >
+                        <option value="gris">Gris (dB)</option>
+                        <option value="color" disabled={seleccion.polarization.length < 2}>
+                          Color HH/HV
+                        </option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+
                 <label>
                   Tamaño
                   <select value={px} onChange={(evento) => setPx(evento.target.value)}>
@@ -572,7 +658,69 @@ export function NisarView() {
                     <option value="4096">4096 px</option>
                   </select>
                 </label>
+
+                {producto === "cambio" ? (
+                  <>
+                    <label className="nisar__ancho">
+                      Fecha anterior
+                      <select
+                        value={antesId}
+                        onChange={(evento) => setAntesId(evento.target.value)}
+                        disabled={candidatos.length === 0}
+                      >
+                        {candidatos.length === 0 ? (
+                          <option value="">Sin otra fecha</option>
+                        ) : null}
+                        {candidatos.map((granulo) => (
+                          <option key={granulo.id} value={granulo.id}>
+                            {fechaCorta(granulo.start)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Modo
+                      <select
+                        value={modoCambio}
+                        onChange={(evento) => setModoCambio(evento.target.value)}
+                      >
+                        <option value="mascara">Máscara</option>
+                        <option value="delta">Delta</option>
+                        <option value="rgb">RGB</option>
+                      </select>
+                    </label>
+                    <label>
+                      Umbral (dB)
+                      <input
+                        type="number"
+                        min="0.5"
+                        max="20"
+                        step="0.5"
+                        value={umbral}
+                        onChange={(evento) => setUmbral(evento.target.value)}
+                      />
+                    </label>
+                    <label>
+                      HV mín. (dB)
+                      <input
+                        type="number"
+                        min="-30"
+                        max="0"
+                        step="0.5"
+                        value={hvMin}
+                        onChange={(evento) => setHvMin(evento.target.value)}
+                      />
+                    </label>
+                  </>
+                ) : null}
               </div>
+
+              {producto === "cambio" && candidatos.length === 0 ? (
+                <p className="nisar__aviso">
+                  No hay otra fecha del mismo track/frame en esta búsqueda. Ampliá la
+                  ventana de fechas.
+                </p>
+              ) : null}
 
               {!catalogo?.earthdata_configured ? (
                 <p className="nisar__aviso">
@@ -584,10 +732,19 @@ export function NisarView() {
                 <button
                   type="button"
                   className="btn btn--primary"
-                  disabled={!caja || enMarcha || !catalogo?.earthdata_configured}
+                  disabled={
+                    !caja ||
+                    enMarcha ||
+                    !catalogo?.earthdata_configured ||
+                    (producto === "cambio" && !antes)
+                  }
                   onClick={() => void renderizar()}
                 >
-                  Descargar y renderizar
+                  {producto === "cambio"
+                    ? "Comparar fechas"
+                    : producto === "rvi"
+                      ? "Calcular RVI"
+                      : "Descargar y renderizar"}
                 </button>
                 {enMarcha ? (
                   <button type="button" className="btn" onClick={() => void cancelarRender()}>
@@ -622,7 +779,7 @@ export function NisarView() {
                         key={arte.url}
                         className="nisar__imagen"
                         src={arte.url}
-                        alt="Recorte NISAR renderizado"
+                        alt="Resultado NISAR"
                       />
                     ))}
                 </div>

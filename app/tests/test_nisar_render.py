@@ -8,6 +8,7 @@ prueba el recorte, la conversion a dB y el PNG sin red ni credenciales.
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -36,6 +37,7 @@ import numpy as np
 from pyproj import Transformer
 
 salida = Path(sys.argv[1])
+modo = sys.argv[2] if len(sys.argv) > 2 else "base"
 epsg = 32721  # UTM 21S, Paraguay
 tr = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True)
 cx, cy = tr.transform(-58.4, -23.4)
@@ -48,6 +50,9 @@ yy, xx = np.meshgrid(np.arange(alto), np.arange(ancho), indexing="ij")
 hh = (10 ** (-1.2 + 0.35 * np.sin(xx / 37.0) * np.cos(yy / 29.0))).astype("float32")
 hv = (hh * (0.28 + 0.08 * np.cos(xx / 19.0))).astype("float32")
 hh[10:20, 30:50] = 0.0
+if modo == "perdida":
+    # Parche de perdida de dosel: HV cae ~7 dB en el centro de la caja.
+    hv[150:250, 250:350] *= 0.2
 
 salida.parent.mkdir(parents=True, exist_ok=True)
 with h5py.File(salida, "w") as f:
@@ -94,7 +99,7 @@ class RenderNisar(unittest.TestCase):
             h5 = tmp / "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_20261029T214921_20261029T214955_P05036_N_F_J_001.h5"
 
             creado = subprocess.run(
-                [str(python_repo()), str(fixture), str(h5)],
+                [str(python_repo()), str(fixture), str(h5), "base"],
                 capture_output=True,
                 text=True,
                 cwd=str(RAIZ),
@@ -153,6 +158,91 @@ class RenderNisar(unittest.TestCase):
             )
             self.assertNotEqual(fuera.returncode, 0)
             self.assertIn("no intersecta", fuera.stderr + fuera.stdout)
+
+    def test_rvi_y_cambio_con_par_sintetico(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            tmp = Path(carpeta)
+            fixture = tmp / "fixture.py"
+            fixture.write_text(FIXTURE, encoding="utf-8")
+            antes = tmp / (
+                "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+                "20261017T214920_20261017T214955_P05023_N_F_J_001.h5"
+            )
+            despues = tmp / (
+                "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_"
+                "20261029T214921_20261029T214955_P05036_N_F_J_001.h5"
+            )
+            for ruta, modo in ((antes, "base"), (despues, "perdida")):
+                creado = subprocess.run(
+                    [str(python_repo()), str(fixture), str(ruta), modo],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(creado.returncode, 0, creado.stderr)
+                bbox = creado.stdout.strip().splitlines()[-1]
+
+            rvi = tmp / "rvi.png"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_rvi.py",
+                    "--h5",
+                    str(antes),
+                    "--bbox",
+                    bbox,
+                    "--px",
+                    "900",
+                    "--out",
+                    str(rvi),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            self.assertTrue(rvi.is_file())
+            meta_rvi = json.loads(rvi.with_suffix(".json").read_text(encoding="utf-8"))
+            self.assertEqual(meta_rvi["producto"], "rvi")
+            self.assertGreater(meta_rvi["rvi_medio"], 0.0)
+            self.assertLessEqual(meta_rvi["rvi_medio"], 1.5)
+
+            cambio = tmp / "cambio.png"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_cambio.py",
+                    "--antes",
+                    str(antes),
+                    "--despues",
+                    str(despues),
+                    "--bbox",
+                    bbox,
+                    "--px",
+                    "900",
+                    "--modo",
+                    "mascara",
+                    "--umbral",
+                    "3",
+                    "--hv-min",
+                    "-30",
+                    "--out",
+                    str(cambio),
+                    "--geojson",
+                    "datos/paraguay_gadm.json",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            self.assertTrue(cambio.is_file())
+            meta = json.loads(cambio.with_suffix(".json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["producto"], "cambio")
+            self.assertGreater(meta["perdida_ha"], 0.0)
+            self.assertGreater(meta["area_ha"], meta["perdida_ha"])
+            with Image.open(cambio) as imagen:
+                self.assertEqual(imagen.mode, "RGB")
 
 
 if __name__ == "__main__":
