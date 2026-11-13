@@ -27,6 +27,7 @@ sys.path.insert(0, str(RAIZ / "comun"))
 sys.path.insert(0, str(RAIZ))
 
 import nisar  # noqa: E402
+import sentinel2  # noqa: E402
 from firms import color_foco  # noqa: E402
 
 
@@ -67,6 +68,16 @@ def main() -> int:
     ap.add_argument("--px", type=int, default=1400)
     ap.add_argument("--umbral", type=float, default=3.0, help="caída mínima de HV en dB")
     ap.add_argument("--hv-min", type=float, default=-15.5, help="HV mínimo para dosel")
+    ap.add_argument(
+        "--bosque",
+        default="hv",
+        choices=("ndvi", "hv"),
+        help="cómo decidir dónde había dosel antes del fuego",
+    )
+    ap.add_argument("--ndvi-bosque", type=float, default=0.55, help="NDVI mínimo de bosque")
+    ap.add_argument("--dias", type=int, default=15, help="ventana de Sentinel-2 en días")
+    ap.add_argument("--nubes", type=float, default=40.0, help="nubes máximas de Sentinel-2")
+    ap.add_argument("--max-items", type=int, default=8, help="ítems máximos de Sentinel-2")
     ap.add_argument("--firms", action="store_true", help="superponer focos FIRMS")
     ap.add_argument("--out", required=True)
     ap.add_argument("--geojson", default=None)
@@ -104,7 +115,52 @@ def main() -> int:
         db_despues = nisar.a_db(hv_despues)
         delta = db_despues - db_antes
         valido = np.isfinite(delta)
+        bosque_meta: dict = {"fuente": "hv", "ndvi_umbral": None, "items": []}
         pre_bosque = valido & (db_antes > hv_min)
+        if args.bosque == "ndvi":
+            ndvi = None
+            motivo = ""
+            if not sentinel2.DISPONIBLE:
+                motivo = "faltan rasterio/pystac-client"
+            else:
+                try:
+                    fecha = datetime.strptime(antes.fecha[:10], "%Y-%m-%d").date()
+                    transform, crs = sentinel2.grilla(xs, ys, rec_antes.epsg)
+                    items = sentinel2.buscar_items(
+                        (oeste, sur, este, norte),
+                        fecha,
+                        int(args.dias),
+                        float(args.nubes),
+                        int(args.max_items),
+                    )
+                    if items:
+                        ndvi, usados = sentinel2.componer_ndvi(
+                            items,
+                            (oeste, sur, este, norte),
+                            db_antes.shape,
+                            transform,
+                            crs,
+                            px,
+                        )
+                        bosque_meta["items"] = usados
+                    else:
+                        motivo = "sin Sentinel-2 en la ventana"
+                except Exception as exc:  # noqa: BLE001 - sin óptico se sigue con HV
+                    motivo = f"{type(exc).__name__}: {exc}"
+            if ndvi is not None and np.isfinite(ndvi).any():
+                pre_bosque = (
+                    valido & np.isfinite(ndvi) & (ndvi > float(args.ndvi_bosque))
+                )
+                bosque_meta["fuente"] = "ndvi"
+                bosque_meta["ndvi_umbral"] = float(args.ndvi_bosque)
+                print(
+                    f"bosque: NDVI > {args.ndvi_bosque:g} "
+                    f"({100.0 * pre_bosque.sum() / max(1, int(valido.sum())):.1f}% del área)"
+                )
+            else:
+                bosque_meta["fuente"] = f"hv (sin NDVI: {motivo or 'sin datos'})"
+                print(f"aviso: máscara de bosque por HV ({motivo or 'sin datos'})")
+
         cicatriz = (
             nisar.mayoria3(valido & pre_bosque & (delta < -umbral)) & valido
         )
@@ -195,6 +251,12 @@ def main() -> int:
             "area_ha": round(area_ha, 1),
             "cicatriz_ha": round(cicatriz_ha, 1),
             "cicatriz_pct": round(cicatriz_pct, 2),
+            "bosque": {
+                **bosque_meta,
+                "fraccion_area_pct": round(
+                    100.0 * float(pre_bosque.sum()) / max(1, valido_px), 2
+                ),
+            },
             "delta_medio_db": round(delta_medio, 2),
             "firms": bool(args.firms),
             "focos": len(focos),

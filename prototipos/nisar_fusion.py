@@ -20,7 +20,6 @@ entrenado: es una herramienta de exploración con umbrales visibles.
 from __future__ import annotations
 
 import argparse
-import math
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -31,95 +30,15 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
-import planetary_computer as pc  # noqa: E402
-import rasterio  # noqa: E402
-from affine import Affine  # noqa: E402
 from matplotlib.colors import ListedColormap  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
-from pystac_client import Client  # noqa: E402
-from rasterio.enums import Resampling  # noqa: E402
-from rasterio.warp import reproject, transform_bounds  # noqa: E402
-from rasterio.windows import from_bounds  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 
 import nisar  # noqa: E402
 import optico  # noqa: E402
-
-STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
-
-
-def _ventana(src, bbox):
-    b = transform_bounds("EPSG:4326", src.crs, *bbox)
-    return from_bounds(*b, transform=src.transform)
-
-
-def _ndvi_item(item, bbox, destino_forma, destino_transform, destino_crs, px):
-    """NDVI de un ítem, enmascarado por SCL y reproyectado a la grilla NISAR."""
-    item = pc.sign(item)
-    faltan = [clave for clave in ("B04", "B08", "SCL") if clave not in item.assets]
-    if faltan:
-        print(f"aviso: {item.id} sin assets {faltan}; se omite")
-        return None
-
-    with rasterio.open(item.assets["B04"].href) as src_b04:
-        win_b04 = _ventana(src_b04, bbox)
-        escala = max(
-            1,
-            int(
-                math.ceil(
-                    max(win_b04.width, win_b04.height) / max(1, int(px * 1.5))
-                )
-            ),
-        )
-        alto = max(1, int(round(win_b04.height / escala)))
-        ancho = max(1, int(round(win_b04.width / escala)))
-        rojo = src_b04.read(
-            1,
-            window=win_b04,
-            out_shape=(alto, ancho),
-            resampling=Resampling.bilinear,
-        ).astype(np.float32)
-        transform_origen = src_b04.window_transform(win_b04) * Affine.scale(
-            win_b04.width / ancho, win_b04.height / alto
-        )
-        crs_origen = src_b04.crs
-
-    with rasterio.open(item.assets["B08"].href) as src_b08:
-        win_b08 = _ventana(src_b08, bbox)
-        nir = src_b08.read(
-            1,
-            window=win_b08,
-            out_shape=(alto, ancho),
-            resampling=Resampling.bilinear,
-        ).astype(np.float32)
-
-    with rasterio.open(item.assets["SCL"].href) as src_scl:
-        win_scl = _ventana(src_scl, bbox)
-        scl = src_scl.read(
-            1,
-            window=win_scl,
-            out_shape=(alto, ancho),
-            resampling=Resampling.nearest,
-        )
-
-    nd = optico.ndvi(rojo, nir)
-    nd[~optico.mascara_scl(scl)] = np.nan
-
-    destino = np.full(destino_forma, np.nan, dtype=np.float32)
-    reproject(
-        source=nd,
-        destination=destino,
-        src_transform=transform_origen,
-        src_crs=crs_origen,
-        dst_transform=destino_transform,
-        dst_crs=destino_crs,
-        resampling=Resampling.bilinear,
-        src_nodata=np.nan,
-        dst_nodata=np.nan,
-    )
-    return destino, float(item.properties.get("eo:cloud_cover", 100.0))
+import sentinel2  # noqa: E402
 
 
 def _figura_fusion(salida, hv_db, hh_db, ndvi_comp, clases, areas, meta):
@@ -291,10 +210,7 @@ def main() -> int:
 
         mpp_x = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
         mpp_y = abs(float(ys[0] - ys[-1])) / max(1, len(ys) - 1)
-        destino_transform = Affine.translation(
-            float(xs[0]) - mpp_x / 2.0, float(ys[0]) + mpp_y / 2.0
-        ) * Affine.scale(mpp_x, -mpp_y)
-        destino_crs = f"EPSG:{rec_hv.epsg}"
+        destino_transform, destino_crs = sentinel2.grilla(xs, ys, rec_hv.epsg)
         try:
             fecha = datetime.strptime(escena.fecha[:10], "%Y-%m-%d").date()
         except (TypeError, ValueError):
@@ -304,58 +220,28 @@ def main() -> int:
             f"{mpp_x:.0f} m/px · EPSG:{rec_hv.epsg}"
         )
 
-        desde = fecha - timedelta(days=max(1, int(args.dias)))
-        hasta = fecha + timedelta(days=max(1, int(args.dias)))
-        print(f"buscando Sentinel-2 del {desde} al {hasta} (nubes < {args.nubes:g}%)")
-        catalogo = Client.open(STAC)
-        busqueda = catalogo.search(
-            collections=["sentinel-2-l2a"],
-            bbox=(oeste, sur, este, norte),
-            datetime=f"{desde}/{hasta}",
-            query={"eo:cloud_cover": {"lt": float(args.nubes)}},
+        items = sentinel2.buscar_items(
+            (oeste, sur, este, norte),
+            fecha,
+            int(args.dias),
+            float(args.nubes),
+            int(args.max_items),
         )
-        items = sorted(
-            list(busqueda.items()),
-            key=lambda item: float(item.properties.get("eo:cloud_cover", 100.0)),
-        )[: max(1, int(args.max_items))]
         if not items:
             raise SystemExit(
                 "No hay Sentinel-2 L2A en esa ventana con ese límite de nubes. "
                 "Ampliá --dias o subí --nubes."
             )
-        print(f"Sentinel-2: {len(items)} ítem(s)")
-
-        ndvis: list[np.ndarray] = []
-        usados: list[dict] = []
-        for item in items:
-            try:
-                nd, nubes = _ndvi_item(
-                    item,
-                    (oeste, sur, este, norte),
-                    (alto_nisar, ancho_nisar),
-                    destino_transform,
-                    destino_crs,
-                    px,
-                )
-            except Exception as exc:  # noqa: BLE001 - un ítem roto no mata la fusión
-                print(
-                    f"aviso: {item.id} fallo al leer/reproyectar "
-                    f"({type(exc).__name__}: {exc}); se omite"
-                )
-                continue
-            if nd is None:
-                continue
-            validos = int(np.isfinite(nd).sum())
-            if validos == 0:
-                print(f"  {item.id}: sin píxeles válidos tras SCL")
-                continue
-            ndvis.append(nd)
-            usados.append({"id": item.id, "cloud": round(nubes, 2)})
-            print(f"  {item.id}: {nubes:.1f}% nubes · {validos} px")
-
-        if not ndvis:
+        ndvi_comp, usados = sentinel2.componer_ndvi(
+            items,
+            (oeste, sur, este, norte),
+            (alto_nisar, ancho_nisar),
+            destino_transform,
+            destino_crs,
+            px,
+        )
+        if ndvi_comp is None:
             raise SystemExit("Ningún ítem dejó píxeles válidos después de enmascarar.")
-        ndvi_comp = optico.compuesto_mediana(ndvis)
         validos_ndvi = int(np.isfinite(ndvi_comp).sum())
         total = int(ndvi_comp.size)
         p10, p50, p90 = [float(np.nanpercentile(ndvi_comp, p)) for p in (10, 50, 90)]
@@ -393,8 +279,8 @@ def main() -> int:
             },
             "optico": {
                 "coleccion": "sentinel-2-l2a",
-                "desde": desde.isoformat(),
-                "hasta": hasta.isoformat(),
+                "desde": (fecha - timedelta(days=int(args.dias))).isoformat(),
+                "hasta": (fecha + timedelta(days=int(args.dias))).isoformat(),
                 "nubes_max": float(args.nubes),
                 "items": len(usados),
                 "detalle": usados,

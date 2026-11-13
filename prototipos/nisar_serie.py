@@ -22,6 +22,7 @@ import argparse
 import re
 import sys
 import warnings
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib
@@ -35,6 +36,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 
 import nisar  # noqa: E402
+import sentinel2  # noqa: E402
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -78,6 +80,16 @@ def main() -> int:
     ap.add_argument("--px", type=int, default=1200)
     ap.add_argument("--umbral", type=float, default=3.0)
     ap.add_argument("--hv-min", type=float, default=-15.5)
+    ap.add_argument(
+        "--bosque",
+        default="hv",
+        choices=("ndvi", "hv"),
+        help="como decidir donde habia dosel antes del cambio",
+    )
+    ap.add_argument("--ndvi-bosque", type=float, default=0.55, help="NDVI minimo de bosque")
+    ap.add_argument("--dias", type=int, default=15, help="ventana de Sentinel-2 en dias")
+    ap.add_argument("--nubes", type=float, default=40.0, help="nubes maximas de Sentinel-2")
+    ap.add_argument("--max-items", type=int, default=8, help="items maximos de Sentinel-2")
     ap.add_argument("--max", type=int, default=12)
     ap.add_argument("--out", required=True, help="prefijo de salida (sin extension)")
     ap.add_argument("--fechas", default="", help="IDs separados por coma; vacío = todas")
@@ -95,6 +107,7 @@ def main() -> int:
     px = max(800, min(int(args.px), 1600))
     umbral = abs(float(args.umbral))
     hv_min = float(args.hv_min)
+    oeste, sur, este, norte = nisar.caja(args.bbox)
     prefijo = Path(args.out)
     if prefijo.suffix:
         prefijo = prefijo.with_suffix("")
@@ -193,9 +206,56 @@ def main() -> int:
 
     # La mascara de bosque sale del promedio en potencia de las dos primeras
     # fechas: una sola escena tiene demasiado speckle para decidir donde hay
-    # dosel.
+    # dosel. Si hay Sentinel-2, el NDVI manda: el HV solo no separa bosque de
+    # cultivo.
     base = np.nanmean(hv_pila[: min(2, n)], axis=0)
+    bosque_meta: dict = {"fuente": "hv", "ndvi_umbral": None, "items": []}
     pre_bosque = np.isfinite(base) & (nisar.a_db(base) > hv_min)
+    if args.bosque == "ndvi":
+        ndvi = None
+        motivo = ""
+        if not sentinel2.DISPONIBLE:
+            motivo = "faltan rasterio/pystac-client"
+        else:
+            try:
+                fecha = datetime.strptime(fechas[0][:10], "%Y-%m-%d").date()
+                transform, crs = sentinel2.grilla(xs, ys, epsg)
+                items = sentinel2.buscar_items(
+                    (oeste, sur, este, norte),
+                    fecha,
+                    int(args.dias),
+                    float(args.nubes),
+                    int(args.max_items),
+                )
+                if items:
+                    ndvi, usados = sentinel2.componer_ndvi(
+                        items,
+                        (oeste, sur, este, norte),
+                        base.shape,
+                        transform,
+                        crs,
+                        px,
+                    )
+                    bosque_meta["items"] = usados
+                else:
+                    motivo = "sin Sentinel-2 en la ventana"
+            except Exception as exc:  # noqa: BLE001 - sin optico se sigue con HV
+                motivo = f"{type(exc).__name__}: {exc}"
+        if ndvi is not None and np.isfinite(ndvi).any():
+            pre_bosque = (
+                np.isfinite(base)
+                & np.isfinite(ndvi)
+                & (ndvi > float(args.ndvi_bosque))
+            )
+            bosque_meta["fuente"] = "ndvi"
+            bosque_meta["ndvi_umbral"] = float(args.ndvi_bosque)
+            print(
+                f"bosque: NDVI > {args.ndvi_bosque:g} "
+                f"({100.0 * pre_bosque.sum() / max(1, int(valido.sum())):.1f}% del area)"
+            )
+        else:
+            bosque_meta["fuente"] = f"hv (sin NDVI: {motivo or 'sin datos'})"
+            print(f"aviso: mascara de bosque por HV ({motivo or 'sin datos'})")
     cambio = (
         nisar.mayoria3(
             valido & pre_bosque & np.isfinite(mejor_caida) & (mejor_caida < -umbral)
@@ -331,6 +391,12 @@ def main() -> int:
             "area_ha": round(area_ha, 1),
             "cambio_ha": round(cambio_ha, 1),
             "por_fecha": por_fecha,
+        },
+        "bosque": {
+            **bosque_meta,
+            "fraccion_area_pct": round(
+                100.0 * float(pre_bosque.sum()) / max(1, int(valido.sum())), 2
+            ),
         },
         "archivos": {
             "serie": str(chart),

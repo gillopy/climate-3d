@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +28,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 
 import nisar  # noqa: E402
+import sentinel2  # noqa: E402
 
 
 def main() -> int:
@@ -38,6 +40,16 @@ def main() -> int:
     ap.add_argument("--modo", default="mascara", choices=("delta", "mascara", "rgb"))
     ap.add_argument("--umbral", type=float, default=3.0, help="caida minima de HV en dB")
     ap.add_argument("--hv-min", type=float, default=-15.5, help="HV minimo para considerar bosque")
+    ap.add_argument(
+        "--bosque",
+        default="hv",
+        choices=("ndvi", "hv"),
+        help="como decidir donde habia dosel antes del cambio",
+    )
+    ap.add_argument("--ndvi-bosque", type=float, default=0.55, help="NDVI minimo de bosque")
+    ap.add_argument("--dias", type=int, default=15, help="ventana de Sentinel-2 en dias")
+    ap.add_argument("--nubes", type=float, default=40.0, help="nubes maximas de Sentinel-2")
+    ap.add_argument("--max-items", type=int, default=8, help="items maximos de Sentinel-2")
     ap.add_argument("--rango", type=float, default=6.0, help="rango de la paleta de delta en dB")
     ap.add_argument("--out", required=True)
     ap.add_argument("--geojson", default=None)
@@ -47,6 +59,7 @@ def main() -> int:
     salida = Path(args.out)
     umbral = abs(float(args.umbral))
     rango = max(0.5, float(args.rango))
+    oeste, sur, este, norte = nisar.caja(args.bbox)
 
     print(f"abriendo antes={Path(args.antes).name}")
     print(f"abriendo despues={Path(args.despues).name}")
@@ -75,7 +88,52 @@ def main() -> int:
         delta = db_despues - db_antes
         valido = np.isfinite(delta)
 
+        bosque_meta: dict = {"fuente": "hv", "ndvi_umbral": None, "items": []}
         pre_bosque = valido & (db_antes > float(args.hv_min))
+        if args.bosque == "ndvi":
+            ndvi = None
+            motivo = ""
+            if not sentinel2.DISPONIBLE:
+                motivo = "faltan rasterio/pystac-client"
+            else:
+                try:
+                    fecha = datetime.strptime(antes.fecha[:10], "%Y-%m-%d").date()
+                    transform, crs = sentinel2.grilla(xs, ys, rec_antes.epsg)
+                    items = sentinel2.buscar_items(
+                        (oeste, sur, este, norte),
+                        fecha,
+                        int(args.dias),
+                        float(args.nubes),
+                        int(args.max_items),
+                    )
+                    if items:
+                        ndvi, usados = sentinel2.componer_ndvi(
+                            items,
+                            (oeste, sur, este, norte),
+                            db_antes.shape,
+                            transform,
+                            crs,
+                            px,
+                        )
+                        bosque_meta["items"] = usados
+                    else:
+                        motivo = "sin Sentinel-2 en la ventana"
+                except Exception as exc:  # noqa: BLE001 - sin optico se sigue con HV
+                    motivo = f"{type(exc).__name__}: {exc}"
+            if ndvi is not None and np.isfinite(ndvi).any():
+                pre_bosque = (
+                    valido & np.isfinite(ndvi) & (ndvi > float(args.ndvi_bosque))
+                )
+                bosque_meta["fuente"] = "ndvi"
+                bosque_meta["ndvi_umbral"] = float(args.ndvi_bosque)
+                print(
+                    f"bosque: NDVI > {args.ndvi_bosque:g} "
+                    f"({100.0 * pre_bosque.sum() / max(1, int(valido.sum())):.1f}% del area)"
+                )
+            else:
+                bosque_meta["fuente"] = f"hv (sin NDVI: {motivo or 'sin datos'})"
+                print(f"aviso: mascara de bosque por HV ({motivo or 'sin datos'})")
+
         perdida = nisar.mayoria3(valido & pre_bosque & (delta < -umbral)) & valido
         ganancia = nisar.mayoria3(valido & (delta > umbral)) & valido
 
@@ -165,6 +223,13 @@ def main() -> int:
             "hv_min_db": float(args.hv_min),
             "area_ha": round(area_ha, 1),
             "bosque_ha": round(bosque_ha, 1),
+            "bosque": {
+                **bosque_meta,
+                "bosque_ha": round(bosque_ha, 1),
+                "fraccion_area_pct": round(
+                    100.0 * bosque_px / max(1, pixeles_validos), 2
+                ),
+            },
             "perdida_ha": round(perdida_ha, 1),
             "perdida_pct": round(perdida_pct, 2),
             "perdida_bosque_pct": round(perdida_bosque_pct, 2),
