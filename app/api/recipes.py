@@ -1992,12 +1992,12 @@ def _nisar_descarga(
 def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
     """Plan del visor: descarga la/s escena/s y corre el producto elegido.
 
-    Productos: ``recorte`` (poster actual), ``rvi`` y ``cambio``. La descarga es
-    reanudable y saltea el archivo si ya esta: cambiar de producto no vuelve a
-    bajar 1.9 GB por escena.
+    Productos: ``recorte``, ``rvi``, ``cambio``, ``serie`` y ``geotiff``. La
+    descarga es reanudable y saltea el archivo si ya esta: cambiar de producto no
+    vuelve a bajar 1.9 GB por escena.
     """
     producto = str(params.get("producto") or "recorte").strip().lower()
-    if producto not in ("recorte", "rvi", "cambio"):
+    if producto not in ("recorte", "rvi", "cambio", "serie", "geotiff"):
         raise ValueError(f"Producto NISAR desconocido: {producto}")
 
     granulo = _nisar_nombre(str(params.get("granulo") or "").strip(), "granulo")
@@ -2095,6 +2095,63 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                 "--geojson", geojson,
             ],
             expected=8,
+        )
+    elif producto == "serie":
+        try:
+            track = int(params.get("track") or 0)
+            frame = int(params.get("frame") or 0)
+        except (TypeError, ValueError):
+            track = frame = 0
+        if not track or not frame:
+            raise ValueError("La serie temporal necesita track y frame.")
+        try:
+            umbral = max(0.5, min(abs(float(params.get("umbral", 3.0))), 20.0))
+        except (TypeError, ValueError):
+            umbral = 3.0
+        try:
+            hv_min = max(-30.0, min(float(params.get("hv_min", -15.5)), 0.0))
+        except (TypeError, ValueError):
+            hv_min = -15.5
+        px_serie = max(800, min(px, 1600))
+        render = Step(
+            kind="render",
+            label=f"serie temporal track {track} frame {frame}",
+            script="prototipos/nisar_serie.py",
+            args=[
+                "--h5", str(h5),
+                "--coleccion-dir", str(raiz_nisar / coleccion),
+                "--track", str(track),
+                "--frame", str(frame),
+                "--bbox", bbox_final,
+                "--px", str(px_serie),
+                "--umbral", f"{umbral:g}",
+                "--hv-min", f"{hv_min:g}",
+                "--out", str(work / "serie"),
+                "--geojson", geojson,
+            ],
+            expected=20,
+        )
+    elif producto == "geotiff":
+        pol = str(params.get("pol") or "auto").lower()
+        if pol not in ("auto", "hh", "hv", "vv", "vh"):
+            pol = "auto"
+        modo_geo = str(params.get("modo_geo") or "db").lower()
+        if modo_geo not in ("db", "lineal"):
+            modo_geo = "db"
+        render = Step(
+            kind="render",
+            label=f"exportando GeoTIFF {pol} ({modo_geo})",
+            script="prototipos/nisar_geotiff.py",
+            args=[
+                "--h5", str(h5),
+                "--bbox", bbox_final,
+                "--pol", pol,
+                "--px", str(px),
+                "--modo", modo_geo,
+                "--out", str(work / "nisar_geotiff.tif"),
+                "--geojson", geojson,
+            ],
+            expected=5,
         )
     else:
         pol = str(params.get("pol") or "auto").lower()

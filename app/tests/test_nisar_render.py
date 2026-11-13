@@ -85,7 +85,7 @@ class RenderNisar(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         chequeo = subprocess.run(
-            [str(python_repo()), "-c", "import h5py, pyproj, matplotlib, PIL"],
+            [str(python_repo()), "-c", "import h5py, pyproj, matplotlib, PIL, tifffile"],
             capture_output=True,
         )
         if chequeo.returncode != 0:
@@ -243,6 +243,124 @@ class RenderNisar(unittest.TestCase):
             self.assertGreater(meta["area_ha"], meta["perdida_ha"])
             with Image.open(cambio) as imagen:
                 self.assertEqual(imagen.mode, "RGB")
+
+    def test_serie_temporal_y_geotiff(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            tmp = Path(carpeta)
+            coleccion = tmp / "NISAR_L2_GCOV_V1"
+            coleccion.mkdir()
+            fixture = tmp / "fixture.py"
+            fixture.write_text(FIXTURE, encoding="utf-8")
+            nombres = [
+                (
+                    "NISAR_L2_PR_GCOV_032_082_D_101_2005_DHDH_A_"
+                    "20261005T214920_20261005T214955_P05023_N_F_J_001",
+                    "base",
+                ),
+                (
+                    "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+                    "20261017T214920_20261017T214955_P05023_N_F_J_001",
+                    "base",
+                ),
+                (
+                    "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_"
+                    "20261029T214921_20261029T214955_P05036_N_F_J_001",
+                    "perdida",
+                ),
+            ]
+            rutas = []
+            for nombre, modo in nombres:
+                ruta = coleccion / f"{nombre}.h5"
+                creado = subprocess.run(
+                    [str(python_repo()), str(fixture), str(ruta), modo],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(creado.returncode, 0, creado.stderr)
+                bbox = creado.stdout.strip().splitlines()[-1]
+                rutas.append(ruta)
+
+            prefijo = tmp / "serie"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_serie.py",
+                    "--h5",
+                    str(rutas[-1]),
+                    "--coleccion-dir",
+                    str(coleccion),
+                    "--track",
+                    "82",
+                    "--frame",
+                    "101",
+                    "--bbox",
+                    bbox,
+                    "--px",
+                    "900",
+                    "--umbral",
+                    "3",
+                    "--hv-min",
+                    "-30",
+                    "--out",
+                    str(prefijo),
+                    "--geojson",
+                    "datos/paraguay_gadm.json",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            for sufijo in ("_serie.png", "_mediana.png", "_cusum.png"):
+                self.assertTrue(prefijo.with_name(f"serie{sufijo}").is_file())
+            meta = json.loads((tmp / "serie.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["producto"], "serie")
+            self.assertEqual(len(meta["fechas"]), 3)
+            self.assertGreater(meta["cusum"]["cambio_ha"], 0)
+            self.assertTrue(
+                any(fecha.startswith("2026-10-29") for fecha in meta["cusum"]["por_fecha"])
+            )
+
+            tif = tmp / "corte.tif"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_geotiff.py",
+                    "--h5",
+                    str(rutas[0]),
+                    "--bbox",
+                    bbox,
+                    "--pol",
+                    "hv",
+                    "--px",
+                    "900",
+                    "--out",
+                    str(tif),
+                    "--geojson",
+                    "datos/paraguay_gadm.json",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            self.assertTrue(tif.is_file())
+            self.assertTrue(tif.with_name("corte_preview.png").is_file())
+
+            codigo = (
+                "import tifffile; "
+                f"t=tifffile.TiffFile({str(tif)!r}); p=t.pages[0]; "
+                "print(p.shape); print(p.tags['GeoKeyDirectoryTag'].value)"
+            )
+            chequeo = subprocess.run(
+                [str(python_repo()), "-c", codigo],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(chequeo.returncode, 0, chequeo.stderr)
+            self.assertIn("32721", chequeo.stdout)
 
 
 if __name__ == "__main__":

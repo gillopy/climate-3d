@@ -252,6 +252,22 @@ def a_db(potencia: np.ndarray) -> np.ndarray:
     return salida
 
 
+def mayoria3(mascara: np.ndarray) -> np.ndarray:
+    """True si al menos 5 de los 9 pixeles del entorno son True.
+
+    Sirve para no contar pixeles aislados de cambio como pérdida.
+    """
+    m = np.asarray(mascara).astype(np.uint8)
+    if m.size == 0:
+        return np.asarray(mascara, dtype=bool)
+    relleno = np.pad(m, 1)
+    suma = np.zeros_like(m, dtype=np.uint8)
+    for dy in range(3):
+        for dx in range(3):
+            suma += relleno[dy : dy + m.shape[0], dx : dx + m.shape[1]]
+    return suma >= 5
+
+
 def rvi(hh: np.ndarray, hv: np.ndarray) -> np.ndarray:
     """RVI dual-pol (notebook de Sentinel-1) adaptado a HH/HV en potencia."""
     hh = np.asarray(hh, dtype=np.float32)
@@ -437,3 +453,48 @@ def guardar(
 def guardar_json(salida: str | Path, meta: dict) -> None:
     ruta = Path(salida).with_suffix(".json")
     ruta.write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8")
+
+
+def guardar_geotiff(
+    salida: str | Path,
+    datos: np.ndarray,
+    *,
+    x0: float,
+    y1: float,
+    mpp_x: float,
+    mpp_y: float,
+    epsg: int,
+    descripcion: str = "",
+) -> None:
+    """GeoTIFF de una banda float32 (norte arriba) con tags EPSG.
+
+    Sin GDAL: `tifffile` escribe el raster y los tres tags que necesitan QGIS,
+    ArcGIS y rasterio (pixel scale, tiepoint y GeoKeyDirectory). El tiepoint es
+    la esquina superior izquierda del pixel (PixelIsArea).
+    """
+    import tifffile
+
+    datos = np.asarray(datos, dtype=np.float32)
+    claves = (
+        1, 1, 0, 3,          # version, revision, minor, numero de claves
+        1024, 0, 1, 1,       # GTModelTypeGeoKey = projected
+        1025, 0, 1, 1,       # GTRasterTypeGeoKey = PixelIsArea
+        3072, 0, 1, int(epsg),  # ProjectedCSTypeGeoKey
+        3076, 0, 1, 9001,    # ProjLinearUnitsGeoKey = metro
+    )
+    extratags = [
+        (33550, "d", 3, (float(mpp_x), float(mpp_y), 0.0), False),
+        (33922, "d", 6, (0.0, 0.0, 0.0, float(x0), float(y1), 0.0), False),
+        (34735, "H", len(claves), claves, False),
+    ]
+    ruta = Path(salida)
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    tifffile.imwrite(
+        ruta,
+        datos,
+        photometric="minisblack",
+        compression="zlib",
+        extratags=extratags,
+        metadata=None,
+        description=descripcion,
+    )

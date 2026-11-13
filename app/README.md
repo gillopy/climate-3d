@@ -597,6 +597,13 @@ El job `nisar_render` despacha por `producto`:
 - **Cambio de cobertura** (`nisar_cambio.py`): ΔHV entre dos fechas del mismo
   track/frame. Aplica una mayoría 3×3, marca pérdida/ganancia y reporta
   hectáreas, porcentaje del área y del bosque.
+- **Serie temporal** (`nisar_serie.py`): usa todas las fechas locales del mismo
+  track/frame/colección (mínimo 2), arma la serie de HV/HH/RVI, el compuesto
+  mediano y el mapa CUSUM con la fecha de cambio y hectáreas por fecha.
+- **GeoTIFF** (`nisar_geotiff.py`): exporta el recorte en la UTM de la escena
+  (float32, dB o potencia) con tags EPSG; deja un PNG de vista previa. El `.tif`
+  queda en la carpeta del job, accesible con **Abrir carpeta**. Lo escribe
+  `tifffile`, sin GDAL.
 
 El motor común vive en `comun/nisar.py` (abrir escena, recortar, máscara, dB,
 RVI, normalizar, PNG con escala/pie). Un producto nuevo es un script chico.
@@ -673,12 +680,13 @@ Qué cubre:
   restringido a ASF, caché del browse y GeoJSON de Paraguay.
 - `test_nisar_render.py` — render de un GCOV sintético con la estructura real:
   recorte, paso a dB, PNG color/gris, caja fuera de escena, RVI y cambio con un
-  par sintético que tiene un parche de pérdida.
+  par sintético que tiene un parche de pérdida, serie/CUSUM de tres fechas y
+  GeoTIFF con EPSG.
 - `test_recetas_ecmwf.py`, `test_goes_rgb.py`, `test_goes_ultimos.py`,
   `test_paraguay_ultimos.py`, `test_descargadores_gibs.py` — recetas, bandas,
   encuadre y descargadores.
 
-Resultado esperado al día de hoy: **301 tests, OK**. Si ves `skipped`, falta
+Resultado esperado al día de hoy: **304 tests, OK**. Si ves `skipped`, falta
 alguna dependencia de `requirements-dev.txt`; el mensaje del skip dice cuál.
 
 ## Límites conocidos

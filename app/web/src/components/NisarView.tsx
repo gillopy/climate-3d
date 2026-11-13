@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import type { FeatureCollection } from "geojson";
 
-import { cancelJob, createJob, subscribeJob } from "../api";
+import { cancelJob, createJob, revealJob, subscribeJob } from "../api";
 import { getNisarCatalog, getParaguay, searchNisar } from "../nisar";
 import type { Caja, NisarCatalog, NisarGranule, NisarSearch } from "../nisar";
 import type { Job, Params } from "../types";
@@ -64,6 +64,7 @@ export function NisarView() {
   const [modoCambio, setModoCambio] = useState("mascara");
   const [umbral, setUmbral] = useState("3");
   const [hvMin, setHvMin] = useState("-15.5");
+  const [modoGeo, setModoGeo] = useState("db");
 
   const elegirGranulo = useCallback((granulo: NisarGranule) => {
     setSeleccion(granulo);
@@ -347,6 +348,13 @@ export function NisarView() {
     setAntesId((previas[0] ?? lista[0]).id);
   }, [seleccion, resultado, antesId]);
 
+  // La serie lee como máximo 1600 px para no apilar 11 escenas gigantes.
+  useEffect(() => {
+    if (producto === "serie" && px !== "1200" && px !== "1600") {
+      setPx("1600");
+    }
+  }, [producto, px]);
+
   const enMarcha = trabajo?.status === "queued" || trabajo?.status === "running";
 
   async function renderizar() {
@@ -380,6 +388,18 @@ export function NisarView() {
       params.modo_cambio = modoCambio;
       params.umbral = Number(umbral);
       params.hv_min = Number(hvMin);
+    } else if (producto === "serie") {
+      if (seleccion.path === null || seleccion.frame === null) {
+        setError("La escena no declara track/frame; no puedo armar la serie.");
+        return;
+      }
+      params.track = seleccion.path;
+      params.frame = seleccion.frame;
+      params.umbral = Number(umbral);
+      params.hv_min = Number(hvMin);
+    } else if (producto === "geotiff") {
+      params.pol = polFinal;
+      params.modo_geo = modoGeo;
     }
     try {
       const job = await createJob("nisar_render", params);
@@ -398,6 +418,17 @@ export function NisarView() {
     } catch (exc) {
       setError(
         exc instanceof Error ? exc.message : "No se pudo cancelar el trabajo.",
+      );
+    }
+  }
+
+  async function revelarCarpeta() {
+    if (!trabajo) return;
+    try {
+      await revealJob(trabajo.id);
+    } catch (exc) {
+      setError(
+        exc instanceof Error ? exc.message : "No se pudo abrir la carpeta.",
       );
     }
   }
@@ -600,7 +631,11 @@ export function NisarView() {
                   ? "Compara HV entre esta fecha y otra del mismo track/frame. Pérdida = caída de HV."
                   : producto === "rvi"
                     ? "Índice de vegetación radar (HH/HV) de esta fecha."
-                    : `Baja el .h5 a ${catalogo?.data_root ?? "la carpeta de datos"} y recorta esta caja.`}
+                    : producto === "serie"
+                      ? "Usa todas las fechas locales del mismo track/frame/colección (mínimo 2). Genera serie, mediana y CUSUM."
+                      : producto === "geotiff"
+                        ? "Exporta la caja como GeoTIFF en el EPSG de la escena. El .tif queda en la carpeta del job."
+                        : `Baja el .h5 a ${catalogo?.data_root ?? "la carpeta de datos"} y recorta esta caja.`}
                 {seleccion.size_mb !== null
                   ? ` Pesa ~${seleccion.size_mb} MB.`
                   : ""}
@@ -615,6 +650,8 @@ export function NisarView() {
                     <option value="recorte">Recorte (dB / color)</option>
                     <option value="rvi">RVI (vegetación)</option>
                     <option value="cambio">Cambio de cobertura</option>
+                    <option value="serie">Serie temporal + CUSUM</option>
+                    <option value="geotiff">GeoTIFF (GIS)</option>
                   </select>
                 </label>
 
@@ -649,14 +686,50 @@ export function NisarView() {
                   </>
                 ) : null}
 
+                {producto === "geotiff" ? (
+                  <>
+                    <label>
+                      Polarización
+                      <select
+                        value={pol}
+                        onChange={(evento) => setPol(evento.target.value)}
+                      >
+                        <option value="auto">Auto</option>
+                        {seleccion.polarization.map((valor) => (
+                          <option key={valor} value={valor.toLowerCase()}>
+                            {valor}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Modo
+                      <select
+                        value={modoGeo}
+                        onChange={(evento) => setModoGeo(evento.target.value)}
+                      >
+                        <option value="db">dB</option>
+                        <option value="lineal">Potencia lineal</option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+
                 <label>
                   Tamaño
-                  <select value={px} onChange={(evento) => setPx(evento.target.value)}>
-                    <option value="1600">1600 px</option>
-                    <option value="2400">2400 px</option>
-                    <option value="3200">3200 px</option>
-                    <option value="4096">4096 px</option>
-                  </select>
+                  {producto === "serie" ? (
+                    <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                      <option value="1200">1200 px</option>
+                      <option value="1600">1600 px</option>
+                    </select>
+                  ) : (
+                    <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                      <option value="1600">1600 px</option>
+                      <option value="2400">2400 px</option>
+                      <option value="3200">3200 px</option>
+                      <option value="4096">4096 px</option>
+                    </select>
+                  )}
                 </label>
 
                 {producto === "cambio" ? (
@@ -713,6 +786,33 @@ export function NisarView() {
                     </label>
                   </>
                 ) : null}
+
+                {producto === "serie" ? (
+                  <>
+                    <label>
+                      Umbral (dB)
+                      <input
+                        type="number"
+                        min="0.5"
+                        max="20"
+                        step="0.5"
+                        value={umbral}
+                        onChange={(evento) => setUmbral(evento.target.value)}
+                      />
+                    </label>
+                    <label>
+                      HV mín. (dB)
+                      <input
+                        type="number"
+                        min="-30"
+                        max="0"
+                        step="0.5"
+                        value={hvMin}
+                        onChange={(evento) => setHvMin(evento.target.value)}
+                      />
+                    </label>
+                  </>
+                ) : null}
               </div>
 
               {producto === "cambio" && candidatos.length === 0 ? (
@@ -736,7 +836,9 @@ export function NisarView() {
                     !caja ||
                     enMarcha ||
                     !catalogo?.earthdata_configured ||
-                    (producto === "cambio" && !antes)
+                    (producto === "cambio" && !antes) ||
+                    (producto === "serie" &&
+                      (seleccion.path === null || seleccion.frame === null))
                   }
                   onClick={() => void renderizar()}
                 >
@@ -744,7 +846,11 @@ export function NisarView() {
                     ? "Comparar fechas"
                     : producto === "rvi"
                       ? "Calcular RVI"
-                      : "Descargar y renderizar"}
+                      : producto === "serie"
+                        ? "Generar serie"
+                        : producto === "geotiff"
+                          ? "Exportar GeoTIFF"
+                          : "Descargar y renderizar"}
                 </button>
                 {enMarcha ? (
                   <button type="button" className="btn" onClick={() => void cancelarRender()}>
@@ -782,6 +888,15 @@ export function NisarView() {
                         alt="Resultado NISAR"
                       />
                     ))}
+                  <div className="nisar__acciones">
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void revelarCarpeta()}
+                    >
+                      Abrir carpeta
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>

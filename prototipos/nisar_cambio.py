@@ -29,19 +29,6 @@ sys.path.insert(0, str(RAIZ / "comun"))
 import nisar  # noqa: E402
 
 
-def _mayoria3(mascara: np.ndarray) -> np.ndarray:
-    """True si al menos 5 de los 9 pixeles del entorno son True."""
-    m = mascara.astype(np.uint8)
-    if m.size == 0:
-        return mascara
-    relleno = np.pad(m, 1)
-    suma = np.zeros_like(m, dtype=np.uint8)
-    for dy in range(3):
-        for dx in range(3):
-            suma += relleno[dy : dy + m.shape[0], dx : dx + m.shape[1]]
-    return suma >= 5
-
-
 def _compatibles(a: nisar.Recorte, b: nisar.Recorte) -> bool:
     if a.datos.shape != b.datos.shape:
         return False
@@ -98,8 +85,8 @@ def main() -> int:
         valido = np.isfinite(delta)
 
         pre_bosque = valido & (db_antes > float(args.hv_min))
-        perdida = _mayoria3(valido & pre_bosque & (delta < -umbral)) & valido
-        ganancia = _mayoria3(valido & (delta > umbral)) & valido
+        perdida = nisar.mayoria3(valido & pre_bosque & (delta < -umbral)) & valido
+        ganancia = nisar.mayoria3(valido & (delta > umbral)) & valido
 
         mpp_x = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
         mpp_y = abs(float(ys[-1] - ys[0])) / max(1, len(ys) - 1)

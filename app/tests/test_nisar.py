@@ -271,6 +271,62 @@ class VisorNisar(unittest.TestCase):
         )
         self.assertEqual(plan.pasos[1].kind, "render")
 
+    def test_receta_serie_usa_la_carpeta_de_la_coleccion(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "serie",
+                    "granulo": GRANULO,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1200,
+                    "track": 82,
+                    "frame": 101,
+                    "umbral": 3,
+                    "hv_min": -15.5,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_serie.py"],
+        )
+        self.assertIn("--coleccion-dir", plan.pasos[1].args)
+        self.assertIn("--track", plan.pasos[1].args)
+        self.assertIn("82", plan.pasos[1].args)
+
+    def test_receta_geotiff(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "geotiff",
+                    "granulo": GRANULO,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1200,
+                    "pol": "hv",
+                    "modo_geo": "db",
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_geotiff.py"],
+        )
+        self.assertIn("--modo", plan.pasos[1].args)
+
     def test_receta_cambio_descarga_dos_fechas_y_compara(self):
         with tempfile.TemporaryDirectory() as carpeta:
             plan = planear(

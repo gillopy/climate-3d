@@ -26,3 +26,6 @@ pykdtree==1.4.*
 # Opcional: solo `descargar/descargar_era5.py` (Copernicus CDS + ~/.cdsapirc).
 # No se instala por defecto: el .nc de ERA5 ya esta bajado y nada mas lo usa.
 # cdsapi
+
+# GeoTIFF de los recortes NISAR sin GDAL (prototipos/nisar_geotiff.py).
+tifffile==2026.11.*
