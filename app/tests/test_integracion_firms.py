@@ -206,9 +206,19 @@ class RenderersDeFocos(unittest.TestCase):
     def test_todo_script_con_firms_esta_en_el_contrato(self):
         for archivo in sorted((RAIZ / "prototipos").glob("*.py")):
             if "--firms" in archivo.read_text(encoding="utf-8"):
-                self.assertIn(f"prototipos/{archivo.name}",
-                              set(RENDERERS.values()) | {"prototipos/poster_goes_disco.py"},
-                              archivo.name)
+                self.assertIn(
+                    f"prototipos/{archivo.name}",
+                    set(RENDERERS.values())
+                    | {
+                        "prototipos/poster_goes_disco.py",
+                        "prototipos/nisar_incendio.py",
+                    },
+                    archivo.name,
+                )
+
+    def test_el_incendio_nisar_declara_firms(self):
+        conocidas = declaradas("prototipos/nisar_incendio.py")
+        self.assertIn("--firms", conocidas)
 
 
 class ApagadoNoDejaRastro(unittest.TestCase):

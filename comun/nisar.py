@@ -229,6 +229,22 @@ class Escena:
         )
 
 
+def compatibles(a: Recorte, b: Recorte) -> bool:
+    """True si dos recortes comparten forma y extensión (misma grilla)."""
+    if a.datos.shape != b.datos.shape:
+        return False
+    # Mismo track/frame = misma grilla exacta; 1/4 de píxel es margen de sobra.
+    tolerancia = max(a.metros_por_px, b.metros_por_px, 1.0) * 0.25
+    return all(
+        abs(uno - otro) <= tolerancia
+        for uno, otro in ((a.x0, b.x0), (a.x1, b.x1), (a.y0, b.y0), (a.y1, b.y1))
+    )
+
+
+def hectareas(pixeles: int, mpp_x: float, mpp_y: float) -> float:
+    return pixeles * mpp_x * mpp_y / 10000.0
+
+
 def orientar(recorte: Recorte) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Devuelve (datos, xs, ys) con oeste->este y norte->sur."""
     datos = recorte.datos
@@ -421,6 +437,40 @@ def _pie(img: Image.Image, lineas: list[str], px: int) -> Image.Image:
     return lienzo
 
 
+def _dibujar_focos(
+    img: Image.Image,
+    focos: list[tuple[float, float, tuple[int, int, int]]],
+    epsg: int,
+    x0: float,
+    x1: float,
+    y0: float,
+    y1: float,
+) -> None:
+    """Puntos FIRMS (lon, lat, color) sobre el mapa, con halo oscuro."""
+    ancho, alto = img.size
+    if x1 <= x0 or y1 <= y0:
+        return
+    transformador = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True)
+    dibujo = ImageDraw.Draw(img)
+    radio = max(4, ancho // 220)
+    for lon, lat, color in focos:
+        x, y = transformador.transform(lon, lat)
+        if not (np.isfinite(x) and np.isfinite(y)):
+            continue
+        px = (x - x0) / (x1 - x0) * (ancho - 1)
+        py = (y1 - y) / (y1 - y0) * (alto - 1)
+        if px < -radio or px > ancho + radio or py < -radio or py > alto + radio:
+            continue
+        dibujo.ellipse(
+            [px - radio - 2, py - radio - 2, px + radio + 2, py + radio + 2],
+            fill=(8, 9, 10),
+        )
+        dibujo.ellipse(
+            [px - radio, py - radio, px + radio, py + radio],
+            fill=tuple(int(c) for c in color),
+        )
+
+
 def guardar(
     rgb: np.ndarray,
     salida: str | Path,
@@ -433,6 +483,7 @@ def guardar(
     x1: float | None = None,
     y0: float | None = None,
     y1: float | None = None,
+    focos: list[tuple[float, float, tuple[int, int, int]]] | None = None,
 ) -> tuple[int, int]:
     """Guarda un RGB (h,w,3) con escala, borde opcional y pie. Devuelve (W,H)."""
     salida = Path(salida)
@@ -445,6 +496,10 @@ def guardar(
         _dibujar_escala(img, metros_por_px)
     if geojson and epsg is not None and None not in (x0, x1, y0, y1):
         _dibujar_borde(img, Path(geojson), epsg, float(x0), float(x1), float(y0), float(y1))
+    if focos and epsg is not None and None not in (x0, x1, y0, y1):
+        _dibujar_focos(
+            img, focos, epsg, float(x0), float(x1), float(y0), float(y1)
+        )
     img = _pie(img, lineas, px)
     img.save(salida, "PNG", optimize=True)
     return img.size

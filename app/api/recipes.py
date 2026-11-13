@@ -1997,7 +1997,9 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
     vuelve a bajar 1.9 GB por escena.
     """
     producto = str(params.get("producto") or "recorte").strip().lower()
-    if producto not in ("recorte", "rvi", "cambio", "serie", "geotiff"):
+    if producto not in (
+        "recorte", "rvi", "cambio", "serie", "geotiff", "agua", "incendio"
+    ):
         raise ValueError(f"Producto NISAR desconocido: {producto}")
 
     granulo = _nisar_nombre(str(params.get("granulo") or "").strip(), "granulo")
@@ -2045,7 +2047,31 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             ],
             expected=5,
         )
-    elif producto == "cambio":
+    elif producto == "agua":
+        try:
+            hh_max = max(-40.0, min(float(params.get("hh_max", -20.0)), 0.0))
+        except (TypeError, ValueError):
+            hh_max = -20.0
+        try:
+            hv_max = max(-40.0, min(float(params.get("hv_max", -25.0)), 0.0))
+        except (TypeError, ValueError):
+            hv_max = -25.0
+        render = Step(
+            kind="render",
+            label=f"detectando agua a {px} px",
+            script="prototipos/nisar_agua.py",
+            args=[
+                "--h5", str(h5),
+                "--bbox", bbox_final,
+                "--px", str(px),
+                "--hh-max", f"{hh_max:g}",
+                "--hv-max", f"{hv_max:g}",
+                "--out", str(work / f"nisar_agua_{px}.png"),
+                "--geojson", geojson,
+            ],
+            expected=5,
+        )
+    elif producto in ("cambio", "incendio"):
         antes_granulo = _nisar_nombre(
             str(params.get("antes_granulo") or "").strip(), "antes_granulo"
         )
@@ -2068,9 +2094,6 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             _nisar_descarga(antes_granulo, antes_url, antes_coleccion, DATOS, "anterior")
         )
 
-        modo_cambio = str(params.get("modo_cambio") or "mascara").lower()
-        if modo_cambio not in ("delta", "mascara", "rgb"):
-            modo_cambio = "mascara"
         try:
             umbral = max(0.5, min(abs(float(params.get("umbral", 3.0))), 20.0))
         except (TypeError, ValueError):
@@ -2079,23 +2102,45 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             hv_min = max(-30.0, min(float(params.get("hv_min", -15.5)), 0.0))
         except (TypeError, ValueError):
             hv_min = -15.5
-        render = Step(
-            kind="render",
-            label=f"comparando fechas a {px} px",
-            script="prototipos/nisar_cambio.py",
-            args=[
-                "--antes", str(h5_antes),
-                "--despues", str(h5),
-                "--bbox", bbox_final,
-                "--px", str(px),
-                "--modo", modo_cambio,
-                "--umbral", f"{umbral:g}",
-                "--hv-min", f"{hv_min:g}",
-                "--out", str(work / f"nisar_cambio_{modo_cambio}_{px}.png"),
-                "--geojson", geojson,
-            ],
-            expected=8,
-        )
+        if producto == "cambio":
+            modo_cambio = str(params.get("modo_cambio") or "mascara").lower()
+            if modo_cambio not in ("delta", "mascara", "rgb"):
+                modo_cambio = "mascara"
+            render = Step(
+                kind="render",
+                label=f"comparando fechas a {px} px",
+                script="prototipos/nisar_cambio.py",
+                args=[
+                    "--antes", str(h5_antes),
+                    "--despues", str(h5),
+                    "--bbox", bbox_final,
+                    "--px", str(px),
+                    "--modo", modo_cambio,
+                    "--umbral", f"{umbral:g}",
+                    "--hv-min", f"{hv_min:g}",
+                    "--out", str(work / f"nisar_cambio_{modo_cambio}_{px}.png"),
+                    "--geojson", geojson,
+                ],
+                expected=8,
+            )
+        else:
+            render = Step(
+                kind="render",
+                label=f"detectando cicatriz a {px} px",
+                script="prototipos/nisar_incendio.py",
+                args=[
+                    "--antes", str(h5_antes),
+                    "--despues", str(h5),
+                    "--bbox", bbox_final,
+                    "--px", str(px),
+                    "--umbral", f"{umbral:g}",
+                    "--hv-min", f"{hv_min:g}",
+                    "--out", str(work / f"nisar_incendio_{px}.png"),
+                    "--geojson", geojson,
+                    *(["--firms"] if params.get("firms", True) else []),
+                ],
+                expected=10,
+            )
     elif producto == "serie":
         try:
             track = int(params.get("track") or 0)

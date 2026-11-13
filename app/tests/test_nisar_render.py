@@ -53,6 +53,10 @@ hh[10:20, 30:50] = 0.0
 if modo == "perdida":
     # Parche de perdida de dosel: HV cae ~7 dB en el centro de la caja.
     hv[150:250, 250:350] *= 0.2
+if modo == "agua":
+    # Parche de agua abierta: HH y HV muy bajos en el centro de la caja.
+    hh[150:230, 250:330] = 1e-5
+    hv[150:230, 250:330] = 1e-6
 
 salida.parent.mkdir(parents=True, exist_ok=True)
 with h5py.File(salida, "w") as f:
@@ -361,6 +365,91 @@ class RenderNisar(unittest.TestCase):
             )
             self.assertEqual(chequeo.returncode, 0, chequeo.stderr)
             self.assertIn("32721", chequeo.stdout)
+
+    def test_agua_e_incendio(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            tmp = Path(carpeta)
+            fixture = tmp / "fixture.py"
+            fixture.write_text(FIXTURE, encoding="utf-8")
+            base = tmp / (
+                "NISAR_L2_PR_GCOV_032_082_D_101_2005_DHDH_A_"
+                "20261005T214920_20261005T214955_P05023_N_F_J_001.h5"
+            )
+            perdida = tmp / (
+                "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_"
+                "20261029T214921_20261029T214955_P05036_N_F_J_001.h5"
+            )
+            agua = tmp / (
+                "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+                "20261017T214920_20261017T214955_P05023_N_F_J_001.h5"
+            )
+            for ruta, modo in ((base, "base"), (perdida, "perdida"), (agua, "agua")):
+                creado = subprocess.run(
+                    [str(python_repo()), str(fixture), str(ruta), modo],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(creado.returncode, 0, creado.stderr)
+                bbox = creado.stdout.strip().splitlines()[-1]
+
+            png_agua = tmp / "agua.png"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_agua.py",
+                    "--h5",
+                    str(agua),
+                    "--bbox",
+                    bbox,
+                    "--px",
+                    "900",
+                    "--out",
+                    str(png_agua),
+                    "--geojson",
+                    "datos/paraguay_gadm.json",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            self.assertTrue(png_agua.is_file())
+            meta_agua = json.loads(png_agua.with_suffix(".json").read_text(encoding="utf-8"))
+            self.assertGreater(meta_agua["agua_ha"], 0.0)
+
+            png_fuego = tmp / "incendio.png"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_incendio.py",
+                    "--antes",
+                    str(base),
+                    "--despues",
+                    str(perdida),
+                    "--bbox",
+                    bbox,
+                    "--px",
+                    "900",
+                    "--umbral",
+                    "3",
+                    "--hv-min",
+                    "-30",
+                    "--out",
+                    str(png_fuego),
+                    "--geojson",
+                    "datos/paraguay_gadm.json",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            self.assertTrue(png_fuego.is_file())
+            meta_fuego = json.loads(png_fuego.with_suffix(".json").read_text(encoding="utf-8"))
+            self.assertGreater(meta_fuego["cicatriz_ha"], 0.0)
+            self.assertFalse(meta_fuego["firms"])
+            self.assertEqual(meta_fuego["focos"], 0)
 
 
 if __name__ == "__main__":

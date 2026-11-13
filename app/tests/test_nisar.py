@@ -327,6 +327,65 @@ class VisorNisar(unittest.TestCase):
         )
         self.assertIn("--modo", plan.pasos[1].args)
 
+    def test_receta_agua(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "agua",
+                    "granulo": GRANULO,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1400,
+                    "hh_max": -20,
+                    "hv_max": -25,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_agua.py"],
+        )
+        self.assertIn("--hh-max", plan.pasos[1].args)
+
+    def test_receta_incendio_con_dos_fechas_y_firms(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "incendio",
+                    "granulo": GRANULO,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "antes_granulo": "ANTES",
+                    "antes_url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        "NISAR_L2_GCOV_V1/ANTES/ANTES.h5"
+                    ),
+                    "antes_coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1400,
+                    "umbral": 3,
+                    "hv_min": -15.5,
+                    "firms": True,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "descargar/nisar.py", "prototipos/nisar_incendio.py"],
+        )
+        self.assertIn("--firms", plan.pasos[2].args)
+
     def test_receta_cambio_descarga_dos_fechas_y_compara(self):
         with tempfile.TemporaryDirectory() as carpeta:
             plan = planear(

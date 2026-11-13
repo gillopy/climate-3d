@@ -29,20 +29,6 @@ sys.path.insert(0, str(RAIZ / "comun"))
 import nisar  # noqa: E402
 
 
-def _compatibles(a: nisar.Recorte, b: nisar.Recorte) -> bool:
-    if a.datos.shape != b.datos.shape:
-        return False
-    tolerancia = max(a.metros_por_px, b.metros_por_px, 1.0) * 1.5
-    return all(
-        abs(uno - otro) <= tolerancia
-        for uno, otro in ((a.x0, b.x0), (a.x1, b.x1), (a.y0, b.y0), (a.y1, b.y1))
-    )
-
-
-def _ha(pixeles: int, mpp_x: float, mpp_y: float) -> float:
-    return pixeles * mpp_x * mpp_y / 10000.0
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--antes", required=True)
@@ -68,10 +54,15 @@ def main() -> int:
         for escena, nombre in ((antes, "antes"), (despues, "despues")):
             if "HV" not in escena.pols:
                 raise SystemExit(f"La escena {nombre} no tiene HV.")
+        if (antes.track, antes.frame) != (despues.track, despues.frame):
+            raise SystemExit(
+                f"Las escenas no son del mismo track/frame: "
+                f"{antes.track}/{antes.frame} vs {despues.track}/{despues.frame}."
+            )
 
         rec_antes = antes.recortar("HV", args.bbox, px)
         rec_despues = despues.recortar("HV", args.bbox, px)
-        if not _compatibles(rec_antes, rec_despues):
+        if not nisar.compatibles(rec_antes, rec_despues):
             raise SystemExit(
                 "Las dos escenas no comparten grilla. Usa dos fechas del mismo "
                 "track/frame y la misma version de procesamiento."
@@ -98,10 +89,10 @@ def main() -> int:
         perdida_px = int(perdida.sum())
         ganancia_px = int(ganancia.sum())
         bosque_px = int(pre_bosque.sum())
-        area_ha = _ha(pixeles_validos, mpp_x, mpp_y)
-        perdida_ha = _ha(perdida_px, mpp_x, mpp_y)
-        ganancia_ha = _ha(ganancia_px, mpp_x, mpp_y)
-        bosque_ha = _ha(bosque_px, mpp_x, mpp_y)
+        area_ha = nisar.hectareas(pixeles_validos, mpp_x, mpp_y)
+        perdida_ha = nisar.hectareas(perdida_px, mpp_x, mpp_y)
+        ganancia_ha = nisar.hectareas(ganancia_px, mpp_x, mpp_y)
+        bosque_ha = nisar.hectareas(bosque_px, mpp_x, mpp_y)
         perdida_pct = 100.0 * perdida_px / pixeles_validos
         perdida_bosque_pct = 100.0 * perdida_px / max(1, bosque_px)
         delta_medio = float(np.nanmean(delta[perdida])) if perdida_px else 0.0

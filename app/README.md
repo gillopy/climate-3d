@@ -604,6 +604,12 @@ El job `nisar_render` despacha por `producto`:
   (float32, dB o potencia) con tags EPSG; deja un PNG de vista previa. El `.tif`
   queda en la carpeta del job, accesible con **Abrir carpeta**. Lo escribe
   `tifffile`, sin GDAL.
+- **Agua / inundación** (`nisar_agua.py`): máscara de agua abierta por HH y HV
+  bajos, con mayoría 3×3 y hectáreas. Ojo: el bosque inundado puede brillar en
+  HH por doble rebote; el producto apunta a agua abierta.
+- **Incendio** (`nisar_incendio.py`): cicatriz por caída de HV y, opcionalmente,
+  focos FIRMS del intervalo entre las dos fechas. El radar ve la cicatriz, no el
+  fuego activo. Si falta el MAP_KEY de FIRMS, el producto sigue sin focos.
 
 El motor común vive en `comun/nisar.py` (abrir escena, recortar, máscara, dB,
 RVI, normalizar, PNG con escala/pie). Un producto nuevo es un script chico.
@@ -611,7 +617,9 @@ RVI, normalizar, PNG con escala/pie). Un producto nuevo es un script chico.
 **Candado de colección:** las dos fechas de un cambio tienen que ser de la misma
 colección (`NISAR_L2_GCOV_V1` o `NISAR_L2_GCOV_PROVISIONAL_V1`). Mezclar
 PROVISIONAL con VALIDATED puede inventar cambios por el procesamiento. La UI
-filtra las fechas por track/frame/colección y el backend rechaza la mezcla.
+filtra las fechas por track/frame/colección y el backend rechaza la mezcla. Los
+scripts de cambio/incendio también exigen el mismo track/frame y una grilla
+alineada a 1/4 de píxel.
 
 ## Caché de renders
 
@@ -680,13 +688,13 @@ Qué cubre:
   restringido a ASF, caché del browse y GeoJSON de Paraguay.
 - `test_nisar_render.py` — render de un GCOV sintético con la estructura real:
   recorte, paso a dB, PNG color/gris, caja fuera de escena, RVI y cambio con un
-  par sintético que tiene un parche de pérdida, serie/CUSUM de tres fechas y
-  GeoTIFF con EPSG.
+  par sintético que tiene un parche de pérdida, serie/CUSUM de tres fechas,
+  GeoTIFF con EPSG, agua y cicatriz de incendio.
 - `test_recetas_ecmwf.py`, `test_goes_rgb.py`, `test_goes_ultimos.py`,
   `test_paraguay_ultimos.py`, `test_descargadores_gibs.py` — recetas, bandas,
   encuadre y descargadores.
 
-Resultado esperado al día de hoy: **304 tests, OK**. Si ves `skipped`, falta
+Resultado esperado al día de hoy: **308 tests, OK**. Si ves `skipped`, falta
 alguna dependencia de `requirements-dev.txt`; el mensaje del skip dice cuál.
 
 ## Límites conocidos

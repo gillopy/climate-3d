@@ -65,6 +65,9 @@ export function NisarView() {
   const [umbral, setUmbral] = useState("3");
   const [hvMin, setHvMin] = useState("-15.5");
   const [modoGeo, setModoGeo] = useState("db");
+  const [hhMax, setHhMax] = useState("-20");
+  const [hvMax, setHvMax] = useState("-25");
+  const [firms, setFirms] = useState(true);
 
   const elegirGranulo = useCallback((granulo: NisarGranule) => {
     setSeleccion(granulo);
@@ -377,7 +380,7 @@ export function NisarView() {
     if (producto === "recorte") {
       params.pol = polFinal;
       params.modo = modoFinal;
-    } else if (producto === "cambio") {
+    } else if (producto === "cambio" || producto === "incendio") {
       if (!antes) {
         setError("Elegí una fecha anterior del mismo track/frame.");
         return;
@@ -385,9 +388,16 @@ export function NisarView() {
       params.antes_granulo = antes.id;
       params.antes_url = antes.download;
       params.antes_coleccion = antes.collection;
-      params.modo_cambio = modoCambio;
       params.umbral = Number(umbral);
       params.hv_min = Number(hvMin);
+      if (producto === "cambio") {
+        params.modo_cambio = modoCambio;
+      } else {
+        params.firms = firms;
+      }
+    } else if (producto === "agua") {
+      params.hh_max = Number(hhMax);
+      params.hv_max = Number(hvMax);
     } else if (producto === "serie") {
       if (seleccion.path === null || seleccion.frame === null) {
         setError("La escena no declara track/frame; no puedo armar la serie.");
@@ -635,7 +645,11 @@ export function NisarView() {
                       ? "Usa todas las fechas locales del mismo track/frame/colección (mínimo 2). Genera serie, mediana y CUSUM."
                       : producto === "geotiff"
                         ? "Exporta la caja como GeoTIFF en el EPSG de la escena. El .tif queda en la carpeta del job."
-                        : `Baja el .h5 a ${catalogo?.data_root ?? "la carpeta de datos"} y recorta esta caja.`}
+                        : producto === "agua"
+                          ? "Máscara de agua abierta: HH y HV bajos. Reporta hectáreas y porcentaje."
+                          : producto === "incendio"
+                            ? "Cicatriz por caída de HV entre dos fechas, con focos FIRMS opcionales."
+                            : `Baja el .h5 a ${catalogo?.data_root ?? "la carpeta de datos"} y recorta esta caja.`}
                 {seleccion.size_mb !== null
                   ? ` Pesa ~${seleccion.size_mb} MB.`
                   : ""}
@@ -652,6 +666,8 @@ export function NisarView() {
                     <option value="cambio">Cambio de cobertura</option>
                     <option value="serie">Serie temporal + CUSUM</option>
                     <option value="geotiff">GeoTIFF (GIS)</option>
+                    <option value="agua">Agua / inundación</option>
+                    <option value="incendio">Incendio (cicatriz + FIRMS)</option>
                   </select>
                 </label>
 
@@ -715,6 +731,33 @@ export function NisarView() {
                   </>
                 ) : null}
 
+                {producto === "agua" ? (
+                  <>
+                    <label>
+                      HH máx. (dB)
+                      <input
+                        type="number"
+                        min="-40"
+                        max="0"
+                        step="0.5"
+                        value={hhMax}
+                        onChange={(evento) => setHhMax(evento.target.value)}
+                      />
+                    </label>
+                    <label>
+                      HV máx. (dB)
+                      <input
+                        type="number"
+                        min="-40"
+                        max="0"
+                        step="0.5"
+                        value={hvMax}
+                        onChange={(evento) => setHvMax(evento.target.value)}
+                      />
+                    </label>
+                  </>
+                ) : null}
+
                 <label>
                   Tamaño
                   {producto === "serie" ? (
@@ -732,7 +775,7 @@ export function NisarView() {
                   )}
                 </label>
 
-                {producto === "cambio" ? (
+                {producto === "cambio" || producto === "incendio" ? (
                   <>
                     <label className="nisar__ancho">
                       Fecha anterior
@@ -751,17 +794,19 @@ export function NisarView() {
                         ))}
                       </select>
                     </label>
-                    <label>
-                      Modo
-                      <select
-                        value={modoCambio}
-                        onChange={(evento) => setModoCambio(evento.target.value)}
-                      >
-                        <option value="mascara">Máscara</option>
-                        <option value="delta">Delta</option>
-                        <option value="rgb">RGB</option>
-                      </select>
-                    </label>
+                    {producto === "cambio" ? (
+                      <label>
+                        Modo
+                        <select
+                          value={modoCambio}
+                          onChange={(evento) => setModoCambio(evento.target.value)}
+                        >
+                          <option value="mascara">Máscara</option>
+                          <option value="delta">Delta</option>
+                          <option value="rgb">RGB</option>
+                        </select>
+                      </label>
+                    ) : null}
                     <label>
                       Umbral (dB)
                       <input
@@ -784,6 +829,18 @@ export function NisarView() {
                         onChange={(evento) => setHvMin(evento.target.value)}
                       />
                     </label>
+                    {producto === "incendio" ? (
+                      <label>
+                        Focos FIRMS
+                        <select
+                          value={firms ? "si" : "no"}
+                          onChange={(evento) => setFirms(evento.target.value === "si")}
+                        >
+                          <option value="si">Sí</option>
+                          <option value="no">No</option>
+                        </select>
+                      </label>
+                    ) : null}
                   </>
                 ) : null}
 
@@ -815,7 +872,8 @@ export function NisarView() {
                 ) : null}
               </div>
 
-              {producto === "cambio" && candidatos.length === 0 ? (
+              {(producto === "cambio" || producto === "incendio") &&
+              candidatos.length === 0 ? (
                 <p className="nisar__aviso">
                   No hay otra fecha del mismo track/frame en esta búsqueda. Ampliá la
                   ventana de fechas.
@@ -836,7 +894,7 @@ export function NisarView() {
                     !caja ||
                     enMarcha ||
                     !catalogo?.earthdata_configured ||
-                    (producto === "cambio" && !antes) ||
+                    ((producto === "cambio" || producto === "incendio") && !antes) ||
                     (producto === "serie" &&
                       (seleccion.path === null || seleccion.frame === null))
                   }
@@ -850,7 +908,11 @@ export function NisarView() {
                         ? "Generar serie"
                         : producto === "geotiff"
                           ? "Exportar GeoTIFF"
-                          : "Descargar y renderizar"}
+                          : producto === "agua"
+                            ? "Detectar agua"
+                            : producto === "incendio"
+                              ? "Detectar cicatriz"
+                              : "Descargar y renderizar"}
                 </button>
                 {enMarcha ? (
                   <button type="button" className="btn" onClick={() => void cancelarRender()}>
