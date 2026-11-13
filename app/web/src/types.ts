@@ -65,7 +65,7 @@ export interface DatesResponse {
 export interface Artifact {
   name: string;
   url: string;
-  kind: "image" | "video";
+  kind: "image" | "video" | "file";
   bytes: number;
 }
 

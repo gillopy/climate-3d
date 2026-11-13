@@ -76,6 +76,7 @@ def main() -> int:
         lineas = [
             f"NISAR GCOV · {pol} · GeoTIFF ({args.modo}) · {escena.fecha or escena.ruta.stem}",
             f"dB {vmin:.1f} a {vmax:.1f} · {mpp_x:.0f} m/px · EPSG:{recorte.epsg}",
+            "gris = dB (vista previa) · el .tif tiene los datos",
         ]
         ancho, alto = nisar.guardar(
             rgb,

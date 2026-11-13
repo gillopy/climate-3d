@@ -159,6 +159,9 @@ def main() -> int:
             f"{despues.fecha or despues.ruta.stem}",
             f"cicatriz {cicatriz_ha:.0f} ha ({cicatriz_pct:.1f}%) · "
             f"{len(focos)} focos FIRMS · umbral {umbral:g} dB · {mpp_x:.0f} m/px",
+            "rojo = cicatriz · puntos = focos FIRMS"
+            if args.firms
+            else "rojo = cicatriz (FIRMS apagado)",
         ]
         ancho, alto = nisar.guardar(
             rgb,

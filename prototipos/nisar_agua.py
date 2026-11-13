@@ -85,6 +85,7 @@ def main() -> int:
             f"NISAR GCOV · agua · {escena.fecha or escena.ruta.stem}",
             f"agua {agua_ha:.0f} ha ({agua_pct:.1f}%) · HH<{hh_max:g} · "
             f"HV<{hv_max:g} dB · {mpp:.0f} m/px · EPSG:{rec_hh.epsg}",
+            "azul = agua abierta (HH y HV bajos)",
         ]
         ancho, alto = nisar.guardar(
             rgb,

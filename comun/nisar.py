@@ -417,7 +417,7 @@ def _dibujar_borde(
 
 def _pie(img: Image.Image, lineas: list[str], px: int) -> Image.Image:
     ancho, alto = img.size
-    alto_pie = max(58, int(px * 0.05))
+    alto_pie = max(78, int(px * 0.068)) if len(lineas) >= 3 else max(58, int(px * 0.05))
     lienzo = Image.new("RGB", (ancho, alto + alto_pie), FONDO)
     lienzo.paste(img, (0, 0))
     dibujo = ImageDraw.Draw(lienzo)
@@ -426,7 +426,7 @@ def _pie(img: Image.Image, lineas: list[str], px: int) -> Image.Image:
     fuente2 = _fuente(max(11, int(px * 0.009)))
     margen = max(14, int(px * 0.014))
     y = alto + max(10, int(px * 0.009))
-    for indice, texto in enumerate(lineas[:2]):
+    for indice, texto in enumerate(lineas[:3]):
         dibujo.text(
             (margen, y),
             texto,

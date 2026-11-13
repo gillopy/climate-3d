@@ -80,6 +80,7 @@ def main() -> int:
     ap.add_argument("--hv-min", type=float, default=-15.5)
     ap.add_argument("--max", type=int, default=12)
     ap.add_argument("--out", required=True, help="prefijo de salida (sin extension)")
+    ap.add_argument("--fechas", default="", help="IDs separados por coma; vacío = todas")
     ap.add_argument("--geojson", default=None)
     args = ap.parse_args()
 
@@ -104,10 +105,13 @@ def main() -> int:
     escenas = _escenas_locales(
         Path(args.coleccion_dir), seleccionada, track, frame, max(2, int(args.max))
     )
+    seleccionadas = {parte.strip() for parte in args.fechas.split(",") if parte.strip()}
+    if seleccionadas:
+        escenas = [ruta for ruta in escenas if ruta.stem in seleccionadas]
     if len(escenas) < 2:
         raise SystemExit(
-            f"Hay {len(escenas)} escena(s) local(es) para track {track} frame {frame}. "
-            "Bajá al menos dos fechas de la misma colección."
+            f"Hay {len(escenas)} escena(s) local(es) para track {track} frame {frame} "
+            "con la selección actual. Elegí al menos dos fechas de la misma colección."
         )
 
     fechas: list[str] = []
@@ -211,6 +215,7 @@ def main() -> int:
     lineas_mediana = [
         f"NISAR GCOV · HV mediana de {n} fechas · {fechas[0]} -> {fechas[-1]}",
         f"dB {vmin:.1f} a {vmax:.1f} · {mpp_x:.0f} m/px · EPSG:{epsg}",
+        "gris = HV mediana (potencia)",
     ]
     ancho, alto = nisar.guardar(
         rgb_mediana,
@@ -241,6 +246,7 @@ def main() -> int:
     lineas_cusum = [
         f"NISAR GCOV · CUSUM HV · cambio {cambio_ha:.0f} ha · umbral {umbral:g} dB",
         f"{n} fechas · {fechas[0]} -> {fechas[-1]} · {mpp_x:.0f} m/px · EPSG:{epsg}",
+        "color = fecha de cambio (temprano -> tarde)",
     ]
     nisar.guardar(
         rgb_cusum,

@@ -129,6 +129,11 @@ def main() -> int:
             f"{despues.fecha or despues.ruta.stem}",
             f"perdida {perdida_ha:.0f} ha ({perdida_pct:.1f}%) · "
             f"umbral {umbral:g} dB · {mpp:.0f} m/px · EPSG:{rec_antes.epsg}",
+            {
+                "mascara": "rojo = pérdida · azul = ganancia",
+                "delta": "rojo = caída de HV · azul = aumento",
+                "rgb": "R = antes · G = después · B = ΔHV",
+            }[args.modo],
         ]
         ancho, alto = nisar.guardar(
             rgb,

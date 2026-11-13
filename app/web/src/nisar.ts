@@ -60,6 +60,20 @@ export interface NisarSearch {
   notes: string[];
 }
 
+export interface NisarLocalScene {
+  id: string;
+  date: string;
+  size_mb: number;
+}
+
+export interface NisarLocalScenes {
+  track: number;
+  frame: number;
+  collection: string;
+  total: number;
+  scenes: NisarLocalScene[];
+}
+
 export interface NisarFiltros {
   start: string;
   end: string;
@@ -87,6 +101,21 @@ export function searchNisar(
   if (filtros.polarization) query.set("polarization", filtros.polarization);
   if (filtros.max) query.set("max", String(filtros.max));
   return fetch(`/api/nisar/search?${query}`).then((r) => leer<NisarSearch>(r));
+}
+
+export function getLocalScenes(
+  track: number,
+  frame: number,
+  coleccion: string,
+): Promise<NisarLocalScenes> {
+  const query = new URLSearchParams({
+    track: String(track),
+    frame: String(frame),
+    coleccion,
+  });
+  return fetch(`/api/nisar/local?${query}`).then((r) =>
+    leer<NisarLocalScenes>(r),
+  );
 }
 
 export function getParaguay(): Promise<FeatureCollection> {

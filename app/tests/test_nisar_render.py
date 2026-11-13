@@ -326,6 +326,40 @@ class RenderNisar(unittest.TestCase):
                 any(fecha.startswith("2026-10-29") for fecha in meta["cusum"]["por_fecha"])
             )
 
+            prefijo2 = tmp / "serie2"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_serie.py",
+                    "--h5",
+                    str(rutas[-1]),
+                    "--coleccion-dir",
+                    str(coleccion),
+                    "--track",
+                    "82",
+                    "--frame",
+                    "101",
+                    "--bbox",
+                    bbox,
+                    "--px",
+                    "900",
+                    "--umbral",
+                    "3",
+                    "--hv-min",
+                    "-30",
+                    "--fechas",
+                    f"{rutas[0].stem},{rutas[2].stem}",
+                    "--out",
+                    str(prefijo2),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            meta2 = json.loads((tmp / "serie2.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(meta2["fechas"]), 2)
+
             tif = tmp / "corte.tif"
             corrida = subprocess.run(
                 [

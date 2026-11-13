@@ -2183,22 +2183,31 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
         except (TypeError, ValueError):
             hv_min = -15.5
         px_serie = max(800, min(px, 1600))
+        fechas = str(params.get("fechas") or "").strip()
+        ids_fechas: list[str] = []
+        if fechas:
+            ids_fechas = [parte.strip() for parte in fechas.split(",") if parte.strip()]
+            for rid in ids_fechas:
+                _nisar_nombre(rid, "fecha")
+        args_serie = [
+            "--h5", str(h5),
+            "--coleccion-dir", str(raiz_nisar / coleccion),
+            "--track", str(track),
+            "--frame", str(frame),
+            "--bbox", bbox_final,
+            "--px", str(px_serie),
+            "--umbral", f"{umbral:g}",
+            "--hv-min", f"{hv_min:g}",
+            "--out", str(work / "serie"),
+            "--geojson", geojson,
+        ]
+        if ids_fechas:
+            args_serie += ["--fechas", ",".join(ids_fechas)]
         render = Step(
             kind="render",
             label=f"serie temporal track {track} frame {frame}",
             script="prototipos/nisar_serie.py",
-            args=[
-                "--h5", str(h5),
-                "--coleccion-dir", str(raiz_nisar / coleccion),
-                "--track", str(track),
-                "--frame", str(frame),
-                "--bbox", bbox_final,
-                "--px", str(px_serie),
-                "--umbral", f"{umbral:g}",
-                "--hv-min", f"{hv_min:g}",
-                "--out", str(work / "serie"),
-                "--geojson", geojson,
-            ],
+            args=args_serie,
             expected=20,
         )
     elif producto == "geotiff":

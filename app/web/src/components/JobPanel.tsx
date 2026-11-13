@@ -108,6 +108,7 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
   const activas = corridas.filter((corrida) => enMarcha(corrida.status)).length;
   const imagenes = job?.artifacts.filter((a) => a.kind === "image") ?? [];
   const videos = job?.artifacts.filter((a) => a.kind === "video") ?? [];
+  const archivos = job?.artifacts.filter((a) => a.kind === "file") ?? [];
   const porcentaje = Math.round((job?.progress ?? 0) * 100);
   const relleno =
     job?.status === "done"
@@ -232,7 +233,7 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
               ))}
             </div>
 
-            {imagenes.length > 0 || videos.length > 0 ? (
+            {imagenes.length > 0 || videos.length > 0 || archivos.length > 0 ? (
               <div className="artifacts">
                 {imagenes.map((arte) => (
                   <figure key={arte.name} className="artifact">
@@ -271,6 +272,19 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
                           href={arte.url}
                           download={arte.name}
                         >
+                          Bajar
+                        </a>
+                      </span>
+                    </figcaption>
+                  </figure>
+                ))}
+                {archivos.map((arte) => (
+                  <figure key={arte.name} className="artifact artifact--file">
+                    <figcaption>
+                      <span className="artifact__name">{arte.name}</span>
+                      <span className="artifact__meta">
+                        <span className="artifact__size">{peso(arte.bytes)}</span>
+                        <a className="artifact__dl" href={arte.url} download={arte.name}>
                           Bajar
                         </a>
                       </span>

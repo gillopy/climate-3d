@@ -480,6 +480,11 @@ class JobManager:
         nuevos = [p for p in posters if p.stat().st_mtime >= inicio - 1.0]
         for poster in (nuevos or posters[-1:]):
             self._artefacto(job, poster, "image")
+        # NISAR: el JSON de estadisticas y los GeoTIFF son parte del resultado.
+        if job.product_id == "nisar_render":
+            for patron in ("*.json", "*.tif", "*.tiff"):
+                for archivo in sorted(job.work.glob(patron)):
+                    self._artefacto(job, archivo, "file")
 
     async def _correr(self, job: Job) -> None:
         async with self._un_slot:

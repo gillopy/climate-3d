@@ -2350,6 +2350,15 @@ input[type="range"]:disabled {
   border-color: var(--iris-line);
 }
 
+/* JSON/TIF: no hay miniatura, solo nombre y descarga. */
+.artifact--file {
+  background: var(--obsidian);
+}
+
+.artifact--file figcaption {
+  border-top: 0;
+}
+
 .job__error {
   margin: 0;
   padding: 9px 11px;
@@ -3175,6 +3184,115 @@ input[type="range"]:disabled {
 
 .nisar__job .nisar__imagen {
   margin-top: 8px;
+}
+
+.nisar__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  margin: 8px 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--obsidian);
+}
+
+.nisar__stat {
+  min-width: 0;
+}
+
+.nisar__stat dt {
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.nisar__stat dd {
+  margin: 1px 0 0;
+  font-size: 11px;
+  color: var(--mist);
+  overflow-wrap: anywhere;
+}
+
+.nisar__archivo {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--iris-hi);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.nisar__archivo:hover {
+  text-decoration: underline;
+}
+
+.nisar__fechas {
+  margin: 8px 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--obsidian);
+}
+
+.nisar__fechas-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.nisar__fechas-head span {
+  margin-right: auto;
+}
+
+.nisar__fechas-head .btn {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 10px;
+}
+
+.nisar__fechas-lista {
+  max-height: 150px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.nisar__fechas-lista li {
+  margin: 0;
+}
+
+.nisar__fechas-lista label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 10.5px;
+  color: var(--mist);
+  cursor: pointer;
+}
+
+.nisar__fechas-lista input[type="checkbox"] {
+  accent-color: var(--iris);
+}
+
+.nisar__fechas-peso {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--ash);
 }
 
 /* Leaflet sobre el mundo oscuro de la consola. */

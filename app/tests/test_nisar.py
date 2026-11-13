@@ -289,6 +289,7 @@ class VisorNisar(unittest.TestCase):
                     "frame": 101,
                     "umbral": 3,
                     "hv_min": -15.5,
+                    "fechas": "A,B",
                 },
                 Path(carpeta),
             )
@@ -300,6 +301,7 @@ class VisorNisar(unittest.TestCase):
         self.assertIn("--coleccion-dir", plan.pasos[1].args)
         self.assertIn("--track", plan.pasos[1].args)
         self.assertIn("82", plan.pasos[1].args)
+        self.assertIn("--fechas", plan.pasos[1].args)
 
     def test_receta_geotiff(self):
         with tempfile.TemporaryDirectory() as carpeta:
@@ -515,6 +517,34 @@ class VisorNisar(unittest.TestCase):
                 },
                 Path("."),
             )
+
+    def test_locales_lista_solo_track_frame_y_coleccion(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta) / "nisar" / "COL"
+            base.mkdir(parents=True)
+            nombres = [
+                "NISAR_L2_PR_GCOV_032_082_D_101_2005_DHDH_A_"
+                "20261005T214920_20261005T214955_P05023_N_F_J_001.h5",
+                "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+                "20261017T214920_20261017T214955_P05023_N_F_J_001.h5",
+                "NISAR_L2_PR_GCOV_033_082_D_100_2005_DHDH_A_"
+                "20261017T214847_20261017T214921_P05023_N_F_J_001.h5",
+            ]
+            for nombre in nombres:
+                (base / nombre).write_bytes(b"x")
+            with patch.object(nisar, "_datos", return_value=Path(carpeta)):
+                respuesta = self.cliente.get(
+                    "/api/nisar/local",
+                    params={"track": 82, "frame": 101, "coleccion": "COL"},
+                )
+
+        self.assertEqual(respuesta.status_code, 200)
+        cuerpo = respuesta.json()
+        self.assertEqual(cuerpo["total"], 2)
+        self.assertEqual(
+            [escena["date"][:10] for escena in cuerpo["scenes"]],
+            ["2026-10-05", "2026-10-17"],
+        )
 
     def test_paraguay_sale_del_geojson_del_repo(self):
         respuesta = self.cliente.get("/api/nisar/paraguay")

@@ -67,6 +67,7 @@ def main() -> int:
             f"NISAR GCOV · RVI · {escena.fecha or escena.ruta.stem}",
             f"medio {media:.2f} · p10 {p10:.2f} · p90 {p90:.2f} · "
             f"{area_ha:.0f} ha · {mpp:.0f} m/px · EPSG:{rec_hh.epsg}",
+            "verde = más RVI · rojo = menos",
         ]
         ancho, alto = nisar.guardar(
             rgb,

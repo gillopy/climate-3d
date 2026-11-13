@@ -628,6 +628,17 @@ filtra las fechas por track/frame/colección y el backend rechaza la mezcla. Los
 scripts de cambio/incendio también exigen el mismo track/frame y una grilla
 alineada a 1/4 de píxel.
 
+### Confianza y lectura (P0)
+
+- Al terminar un job, el panel muestra una **tarjeta de estadísticas** (hectáreas,
+  porcentajes, fechas, umbrales) leída del JSON del producto.
+- El JSON y los GeoTIFF se publican como **artefactos descargables** (`kind=file`).
+- Los productos están agrupados por **Visualización / Cambio / Agua / Óptico**.
+- La **serie temporal** deja elegir las fechas locales del track/frame/colección
+  (mínimo 2) con `GET /api/nisar/local`.
+- Los mapas de análisis llevan una tercera línea de leyenda (qué significa cada
+  color) además del pie y la escala.
+
 ## Caché de renders
 
 La carpeta de trabajo es `app/var/media/cache/<firma>/`, donde la firma es un
@@ -702,7 +713,7 @@ Qué cubre:
   `test_paraguay_ultimos.py`, `test_descargadores_gibs.py` — recetas, bandas,
   encuadre y descargadores.
 
-Resultado esperado al día de hoy: **313 tests, OK**. Si ves `skipped`, falta
+Resultado esperado al día de hoy: **314 tests, OK**. Si ves `skipped`, falta
 alguna dependencia de `requirements-dev.txt`; el mensaje del skip dice cuál.
 
 ## Límites conocidos

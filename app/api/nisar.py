@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -41,6 +42,10 @@ PARAGUAY = RAIZ_REPO / "datos" / "paraguay_gadm.json"
 
 #: Caja por defecto: Paraguay continental con un margen comodo.
 CAJA_PARAGUAY = [-62.7, -27.7, -54.2, -19.2]
+
+#: En el nombre del granulo: ciclo, track, direccion y frame.
+_TRACK_FRAME = re.compile(r"_(\d{3})_(\d{3})_[AD]_(\d{3})_")
+_FECHA_NISAR = re.compile(r"(\d{8})T(\d{6})")
 
 #: Niveles que tienen sentido para un visor de imagenes. RSLC (L1) queda afuera:
 #: no esta geocodificado y no se puede superponer a un mapa.
@@ -105,6 +110,20 @@ class Granule(BaseModel):
     images: list[GranuleImage] = Field(default_factory=list)
     download: str = ""
     asf_url: str = ""
+
+
+class LocalScene(BaseModel):
+    id: str
+    date: str
+    size_mb: float
+
+
+class LocalScenes(BaseModel):
+    track: int
+    frame: int
+    collection: str
+    total: int
+    scenes: list[LocalScene]
 
 
 class NisarSearch(BaseModel):
@@ -507,6 +526,51 @@ def browse(url: str = Query(..., min_length=10)) -> Response:
     parcial.write_bytes(datos)
     os.replace(parcial, cache)
     return Response(content=datos, media_type="image/png", headers=cabeceras)
+
+
+@router.get("/local", response_model=LocalScenes)
+def locales(
+    track: int = Query(..., ge=1, le=999),
+    frame: int = Query(..., ge=1, le=999),
+    coleccion: str = Query(..., min_length=1, max_length=80),
+) -> LocalScenes:
+    """Escenas .h5 ya bajadas para un track/frame/colección.
+
+    No abre los HDF5: alcanza con el nombre (ciclo/track/frame/fecha) que
+    escribe ASF. Así el endpoint vive en el venv de la API, sin h5py.
+    """
+    if any(c in coleccion for c in '\\/:*?"<>|'):
+        raise HTTPException(status_code=400, detail="coleccion invalida")
+    carpeta = _datos() / "nisar" / coleccion
+    escenas: list[LocalScene] = []
+    if carpeta.is_dir():
+        for ruta in sorted(carpeta.glob("*.h5")):
+            partes = _TRACK_FRAME.search(ruta.stem)
+            if (
+                not partes
+                or int(partes.group(2)) != track
+                or int(partes.group(3)) != frame
+            ):
+                continue
+            fecha = _FECHA_NISAR.search(ruta.stem)
+            if not fecha:
+                continue
+            dia, hora = fecha.groups()
+            escenas.append(
+                LocalScene(
+                    id=ruta.stem,
+                    date=f"{dia[:4]}-{dia[4:6]}-{dia[6:]} {hora[:2]}:{hora[2:4]} UTC",
+                    size_mb=round(ruta.stat().st_size / 1e6, 1),
+                )
+            )
+    escenas.sort(key=lambda escena: escena.date)
+    return LocalScenes(
+        track=track,
+        frame=frame,
+        collection=coleccion,
+        total=len(escenas),
+        scenes=escenas,
+    )
 
 
 @router.get("/paraguay")

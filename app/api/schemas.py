@@ -107,7 +107,7 @@ class RecipeRequest(BaseModel):
 class Artifact(BaseModel):
     name: str
     url: str
-    kind: Literal["image", "video"]
+    kind: Literal["image", "video", "file"]
     bytes: int
 
 

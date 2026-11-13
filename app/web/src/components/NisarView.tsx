@@ -3,8 +3,14 @@ import L from "leaflet";
 import type { FeatureCollection } from "geojson";
 
 import { cancelJob, createJob, revealJob, subscribeJob } from "../api";
-import { getNisarCatalog, getParaguay, searchNisar } from "../nisar";
-import type { Caja, NisarCatalog, NisarGranule, NisarSearch } from "../nisar";
+import { getLocalScenes, getNisarCatalog, getParaguay, searchNisar } from "../nisar";
+import type {
+  Caja,
+  NisarCatalog,
+  NisarGranule,
+  NisarLocalScene,
+  NisarSearch,
+} from "../nisar";
 import type { Job, Params } from "../types";
 
 const CENTRO_PARAGUAY: L.LatLngTuple = [-23.4, -58.4];
@@ -37,6 +43,96 @@ function imagenInicial(granulo: NisarGranule | null): string | null {
   return mapa?.url ?? granulo.images[0]?.url ?? granulo.thumbnail;
 }
 
+function pesoArchivo(bytes: number): string {
+  return bytes >= 1_048_576
+    ? `${(bytes / 1_048_576).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+interface StatsRow {
+  label: string;
+  value: string;
+}
+
+function _get(meta: Record<string, unknown>, ruta: string): unknown {
+  let actual: unknown = meta;
+  for (const parte of ruta.split(".")) {
+    if (actual === null || typeof actual !== "object") return undefined;
+    actual = (actual as Record<string, unknown>)[parte];
+  }
+  return actual;
+}
+
+function resumenStats(meta: Record<string, unknown>): StatsRow[] {
+  const filas: StatsRow[] = [];
+  const agregar = (
+    label: string,
+    ruta: string,
+    formato: (valor: unknown) => string,
+  ) => {
+    const valor = _get(meta, ruta);
+    if (valor === undefined || valor === null || valor === "") return;
+    filas.push({ label, value: formato(valor) });
+  };
+  const texto = (valor: unknown) => String(valor);
+  const num = (valor: unknown) =>
+    Number(valor).toLocaleString("es-PY", { maximumFractionDigits: 2 });
+  const ha = (valor: unknown) => `${num(valor)} ha`;
+  const pct = (valor: unknown) => `${Number(valor).toFixed(1)} %`;
+  const db = (valor: unknown) => `${Number(valor).toFixed(1)} dB`;
+
+  agregar("Producto", "producto", texto);
+  agregar("Fecha", "fecha", texto);
+  agregar("Fecha", "nisar.fecha", texto);
+  agregar("Antes", "fecha_antes", texto);
+  agregar("Después", "fecha_despues", texto);
+  agregar("Track / frame", "track", (valor) => `${valor} / ${_get(meta, "frame") ?? "?"}`);
+  agregar("Track / frame", "nisar.track", (valor) => `${valor} / ${_get(meta, "nisar.frame") ?? "?"}`);
+  agregar("Fechas", "fechas", (valor) =>
+    `${Array.isArray(valor) ? valor.length : "?"} fecha(s)`,
+  );
+  agregar("Área", "area_ha", ha);
+  agregar("Bosque", "bosque_ha", ha);
+  agregar("Pérdida (área)", "perdida_ha", ha);
+  agregar("Pérdida (%)", "perdida_pct", pct);
+  agregar("Pérdida del bosque", "perdida_bosque_pct", pct);
+  agregar("Ganancia", "ganancia_ha", ha);
+  agregar("Cicatriz (área)", "cicatriz_ha", ha);
+  agregar("Cicatriz (%)", "cicatriz_pct", pct);
+  agregar("Agua (área)", "agua_ha", ha);
+  agregar("Agua (%)", "agua_pct", pct);
+  agregar("RVI medio", "rvi_medio", num);
+  agregar("RVI p10 / p90", "rvi_p10", (valor) => `${num(valor)} / ${num(_get(meta, "rvi_p90"))}`);
+  agregar("Umbral", "umbral_db", db);
+  agregar("HV mínimo", "hv_min_db", db);
+  agregar("HH máximo", "hh_max_db", db);
+  agregar("HV máximo", "hv_max_db", db);
+  agregar("NDVI medio", "ndvi.medio", num);
+  agregar("Correlación HV/NDVI", "correlacion", num);
+  agregar("Cambio CUSUM", "cusum.cambio_ha", ha);
+  agregar("Área CUSUM", "cusum.area_ha", ha);
+  agregar("Sentinel-2", "optico.items", (valor) => `${valor} ítem(s)`);
+  agregar("Cobertura NDVI", "optico.cobertura_valida_pct", pct);
+  agregar("Focos FIRMS", "focos", texto);
+  agregar("Resolución", "mpp", (valor) => `${Number(valor).toFixed(0)} m/px`);
+  agregar("Resolución", "metros_por_px", (valor) => `${Number(valor).toFixed(0)} m/px`);
+  agregar("EPSG", "epsg", texto);
+  agregar("Polarización", "polarizaciones", (valor) =>
+    Array.isArray(valor) ? valor.join(" · ") : String(valor),
+  );
+  agregar("Polarización", "polarizacion", texto);
+  agregar("Modo", "modo", texto);
+  agregar("Colección", "coleccion", texto);
+
+  const clases = meta.clases;
+  if (clases && typeof clases === "object" && !Array.isArray(clases)) {
+    for (const [nombre, valor] of Object.entries(clases as Record<string, unknown>)) {
+      filas.push({ label: nombre, value: ha(valor) });
+    }
+  }
+  return filas;
+}
+
 export function NisarView() {
   const contenedor = useRef<HTMLDivElement | null>(null);
   const mapaRef = useRef<L.Map | null>(null);
@@ -59,6 +155,9 @@ export function NisarView() {
   const [modo, setModo] = useState("gris");
   const [px, setPx] = useState("2400");
   const [trabajo, setTrabajo] = useState<Job | null>(null);
+  const [stats, setStats] = useState<Record<string, unknown> | null>(null);
+  const [locales, setLocales] = useState<NisarLocalScene[]>([]);
+  const [fechasSerie, setFechasSerie] = useState<string[]>([]);
   const [producto, setProducto] = useState("recorte");
   const [antesId, setAntesId] = useState("");
   const [modoCambio, setModoCambio] = useState("mascara");
@@ -360,6 +459,60 @@ export function NisarView() {
     }
   }, [producto, px]);
 
+  const statsArtifact =
+    trabajo?.artifacts.find(
+      (arte) => arte.kind === "file" && arte.name.endsWith(".json"),
+    ) ?? null;
+
+  useEffect(() => {
+    if (!statsArtifact) {
+      setStats(null);
+      return;
+    }
+    let vigente = true;
+    fetch(statsArtifact.url)
+      .then((respuesta) => (respuesta.ok ? respuesta.json() : null))
+      .then((datos) => {
+        if (vigente) setStats(datos as Record<string, unknown> | null);
+      })
+      .catch(() => {
+        if (vigente) setStats(null);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [statsArtifact?.url]);
+
+  useEffect(() => {
+    if (
+      !seleccion ||
+      seleccion.path === null ||
+      seleccion.frame === null ||
+      !seleccion.collection
+    ) {
+      setLocales([]);
+      setFechasSerie([]);
+      return;
+    }
+    let vigente = true;
+    getLocalScenes(seleccion.path, seleccion.frame, seleccion.collection)
+      .then((datos) => {
+        if (!vigente) return;
+        setLocales(datos.scenes);
+        setFechasSerie(datos.scenes.map((escena) => escena.id));
+      })
+      .catch(() => {
+        if (vigente) {
+          setLocales([]);
+          setFechasSerie([]);
+        }
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [seleccion?.id, seleccion?.path, seleccion?.frame, seleccion?.collection]);
+
+  const resumen = stats ? resumenStats(stats) : [];
   const enMarcha = trabajo?.status === "queued" || trabajo?.status === "running";
 
   async function renderizar() {
@@ -412,6 +565,11 @@ export function NisarView() {
       params.frame = seleccion.frame;
       params.umbral = Number(umbral);
       params.hv_min = Number(hvMin);
+      if (fechasSerie.length < 2) {
+        setError("Elegí al menos 2 fechas locales para la serie.");
+        return;
+      }
+      params.fechas = fechasSerie.join(",");
     } else if (producto === "geotiff") {
       params.pol = polFinal;
       params.modo_geo = modoGeo;
@@ -668,14 +826,22 @@ export function NisarView() {
                     value={producto}
                     onChange={(evento) => setProducto(evento.target.value)}
                   >
-                    <option value="recorte">Recorte (dB / color)</option>
-                    <option value="rvi">RVI (vegetación)</option>
-                    <option value="cambio">Cambio de cobertura</option>
-                    <option value="serie">Serie temporal + CUSUM</option>
-                    <option value="geotiff">GeoTIFF (GIS)</option>
-                    <option value="agua">Agua / inundación</option>
-                    <option value="incendio">Incendio (cicatriz + FIRMS)</option>
-                    <option value="fusion">Fusión óptica (Sentinel-2)</option>
+                    <optgroup label="Visualización">
+                      <option value="recorte">Recorte (dB / color)</option>
+                      <option value="rvi">RVI (vegetación)</option>
+                      <option value="geotiff">GeoTIFF (GIS)</option>
+                    </optgroup>
+                    <optgroup label="Cambio">
+                      <option value="cambio">Cambio de cobertura</option>
+                      <option value="serie">Serie temporal + CUSUM</option>
+                      <option value="incendio">Incendio (cicatriz + FIRMS)</option>
+                    </optgroup>
+                    <optgroup label="Agua">
+                      <option value="agua">Agua / inundación</option>
+                    </optgroup>
+                    <optgroup label="Óptico">
+                      <option value="fusion">Fusión óptica (Sentinel-2)</option>
+                    </optgroup>
                   </select>
                 </label>
 
@@ -901,6 +1067,64 @@ export function NisarView() {
                 ) : null}
               </div>
 
+              {producto === "serie" ? (
+                <div className="nisar__fechas">
+                  <div className="nisar__fechas-head">
+                    <span>Fechas locales ({locales.length})</span>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() =>
+                        setFechasSerie(locales.map((escena) => escena.id))
+                      }
+                    >
+                      Todas
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setFechasSerie([])}
+                    >
+                      Ninguna
+                    </button>
+                  </div>
+                  {locales.length === 0 ? (
+                    <p className="nisar__vacio">
+                      No hay fechas locales de ese track/frame/colección.
+                    </p>
+                  ) : (
+                    <ul className="nisar__fechas-lista">
+                      {locales.map((escena) => (
+                        <li key={escena.id}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={fechasSerie.includes(escena.id)}
+                              onChange={(evento) =>
+                                setFechasSerie((previo) =>
+                                  evento.target.checked
+                                    ? [...previo, escena.id]
+                                    : previo.filter((id) => id !== escena.id),
+                                )
+                              }
+                            />
+                            <span>{escena.date}</span>
+                            <span className="nisar__fechas-peso">
+                              {escena.size_mb} MB
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {fechasSerie.length < 2 ? (
+                    <p className="nisar__aviso">
+                      Elegí al menos 2 fechas para la serie.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
               {(producto === "cambio" || producto === "incendio") &&
               candidatos.length === 0 ? (
                 <p className="nisar__aviso">
@@ -925,7 +1149,9 @@ export function NisarView() {
                     !catalogo?.earthdata_configured ||
                     ((producto === "cambio" || producto === "incendio") && !antes) ||
                     (producto === "serie" &&
-                      (seleccion.path === null || seleccion.frame === null))
+                      (seleccion.path === null ||
+                        seleccion.frame === null ||
+                        fechasSerie.length < 2))
                   }
                   onClick={() => void renderizar()}
                 >
@@ -961,6 +1187,16 @@ export function NisarView() {
                   <div className="nisar__bar">
                     <i style={{ width: `${Math.round(trabajo.progress * 100)}%` }} />
                   </div>
+                  {resumen.length > 0 ? (
+                    <dl className="nisar__stats">
+                      {resumen.map((fila) => (
+                        <div key={`${fila.label}-${fila.value}`} className="nisar__stat">
+                          <dt>{fila.label}</dt>
+                          <dd>{fila.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
                   {trabajo.logs.length > 0 ? (
                     <ul className="nisar__logs">
                       {trabajo.logs.slice(-6).map((linea, indice) => (
@@ -980,6 +1216,18 @@ export function NisarView() {
                         src={arte.url}
                         alt="Resultado NISAR"
                       />
+                    ))}
+                  {trabajo.artifacts
+                    .filter((arte) => arte.kind === "file")
+                    .map((arte) => (
+                      <a
+                        key={arte.url}
+                        className="nisar__archivo"
+                        href={arte.url}
+                        download={arte.name}
+                      >
+                        {arte.name} · {pesoArchivo(arte.bytes)}
+                      </a>
                     ))}
                   <div className="nisar__acciones">
                     <button
