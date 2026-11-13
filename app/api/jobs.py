@@ -640,7 +640,7 @@ class JobManager:
                 if codigo != 0:
                     pista = (
                         " Puede que esa fecha no exista en el archivo de la fuente."
-                        if descargado
+                        if descargado and job.product_id != "nisar_render"
                         else ""
                     )
                     raise RuntimeError(

@@ -514,9 +514,17 @@ export function NisarView() {
 
   const resumen = stats ? resumenStats(stats) : [];
   const enMarcha = trabajo?.status === "queued" || trabajo?.status === "running";
+  const esGcov = seleccion?.level === "GCOV";
 
   async function renderizar() {
     if (!seleccion || !caja) return;
+    if (seleccion.level !== "GCOV") {
+      setError(
+        `La escena es ${seleccion.level}. Los productos actuales usan GCOV; ` +
+          "elegí una escena GCOV para analizar.",
+      );
+      return;
+    }
     setError(null);
     const polFinal =
       pol !== "auto" && !seleccion.polarization.includes(pol.toUpperCase())
@@ -526,6 +534,7 @@ export function NisarView() {
       modo === "color" && seleccion.polarization.length < 2 ? "gris" : modo;
     const params: Params = {
       producto,
+      nivel: seleccion.level,
       granulo: seleccion.id,
       url: seleccion.download,
       coleccion: seleccion.collection,
@@ -799,6 +808,13 @@ export function NisarView() {
 
             <div className="nisar__render">
               <h3>Análisis de la caja</h3>
+              {!esGcov ? (
+                <p className="nisar__aviso">
+                  {seleccion.level} no usa la grilla GCOV. Los productos actuales
+                  (RVI, cambio, agua, incendio, serie, fusión) requieren GCOV.
+                  Podés descargar el .h5 o elegir una escena GCOV.
+                </p>
+              ) : null}
               <p className="nisar__sub">
                 {producto === "cambio"
                   ? "Compara HV entre esta fecha y otra del mismo track/frame. Pérdida = caída de HV."
@@ -824,6 +840,7 @@ export function NisarView() {
                   Producto
                   <select
                     value={producto}
+                    disabled={!esGcov}
                     onChange={(evento) => setProducto(evento.target.value)}
                   >
                     <optgroup label="Visualización">
@@ -1145,6 +1162,7 @@ export function NisarView() {
                   className="btn btn--primary"
                   disabled={
                     !caja ||
+                    !esGcov ||
                     enMarcha ||
                     !catalogo?.earthdata_configured ||
                     ((producto === "cambio" || producto === "incendio") && !antes) ||

@@ -2002,6 +2002,14 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
     ):
         raise ValueError(f"Producto NISAR desconocido: {producto}")
 
+    nivel = str(params.get("nivel") or "GCOV").strip().upper()
+    if nivel != "GCOV":
+        raise ValueError(
+            f"El producto {producto} usa GCOV; la escena elegida es {nivel}. "
+            "Elegí una escena GCOV. GUNW/GSLC/SME2 quedan como búsqueda y "
+            "descarga hasta tener su producto."
+        )
+
     granulo = _nisar_nombre(str(params.get("granulo") or "").strip(), "granulo")
     url = str(params.get("url") or "").strip()
     coleccion = _nisar_coleccion(url, str(params.get("coleccion") or ""))

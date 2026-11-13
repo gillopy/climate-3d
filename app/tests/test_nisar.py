@@ -356,6 +356,28 @@ class VisorNisar(unittest.TestCase):
         self.assertIn("--dias", plan.pasos[1].args)
         self.assertIn("--nubes", plan.pasos[1].args)
 
+    def test_receta_rechaza_nivel_no_gcov(self):
+        with self.assertRaises(ValueError) as contexto:
+            planear(
+                "nisar_render",
+                {
+                    "producto": "agua",
+                    "nivel": "SME2",
+                    "granulo": "NISAR_L3_PR_SME2_033_132_A_165_2005_DHDH_A_20261021T094010_20261021T094045_P05023_N_F_J_001",
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        "NISAR_L3_SME2_PROVISIONAL_V1/GRAN/GRAN.h5"
+                    ),
+                    "coleccion": "NISAR_L3_SME2_PROVISIONAL_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1200,
+                },
+                Path("."),
+            )
+
+        self.assertIn("GCOV", str(contexto.exception))
+        self.assertIn("SME2", str(contexto.exception))
+
     def test_receta_agua(self):
         with tempfile.TemporaryDirectory() as carpeta:
             plan = planear(

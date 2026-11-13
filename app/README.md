@@ -617,6 +617,11 @@ El job `nisar_render` despacha por `producto`:
   suelo), no un modelo entrenado. Suma `rasterio`, `pystac-client` y
   `planetary-computer` al `.venv` del repo.
 
+**Niveles:** los productos actuales usan **GCOV**. GSLC, GUNW y SME2 se pueden
+buscar y descargar, pero su render (coherencia, deformación, humedad) queda para
+una próxima iteración; la UI y la receta los rechazan con un mensaje claro en
+lugar de fallar.
+
 El motor común vive en `comun/nisar.py` (abrir escena, recortar, máscara, dB,
 RVI, normalizar, PNG con escala/pie) y `comun/optico.py` (NDVI, SCL, compuesto
 mediano y clasificación). Un producto nuevo es un script chico.
