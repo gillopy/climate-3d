@@ -639,6 +639,14 @@ alineada a 1/4 de píxel.
 - Los mapas de análisis llevan una tercera línea de leyenda (qué significa cada
   color) además del pie y la escala.
 
+### Validación
+
+`validacion/deforestacion_este.py` mide el cambio NISAR contra NDVI Sentinel-2
+pre/post. Primer caso del Este (82/101, junio→octubre 2026): **F1 denso 0,15** y
+sesgo de área **+57 %**. El producto es una herramienta de screening, no un
+detector de deforestación; el detalle y los límites están en
+`validacion/este_2026/`.
+
 ## Caché de renders
 
 La carpeta de trabajo es `app/var/media/cache/<firma>/`, donde la firma es un

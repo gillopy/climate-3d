@@ -74,3 +74,7 @@ odd/
 
 # Artefactos de la skill de diseno (mocks y capturas de revision)
 .impeccable/
+
+# Validacion NISAR: caches y figuras regenerables (los informes si se versionan)
+validacion/**/*.npy
+validacion/**/*.png
