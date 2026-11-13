@@ -657,8 +657,8 @@ export function NisarView() {
         <header className="nisar__head">
           <h2 className="nisar__title">NISAR · radar de apertura sintetica</h2>
           <p className="nisar__sub">
-            Elegí una caja sobre Paraguay y ASF devuelve las escenas. Las imagenes
-            browse son publicas; los .h5 quedan para la Fase 2.
+            Elegí una caja sobre Paraguay y ASF devuelve las escenas. Las imágenes
+            browse son públicas; los .h5 se descargan con Earthdata.
           </p>
         </header>
 
@@ -808,456 +808,463 @@ export function NisarView() {
 
             <div className="nisar__render">
               <h3>Análisis de la caja</h3>
-              {!esGcov ? (
+              {esGcov ? (
+                <>
+                  <p className="nisar__sub">
+                    {producto === "cambio"
+                      ? "Compara HV entre esta fecha y otra del mismo track/frame. Pérdida = caída de HV."
+                      : producto === "rvi"
+                        ? "Índice de vegetación radar (HH/HV) de esta fecha."
+                        : producto === "serie"
+                          ? "Usa todas las fechas locales del mismo track/frame/colección (mínimo 2). Genera serie, mediana y CUSUM."
+                          : producto === "geotiff"
+                            ? "Exporta la caja como GeoTIFF en el EPSG de la escena. El .tif queda en la carpeta del job."
+                            : producto === "agua"
+                              ? "Máscara de agua abierta: HH y HV bajos. Reporta hectáreas y porcentaje."
+                              : producto === "incendio"
+                                ? "Cicatriz por caída de HV entre dos fechas, con focos FIRMS opcionales."
+                                : producto === "fusion"
+                                  ? "Compone Sentinel-2 L2A (NDVI sin nubes) sobre la caja y la cruza con HV. Clasificación rule-based, no un modelo entrenado."
+                                  : `Baja el .h5 a ${
+                                      catalogo?.data_root
+                                        ? `${catalogo.data_root}/nisar`
+                                        : "la carpeta de datos"
+                                    } y recorta esta caja.`}
+                    {seleccion.size_mb !== null
+                      ? ` Pesa ~${seleccion.size_mb} MB.`
+                      : ""}
+                  </p>
+                  <div className="nisar__render-ctrl">
+                    <label className="nisar__ancho">
+                      Producto
+                      <select
+                        value={producto}
+                        disabled={!esGcov}
+                        onChange={(evento) => setProducto(evento.target.value)}
+                      >
+                        <optgroup label="Visualización">
+                          <option value="recorte">Recorte (dB / color)</option>
+                          <option value="rvi">RVI (vegetación)</option>
+                          <option value="geotiff">GeoTIFF (GIS)</option>
+                        </optgroup>
+                        <optgroup label="Cambio">
+                          <option value="cambio">Cambio de cobertura</option>
+                          <option value="serie">Serie temporal + CUSUM</option>
+                          <option value="incendio">Incendio (cicatriz + FIRMS)</option>
+                        </optgroup>
+                        <optgroup label="Agua">
+                          <option value="agua">Agua / inundación</option>
+                        </optgroup>
+                        <optgroup label="Óptico">
+                          <option value="fusion">Fusión óptica (Sentinel-2)</option>
+                        </optgroup>
+                      </select>
+                    </label>
+
+                    {producto === "recorte" ? (
+                      <>
+                        <label>
+                          Polarización
+                          <select
+                            value={pol}
+                            onChange={(evento) => setPol(evento.target.value)}
+                          >
+                            <option value="auto">Auto</option>
+                            {seleccion.polarization.map((valor) => (
+                              <option key={valor} value={valor.toLowerCase()}>
+                                {valor}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Modo
+                          <select
+                            value={modo}
+                            onChange={(evento) => setModo(evento.target.value)}
+                          >
+                            <option value="gris">Gris (dB)</option>
+                            <option value="color" disabled={seleccion.polarization.length < 2}>
+                              Color HH/HV
+                            </option>
+                          </select>
+                        </label>
+                      </>
+                    ) : null}
+
+                    {producto === "geotiff" ? (
+                      <>
+                        <label>
+                          Polarización
+                          <select
+                            value={pol}
+                            onChange={(evento) => setPol(evento.target.value)}
+                          >
+                            <option value="auto">Auto</option>
+                            {seleccion.polarization.map((valor) => (
+                              <option key={valor} value={valor.toLowerCase()}>
+                                {valor}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Modo
+                          <select
+                            value={modoGeo}
+                            onChange={(evento) => setModoGeo(evento.target.value)}
+                          >
+                            <option value="db">dB</option>
+                            <option value="lineal">Potencia lineal</option>
+                          </select>
+                        </label>
+                      </>
+                    ) : null}
+
+                    {producto === "agua" ? (
+                      <>
+                        <label>
+                          HH máx. (dB)
+                          <input
+                            type="number"
+                            min="-40"
+                            max="0"
+                            step="0.5"
+                            value={hhMax}
+                            onChange={(evento) => setHhMax(evento.target.value)}
+                          />
+                        </label>
+                        <label>
+                          HV máx. (dB)
+                          <input
+                            type="number"
+                            min="-40"
+                            max="0"
+                            step="0.5"
+                            value={hvMax}
+                            onChange={(evento) => setHvMax(evento.target.value)}
+                          />
+                        </label>
+                      </>
+                    ) : null}
+
+                    {producto === "fusion" ? (
+                      <>
+                        <label>
+                          Días ópticos
+                          <select value={dias} onChange={(evento) => setDias(evento.target.value)}>
+                            <option value="7">±7 días</option>
+                            <option value="15">±15 días</option>
+                            <option value="30">±30 días</option>
+                          </select>
+                        </label>
+                        <label>
+                          Nubes máx.
+                          <select value={nubes} onChange={(evento) => setNubes(evento.target.value)}>
+                            <option value="20">20 %</option>
+                            <option value="40">40 %</option>
+                            <option value="60">60 %</option>
+                          </select>
+                        </label>
+                      </>
+                    ) : null}
+
+                    <label>
+                      Tamaño
+                      {producto === "serie" ? (
+                        <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                          <option value="1200">1200 px</option>
+                          <option value="1600">1600 px</option>
+                        </select>
+                      ) : (
+                        <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                          <option value="1600">1600 px</option>
+                          <option value="2400">2400 px</option>
+                          <option value="3200">3200 px</option>
+                          <option value="4096">4096 px</option>
+                        </select>
+                      )}
+                    </label>
+
+                    {producto === "cambio" || producto === "incendio" ? (
+                      <>
+                        <label className="nisar__ancho">
+                          Fecha anterior
+                          <select
+                            value={antesId}
+                            onChange={(evento) => setAntesId(evento.target.value)}
+                            disabled={candidatos.length === 0}
+                          >
+                            {candidatos.length === 0 ? (
+                              <option value="">Sin otra fecha</option>
+                            ) : null}
+                            {candidatos.map((granulo) => (
+                              <option key={granulo.id} value={granulo.id}>
+                                {fechaCorta(granulo.start)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {producto === "cambio" ? (
+                          <label>
+                            Modo
+                            <select
+                              value={modoCambio}
+                              onChange={(evento) => setModoCambio(evento.target.value)}
+                            >
+                              <option value="mascara">Máscara</option>
+                              <option value="delta">Delta</option>
+                              <option value="rgb">RGB</option>
+                            </select>
+                          </label>
+                        ) : null}
+                        <label>
+                          Umbral (dB)
+                          <input
+                            type="number"
+                            min="0.5"
+                            max="20"
+                            step="0.5"
+                            value={umbral}
+                            onChange={(evento) => setUmbral(evento.target.value)}
+                          />
+                        </label>
+                        <label>
+                          HV mín. (dB)
+                          <input
+                            type="number"
+                            min="-30"
+                            max="0"
+                            step="0.5"
+                            value={hvMin}
+                            onChange={(evento) => setHvMin(evento.target.value)}
+                          />
+                        </label>
+                        {producto === "incendio" ? (
+                          <label>
+                            Focos FIRMS
+                            <select
+                              value={firms ? "si" : "no"}
+                              onChange={(evento) => setFirms(evento.target.value === "si")}
+                            >
+                              <option value="si">Sí</option>
+                              <option value="no">No</option>
+                            </select>
+                          </label>
+                        ) : null}
+                      </>
+                    ) : null}
+
+                    {producto === "serie" ? (
+                      <>
+                        <label>
+                          Umbral (dB)
+                          <input
+                            type="number"
+                            min="0.5"
+                            max="20"
+                            step="0.5"
+                            value={umbral}
+                            onChange={(evento) => setUmbral(evento.target.value)}
+                          />
+                        </label>
+                        <label>
+                          HV mín. (dB)
+                          <input
+                            type="number"
+                            min="-30"
+                            max="0"
+                            step="0.5"
+                            value={hvMin}
+                            onChange={(evento) => setHvMin(evento.target.value)}
+                          />
+                        </label>
+                      </>
+                    ) : null}
+                  </div>
+
+                  {producto === "serie" ? (
+                    <div className="nisar__fechas">
+                      <div className="nisar__fechas-head">
+                        <span>Fechas locales ({locales.length})</span>
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() =>
+                            setFechasSerie(locales.map((escena) => escena.id))
+                          }
+                        >
+                          Todas
+                        </button>
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => setFechasSerie([])}
+                        >
+                          Ninguna
+                        </button>
+                      </div>
+                      {locales.length === 0 ? (
+                        <p className="nisar__vacio">
+                          No hay fechas locales de ese track/frame/colección.
+                        </p>
+                      ) : (
+                        <ul className="nisar__fechas-lista">
+                          {locales.map((escena) => (
+                            <li key={escena.id}>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  checked={fechasSerie.includes(escena.id)}
+                                  onChange={(evento) =>
+                                    setFechasSerie((previo) =>
+                                      evento.target.checked
+                                        ? [...previo, escena.id]
+                                        : previo.filter((id) => id !== escena.id),
+                                    )
+                                  }
+                                />
+                                <span>{escena.date}</span>
+                                <span className="nisar__fechas-peso">
+                                  {escena.size_mb} MB
+                                </span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {fechasSerie.length < 2 ? (
+                        <p className="nisar__aviso">
+                          Elegí al menos 2 fechas para la serie.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {(producto === "cambio" || producto === "incendio") &&
+                  candidatos.length === 0 ? (
+                    <p className="nisar__aviso">
+                      No hay otra fecha del mismo track/frame en esta búsqueda. Ampliá la
+                      ventana de fechas.
+                    </p>
+                  ) : null}
+
+                  {!catalogo?.earthdata_configured ? (
+                    <p className="nisar__aviso">
+                      Falta EARTHDATA_USER y EARTHDATA_PASSWORD en .env para bajar el .h5.
+                    </p>
+                  ) : null}
+
+                  <div className="nisar__acciones">
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      disabled={
+                        !caja ||
+                        !esGcov ||
+                        enMarcha ||
+                        !catalogo?.earthdata_configured ||
+                        ((producto === "cambio" || producto === "incendio") && !antes) ||
+                        (producto === "serie" &&
+                          (seleccion.path === null ||
+                            seleccion.frame === null ||
+                            fechasSerie.length < 2))
+                      }
+                      onClick={() => void renderizar()}
+                    >
+                      {producto === "cambio"
+                        ? "Comparar fechas"
+                        : producto === "rvi"
+                          ? "Calcular RVI"
+                          : producto === "serie"
+                            ? "Generar serie"
+                            : producto === "geotiff"
+                              ? "Exportar GeoTIFF"
+                              : producto === "agua"
+                                ? "Detectar agua"
+                                : producto === "incendio"
+                                  ? "Detectar cicatriz"
+                                  : producto === "fusion"
+                                    ? "Fusionar óptico"
+                                    : "Descargar y renderizar"}
+                    </button>
+                    {enMarcha ? (
+                      <button type="button" className="btn" onClick={() => void cancelarRender()}>
+                        Cancelar
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {trabajo ? (
+                    <div className="nisar__job">
+                      <div className="nisar__job-head">
+                        <span>{trabajo.stage}</span>
+                        <span>{Math.round(trabajo.progress * 100)} %</span>
+                      </div>
+                      <div className="nisar__bar">
+                        <i style={{ width: `${Math.round(trabajo.progress * 100)}%` }} />
+                      </div>
+                      {resumen.length > 0 ? (
+                        <dl className="nisar__stats">
+                          {resumen.map((fila) => (
+                            <div key={`${fila.label}-${fila.value}`} className="nisar__stat">
+                              <dt>{fila.label}</dt>
+                              <dd>{fila.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : null}
+                      {trabajo.logs.length > 0 ? (
+                        <ul className="nisar__logs">
+                          {trabajo.logs.slice(-6).map((linea, indice) => (
+                            <li key={`${linea.at}-${indice}`}>{linea.text}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {trabajo.error ? (
+                        <p className="nisar__aviso">{trabajo.error}</p>
+                      ) : null}
+                      {trabajo.artifacts
+                        .filter((arte) => arte.kind === "image")
+                        .map((arte) => (
+                          <img
+                            key={arte.url}
+                            className="nisar__imagen"
+                            src={arte.url}
+                            alt="Resultado NISAR"
+                          />
+                        ))}
+                      {trabajo.artifacts
+                        .filter((arte) => arte.kind === "file")
+                        .map((arte) => (
+                          <a
+                            key={arte.url}
+                            className="nisar__archivo"
+                            href={arte.url}
+                            download={arte.name}
+                          >
+                            {arte.name} · {pesoArchivo(arte.bytes)}
+                          </a>
+                        ))}
+                      <div className="nisar__acciones">
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => void revelarCarpeta()}
+                        >
+                          Abrir carpeta
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
                 <p className="nisar__aviso">
                   {seleccion.level} no usa la grilla GCOV. Los productos actuales
                   (RVI, cambio, agua, incendio, serie, fusión) requieren GCOV.
                   Podés descargar el .h5 o elegir una escena GCOV.
                 </p>
-              ) : null}
-              <p className="nisar__sub">
-                {producto === "cambio"
-                  ? "Compara HV entre esta fecha y otra del mismo track/frame. Pérdida = caída de HV."
-                  : producto === "rvi"
-                    ? "Índice de vegetación radar (HH/HV) de esta fecha."
-                    : producto === "serie"
-                      ? "Usa todas las fechas locales del mismo track/frame/colección (mínimo 2). Genera serie, mediana y CUSUM."
-                      : producto === "geotiff"
-                        ? "Exporta la caja como GeoTIFF en el EPSG de la escena. El .tif queda en la carpeta del job."
-                        : producto === "agua"
-                          ? "Máscara de agua abierta: HH y HV bajos. Reporta hectáreas y porcentaje."
-                          : producto === "incendio"
-                            ? "Cicatriz por caída de HV entre dos fechas, con focos FIRMS opcionales."
-                            : producto === "fusion"
-                              ? "Compone Sentinel-2 L2A (NDVI sin nubes) sobre la caja y la cruza con HV. Clasificación rule-based, no un modelo entrenado."
-                              : `Baja el .h5 a ${catalogo?.data_root ?? "la carpeta de datos"} y recorta esta caja.`}
-                {seleccion.size_mb !== null
-                  ? ` Pesa ~${seleccion.size_mb} MB.`
-                  : ""}
-              </p>
-              <div className="nisar__render-ctrl">
-                <label className="nisar__ancho">
-                  Producto
-                  <select
-                    value={producto}
-                    disabled={!esGcov}
-                    onChange={(evento) => setProducto(evento.target.value)}
-                  >
-                    <optgroup label="Visualización">
-                      <option value="recorte">Recorte (dB / color)</option>
-                      <option value="rvi">RVI (vegetación)</option>
-                      <option value="geotiff">GeoTIFF (GIS)</option>
-                    </optgroup>
-                    <optgroup label="Cambio">
-                      <option value="cambio">Cambio de cobertura</option>
-                      <option value="serie">Serie temporal + CUSUM</option>
-                      <option value="incendio">Incendio (cicatriz + FIRMS)</option>
-                    </optgroup>
-                    <optgroup label="Agua">
-                      <option value="agua">Agua / inundación</option>
-                    </optgroup>
-                    <optgroup label="Óptico">
-                      <option value="fusion">Fusión óptica (Sentinel-2)</option>
-                    </optgroup>
-                  </select>
-                </label>
-
-                {producto === "recorte" ? (
-                  <>
-                    <label>
-                      Polarización
-                      <select
-                        value={pol}
-                        onChange={(evento) => setPol(evento.target.value)}
-                      >
-                        <option value="auto">Auto</option>
-                        {seleccion.polarization.map((valor) => (
-                          <option key={valor} value={valor.toLowerCase()}>
-                            {valor}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Modo
-                      <select
-                        value={modo}
-                        onChange={(evento) => setModo(evento.target.value)}
-                      >
-                        <option value="gris">Gris (dB)</option>
-                        <option value="color" disabled={seleccion.polarization.length < 2}>
-                          Color HH/HV
-                        </option>
-                      </select>
-                    </label>
-                  </>
-                ) : null}
-
-                {producto === "geotiff" ? (
-                  <>
-                    <label>
-                      Polarización
-                      <select
-                        value={pol}
-                        onChange={(evento) => setPol(evento.target.value)}
-                      >
-                        <option value="auto">Auto</option>
-                        {seleccion.polarization.map((valor) => (
-                          <option key={valor} value={valor.toLowerCase()}>
-                            {valor}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Modo
-                      <select
-                        value={modoGeo}
-                        onChange={(evento) => setModoGeo(evento.target.value)}
-                      >
-                        <option value="db">dB</option>
-                        <option value="lineal">Potencia lineal</option>
-                      </select>
-                    </label>
-                  </>
-                ) : null}
-
-                {producto === "agua" ? (
-                  <>
-                    <label>
-                      HH máx. (dB)
-                      <input
-                        type="number"
-                        min="-40"
-                        max="0"
-                        step="0.5"
-                        value={hhMax}
-                        onChange={(evento) => setHhMax(evento.target.value)}
-                      />
-                    </label>
-                    <label>
-                      HV máx. (dB)
-                      <input
-                        type="number"
-                        min="-40"
-                        max="0"
-                        step="0.5"
-                        value={hvMax}
-                        onChange={(evento) => setHvMax(evento.target.value)}
-                      />
-                    </label>
-                  </>
-                ) : null}
-
-                {producto === "fusion" ? (
-                  <>
-                    <label>
-                      Días ópticos
-                      <select value={dias} onChange={(evento) => setDias(evento.target.value)}>
-                        <option value="7">±7 días</option>
-                        <option value="15">±15 días</option>
-                        <option value="30">±30 días</option>
-                      </select>
-                    </label>
-                    <label>
-                      Nubes máx.
-                      <select value={nubes} onChange={(evento) => setNubes(evento.target.value)}>
-                        <option value="20">20 %</option>
-                        <option value="40">40 %</option>
-                        <option value="60">60 %</option>
-                      </select>
-                    </label>
-                  </>
-                ) : null}
-
-                <label>
-                  Tamaño
-                  {producto === "serie" ? (
-                    <select value={px} onChange={(evento) => setPx(evento.target.value)}>
-                      <option value="1200">1200 px</option>
-                      <option value="1600">1600 px</option>
-                    </select>
-                  ) : (
-                    <select value={px} onChange={(evento) => setPx(evento.target.value)}>
-                      <option value="1600">1600 px</option>
-                      <option value="2400">2400 px</option>
-                      <option value="3200">3200 px</option>
-                      <option value="4096">4096 px</option>
-                    </select>
-                  )}
-                </label>
-
-                {producto === "cambio" || producto === "incendio" ? (
-                  <>
-                    <label className="nisar__ancho">
-                      Fecha anterior
-                      <select
-                        value={antesId}
-                        onChange={(evento) => setAntesId(evento.target.value)}
-                        disabled={candidatos.length === 0}
-                      >
-                        {candidatos.length === 0 ? (
-                          <option value="">Sin otra fecha</option>
-                        ) : null}
-                        {candidatos.map((granulo) => (
-                          <option key={granulo.id} value={granulo.id}>
-                            {fechaCorta(granulo.start)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    {producto === "cambio" ? (
-                      <label>
-                        Modo
-                        <select
-                          value={modoCambio}
-                          onChange={(evento) => setModoCambio(evento.target.value)}
-                        >
-                          <option value="mascara">Máscara</option>
-                          <option value="delta">Delta</option>
-                          <option value="rgb">RGB</option>
-                        </select>
-                      </label>
-                    ) : null}
-                    <label>
-                      Umbral (dB)
-                      <input
-                        type="number"
-                        min="0.5"
-                        max="20"
-                        step="0.5"
-                        value={umbral}
-                        onChange={(evento) => setUmbral(evento.target.value)}
-                      />
-                    </label>
-                    <label>
-                      HV mín. (dB)
-                      <input
-                        type="number"
-                        min="-30"
-                        max="0"
-                        step="0.5"
-                        value={hvMin}
-                        onChange={(evento) => setHvMin(evento.target.value)}
-                      />
-                    </label>
-                    {producto === "incendio" ? (
-                      <label>
-                        Focos FIRMS
-                        <select
-                          value={firms ? "si" : "no"}
-                          onChange={(evento) => setFirms(evento.target.value === "si")}
-                        >
-                          <option value="si">Sí</option>
-                          <option value="no">No</option>
-                        </select>
-                      </label>
-                    ) : null}
-                  </>
-                ) : null}
-
-                {producto === "serie" ? (
-                  <>
-                    <label>
-                      Umbral (dB)
-                      <input
-                        type="number"
-                        min="0.5"
-                        max="20"
-                        step="0.5"
-                        value={umbral}
-                        onChange={(evento) => setUmbral(evento.target.value)}
-                      />
-                    </label>
-                    <label>
-                      HV mín. (dB)
-                      <input
-                        type="number"
-                        min="-30"
-                        max="0"
-                        step="0.5"
-                        value={hvMin}
-                        onChange={(evento) => setHvMin(evento.target.value)}
-                      />
-                    </label>
-                  </>
-                ) : null}
-              </div>
-
-              {producto === "serie" ? (
-                <div className="nisar__fechas">
-                  <div className="nisar__fechas-head">
-                    <span>Fechas locales ({locales.length})</span>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() =>
-                        setFechasSerie(locales.map((escena) => escena.id))
-                      }
-                    >
-                      Todas
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setFechasSerie([])}
-                    >
-                      Ninguna
-                    </button>
-                  </div>
-                  {locales.length === 0 ? (
-                    <p className="nisar__vacio">
-                      No hay fechas locales de ese track/frame/colección.
-                    </p>
-                  ) : (
-                    <ul className="nisar__fechas-lista">
-                      {locales.map((escena) => (
-                        <li key={escena.id}>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={fechasSerie.includes(escena.id)}
-                              onChange={(evento) =>
-                                setFechasSerie((previo) =>
-                                  evento.target.checked
-                                    ? [...previo, escena.id]
-                                    : previo.filter((id) => id !== escena.id),
-                                )
-                              }
-                            />
-                            <span>{escena.date}</span>
-                            <span className="nisar__fechas-peso">
-                              {escena.size_mb} MB
-                            </span>
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {fechasSerie.length < 2 ? (
-                    <p className="nisar__aviso">
-                      Elegí al menos 2 fechas para la serie.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {(producto === "cambio" || producto === "incendio") &&
-              candidatos.length === 0 ? (
-                <p className="nisar__aviso">
-                  No hay otra fecha del mismo track/frame en esta búsqueda. Ampliá la
-                  ventana de fechas.
-                </p>
-              ) : null}
-
-              {!catalogo?.earthdata_configured ? (
-                <p className="nisar__aviso">
-                  Falta EARTHDATA_USER y EARTHDATA_PASSWORD en .env para bajar el .h5.
-                </p>
-              ) : null}
-
-              <div className="nisar__acciones">
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  disabled={
-                    !caja ||
-                    !esGcov ||
-                    enMarcha ||
-                    !catalogo?.earthdata_configured ||
-                    ((producto === "cambio" || producto === "incendio") && !antes) ||
-                    (producto === "serie" &&
-                      (seleccion.path === null ||
-                        seleccion.frame === null ||
-                        fechasSerie.length < 2))
-                  }
-                  onClick={() => void renderizar()}
-                >
-                  {producto === "cambio"
-                    ? "Comparar fechas"
-                    : producto === "rvi"
-                      ? "Calcular RVI"
-                      : producto === "serie"
-                        ? "Generar serie"
-                        : producto === "geotiff"
-                          ? "Exportar GeoTIFF"
-                          : producto === "agua"
-                            ? "Detectar agua"
-                            : producto === "incendio"
-                              ? "Detectar cicatriz"
-                              : producto === "fusion"
-                                ? "Fusionar óptico"
-                                : "Descargar y renderizar"}
-                </button>
-                {enMarcha ? (
-                  <button type="button" className="btn" onClick={() => void cancelarRender()}>
-                    Cancelar
-                  </button>
-                ) : null}
-              </div>
-
-              {trabajo ? (
-                <div className="nisar__job">
-                  <div className="nisar__job-head">
-                    <span>{trabajo.stage}</span>
-                    <span>{Math.round(trabajo.progress * 100)} %</span>
-                  </div>
-                  <div className="nisar__bar">
-                    <i style={{ width: `${Math.round(trabajo.progress * 100)}%` }} />
-                  </div>
-                  {resumen.length > 0 ? (
-                    <dl className="nisar__stats">
-                      {resumen.map((fila) => (
-                        <div key={`${fila.label}-${fila.value}`} className="nisar__stat">
-                          <dt>{fila.label}</dt>
-                          <dd>{fila.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : null}
-                  {trabajo.logs.length > 0 ? (
-                    <ul className="nisar__logs">
-                      {trabajo.logs.slice(-6).map((linea, indice) => (
-                        <li key={`${linea.at}-${indice}`}>{linea.text}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  {trabajo.error ? (
-                    <p className="nisar__aviso">{trabajo.error}</p>
-                  ) : null}
-                  {trabajo.artifacts
-                    .filter((arte) => arte.kind === "image")
-                    .map((arte) => (
-                      <img
-                        key={arte.url}
-                        className="nisar__imagen"
-                        src={arte.url}
-                        alt="Resultado NISAR"
-                      />
-                    ))}
-                  {trabajo.artifacts
-                    .filter((arte) => arte.kind === "file")
-                    .map((arte) => (
-                      <a
-                        key={arte.url}
-                        className="nisar__archivo"
-                        href={arte.url}
-                        download={arte.name}
-                      >
-                        {arte.name} · {pesoArchivo(arte.bytes)}
-                      </a>
-                    ))}
-                  <div className="nisar__acciones">
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => void revelarCarpeta()}
-                    >
-                      Abrir carpeta
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+              )}
             </div>
           </div>
         ) : null}
