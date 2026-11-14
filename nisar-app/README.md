@@ -93,6 +93,19 @@ nisar-app\.venv\Scripts\python.exe -m uvicorn nisar_backend.main:app `
 Abrí **http://127.0.0.1:8010**: FastAPI sirve el `dist/` y la API en el mismo
 puerto.
 
+## Panel de trabajos
+
+El visor trae un panel sobre el mapa ("Trabajos") con el historial de corridas
+que el backend persiste en `var/media/historial.jsonl`:
+
+- lista de trabajos con estado, avance y última etapa;
+- detalle del trabajo elegido: plan, log completo, imágenes, JSON/GeoTIFF y
+  estadísticas del producto;
+- acciones para cancelar una corrida en curso o abrir la carpeta del job.
+
+Se abre solo al generar un análisis y se cierra con "Cerrar". Las corridas
+terminadas siguen ahí después de reiniciar el backend.
+
 ## Configuración
 
 Variables de entorno (el proceso manda; lo que falte se completa con

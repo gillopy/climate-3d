@@ -883,6 +883,398 @@ h3 {
   color: var(--ash);
 }
 
+/* --- Panel de trabajos ------------------------------------------------
+   Dock sobre el mapa: historial de corridas a la izquierda y detalle
+   (plan, resultados, estadisticas y log) a la derecha. */
+.trabajos {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  max-height: min(52%, 460px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: rgba(15, 16, 17, 0.97);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.trabajos__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.trabajos__title {
+  font-size: 12px;
+  letter-spacing: -0.01em;
+}
+
+.trabajos__count {
+  padding: 0 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--pill);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--fog);
+}
+
+.trabajos__cerrar {
+  min-height: 26px;
+  margin-left: auto;
+  padding: 2px 10px;
+  background: transparent;
+  color: var(--fog);
+  font-size: 10.5px;
+}
+
+.trabajos__cerrar:hover:not(:disabled) {
+  background: var(--obsidian);
+  color: var(--paper);
+}
+
+.trabajos__cuerpo {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.trabajos__lista {
+  min-height: 0;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.trabajos__fila {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trabajos__fila:hover {
+  background: var(--obsidian);
+}
+
+.trabajos__fila[aria-current="true"] {
+  border-color: var(--iris-line);
+  background: var(--iris-soft);
+}
+
+.trabajos__punto {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--ash);
+}
+
+.trabajos__punto--done {
+  background: var(--success);
+  box-shadow: 0 0 0 2px var(--success-soft);
+}
+
+.trabajos__punto--running,
+.trabajos__punto--queued {
+  background: var(--iris-hi);
+  box-shadow: 0 0 0 2px var(--iris-soft);
+}
+
+.trabajos__punto--error {
+  background: var(--danger);
+  box-shadow: 0 0 0 2px var(--danger-soft);
+}
+
+.trabajos__punto--cancelled {
+  background: var(--warn);
+  box-shadow: 0 0 0 2px var(--warn-soft);
+}
+
+.trabajos__fila-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.trabajos__fila-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.trabajos__estado {
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mist);
+}
+
+.trabajos__hora {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ash);
+  white-space: nowrap;
+}
+
+.trabajos__fila-stage {
+  overflow: hidden;
+  font-size: 10.5px;
+  color: var(--fog);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.trabajos__mini {
+  height: 3px;
+  margin-top: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--slate);
+}
+
+.trabajos__mini i {
+  display: block;
+  height: 100%;
+  background: var(--iris-hi);
+}
+
+.trabajos__detalle {
+  min-height: 0;
+  padding: 10px 12px;
+  overflow-y: auto;
+}
+
+.trabajos__detalle-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trabajos__detalle-title {
+  font-size: 12px;
+}
+
+.trabajos__detalle-sub {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  color: var(--ash);
+}
+
+.trabajos__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.trabajos__acciones .btn {
+  min-height: 28px;
+  padding: 3px 9px;
+  font-size: 10.5px;
+}
+
+.trabajos__aviso {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(248, 81, 73, 0.32);
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
+  color: #ffb4ae;
+  font-size: 10.5px;
+}
+
+.trabajos__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--ash);
+}
+
+.trabajos__meta-bbox {
+  overflow-wrap: anywhere;
+}
+
+.trabajos__plan {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 10.5px;
+  color: var(--fog);
+}
+
+.trabajos__barra {
+  height: 3px;
+  margin: 8px 0 0;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--slate);
+}
+
+.trabajos__barra i {
+  display: block;
+  height: 100%;
+  background: var(--iris-hi);
+  transition: width 200ms var(--ease);
+}
+
+.trabajos__seccion {
+  margin-top: 12px;
+}
+
+.trabajos__seccion h4 {
+  margin: 0 0 6px;
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.trabajos__imagenes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.trabajos__imagenes a {
+  display: block;
+}
+
+.trabajos__imagenes img {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--void);
+}
+
+.trabajos__archivo {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--iris-hi);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.trabajos__archivo:hover {
+  text-decoration: underline;
+}
+
+.trabajos__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--obsidian);
+}
+
+.trabajos__stat {
+  min-width: 0;
+}
+
+.trabajos__stat dt {
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.trabajos__stat dd {
+  margin: 1px 0 0;
+  font-size: 11px;
+  color: var(--mist);
+  overflow-wrap: anywhere;
+}
+
+.trabajos__logs {
+  max-height: 200px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--void);
+}
+
+.trabajos__log {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  padding: 3px 8px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: var(--fog);
+}
+
+.trabajos__log + .trabajos__log {
+  border-top: 1px solid rgba(35, 37, 42, 0.55);
+}
+
+.trabajos__log time {
+  color: var(--ash);
+  font-variant-numeric: tabular-nums;
+}
+
+.trabajos__log span {
+  overflow-wrap: anywhere;
+}
+
+.trabajos__log--warn {
+  color: #e3b341;
+}
+
+.trabajos__log--error {
+  color: #ff9d97;
+}
+
+.trabajos__vacio {
+  margin: 0;
+  padding: 10px 7px;
+  font-size: 10.5px;
+  color: var(--ash);
+}
+
 /* Leaflet sobre el mundo oscuro de la consola. */
 .nisar .leaflet-container {
   background: #0b0c0d;
@@ -935,6 +1327,23 @@ h3 {
 
   .nisar__detalle {
     max-height: none;
+  }
+
+  .trabajos {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    max-height: 56%;
+  }
+
+  .trabajos__cuerpo {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(84px, 120px) minmax(0, 1fr);
+  }
+
+  .trabajos__lista {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
 }
 
