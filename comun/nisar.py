@@ -380,18 +380,18 @@ def paleta(nombre: str, valores: np.ndarray) -> np.ndarray:
 
 
 def dimensiones(ancho: int, alto: int, px: int) -> tuple[int, int]:
-    """Tamano de salida: el pedido, pero nunca mayor que el recorte nativo.
+    """Tamano de salida: el pedido, reduciendo o interpolando segun haga falta.
 
-    Agrandar por encima del nativo no agrega detalle y desalinea la barra de
-    escala; el visor ya escala el PNG al mapa.
+    Achicar a LANCZOS no pierde detalle; agrandar no lo inventa, pero deja el PNG
+    del tamano pedido (para presentaciones). `guardar` avisa cuando interpola y
+    la barra de escala se recalcula con los metros por pixel de salida.
     """
     objetivo = max(1, min(int(px), 4096))
     ancho = max(1, int(ancho))
     alto = max(1, int(alto))
-    lado = min(objetivo, max(ancho, alto))
     if ancho >= alto:
-        return lado, max(1, round(lado * alto / ancho))
-    return max(1, round(lado * ancho / alto)), lado
+        return objetivo, max(1, round(objetivo * alto / ancho))
+    return max(1, round(objetivo * ancho / alto)), objetivo
 
 
 def _fuente(tamano: int) -> ImageFont.FreeTypeFont:
@@ -552,6 +552,11 @@ def guardar(
     salida.parent.mkdir(parents=True, exist_ok=True)
     alto, ancho = rgb.shape[:2]
     ancho_salida, alto_salida = dimensiones(ancho, alto, px)
+    if ancho_salida > ancho or alto_salida > alto:
+        print(
+            f"aviso: el recorte nativo es {ancho}x{alto} px; la salida "
+            f"{ancho_salida}x{alto_salida} px se interpola (no agrega detalle)"
+        )
     img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB")
     img = img.resize((ancho_salida, alto_salida), Image.LANCZOS)
     # La escala se dibuja sobre el PNG final: si hubo resize, los metros por

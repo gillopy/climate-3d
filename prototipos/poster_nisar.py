@@ -32,6 +32,8 @@ RAIZ = Path(__file__).resolve().parents[1]
 if str(RAIZ / "comun") not in sys.path:
     sys.path.insert(0, str(RAIZ / "comun"))
 
+import nisar as kit  # noqa: E402  (multilook y ventana automatica)
+
 #: Nombres de dataset por polarizacion. El spec usa HHHH/HVHV; algunos productos
 #: de ejemplo usan HH/HV. Se aceptan las dos formas.
 CAPAS = {
@@ -164,14 +166,17 @@ def _norm(db: np.ndarray, vmin: float, vmax: float) -> np.ndarray:
 
 
 def _dimensiones(ancho: int, alto: int, px: int) -> tuple[int, int]:
-    """Tamano de salida: el pedido, pero nunca mayor que el recorte nativo."""
+    """Tamano de salida: el pedido, reduciendo o interpolando segun haga falta.
+
+    Achicar no pierde detalle; agrandar no lo inventa, pero deja el PNG del
+    tamano pedido para presentaciones (el log lo avisa).
+    """
     objetivo = max(1, min(int(px), 4096))
     ancho = max(1, int(ancho))
     alto = max(1, int(alto))
-    lado = min(objetivo, max(ancho, alto))
     if ancho >= alto:
-        return lado, max(1, round(lado * alto / ancho))
-    return max(1, round(lado * ancho / alto)), lado
+        return objetivo, max(1, round(objetivo * alto / ancho))
+    return max(1, round(objetivo * ancho / alto)), objetivo
 
 
 def _fuente(tamano: int) -> ImageFont.FreeTypeFont:
@@ -312,6 +317,12 @@ def main() -> int:
     ap.add_argument("--geojson", default=None, help="contorno para superponer (opcional)")
     ap.add_argument("--db-min", type=float, default=None)
     ap.add_argument("--db-max", type=float, default=None)
+    ap.add_argument(
+        "--ventana",
+        type=int,
+        default=0,
+        help="lado del multilook (impar); 0 = automatico para ~90 m, 1 = sin filtro",
+    )
     args = ap.parse_args()
 
     h5 = Path(args.h5)
@@ -355,6 +366,27 @@ def main() -> int:
             f"recorte {r1 - r0}x{c1 - c0} px nativos | pols {', '.join(disponibles)}"
         )
 
+        # Multilook: un color SAR a resolucion nativa es casi todo speckle. Se
+        # promedia la potencia (nunca el dB) a ~90 m para que se vea el terreno.
+        mpp_nativo = abs(float(x[min(c0 + 1, x.size - 1)] - x[c0]))
+        paso_lectura = max(
+            1, int(math.ceil(max(r1 - r0, c1 - c0) / max(1, int(px * 1.5))))
+        )
+        if args.ventana == 1:
+            ventana = 1
+        elif args.ventana > 1:
+            ventana = int(args.ventana)
+        else:
+            ventana = kit.ventana_para(mpp_nativo * paso_lectura, metros=90.0)
+        if ventana % 2 == 0:
+            ventana += 1
+        resolucion = (
+            f"multilook {ventana}x{ventana} (~{ventana * mpp_nativo * paso_lectura:.0f} m)"
+            if ventana > 1
+            else "sin filtro (speckle nativo)"
+        )
+        print(f"{resolucion} · {mpp_nativo:.0f} m/px nativos")
+
         if args.pol == "auto":
             elegidas = [p for p in ("HH", "HV") if p in disponibles]
             if not elegidas:
@@ -370,8 +402,10 @@ def main() -> int:
             modo = "gris"
 
         if modo == "color":
-            db_hh = _a_db(_leer(_capa(grupo, elegidas[0]), r0, r1, c0, c1, px))
-            db_hv = _a_db(_leer(_capa(grupo, elegidas[1]), r0, r1, c0, c1, px))
+            hh = kit.multilook(_leer(_capa(grupo, elegidas[0]), r0, r1, c0, c1, px), ventana)
+            hv = kit.multilook(_leer(_capa(grupo, elegidas[1]), r0, r1, c0, c1, px), ventana)
+            db_hh = _a_db(hh)
+            db_hv = _a_db(hv)
             print(f"leyendo {elegidas[0]} + {elegidas[1]}")
             vmin, vmax = _limites(db_hh, args.db_min, args.db_max)
             vmin2, vmax2 = _limites(db_hv, args.db_min, args.db_max)
@@ -386,7 +420,8 @@ def main() -> int:
             rango = f"dB {vmin:.1f} a {vmax:.1f}"
         else:
             pol = elegidas[0]
-            db = _a_db(_leer(_capa(grupo, pol), r0, r1, c0, c1, px))
+            datos = kit.multilook(_leer(_capa(grupo, pol), r0, r1, c0, c1, px), ventana)
+            db = _a_db(datos)
             print(f"leyendo {pol}")
             vmin, vmax = _limites(db, args.db_min, args.db_max)
             gris = _norm(db, vmin, vmax)
@@ -403,6 +438,11 @@ def main() -> int:
             rgb = np.flip(rgb, axis=0)
         alto, ancho = rgb.shape[:2]
         ancho_salida, alto_salida = _dimensiones(ancho, alto, px)
+        if ancho_salida > ancho or alto_salida > alto:
+            print(
+                f"aviso: el recorte nativo es {ancho}x{alto} px; la salida "
+                f"{ancho_salida}x{alto_salida} px se interpola (no agrega detalle)"
+            )
         img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB")
         img = img.resize((ancho_salida, alto_salida), Image.LANCZOS)
 
@@ -434,6 +474,8 @@ def main() -> int:
         "modo": modo,
         "tamano": list(img.size),
         "metros_por_px": round(metros_por_px, 3),
+        "multilook": ventana,
+        "multilook_m": round(ventana * mpp_nativo * paso_lectura, 1),
     }
     salida.with_suffix(".json").write_text(
         json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8"
