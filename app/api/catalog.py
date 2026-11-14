@@ -525,7 +525,8 @@ PRODUCTS: list[Product] = [
                       default=_rango(), enabled_when={"ultimos": False}),
             *_params_ultimos(),
             *_params_cuadro(),
-            ParamSpec(name="resolucion", label="Resolucion", kind="select", default="2712", options=_RESOLUCIONES),
+            ParamSpec(name="resolucion", label="Resolucion", kind="select",
+                      default="2712", options=_RESOLUCIONES),
             ParamSpec(
                 name="hora_desde",
                 label="Desde (UTC)",
@@ -551,6 +552,83 @@ PRODUCTS: list[Product] = [
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
                       enabled_when={"ultimos": False}),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
+        ],
+    ),
+    Product(
+        id="goes_lst",
+        name="GOES - temperatura de superficie (LST)",
+        group="satelite",
+        stage="descargar/descargar_goes_lst.py + prototipos/poster_goes_lst.py",
+        summary="ABI L2 LST a 2 km, disco completo: temperatura de la superficie solo "
+        "en tierra despejada, con cadencia horaria. La escala va en C y muestra F "
+        "como escala secundaria.",
+        params=[
+            ParamSpec(
+                name="satelite",
+                label="Satelite",
+                kind="select",
+                default="G19",
+                options=[
+                    ParamOption(value="G19", label="GOES-East G19 (75.2 W)"),
+                    ParamOption(value="G18", label="GOES-West G18 (137.2 W)"),
+                    ParamOption(value="G16", label="GOES-East G16 (hasta 2025)"),
+                ],
+            ),
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
+                      default=_rango(), enabled_when={"ultimos": False}),
+            *_params_ultimos(),
+            ParamSpec(
+                name="hora",
+                label="Hora del cuadro (UTC)",
+                kind="hour",
+                default=15,
+                min=0,
+                max=23,
+                step=1,
+                help=_AYUDA_HORA_UTC,
+                enabled_when={"snapshot": True},
+            ),
+            ParamSpec(name="resolucion", label="Resolucion", kind="select",
+                      default="2712", options=_RESOLUCIONES),
+            ParamSpec(
+                name="compuesto",
+                label="Compuesto temporal (h)",
+                kind="select",
+                default="1",
+                options=[
+                    ParamOption(value="1", label="1 h (cuadro instantaneo)"),
+                    ParamOption(value="3", label="3 h (menos huecos)"),
+                    ParamOption(value="6", label="6 h (poster, mas suave)"),
+                ],
+                help="promedia las horas anteriores para tapar nubes; con mas de una "
+                     "hora el cuadro deja de ser una instantanea",
+            ),
+            ParamSpec(
+                name="hora_desde",
+                label="Desde (UTC)",
+                kind="hour",
+                default=0,
+                min=0,
+                max=23,
+                step=1,
+                help=_AYUDA_HORA_UTC,
+                enabled_when={"ultimos": False},
+            ),
+            ParamSpec(
+                name="hora_hasta",
+                label="Hasta (UTC)",
+                kind="hour",
+                default=24,
+                min=1,
+                max=24,
+                step=1,
+                help="fin exclusivo: 24 cierra el dia UTC completo",
+                enabled_when={"ultimos": False},
+            ),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
+                      enabled_when={"ultimos": False}),
+            ParamSpec(name="fps", label="Cuadros por segundo", kind="slider",
+                      default=8, min=4, max=30, step=2),
         ],
     ),
     _producto_rgb("goes_dust", "GOES - Dust RGB", "dust"),
@@ -1176,6 +1254,7 @@ _ORDEN = (
     "goes_banda",
     "geocolor",
     "goes_c13",
+    "goes_lst",
     "goes_truecolor",
     "goes_airmass",
     "goes_dust",
@@ -1358,6 +1437,11 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
     if product.id in ("goes_dust", "goes_airmass", "goes_firetemp"):
         banda = "C07" if product.id == "goes_firetemp" else "C13"
         datos = raiz / f"goes_{banda.lower()}_{str(params.get('satelite', 'G19')).lower()}"
+        if datos.is_dir():
+            encontradas |= _fechas_de_nombres([f.name for f in datos.glob("*.nc")], _DIA_GOES)
+
+    if product.id == "goes_lst":
+        datos = raiz / f"goes_lst_{str(params.get('satelite', 'G19')).lower()}"
         if datos.is_dir():
             encontradas |= _fechas_de_nombres([f.name for f in datos.glob("*.nc")], _DIA_GOES)
 

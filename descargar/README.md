@@ -6,6 +6,7 @@ conexión** a partir de lo que ya está descargado.
 | Archivo | Qué baja | Fuente | Destino |
 |---|---|---|---|
 | `descargar_goes.py` | GOES-R ABI L2 CMIP (`.nc`) | Bucket público NOAA S3 | `DATOS/goes_<banda>_<sat>/` |
+| `descargar_goes_lst.py` | GOES-R ABI L2 LST 2 km full disk (`.nc`) | Bucket público NOAA S3 | `DATOS/goes_lst_<sat>/` |
 | `descargar_era5.py` | ERA5 2m temperature 2024–2026 (requiere `cdsapi`) | Copernicus CDS | `DATOS/era5_t2m_2024-2026.nc` |
 | `descargar_himawari.py` | Himawari-9 AHI banda 13 en HSD, decodificada a `.npz` | Bucket público NOAA S3 | `DATOS/himawari_b13_h09/` |
 | `truecolor_goes.py` | Bandas visibles C01 / C02 / C03 del GOES-R ABI | Bucket público NOAA S3 | `DATOS/goes_c0{1,2,3}_<sat>/` |
