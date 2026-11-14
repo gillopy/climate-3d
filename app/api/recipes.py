@@ -2395,6 +2395,13 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             modo_cambio = str(params.get("modo_cambio") or "mascara").lower()
             if modo_cambio not in ("delta", "mascara", "rgb"):
                 modo_cambio = "mascara"
+            verificar = bool(params.get("verificar_s2"))
+            try:
+                mmu_ha = max(
+                    0.0, float(params.get("mmu_ha", 0.5 if verificar else 0.0))
+                )
+            except (TypeError, ValueError):
+                mmu_ha = 0.5 if verificar else 0.0
             render = Step(
                 kind="render",
                 label=f"comparando fechas a {px} px",
@@ -2407,6 +2414,8 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                     "--modo", modo_cambio,
                     "--umbral", f"{umbral:g}",
                     "--hv-min", f"{hv_min:g}",
+                    *(["--verificar-s2"] if verificar else []),
+                    *(["--mmu-ha", f"{mmu_ha:g}"] if mmu_ha > 0 else []),
                     "--out", str(work / f"nisar_cambio_{modo_cambio}_{px}.png"),
                     "--geojson", geojson,
                 ],

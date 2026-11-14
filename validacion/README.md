@@ -45,6 +45,25 @@ incluye cosechas, anegamientos y estacionalidad, así que no es verdad de campo.
 El próximo paso es serie/CUSUM, máscara de bosque, misma estación y una
 referencia anual (MapBiomas/GFW) o interpretación visual de polígonos.
 
+## Caja del Este (10 m, 2026-06-28 → 2026-08-27)
+
+Misma validación con las fechas exactas de la óptica (S2 del 28-jun y del 27-ago),
+track 031/165, caja `-54.688225,-24.5212,-54.600334,-24.398071`:
+
+| Producto | Área predicha | Referencia NDVI | Precisión densa | Recall | Sesgo |
+|---|---:|---:|---:|---:|---:|
+| HV > −15,5 dB y ΔHV < −3 dB (defaults) | 4.764 ha | 328 ha | 0,03 | 0,38 | +1350 % |
+| + bosque por NDVI > 0,55 + ΔNDVI ≤ −0,20 + MMU 0,5 ha | 138 ha | 328 ha | — | — | −58 % |
+
+La primera fila es la que el visor pintaba como "cambio de dosel": 93 % de esos
+píxeles no tienen pérdida de NDVI. La segunda es el producto con confirmación
+óptica (`prototipos/nisar_cambio.py --verificar-s2 --mmu-ha 0.5`): pinta bloques
+coherentes y queda del orden de la referencia. Queda conservador (menos área que
+la referencia) porque exige NDVI > 0,55 antes del cambio.
+
+El script de validación usa ahora [`comun/sentinel2.py`](../comun/sentinel2.py)
+(el módulo compartido); antes importaba `nisar_fusion.STAC`, que ya no existe.
+
 ## Límites
 
 - Referencia óptica, no campo; una cosecha o el agua también bajan el NDVI.

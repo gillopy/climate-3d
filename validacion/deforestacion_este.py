@@ -1,13 +1,13 @@
-"""Validación de deforestación en el Este contra una referencia óptica pre/post.
+"""ValidaciÃ³n de deforestaciÃ³n en el Este contra una referencia Ã³ptica pre/post.
 
 No hay verdad de campo: la referencia es el cambio de NDVI de Sentinel-2 entre
 una ventana previa y una posterior, enmascarado con SCL. Es una referencia
-independiente del radar, pero no perfecta: una cosecha o un anegamiento también
+independiente del radar, pero no perfecta: una cosecha o un anegamiento tambiÃ©n
 pueden bajar el NDVI. El informe lo dice y separa lo que se puede afirmar.
 
 Salidas en ``--out``:
-- ``ndvi_pre.npy`` / ``ndvi_post.npy`` (caché de los compuestos),
-- ``muestras.csv`` (puntos ciegos con etiqueta y predicción),
+- ``ndvi_pre.npy`` / ``ndvi_post.npy`` (cachÃ© de los compuestos),
+- ``muestras.csv`` (puntos ciegos con etiqueta y predicciÃ³n),
 - ``metricas.json`` y ``informe.md``,
 - ``comparacion.png``, ``errores.png``, ``curva.png``, ``dispersion.png``.
 
@@ -20,6 +20,7 @@ import argparse
 import csv
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 import matplotlib
@@ -30,59 +31,43 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from affine import Affine  # noqa: E402
 from pyproj import Transformer  # noqa: E402
-from pystac_client import Client  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 sys.path.insert(0, str(RAIZ / "prototipos"))
 
 import nisar  # noqa: E402
-import optico  # noqa: E402
+import sentinel2  # noqa: E402
 import validacion  # noqa: E402
-from nisar_fusion import STAC, _ndvi_item  # noqa: E402
 
 
 def compuesto_ndvi(
     bbox, desde: str, hasta: str, nubes: float, forma, transform, crs, px: int,
     max_items: int = 12,
 ) -> tuple[np.ndarray, list[dict]]:
-    catalogo = Client.open(STAC)
-    items = sorted(
-        list(
-            catalogo.search(
-                collections=["sentinel-2-l2a"],
-                bbox=bbox,
-                datetime=f"{desde}/{hasta}",
-                query={"eo:cloud_cover": {"lt": float(nubes)}},
-            ).items()
-        ),
-        key=lambda item: float(item.properties.get("eo:cloud_cover", 100.0)),
-    )[:max_items]
+    """NDVI mediano de Sentinel-2 en la ventana, en la grilla del radar."""
+    inicio = date.fromisoformat(desde[:10])
+    fin = date.fromisoformat(hasta[:10])
+    if fin < inicio:
+        inicio, fin = fin, inicio
+    centro = inicio + (fin - inicio) / 2
+    dias = max(1, (fin - inicio).days // 2 + 1)
+    items = sentinel2.buscar_items(bbox, centro, dias, nubes, max_items)
     if not items:
         raise SystemExit(
             f"No hay Sentinel-2 entre {desde} y {hasta} con nubes < {nubes:g}%."
         )
-    ndvis = []
-    usados = []
-    for item in items:
-        try:
-            nd, nubes_item = _ndvi_item(item, bbox, forma, transform, crs, px)
-        except Exception as exc:  # noqa: BLE001 - un ítem roto no mata la validación
-            print(f"  aviso: {item.id} fallo ({type(exc).__name__}: {exc}); se omite")
-            continue
-        if nd is None or not np.isfinite(nd).any():
-            continue
-        ndvis.append(nd)
-        usados.append({"id": item.id, "cloud": round(nubes_item, 2)})
-        print(f"  {item.id}: {nubes_item:.1f}% nubes")
-    if not ndvis:
-        raise SystemExit("Ningún ítem dejó NDVI válido.")
-    return optico.compuesto_mediana(ndvis), usados
+    ndvi, usados = sentinel2.componer_ndvi(
+        items, bbox, forma, transform, crs, px
+    )
+    if ndvi is None or not np.isfinite(ndvi).any():
+        raise SystemExit("NingÃºn Ã­tem dejÃ³ NDVI vÃ¡lido.")
+    return ndvi, usados
 
 
 def _cache_npy(ruta: Path, calcular, refrescar: bool):
     if ruta.is_file() and not refrescar:
-        print(f"usando caché {ruta.name}")
+        print(f"usando cachÃ© {ruta.name}")
         return np.load(ruta)
     valor = calcular()
     np.save(ruta, valor)
@@ -96,7 +81,7 @@ def _metricas_fila(nombre: str, tp, fp, fn, tn) -> dict:
 
 
 def _tabla_md(filas: list[dict]) -> str:
-    cabecera = "| Conjunto | TP | FP | FN | TN | Precisión | Recall | F1 | IoU |\n"
+    cabecera = "| Conjunto | TP | FP | FN | TN | PrecisiÃ³n | Recall | F1 | IoU |\n"
     cabecera += "|---|---:|---:|---:|---:|---:|---:|---:|---:|\n"
     cuerpo = ""
     for fila in filas:
@@ -128,7 +113,7 @@ def main() -> int:
     ap.add_argument("--muestras", type=int, default=250)
     ap.add_argument("--separacion", type=int, default=2)
     ap.add_argument("--out", default=str(RAIZ / "validacion" / "este_2026"))
-    ap.add_argument("--refrescar", action="store_true", help="ignora la caché de NDVI")
+    ap.add_argument("--refrescar", action="store_true", help="ignora la cachÃ© de NDVI")
     args = ap.parse_args()
 
     salida = Path(args.out)
@@ -161,7 +146,7 @@ def main() -> int:
         float(xs[0]) - mpp_x / 2.0, float(ys[0]) + mpp_y / 2.0
     ) * Affine.scale(mpp_x, -mpp_y)
     crs = f"EPSG:{epsg}"
-    print(f"grilla {forma[0]}x{forma[1]} · {mpp_x:.0f} m/px · track {track} frame {frame}")
+    print(f"grilla {forma[0]}x{forma[1]} Â· {mpp_x:.0f} m/px Â· track {track} frame {frame}")
 
     print(f"NDVI previo {args.pre_desde} a {args.pre_hasta}")
     ndvi_pre = _cache_npy(
@@ -203,7 +188,7 @@ def main() -> int:
 
     pred = nisar.mayoria3(valido & (db_antes > args.hv_min) & (dhv < -args.umbral)) & valido
 
-    # Muestreo ciego: puntos de pérdida y de estabilidad, separados en la grilla.
+    # Muestreo ciego: puntos de pÃ©rdida y de estabilidad, separados en la grilla.
     muestras = validacion.muestreo_estratificado(
         {"perdida": perdida_ref, "estable": estable_ref},
         max(20, int(args.muestras)),
@@ -224,7 +209,7 @@ def main() -> int:
     ref_m = np.array(refs, dtype=bool)
     pred_m = np.array(preds, dtype=bool)
     if ref_m.size == 0:
-        raise SystemExit("La referencia no dejó puntos; revisá los umbrales de NDVI.")
+        raise SystemExit("La referencia no dejÃ³ puntos; revisÃ¡ los umbrales de NDVI.")
 
     tp, fp, fn, tn = validacion.matriz_confusion(ref_m, pred_m)
     n_pos_total = int(perdida_ref.sum())
@@ -253,7 +238,7 @@ def main() -> int:
     area_valida = float(valido.sum()) * mpp_x * mpp_y / 10000.0
     sesgo = (area_pred - area_ref) / area_ref * 100.0 if area_ref else 0.0
 
-    # Curva de umbral sobre el mapa denso (la muestra balanceada no da precisión).
+    # Curva de umbral sobre el mapa denso (la muestra balanceada no da precisiÃ³n).
     umbrales = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0]
     curva = []
     for umbral in umbrales:
@@ -360,7 +345,7 @@ def main() -> int:
         f"(P {denso['precision']:.2f}, R {denso['recall']:.2f}) | "
         f"ponderada F1 {tabla[1]['f1']:.2f}"
     )
-    print(f"área ref {area_ref:.0f} ha | pred {area_pred:.0f} ha | sesgo {sesgo:+.1f}%")
+    print(f"Ã¡rea ref {area_ref:.0f} ha | pred {area_pred:.0f} ha | sesgo {sesgo:+.1f}%")
     print(f"listo: {salida}")
     return 0
 
@@ -371,8 +356,8 @@ def _comparacion(salida, ndvi_pre, ndvi_post, dndvi, dhv):
     datos = [
         (ndvi_pre, "NDVI previo", "RdYlGn", -0.2, 0.8),
         (ndvi_post, "NDVI posterior", "RdYlGn", -0.2, 0.8),
-        (dndvi, "ΔNDVI (post - pre)", "RdBu", -0.5, 0.5),
-        (dhv, "NISAR ΔHV (dB)", "RdBu", -6, 6),
+        (dndvi, "Î”NDVI (post - pre)", "RdBu", -0.5, 0.5),
+        (dhv, "NISAR Î”HV (dB)", "RdBu", -6, 6),
     ]
     for ax, (dato, titulo, mapa, vmin, vmax) in zip(axes.ravel(), datos):
         ax.set_facecolor("#0b0c0d")
@@ -385,7 +370,7 @@ def _comparacion(salida, ndvi_pre, ndvi_post, dndvi, dhv):
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02).ax.tick_params(
             colors="#d0d6e0", labelsize=8
         )
-    fig.suptitle("Validación deforestación Este · referencia óptica vs NISAR",
+    fig.suptitle("ValidaciÃ³n deforestaciÃ³n Este Â· referencia Ã³ptica vs NISAR",
                  color="#f7f8f8", fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     fig.savefig(salida, facecolor=fig.get_facecolor(), bbox_inches="tight")
@@ -412,10 +397,10 @@ def _errores(salida, base, referencia, prediccion):
     for borde in ax.spines.values():
         borde.set_color("#23252a")
     ax.set_title(
-        f"Errores · TP {int(tp.sum())} · FP {int(fp.sum())} · FN {int(fn.sum())}",
+        f"Errores Â· TP {int(tp.sum())} Â· FP {int(fp.sum())} Â· FN {int(fn.sum())}",
         color="#f7f8f8", fontsize=10,
     )
-    fig.text(0.01, 0.01, "verde = acierto · rojo = falso positivo · azul = falso negativo",
+    fig.text(0.01, 0.01, "verde = acierto Â· rojo = falso positivo Â· azul = falso negativo",
              color="#8a8f98", fontsize=8)
     fig.tight_layout(rect=[0, 0.03, 1, 1])
     fig.savefig(salida, facecolor=fig.get_facecolor(), bbox_inches="tight")
@@ -429,8 +414,8 @@ def _curva(salida, curva):
     ax.set_facecolor("#0b0c0d")
     for clave, color in (("f1", "#3fb950"), ("precision", "#5e6ad2"), ("recall", "#d29922")):
         ax.plot(umbrales, [fila[clave] for fila in curva], marker="o", label=clave, color=color)
-    ax.set_xlabel("umbral de caída HV (dB)", color="#d0d6e0")
-    ax.set_ylabel("métrica", color="#d0d6e0")
+    ax.set_xlabel("umbral de caÃ­da HV (dB)", color="#d0d6e0")
+    ax.set_ylabel("mÃ©trica", color="#d0d6e0")
     ax.set_ylim(0, 1)
     ax.tick_params(colors="#8a8f98")
     ax.grid(color="#23252a", alpha=0.7)
@@ -450,20 +435,20 @@ def _dispersion(salida, ref_m, db_antes, dndvi, filas, columnas):
     hv = np.array([db_antes[f, c] for f, c in zip(filas, columnas)])
     dn = np.array([dndvi[f, c] for f, c in zip(filas, columnas)])
     for etiqueta, color, nombre in (
-        (True, "#f85149", "pérdida óptica"),
-        (False, "#3fb950", "estable óptico"),
+        (True, "#f85149", "pÃ©rdida Ã³ptica"),
+        (False, "#3fb950", "estable Ã³ptico"),
     ):
         mascara = ref_m == etiqueta
         ax.scatter(hv[mascara], dn[mascara], s=9, alpha=0.7, color=color, label=nombre)
     ax.axhline(0, color="#34343a", linewidth=1)
     ax.set_xlabel("HV antes (dB)", color="#d0d6e0")
-    ax.set_ylabel("ΔNDVI", color="#d0d6e0")
+    ax.set_ylabel("Î”NDVI", color="#d0d6e0")
     ax.tick_params(colors="#8a8f98")
     ax.grid(color="#23252a", alpha=0.6)
     for borde in ax.spines.values():
         borde.set_color("#23252a")
     ax.legend(facecolor="#161718", edgecolor="#23252a", labelcolor="#d0d6e0")
-    ax.set_title("Muestra ciega: HV vs ΔNDVI", color="#f7f8f8", fontsize=10)
+    ax.set_title("Muestra ciega: HV vs Î”NDVI", color="#f7f8f8", fontsize=10)
     fig.tight_layout()
     fig.savefig(salida, facecolor=fig.get_facecolor(), bbox_inches="tight")
     plt.close(fig)
@@ -471,42 +456,42 @@ def _dispersion(salida, ref_m, db_antes, dndvi, filas, columnas):
 
 def _informe(ruta, meta, tabla, ic, split, curva):
     lineas = [
-        "# Validación · deforestación en el Este",
+        "# ValidaciÃ³n Â· deforestaciÃ³n en el Este",
         "",
-        f"- NISAR: {meta['nisar']['antes']} → {meta['nisar']['despues']}",
+        f"- NISAR: {meta['nisar']['antes']} â†’ {meta['nisar']['despues']}",
         f"- Track/frame: {meta['nisar']['track']}/{meta['nisar']['frame']}",
-        f"- Grilla: {meta['nisar']['mpp'][0]:.0f} m/px · EPSG:{meta['nisar']['epsg']}",
+        f"- Grilla: {meta['nisar']['mpp'][0]:.0f} m/px Â· EPSG:{meta['nisar']['epsg']}",
         f"- Sentinel-2: {meta['ventanas']['pre'][0]} a {meta['ventanas']['pre'][1]} "
         f"(previo) y {meta['ventanas']['post'][0]} a {meta['ventanas']['post'][1]} "
         f"(posterior), nubes < {meta['ventanas']['nubes_max']:g}%",
-        f"- Referencia: NDVI previo ≥ {meta['referencia']['ndvi_bosque']:.2f}, "
-        f"posterior ≤ {meta['referencia']['ndvi_perdida']:.2f}, "
-        f"ΔNDVI ≤ -{meta['referencia']['dndvi_perdida']:.2f}; "
-        f"estable: |ΔNDVI| ≤ {meta['referencia']['estable']:.2f}",
+        f"- Referencia: NDVI previo â‰¥ {meta['referencia']['ndvi_bosque']:.2f}, "
+        f"posterior â‰¤ {meta['referencia']['ndvi_perdida']:.2f}, "
+        f"Î”NDVI â‰¤ -{meta['referencia']['dndvi_perdida']:.2f}; "
+        f"estable: |Î”NDVI| â‰¤ {meta['referencia']['estable']:.2f}",
         f"- Producto: HV antes > {meta['producto']['hv_min_db']:g} dB y "
-        f"ΔHV < -{meta['producto']['umbral_db']:g} dB, mayoría 3×3",
+        f"Î”HV < -{meta['producto']['umbral_db']:g} dB, mayorÃ­a 3Ã—3",
         f"- Muestras ciegas: {meta['muestras']}",
         "",
-        "## Métricas",
+        "## MÃ©tricas",
         "",
         _tabla_md(tabla),
         "",
-        "La fila **denso** es la operativa. La muestra balanceada (mitad pérdida, "
-        "mitad estable) infla la precisión; sirve para el recall y el IC.",
+        "La fila **denso** es la operativa. La muestra balanceada (mitad pÃ©rdida, "
+        "mitad estable) infla la precisiÃ³n; sirve para el recall y el IC.",
         "",
         "## IC bootstrap (95 %, muestra balanceada)",
         "",
-        f"- Precisión: {ic['precision']['mean']:.2f} "
+        f"- PrecisiÃ³n: {ic['precision']['mean']:.2f} "
         f"[{ic['precision']['p2_5']:.2f}, {ic['precision']['p97_5']:.2f}]",
         f"- Recall: {ic['recall']['mean']:.2f} "
         f"[{ic['recall']['p2_5']:.2f}, {ic['recall']['p97_5']:.2f}]",
         f"- F1: {ic['f1']['mean']:.2f} "
         f"[{ic['f1']['p2_5']:.2f}, {ic['f1']['p97_5']:.2f}]",
         "",
-        "## Área",
+        "## Ãrea",
         "",
         f"- Referencia: {meta['areas_ha']['referencia_perdida']:.0f} ha",
-        f"- Predicción: {meta['areas_ha']['prediccion_perdida']:.0f} ha",
+        f"- PredicciÃ³n: {meta['areas_ha']['prediccion_perdida']:.0f} ha",
         f"- Sesgo: {meta['areas_ha']['sesgo_pct']:+.1f} %",
         "",
         "## Split espacial (muestra balanceada)",
@@ -515,10 +500,10 @@ def _informe(ruta, meta, tabla, ic, split, curva):
     for nombre, fila in split.items():
         lineas.append(
             f"- {nombre} (n={fila['n']}): F1 {fila['f1']:.2f}, "
-            f"precisión {fila['precision']:.2f}, recall {fila['recall']:.2f}"
+            f"precisiÃ³n {fila['precision']:.2f}, recall {fila['recall']:.2f}"
         )
     lineas += ["", "## Curva de umbral (mapa denso)", ""]
-    lineas.append("| Umbral (dB) | Precisión | Recall | F1 |")
+    lineas.append("| Umbral (dB) | PrecisiÃ³n | Recall | F1 |")
     lineas.append("|---:|---:|---:|---:|")
     for fila in curva:
         lineas.append(
@@ -527,16 +512,16 @@ def _informe(ruta, meta, tabla, ic, split, curva):
         )
     lineas += [
         "",
-        "## Límites",
+        "## LÃ­mites",
         "",
-        "- La referencia es **óptica**, no verdad de campo: una cosecha, un anegamiento "
-        "o un cambio de manejo también bajan el NDVI. No distingue deforestación de "
-        "otras pérdidas de vegetación.",
+        "- La referencia es **Ã³ptica**, no verdad de campo: una cosecha, un anegamiento "
+        "o un cambio de manejo tambiÃ©n bajan el NDVI. No distingue deforestaciÃ³n de "
+        "otras pÃ©rdidas de vegetaciÃ³n.",
         "- Las ventanas de junio y octubre incluyen estacionalidad; parte del cambio "
-        "óptico y del HV puede ser humedad, no cobertura.",
-        "- El bootstrap remuestrea píxeles y no corrige del todo la autocorrelación "
+        "Ã³ptico y del HV puede ser humedad, no cobertura.",
+        "- El bootstrap remuestrea pÃ­xeles y no corrige del todo la autocorrelaciÃ³n "
         "espacial; el muestreo ya adelgaza la grilla.",
-        "- NISAR tiene repetición de 12 días: la fecha de cambio no es diaria.",
+        "- NISAR tiene repeticiÃ³n de 12 dÃ­as: la fecha de cambio no es diaria.",
     ]
     ruta.write_text("\n".join(lineas) + "\n", encoding="utf-8")
 

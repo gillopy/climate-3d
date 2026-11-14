@@ -284,6 +284,48 @@ def mayoria3(mascara: np.ndarray) -> np.ndarray:
     return suma >= 5
 
 
+def filtrar_mmu(mascara: np.ndarray, minimo: int) -> np.ndarray:
+    """Deja solo las componentes conexas (8 vecinos) de al menos ``minimo`` px.
+
+    Es la unidad minima de mapeo: un desmonte real es un bloque, no pixeles
+    sueltos. Sin scipy: recorrido en profundidad iterativo sobre el array plano.
+    """
+    m = np.asarray(mascara, dtype=bool)
+    if minimo <= 1 or not m.any():
+        return m
+    alto, ancho = m.shape
+    plano = m.ravel()
+    vistos = np.zeros(plano.shape, dtype=bool)
+    salida = np.zeros(plano.shape, dtype=bool)
+    for inicio in np.flatnonzero(plano):
+        origen = int(inicio)
+        if vistos[origen]:
+            continue
+        vistos[origen] = True
+        pila = [origen]
+        componentes: list[int] = []
+        while pila:
+            indice = pila.pop()
+            componentes.append(indice)
+            fila, columna = divmod(indice, ancho)
+            for df in (-1, 0, 1):
+                nueva_fila = fila + df
+                if nueva_fila < 0 or nueva_fila >= alto:
+                    continue
+                base = nueva_fila * ancho
+                for dc in (-1, 0, 1):
+                    nueva_columna = columna + dc
+                    if nueva_columna < 0 or nueva_columna >= ancho:
+                        continue
+                    vecino = base + nueva_columna
+                    if plano[vecino] and not vistos[vecino]:
+                        vistos[vecino] = True
+                        pila.append(vecino)
+        if len(componentes) >= minimo:
+            salida[componentes] = True
+    return salida.reshape(alto, ancho)
+
+
 def rvi(hh: np.ndarray, hv: np.ndarray) -> np.ndarray:
     """RVI dual-pol (notebook de Sentinel-1) adaptado a HH/HV en potencia."""
     hh = np.asarray(hh, dtype=np.float32)

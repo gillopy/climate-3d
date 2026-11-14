@@ -491,6 +491,35 @@ class VisorNisar(unittest.TestCase):
 
         self.assertEqual(plan.pasos[0].args[-1], "NISAR_L2_GCOV_PROVISIONAL_V1")
 
+    def test_receta_cambio_confirma_con_sentinel_y_descarta_parches_chicos(self):
+        base = {
+            "producto": "cambio",
+            "granulo": GRANULO,
+            "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+            "coleccion": "NISAR_L2_GCOV_V1",
+            "antes_granulo": "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_20261017T214920_20261017T214955_P05023_N_F_J_001",
+            "antes_url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/ANTES/ANTES.h5",
+            "antes_coleccion": "NISAR_L2_GCOV_V1",
+            "bbox": "-55.6,-24.5,-55.2,-23.9",
+            "px": 1600,
+            "modo_cambio": "mascara",
+            "umbral": 3,
+            "hv_min": -15.5,
+        }
+        with tempfile.TemporaryDirectory() as carpeta:
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                con = planear("nisar_render", {**base, "verificar_s2": True}, Path(carpeta))
+                sin = planear("nisar_render", base, Path(carpeta))
+
+        args_con = con.pasos[-1].args
+        self.assertIn("--verificar-s2", args_con)
+        self.assertIn("--mmu-ha", args_con)
+        self.assertEqual(args_con[args_con.index("--mmu-ha") + 1], "0.5")
+
+        args_sin = sin.pasos[-1].args
+        self.assertNotIn("--verificar-s2", args_sin)
+        self.assertNotIn("--mmu-ha", args_sin)
+
     def test_receta_cambio_rechaza_la_misma_fecha(self):
         with self.assertRaises(ValueError):
             planear(

@@ -110,6 +110,7 @@ function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("Área", "area_ha", ha);
   agregar("Bosque", "bosque_ha", ha);
   agregar("Pérdida (área)", "perdida_ha", ha);
+  agregar("Pérdida radar", "perdida_radar_ha", ha);
   agregar("Pérdida (%)", "perdida_pct", pct);
   agregar("Pérdida del bosque", "perdida_bosque_pct", pct);
   agregar("Ganancia", "ganancia_ha", ha);
@@ -128,6 +129,9 @@ function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("Cambio CUSUM", "cusum.cambio_ha", ha);
   agregar("Área CUSUM", "cusum.area_ha", ha);
   agregar("Sentinel-2", "optico.items", (valor) => `${valor} ítem(s)`);
+  agregar("NDVI confirma", "optico.verificado", (valor) =>
+    valor ? "sí" : "no",
+  );
   agregar("Cobertura NDVI", "optico.cobertura_valida_pct", pct);
   agregar("Focos FIRMS", "focos", texto);
   agregar("Resolución", "mpp", (valor) => `${Number(valor).toFixed(0)} m/px`);
@@ -193,6 +197,9 @@ export function NisarView() {
   const [fechaNueva, setFechaNueva] = useState("");
   const [resolviendo, setResolviendo] = useState(false);
   const [coordTexto, setCoordTexto] = useState("");
+  // Confirmar la caida de HV con NDVI de Sentinel-2 y descartar parches chicos:
+  // sin esto el "rojo" incluye cosechas, anegamientos y estacionalidad.
+  const [verificarS2, setVerificarS2] = useState(true);
   const [modoCambio, setModoCambio] = useState("mascara");
   const [umbral, setUmbral] = useState("3");
   const [hvMin, setHvMin] = useState("-15.5");
@@ -665,6 +672,8 @@ export function NisarView() {
       params.hv_min = Number(hvMin);
       if (producto === "cambio") {
         params.modo_cambio = modoCambio;
+        params.verificar_s2 = verificarS2;
+        if (verificarS2) params.mmu_ha = 0.5;
       } else {
         params.firms = firms;
       }
@@ -1088,7 +1097,7 @@ export function NisarView() {
                 <>
                   <p className="nisar__sub">
                     {producto === "cambio"
-                      ? "Compara HV entre esta fecha y otra del mismo track/frame. Pérdida = caída de HV."
+                      ? "Compara HV entre esta fecha y otra del mismo track/frame. Con Sentinel-2 activo, el rojo es solo bosque cuyo NDVI también cayó (parches ≥ 0.5 ha)."
                       : producto === "rvi"
                         ? "Índice de vegetación radar (HH/HV) de esta fecha."
                         : producto === "serie"
@@ -1322,17 +1331,33 @@ export function NisarView() {
                           </span>
                         ) : null}
                         {producto === "cambio" ? (
-                          <label>
-                            Modo
-                            <select
-                              value={modoCambio}
-                              onChange={(evento) => setModoCambio(evento.target.value)}
-                            >
-                              <option value="mascara">Máscara</option>
-                              <option value="delta">Delta</option>
-                              <option value="rgb">RGB</option>
-                            </select>
-                          </label>
+                          <>
+                            <label>
+                              Modo
+                              <select
+                                value={modoCambio}
+                                onChange={(evento) => setModoCambio(evento.target.value)}
+                              >
+                                <option value="mascara">Máscara</option>
+                                <option value="delta">Delta</option>
+                                <option value="rgb">RGB</option>
+                              </select>
+                            </label>
+                            <label className="nisar__ancho">
+                              Confirmar con Sentinel-2 (NDVI)
+                              <select
+                                value={verificarS2 ? "si" : "no"}
+                                onChange={(evento) =>
+                                  setVerificarS2(evento.target.value === "si")
+                                }
+                              >
+                                <option value="si">
+                                  Sí · solo bosque con caída de NDVI, parches ≥ 0.5 ha
+                                </option>
+                                <option value="no">No · solo radar (rápido, sin red)</option>
+                              </select>
+                            </label>
+                          </>
                         ) : null}
                         <label>
                           Umbral (dB)

@@ -81,6 +81,13 @@ frame:
 En ASF Vertex el mismo dato aparece como `rangeBandwidth` (`40+5` / `20+5`). El visor
 muestra `10 m/px` o `20 m/px` en cada escena y en cada fecha del track/frame.
 
+**Cambio de cobertura**: con "Confirmar con Sentinel-2 (NDVI)" activo (default), el rojo
+solo pinta bosque cuyo NDVI también cayó (≥ 0,20) y parches de al menos 0,5 ha. Sin esa
+confirmación, la caída de HV sola incluye cosechas, anegamientos y estacionalidad: en la
+caja de trabajo del Este (031/165, 2026-06-28 → 2026-08-27) pintaba 4.991 ha cuando la
+referencia óptica ve 328 ha (sesgo +1350 %). Con la confirmación quedan 138 ha en bloques.
+La validación reproducible está en [`validacion/`](./validacion).
+
 Dentro de un contenedor la ruta es siempre `/data` y no hace falta exportar nada: lo
 configura el volumen. Ver [Correr en Docker](#correr-en-docker).
 

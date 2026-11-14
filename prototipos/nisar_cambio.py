@@ -47,6 +47,23 @@ def main() -> int:
         help="como decidir donde habia dosel antes del cambio",
     )
     ap.add_argument("--ndvi-bosque", type=float, default=0.55, help="NDVI minimo de bosque")
+    ap.add_argument(
+        "--verificar-s2",
+        action="store_true",
+        help="confirmar la caida de HV con NDVI de Sentinel-2 (pre y post)",
+    )
+    ap.add_argument(
+        "--dndvi",
+        type=float,
+        default=0.20,
+        help="caida minima de NDVI para confirmar la perdida",
+    )
+    ap.add_argument(
+        "--mmu-ha",
+        type=float,
+        default=0.0,
+        help="unidad minima de mapeo: descarta parches menores a estas hectareas",
+    )
     ap.add_argument("--dias", type=int, default=15, help="ventana de Sentinel-2 en dias")
     ap.add_argument("--nubes", type=float, default=40.0, help="nubes maximas de Sentinel-2")
     ap.add_argument("--max-items", type=int, default=8, help="items maximos de Sentinel-2")
@@ -90,39 +107,52 @@ def main() -> int:
 
         bosque_meta: dict = {"fuente": "hv", "ndvi_umbral": None, "items": []}
         pre_bosque = valido & (db_antes > float(args.hv_min))
-        if args.bosque == "ndvi":
-            ndvi = None
-            motivo = ""
+        ndvi_pre = None
+        ndvi_post = None
+        optico_meta: dict = {
+            "disponible": False,
+            "motivo": "",
+            "dndvi_umbral": float(args.dndvi),
+            "items_post": [],
+        }
+        transform, crs = sentinel2.grilla(xs, ys, rec_antes.epsg)
+
+        def _ndvi(fecha_texto: str) -> tuple[np.ndarray | None, list[dict], str]:
+            """NDVI compuesto alrededor de una fecha; (None, [], motivo) si falla."""
             if not sentinel2.DISPONIBLE:
-                motivo = "faltan rasterio/pystac-client"
-            else:
-                try:
-                    fecha = datetime.strptime(antes.fecha[:10], "%Y-%m-%d").date()
-                    transform, crs = sentinel2.grilla(xs, ys, rec_antes.epsg)
-                    items = sentinel2.buscar_items(
-                        (oeste, sur, este, norte),
-                        fecha,
-                        int(args.dias),
-                        float(args.nubes),
-                        int(args.max_items),
-                    )
-                    if items:
-                        ndvi, usados = sentinel2.componer_ndvi(
-                            items,
-                            (oeste, sur, este, norte),
-                            db_antes.shape,
-                            transform,
-                            crs,
-                            px,
-                        )
-                        bosque_meta["items"] = usados
-                    else:
-                        motivo = "sin Sentinel-2 en la ventana"
-                except Exception as exc:  # noqa: BLE001 - sin optico se sigue con HV
-                    motivo = f"{type(exc).__name__}: {exc}"
-            if ndvi is not None and np.isfinite(ndvi).any():
+                return None, [], "faltan rasterio/pystac-client"
+            try:
+                fecha = datetime.strptime(fecha_texto[:10], "%Y-%m-%d").date()
+                items = sentinel2.buscar_items(
+                    (oeste, sur, este, norte),
+                    fecha,
+                    int(args.dias),
+                    float(args.nubes),
+                    int(args.max_items),
+                )
+                if not items:
+                    return None, [], f"sin Sentinel-2 cerca de {fecha_texto[:10]}"
+                ndvi, usados = sentinel2.componer_ndvi(
+                    items,
+                    (oeste, sur, este, norte),
+                    db_antes.shape,
+                    transform,
+                    crs,
+                    px,
+                )
+                if ndvi is None or not np.isfinite(ndvi).any():
+                    return None, usados, "el compuesto NDVI quedo vacio"
+                return ndvi, usados, ""
+            except Exception as exc:  # noqa: BLE001 - sin optico se sigue con HV
+                return None, [], f"{type(exc).__name__}: {exc}"
+
+        if args.bosque == "ndvi" or args.verificar_s2:
+            motivo = ""
+            ndvi_pre, usados_pre, motivo = _ndvi(antes.fecha)
+            bosque_meta["items"] = usados_pre
+            if ndvi_pre is not None:
                 pre_bosque = (
-                    valido & np.isfinite(ndvi) & (ndvi > float(args.ndvi_bosque))
+                    valido & np.isfinite(ndvi_pre) & (ndvi_pre > float(args.ndvi_bosque))
                 )
                 bosque_meta["fuente"] = "ndvi"
                 bosque_meta["ndvi_umbral"] = float(args.ndvi_bosque)
@@ -133,8 +163,34 @@ def main() -> int:
             else:
                 bosque_meta["fuente"] = f"hv (sin NDVI: {motivo or 'sin datos'})"
                 print(f"aviso: mascara de bosque por HV ({motivo or 'sin datos'})")
+                optico_meta["motivo"] = motivo
 
-        perdida = nisar.mayoria3(valido & pre_bosque & (delta < -umbral)) & valido
+        perdida_radar = nisar.mayoria3(valido & pre_bosque & (delta < -umbral)) & valido
+        perdida = perdida_radar
+        if args.verificar_s2:
+            if ndvi_pre is None or not np.isfinite(ndvi_pre).any():
+                optico_meta["motivo"] = optico_meta["motivo"] or "sin NDVI previo"
+            else:
+                ndvi_post, usados_post, motivo = _ndvi(despues.fecha)
+                optico_meta["items_post"] = usados_post
+                if ndvi_post is not None:
+                    confirmado = (
+                        np.isfinite(ndvi_pre)
+                        & np.isfinite(ndvi_post)
+                        & (ndvi_pre >= float(args.ndvi_bosque))
+                        & ((ndvi_post - ndvi_pre) <= -float(args.dndvi))
+                    )
+                    perdida = perdida_radar & confirmado
+                    optico_meta["disponible"] = True
+                    print(
+                        f"optico: NDVI cae >= {args.dndvi:g} en "
+                        f"{100.0 * (perdida.sum() / max(1, perdida_radar.sum())):.0f}% "
+                        "de la perdida radar"
+                    )
+                else:
+                    optico_meta["motivo"] = motivo
+        if not args.verificar_s2 or not optico_meta["disponible"]:
+            optico_meta["motivo"] = optico_meta["motivo"] or "sin verificar"
         ganancia = nisar.mayoria3(valido & (delta > umbral)) & valido
 
         mpp_x = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
@@ -144,7 +200,14 @@ def main() -> int:
         pixeles_validos = int(valido.sum())
         if pixeles_validos == 0:
             raise SystemExit("La caja no tiene pixeles validos en las dos fechas.")
+        area_px_ha = mpp_x * mpp_y / 10000.0
+        minimo_px = 0
+        if float(args.mmu_ha) > 0:
+            minimo_px = max(1, int(round(float(args.mmu_ha) / area_px_ha)))
+            perdida = nisar.filtrar_mmu(perdida, minimo_px)
+            ganancia = nisar.filtrar_mmu(ganancia, minimo_px)
         perdida_px = int(perdida.sum())
+        perdida_radar_ha = nisar.hectareas(int(perdida_radar.sum()), mpp_x, mpp_y)
         ganancia_px = int(ganancia.sum())
         bosque_px = int(pre_bosque.sum())
         area_ha = nisar.hectareas(pixeles_validos, mpp_x, mpp_y)
@@ -182,13 +245,18 @@ def main() -> int:
                 rgb,
             )
 
+        confirmado = args.verificar_s2 and optico_meta["disponible"]
         lineas = [
             f"NISAR GCOV · cambio HV · {antes.fecha or antes.ruta.stem} -> "
             f"{despues.fecha or despues.ruta.stem}",
             f"perdida {perdida_ha:.0f} ha ({perdida_pct:.1f}%) · "
             f"umbral {umbral:g} dB · {mpp:.0f} m/px · EPSG:{rec_antes.epsg}",
             {
-                "mascara": "rojo = pérdida · azul = ganancia",
+                "mascara": (
+                    "rojo = pérdida confirmada con NDVI · azul = ganancia"
+                    if confirmado
+                    else "rojo = pérdida · azul = ganancia"
+                ),
                 "delta": "rojo = caída de HV · azul = aumento",
                 "rgb": "R = antes · G = después · B = ΔHV",
             }[args.modo],
@@ -233,10 +301,17 @@ def main() -> int:
                 ),
             },
             "perdida_ha": round(perdida_ha, 1),
+            "perdida_radar_ha": round(perdida_radar_ha, 1),
             "perdida_pct": round(perdida_pct, 2),
             "perdida_bosque_pct": round(perdida_bosque_pct, 2),
             "ganancia_ha": round(ganancia_ha, 1),
             "delta_medio_perdida_db": round(delta_medio, 2),
+            "optico": {
+                **optico_meta,
+                "verificado": bool(confirmado),
+            },
+            "mmu_ha": float(args.mmu_ha),
+            "mmu_px": minimo_px,
             "pixeles_validos": pixeles_validos,
         }
         nisar.guardar_json(salida, meta)
@@ -245,6 +320,13 @@ def main() -> int:
         f"perdida {perdida_ha:.0f} ha ({perdida_pct:.1f}% del area, "
         f"{perdida_bosque_pct:.1f}% del bosque) | ganancia {ganancia_ha:.0f} ha"
     )
+    if confirmado:
+        print(
+            f"optico: {perdida_ha:.0f} ha confirmadas de {perdida_radar_ha:.0f} ha "
+            f"radar ({100.0 * perdida_ha / max(1e-9, perdida_radar_ha):.0f}%)"
+        )
+    elif args.verificar_s2:
+        print(f"aviso: sin confirmacion optica ({optico_meta.get('motivo')})")
     print(f"listo: {salida} ({ancho}x{alto} px)")
     return 0
 

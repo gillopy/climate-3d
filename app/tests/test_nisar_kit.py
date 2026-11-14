@@ -59,6 +59,15 @@ assert nisar.ventana_para(20.0) == 5, nisar.ventana_para(20.0)
 for mpp in (1.0, 3.7, 6.0, 10.0, 20.0, 40.0):
     assert nisar.ventana_para(mpp) % 2 == 1, f"ventana par para {mpp}"
     assert 1 <= nisar.ventana_para(mpp) <= 9
+
+# MMU: un desmonte es un bloque, no pixeles sueltos.
+m = np.zeros((40, 40), dtype=bool)
+m[2:6, 2:6] = True      # 16 px
+m[20:22, 20:22] = True  # 4 px
+filtrada = nisar.filtrar_mmu(m, 10)
+assert filtrada.sum() == 16, filtrada.sum()
+assert filtrada[3, 3] and not filtrada[20, 20], "no descarto el parche chico"
+assert nisar.filtrar_mmu(m, 1).sum() == 20, "con minimo 1 cambio la mascara"
 '''
 
 
