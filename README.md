@@ -69,6 +69,18 @@ Los archivos ya bajados en otra ruta no se mueven solos: copiá la carpeta `nisa
 al disco nuevo (o apuntá `CLIMATE3D_NISAR` a la vieja). El visor muestra la ruta vigente y
 marca cada fecha como `local` cuando el `.h5` ya está ahí.
 
+El tamaño del píxel NISAR **no depende del track**: el mismo track alterna modos según el
+plan de observación. Se lee del nombre del gránulo, en los cuatro dígitos que siguen al
+frame:
+
+| Nombre | Ancho de banda | Píxel GCOV |
+| --- | --- | --- |
+| `..._031_A_165_4005_...` | `40+5` MHz | **10 m** |
+| `..._082_D_101_2005_...` | `20+5` MHz | **20 m** |
+
+En ASF Vertex el mismo dato aparece como `rangeBandwidth` (`40+5` / `20+5`). El visor
+muestra `10 m/px` o `20 m/px` en cada escena y en cada fecha del track/frame.
+
 Dentro de un contenedor la ruta es siempre `/data` y no hace falta exportar nada: lo
 configura el volumen. Ver [Correr en Docker](#correr-en-docker).
 

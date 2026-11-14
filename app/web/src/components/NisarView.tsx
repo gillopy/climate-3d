@@ -464,6 +464,7 @@ export function NisarView() {
     size_mb: escena.size_mb,
     local: true,
     download: "",
+    mpp: null,
   }));
   const fechasDelTrack: NisarTimelineScene[] = (() => {
     const mapa = new Map<string, NisarTimelineScene>();
@@ -485,6 +486,7 @@ export function NisarView() {
         size_mb: granulo.size_mb,
         local: granulo.local,
         download: granulo.download,
+        mpp: granulo.mpp,
       });
     }
     for (const escena of localesComoEscenas) {
@@ -758,6 +760,7 @@ export function NisarView() {
         size_mb: escena.size_mb,
         local: escena.local,
         download: escena.download,
+        mpp: escena.mpp,
       };
       setTimeline((previo) =>
         [...previo.filter((vieja) => vieja.id !== entrada.id), entrada].sort(
@@ -980,6 +983,7 @@ export function NisarView() {
                   <span className="nisar__item-meta">
                     {granulo.direction === "ASCENDING" ? "ascendente" : "descendente"}
                     {granulo.path !== null ? ` · orbita ${granulo.path}` : ""}
+                    {granulo.mpp !== null ? ` · ${granulo.mpp} m/px` : ""}
                     {granulo.size_mb !== null ? ` · ${granulo.size_mb} MB` : ""}
                   </span>
                   <span className="nisar__chips">
@@ -1457,6 +1461,7 @@ export function NisarView() {
                                 />
                                 <span>{fechaCorta(escena.start)}</span>
                                 <span className="nisar__fechas-peso">
+                                  {escena.mpp !== null ? `${escena.mpp} m/px · ` : ""}
                                   {escena.local
                                     ? "local"
                                     : escena.size_mb !== null

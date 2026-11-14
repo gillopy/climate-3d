@@ -38,6 +38,8 @@ export interface NisarGranule {
   direction: string;
   path: number | null;
   frame: number | null;
+  /** Espaciado del pixel en metros (10 o 20 en GCOV). */
+  mpp: number | null;
   polarization: string[];
   collection: string;
   size_mb: number | null;
@@ -86,6 +88,7 @@ export interface NisarTimelineScene {
   size_mb: number | null;
   local: boolean;
   download: string;
+  mpp: number | null;
 }
 
 export interface NisarTimeline {

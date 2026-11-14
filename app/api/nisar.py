@@ -47,6 +47,14 @@ CAJA_PARAGUAY = [-62.7, -27.7, -54.2, -19.2]
 #: En el nombre del granulo: ciclo, track, direccion y frame.
 _TRACK_FRAME = re.compile(r"_(\d{3})_(\d{3})_[AD]_(\d{3})_")
 _FECHA_NISAR = re.compile(r"(\d{8})T(\d{6})")
+#: Los cuatro digitos despues del frame son el modo de ancho de banda.
+_MODO_GCOV = re.compile(r"_\d{3}_\d{3}_[AD]_\d{3}_(\d{4})_")
+
+#: Espaciado del pixel GCOV segun el modo del nombre (verificado contra el HDF5:
+#: `xCoordinateSpacing`). No depende del track: el mismo track alterna modos.
+#:   _4005_ -> 40+5 MHz -> 10 m/px
+#:   _2005_ -> 20+5 MHz -> 20 m/px
+_MPP_POR_MODO = {"40": 10.0, "20": 20.0}
 
 #: Niveles que tienen sentido para un visor de imagenes. RSLC (L1) queda afuera:
 #: no esta geocodificado y no se puede superponer a un mapa.
@@ -104,6 +112,8 @@ class Granule(BaseModel):
     direction: str
     path: int | None = None
     frame: int | None = None
+    #: Espaciado del pixel en metros (10 o 20 en GCOV), leido del nombre.
+    mpp: float | None = None
     polarization: list[str] = Field(default_factory=list)
     collection: str = ""
     size_mb: float | None = None
@@ -152,6 +162,7 @@ class TimelineScene(BaseModel):
     size_mb: float | None = None
     local: bool = False
     download: str = ""
+    mpp: float | None = None
 
 
 class NisarTimeline(BaseModel):
@@ -432,6 +443,7 @@ def _granulo(feature: dict[str, Any]) -> Granule:
         direction=str(props.get("flightDirection") or ""),
         path=_entero(props.get("pathNumber")),
         frame=_entero(props.get("frameNumber")),
+        mpp=_mpp_de_granulo(granulo_id),
         polarization=[str(valor) for valor in pol],
         collection=coleccion,
         size_mb=_tamano_mb(props),
@@ -451,6 +463,14 @@ def _entero(valor: Any) -> int | None:
         return int(valor)
     except (TypeError, ValueError):
         return None
+
+
+def _mpp_de_granulo(nombre: str) -> float | None:
+    """Espaciado del pixel segun el modo del nombre (`_4005_` 10 m, `_2005_` 20 m)."""
+    encontrado = _MODO_GCOV.search(nombre or "")
+    if not encontrado:
+        return None
+    return _MPP_POR_MODO.get(encontrado.group(1)[:2])
 
 
 def _iso(dia: str, hora: str) -> str:
@@ -749,6 +769,7 @@ def linea_de_tiempo(
             size_mb=granulo.size_mb,
             local=bool(coleccion_local),
             download=granulo.download,
+            mpp=granulo.mpp,
         )
 
     for nombre, coleccion_local in locales.items():
@@ -778,6 +799,7 @@ def linea_de_tiempo(
                 size_mb=_tamano_local(nombre, coleccion_local),
                 local=True,
                 download="",
+                mpp=_mpp_de_granulo(nombre),
             )
         else:
             # El .h5 local es el de esta fila solo si es de la misma coleccion.

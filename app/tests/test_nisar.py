@@ -969,6 +969,23 @@ class VisorNisar(unittest.TestCase):
 
         self.assertEqual(respuesta.status_code, 404)
 
+    def test_el_nombre_del_granulo_dice_el_tamano_del_pixel(self):
+        # No depende del track: el mismo track alterna modos de 10 y 20 m.
+        self.assertEqual(
+            nisar._mpp_de_granulo(
+                "NISAR_L2_PR_GCOV_034_031_A_165_4005_DHDH_A_20261026T093148_20261026T093229_P05036_N_F_J_001"
+            ),
+            10.0,
+        )
+        self.assertEqual(
+            nisar._mpp_de_granulo(
+                "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_20261029T214921_20261029T214955_P05036_N_F_J_001"
+            ),
+            20.0,
+        )
+        self.assertIsNone(nisar._mpp_de_granulo("NISAR_L2_PR_GCOV_SIN_MODO"))
+        self.assertEqual(nisar._granulo(FEATURE).mpp, 20.0)
+
     def test_paraguay_sale_del_geojson_del_repo(self):
         respuesta = self.cliente.get("/api/nisar/paraguay")
 
