@@ -440,7 +440,11 @@ def _granulo(feature: dict[str, Any]) -> Granule:
         direction=str(props.get("flightDirection") or ""),
         path=_entero(props.get("pathNumber")),
         frame=_entero(props.get("frameNumber")),
-        mpp=_mpp_de_granulo(granulo_id),
+        mpp=(
+            200.0
+            if str(props.get("processingLevel") or "").upper() == "SME2"
+            else _mpp_de_granulo(granulo_id)
+        ),
         polarization=[str(valor) for valor in pol],
         collection=coleccion,
         size_mb=_tamano_mb(props),
@@ -590,6 +594,7 @@ def _local_por_fecha(
                 collection=carpeta.name,
                 size_mb=round(ruta.stat().st_size / 1e6, 1),
                 download="",
+                mpp=200.0 if nivel == "SME2" else None,
                 asf_url=(
                     "https://search.asf.alaska.edu/#/?dataset=NISAR&granule="
                     + urllib.parse.quote(ruta.stem, safe="")
@@ -782,7 +787,7 @@ def linea_de_tiempo(
                 size_mb=_tamano_local(nombre, coleccion_local),
                 local=True,
                 download="",
-                mpp=_mpp_de_granulo(nombre),
+                mpp=_mpp_de_granulo(nombre) if nivel != "SME2" else 200.0,
             )
         else:
             # El .h5 local es el de esta fila solo si es de la misma coleccion.

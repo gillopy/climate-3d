@@ -87,6 +87,19 @@ export function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("Recuperado", "temporal.recuperados_ha", ha);
   agregar("Cobertura NDVI", "optico.cobertura_valida_pct", pct);
   agregar("Focos FIRMS", "focos", texto);
+  agregar("Algoritmo", "algoritmo", texto);
+  agregar("Humedad media", "humedad_media", (valor) =>
+    `${Number(valor).toFixed(3)} m³/m³`,
+  );
+  agregar("Humedad p10 / p90", "humedad_p10", (valor) =>
+    `${Number(valor).toFixed(3)} / ${Number(_get(meta, "humedad_p90")).toFixed(3)} m³/m³`,
+  );
+  agregar("Incertidumbre media", "incertidumbre_media", (valor) =>
+    `${Number(valor).toFixed(3)} m³/m³`,
+  );
+  agregar("Cobertura válida", "cobertura_valida_pct", pct);
+  agregar("Calidad limpia", "calidad_limpia_pct", pct);
+  agregar("Área válida", "area_valida_ha", ha);
   agregar("Resolución", "mpp", (valor) => `${Number(valor).toFixed(0)} m/px`);
   agregar("Resolución", "metros_por_px", (valor) => `${Number(valor).toFixed(0)} m/px`);
   agregar("Salida", "px", (valor) =>

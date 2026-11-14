@@ -127,6 +127,8 @@ export function NisarView() {
   const [firms, setFirms] = useState(true);
   const [dias, setDias] = useState("15");
   const [nubes, setNubes] = useState("40");
+  const [algoritmoSme2, setAlgoritmoSme2] = useState("DSG");
+  const [soloCalidadSme2, setSoloCalidadSme2] = useState(false);
   // Panel de trabajos: historial de corridas con logs y resultados.
   const [jobNuevo, setJobNuevo] = useState<string | null>(null);
 
@@ -522,13 +524,15 @@ export function NisarView() {
 
   const enMarcha = trabajo?.status === "queued" || trabajo?.status === "running";
   const esGcov = seleccion?.level === "GCOV";
+  const esSme2 = seleccion?.level === "SME2";
 
   async function renderizar() {
     if (!seleccion || !caja) return;
-    if (seleccion.level !== "GCOV") {
+    const nivel = seleccion.level;
+    if (nivel !== "GCOV" && nivel !== "SME2") {
       setError(
-        `La escena es ${seleccion.level}. Los productos actuales usan GCOV; ` +
-          "elegí una escena GCOV para analizar.",
+        `La escena es ${nivel}. Los productos disponibles usan GCOV o SME2; ` +
+          "elegí una escena de esos niveles para analizar.",
       );
       return;
     }
@@ -540,15 +544,18 @@ export function NisarView() {
     const modoFinal =
       modo === "color" && seleccion.polarization.length < 2 ? "gris" : modo;
     const params: Params = {
-      producto,
-      nivel: seleccion.level,
+      producto: nivel === "SME2" ? "sme2" : producto,
+      nivel,
       granulo: seleccion.id,
       url: seleccion.download,
       coleccion: seleccion.collection,
       bbox: `${caja.oeste},${caja.sur},${caja.este},${caja.norte}`,
       px: Number(px),
     };
-    if (producto === "recorte") {
+    if (nivel === "SME2") {
+      params.algoritmo = algoritmoSme2;
+      params.solo_calidad = soloCalidadSme2;
+    } else if (producto === "recorte") {
       params.pol = polFinal;
       params.modo = modoFinal;
     } else if (producto === "cambio" || producto === "incendio") {
@@ -1505,11 +1512,76 @@ export function NisarView() {
                     ) : null}
                   </div>
                 </>
+              ) : esSme2 ? (
+                <>
+                  <p className="nisar__sub">
+                    Humedad del suelo a 200 m (EASE-Grid 2.0). El producto es
+                    PROVISIONAL: la calibración sigue en curso. El análisis usa la
+                    caja dibujada.
+                  </p>
+                  <div className="nisar__render-ctrl">
+                    <label>
+                      Algoritmo
+                      <select
+                        value={algoritmoSme2}
+                        onChange={(evento) => setAlgoritmoSme2(evento.target.value)}
+                      >
+                        <option value="DSG">DSG - desagregación</option>
+                        <option value="PMI">PMI - modelo físico</option>
+                        <option value="TSR">TSR - serie temporal</option>
+                      </select>
+                    </label>
+                    <label>
+                      Calidad
+                      <select
+                        value={soloCalidadSme2 ? "si" : "no"}
+                        onChange={(evento) =>
+                          setSoloCalidadSme2(evento.target.value === "si")
+                        }
+                      >
+                        <option value="no">Todos los píxeles válidos</option>
+                        <option value="si">Solo quality flag = 0</option>
+                      </select>
+                    </label>
+                    <label>
+                      Tamaño máx.
+                      <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                        <option value="1600">1600 px</option>
+                        <option value="2400">2400 px</option>
+                        <option value="3200">3200 px</option>
+                        <option value="4096">4096 px</option>
+                      </select>
+                    </label>
+                  </div>
+                  <p className="nisar__estado">
+                    SME2 se publica cada ~12 días y no reemplaza al GCOV: es
+                    humedad del suelo, no cambio de cobertura.
+                  </p>
+                  {!catalogo?.earthdata_configured ? (
+                    <p className="nisar__aviso">
+                      Falta EARTHDATA_USER y EARTHDATA_PASSWORD en .env para bajar el .h5.
+                    </p>
+                  ) : null}
+                  <div className="nisar__acciones">
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      disabled={!caja || enMarcha || !catalogo?.earthdata_configured}
+                      onClick={() => void renderizar()}
+                    >
+                      Descargar y renderizar
+                    </button>
+                    {enMarcha ? (
+                      <button type="button" className="btn" onClick={() => void cancelarRender()}>
+                        Cancelar
+                      </button>
+                    ) : null}
+                  </div>
+                </>
               ) : (
                 <p className="nisar__aviso">
-                  {seleccion.level} no usa la grilla GCOV. Los productos actuales
-                  (RVI, cambio, agua, incendio, serie, fusión) requieren GCOV.
-                  Podés descargar el .h5 o elegir una escena GCOV.
+                  {seleccion.level} todavía no tiene un producto de análisis en esta
+                  app. Podés descargar el .h5 o elegir una escena GCOV/SME2.
                 </p>
               )}
             </div>

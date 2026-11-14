@@ -3,12 +3,27 @@
 Visor y análisis de escenas **NISAR GCOV** en una app propia: se dibuja una caja
 sobre el mapa, ASF devuelve las escenas, se baja el `.h5` y se corre el producto
 de análisis que elijas (recorte, RVI, cambio de cobertura, serie temporal,
-GeoTIFF, agua, incendio o fusión óptica).
+GeoTIFF, agua, incendio o fusión óptica). También renderiza **SME2** (humedad del
+suelo a 200 m) con sus tres algoritmos.
 
 Es el flujo NISAR de la consola general, separado en su propio backend y su
 propio frontend. **No toca `app/`**: la consola general sigue igual. El pipeline
 de cómputo (`descargar/`, `comun/`, `prototipos/`, `datos/`) se reutiliza tal
 cual, porque es el código que realmente baja y procesa las escenas.
+
+## Productos
+
+| Nivel | Producto | Estado |
+| --- | --- | --- |
+| GCOV | recorte, RVI, cambio, serie, GeoTIFF, agua, incendio, fusión | completo |
+| SME2 | humedad del suelo (DSG, PMI, TSR) | completo, colección PROVISIONAL |
+| GSLC / GUNW | búsqueda y descarga | pendiente de render |
+
+SME2 no reemplaza al GCOV: mide humedad del suelo a 200 m, no cambio de
+cobertura. El producto es PROVISIONAL y trae un `retrievalQualityFlag`; el visor
+permite ocultar los píxeles que no están limpios. GUNW (interferograma) es el
+siguiente candidato por impacto (deformación del terreno), pero necesita una
+escena descargada para implementarlo y verificarlo.
 
 ## Estructura
 

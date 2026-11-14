@@ -32,6 +32,7 @@ PRODUCTOS = (
     "agua",
     "incendio",
     "fusion",
+    "sme2",
     "descarga",
 )
 
@@ -167,10 +168,16 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
         raise ValueError(f"Producto NISAR desconocido: {producto}")
 
     nivel = str(params.get("nivel") or "GCOV").strip().upper()
-    if nivel != "GCOV" and producto != "descarga":
+    if producto == "sme2":
+        if nivel != "SME2":
+            raise ValueError(
+                f"El producto sme2 usa una escena SME2; la escena elegida es "
+                f"{nivel}. Elegí una escena SME2 para humedad del suelo."
+            )
+    elif nivel != "GCOV" and producto != "descarga":
         raise ValueError(
             f"El producto {producto} usa GCOV; la escena elegida es {nivel}. "
-            "Elegí una escena GCOV. GUNW/GSLC/SME2 quedan como búsqueda y "
+            "Elegí una escena GCOV. GUNW/GSLC quedan como búsqueda y "
             "descarga hasta tener su producto."
         )
 
@@ -251,6 +258,26 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                 "--hv-max", f"{hv_max:g}",
                 "--out", str(work / f"nisar_agua_{px}.png"),
                 "--geojson", geojson,
+            ],
+            expected=5,
+        )
+    elif producto == "sme2":
+        algoritmo = str(params.get("algoritmo") or "DSG").strip().upper()
+        if algoritmo not in ("DSG", "PMI", "TSR"):
+            algoritmo = "DSG"
+        solo_calidad = bool(params.get("solo_calidad", False))
+        render = Step(
+            kind="render",
+            label=f"humedad del suelo {algoritmo} a {px} px",
+            script="prototipos/nisar_sme2.py",
+            args=[
+                "--h5", str(h5),
+                "--bbox", bbox_final,
+                "--px", str(px),
+                "--algoritmo", algoritmo,
+                "--out", str(work / f"nisar_sme2_{algoritmo.lower()}_{px}.png"),
+                "--geojson", geojson,
+                *(["--solo-calidad"] if solo_calidad else []),
             ],
             expected=5,
         )

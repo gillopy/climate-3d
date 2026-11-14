@@ -381,6 +381,66 @@ class VisorNisar(unittest.TestCase):
         self.assertIn("GCOV", str(contexto.exception))
         self.assertIn("SME2", str(contexto.exception))
 
+    def test_receta_sme2_baja_y_renderiza_humedad(self):
+        granulo = (
+            "NISAR_L3_PR_SME2_099_999_A_999_2005_DHDH_A_"
+            "20260101T000000_20260101T000035_P05023_N_F_J_001"
+        )
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "sme2",
+                    "nivel": "SME2",
+                    "granulo": granulo,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L3_SME2_PROVISIONAL_V1/{granulo}/{granulo}.h5"
+                    ),
+                    "coleccion": "NISAR_L3_SME2_PROVISIONAL_V1",
+                    "bbox": "-58.2,-26.5,-54.9,-23.6",
+                    "px": 2400,
+                    "algoritmo": "PMI",
+                    "solo_calidad": True,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_sme2.py"],
+        )
+        args = plan.pasos[1].args
+        self.assertEqual(args[args.index("--algoritmo") + 1], "PMI")
+        self.assertIn("--solo-calidad", args)
+        self.assertTrue(
+            args[args.index("--out") + 1].endswith("nisar_sme2_pmi_2400.png")
+        )
+        self.assertTrue(
+            args[args.index("--geojson") + 1].endswith("paraguay_gadm.json")
+        )
+
+    def test_receta_sme2_exige_una_escena_sme2(self):
+        with self.assertRaises(ValueError) as contexto:
+            planear(
+                "nisar_render",
+                {
+                    "producto": "sme2",
+                    "nivel": "GCOV",
+                    "granulo": GRANULO,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1200,
+                },
+                Path("."),
+            )
+
+        self.assertIn("SME2", str(contexto.exception))
+
     def test_receta_agua(self):
         with tempfile.TemporaryDirectory() as carpeta:
             plan = planear(
