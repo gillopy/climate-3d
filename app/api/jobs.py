@@ -46,7 +46,7 @@ HISTORIAL = "historial.jsonl"
 
 # Subir esto invalida la cache: la firma tiene que representar la receta entera,
 # incluido como se dibuja (paleta, fondo, capas), no solo los parametros.
-RECETA_VERSION = 14
+RECETA_VERSION = 15
 
 # Reparto del progreso entre etapas. La descarga y el render son lo que pesa.
 _PESO = {"download": 0.4, "render": 0.5, "animate": 0.1}

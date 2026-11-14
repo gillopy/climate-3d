@@ -176,7 +176,8 @@ class Plan(unittest.TestCase):
 
     def test_el_render_pide_fondo_y_relleno(self):
         render = [p for p in self._plan().pasos if p.kind == "render"][0]
-        self.assertEqual(render.args[render.args.index("--fondo") + 1], "base")
+        self.assertEqual(render.args[render.args.index("--mapa") + 1], "base")
+        self.assertEqual(render.args[render.args.index("--fondo") + 1], "oscuro")
         self.assertEqual(render.args[render.args.index("--relleno") + 1], "2")
         self.assertEqual(render.args[render.args.index("--compuesto") + 1], "1")
 

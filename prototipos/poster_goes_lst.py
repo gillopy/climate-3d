@@ -349,7 +349,7 @@ def componer_lst(nc: Path, args) -> tuple[np.ndarray, float, dict]:
     cubiertos = float(np.isfinite(campo).sum()) / float(campo.size) if campo.size else 0.0
 
     fondo = None
-    if getattr(args, "fondo", "negro") == "base":
+    if getattr(args, "mapa", "base") == "base":
         fondo = _fondo_globo(nc, args.sat, args.px, tuple(args.centro),
                              args.recorte,
                              int(getattr(args, "fondo_ancho", ANCHO_FONDO)),
@@ -393,7 +393,7 @@ def componer_lst(nc: Path, args) -> tuple[np.ndarray, float, dict]:
     args.interp = "bilinear"
     stats = {"px": px, "validos": validos, "cobertura": cobertura,
              "cubiertos": cubiertos, "relleno": relleno, "compuesto": usadas,
-             "fondo": getattr(args, "fondo", "negro"), **estadisticas}
+             "fondo": getattr(args, "mapa", "base"), **estadisticas}
     return np.dstack([rgb, alfa]), escala, stats
 
 
@@ -415,6 +415,18 @@ def _etiqueta_tiempo(nc: Path, horas: int) -> str:
     return f"{fecha} \u00b7 COMPUESTO {inicio:%H:%M}\u2013{final:%H:%M} UTC-3"
 
 
+def _tinta_oscura() -> None:
+    """Black page with light ink: the house style of the other GOES snapshots.
+
+    `poster_goes_truecolor.dibujar` reads `WHITE` / `INK` / `INK_SOFT` from its
+    own module at call time, so inverting those globals here is the same switch
+    the color-real poster uses for `--fondo oscuro`.
+    """
+    tc.WHITE = "#000000"
+    tc.INK = "#eef2f5"
+    tc.INK_SOFT = "#9aa0a6"
+
+
 def _leyenda(fig, args) -> None:
     """Two-scale horizontal legend: Fahrenheit above, Celsius below the bar."""
     if args.limpio:
@@ -423,7 +435,7 @@ def _leyenda(fig, args) -> None:
     from matplotlib.colors import Normalize
 
     _lut()  # make sure the product ramp is built before the legend samples it
-    cax = fig.add_axes([0.615, 0.965, 0.325, 0.009], zorder=9)
+    cax = fig.add_axes([0.105, 0.072, 0.790, 0.011], zorder=9)
     sm = plt.cm.ScalarMappable(norm=Normalize(args.vmin, args.vmax), cmap=_CMAP)
     sm.set_array([])
     cbar = fig.colorbar(sm, cax=cax, orientation="horizontal")
@@ -469,9 +481,12 @@ def main(argv=None) -> int:
     ap.add_argument("--dpi", type=int, help="dpi; inferred from --px when omitted")
     ap.add_argument("--tope", type=int, default=TOPE,
                     help=f"source grid of the field (default {TOPE}, native 2 km)")
-    ap.add_argument("--fondo", choices=("base", "negro"), default="base",
+    ap.add_argument("--mapa", choices=("base", "negro"), default="base",
                     help="under the data: the Blue Marble base map or black "
                          "(default base: no black holes)")
+    ap.add_argument("--fondo", choices=("claro", "oscuro"), default="oscuro",
+                    help="page background, like the other GOES snapshots "
+                         "(default oscuro: black, full-bleed globe)")
     ap.add_argument("--fondo-ancho", type=int, default=ANCHO_FONDO,
                     help=f"width of the cached base map (default {ANCHO_FONDO})")
     ap.add_argument("--capa-fondo", default=CAPA_FONDO,
@@ -510,6 +525,8 @@ def main(argv=None) -> int:
     args.fuente = args.fuente or (
         f"SOURCE: NOAA/NESDIS {args.sat} ABI L2 LST | 2 KM FULL DISK"
     )
+    if args.fondo == "oscuro":
+        _tinta_oscura()
 
     desde = datetime.fromisoformat(args.desde) if args.desde else None
     lista = slots(args.sat, desde, args.n, args.paso, args.ultimos)

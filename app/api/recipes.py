@@ -1589,7 +1589,9 @@ def _goes_lst(params: dict[str, Any], work: Path) -> Plan:
         "--paso", str(paso),
         "--px", str(px),
         # Sin huecos negros: fondo Blue Marble y puente corto sobre la textura.
-        "--fondo", "base",
+        # Pagina negra a sangre, como el resto de los snapshots GOES.
+        "--mapa", "base",
+        "--fondo", "oscuro",
         "--relleno", "2",
         "--compuesto", str(compuesto),
         *marco,
