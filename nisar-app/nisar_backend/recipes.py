@@ -33,6 +33,7 @@ PRODUCTOS = (
     "incendio",
     "fusion",
     "sme2",
+    "gunw",
     "descarga",
 )
 
@@ -174,10 +175,16 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                 f"El producto sme2 usa una escena SME2; la escena elegida es "
                 f"{nivel}. Elegí una escena SME2 para humedad del suelo."
             )
+    elif producto == "gunw":
+        if nivel != "GUNW":
+            raise ValueError(
+                f"El producto gunw usa una escena GUNW; la escena elegida es "
+                f"{nivel}. Elegí una escena GUNW para el interferograma."
+            )
     elif nivel != "GCOV" and producto != "descarga":
         raise ValueError(
             f"El producto {producto} usa GCOV; la escena elegida es {nivel}. "
-            "Elegí una escena GCOV. GUNW/GSLC quedan como búsqueda y "
+            "Elegí una escena GCOV. GSLC queda como búsqueda y "
             "descarga hasta tener su producto."
         )
 
@@ -278,6 +285,20 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                 "--out", str(work / f"nisar_sme2_{algoritmo.lower()}_{px}.png"),
                 "--geojson", geojson,
                 *(["--solo-calidad"] if solo_calidad else []),
+            ],
+            expected=5,
+        )
+    elif producto == "gunw":
+        render = Step(
+            kind="render",
+            label=f"interferograma a {px} px",
+            script="prototipos/nisar_gunw.py",
+            args=[
+                "--h5", str(h5),
+                "--bbox", bbox_final,
+                "--px", str(px),
+                "--out", str(work / f"nisar_gunw_{px}.png"),
+                "--geojson", geojson,
             ],
             expected=5,
         )

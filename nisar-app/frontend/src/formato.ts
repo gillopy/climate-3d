@@ -100,6 +100,25 @@ export function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("Cobertura válida", "cobertura_valida_pct", pct);
   agregar("Calidad limpia", "calidad_limpia_pct", pct);
   agregar("Área válida", "area_valida_ha", ha);
+  agregar("Par de fechas", "fecha_sec", (valor) =>
+    `${_get(meta, "fecha_ref") ?? "?"} → ${valor}`,
+  );
+  agregar("Coherencia media", "coherencia_media", num);
+  agregar("Coherencia p10 / p90", "coherencia_p10", (valor) =>
+    `${Number(valor).toFixed(2)} / ${Number(_get(meta, "coherencia_p90")).toFixed(2)}`,
+  );
+  agregar("Fase p10 / p90", "fase_p10", (valor) =>
+    `${Number(valor).toFixed(1)} / ${Number(_get(meta, "fase_p90")).toFixed(1)} rad`,
+  );
+  agregar("Desplaz. rel. p10 / p90", "desplazamiento_rel_p10_cm", (valor) =>
+    `${Number(valor).toFixed(0)} / ${Number(_get(meta, "desplazamiento_rel_p90_cm")).toFixed(0)} cm`,
+  );
+  agregar("Franja (2π)", "franja_cm", (valor) =>
+    `${Number(valor).toFixed(1)} cm LOS`,
+  );
+  agregar("Componentes", "componentes", texto);
+  agregar("Mayor componente", "mayor_componente_pct", pct);
+  agregar("Agua (escena)", "agua_pct_escena", pct);
   agregar("Resolución", "mpp", (valor) => `${Number(valor).toFixed(0)} m/px`);
   agregar("Resolución", "metros_por_px", (valor) => `${Number(valor).toFixed(0)} m/px`);
   agregar("Salida", "px", (valor) =>

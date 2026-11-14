@@ -441,6 +441,62 @@ class VisorNisar(unittest.TestCase):
 
         self.assertIn("SME2", str(contexto.exception))
 
+    def test_receta_gunw_baja_y_renderiza_interferograma(self):
+        granulo = (
+            "NISAR_L2_PR_GUNW_099_999_D_999_033_2000_SH_"
+            "20260101T000000_20260101T000030_20260113T000000_"
+            "20260113T000030_P05023_N_F_J_001"
+        )
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "gunw",
+                    "nivel": "GUNW",
+                    "granulo": granulo,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        "NISAR_L2_GUNW_PROVISIONAL_V1/"
+                        f"{granulo}/{granulo}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GUNW_PROVISIONAL_V1",
+                    "bbox": "-60.0,-22.2,-58.0,-20.0",
+                    "px": 1600,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_gunw.py"],
+        )
+        args = plan.pasos[1].args
+        self.assertIn("--bbox", args)
+        self.assertTrue(
+            args[args.index("--out") + 1].endswith("nisar_gunw_1600.png")
+        )
+
+    def test_receta_gunw_exige_una_escena_gunw(self):
+        with self.assertRaises(ValueError) as contexto:
+            planear(
+                "nisar_render",
+                {
+                    "producto": "gunw",
+                    "nivel": "GCOV",
+                    "granulo": GRANULO,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1200,
+                },
+                Path("."),
+            )
+
+        self.assertIn("GUNW", str(contexto.exception))
+
     def test_receta_agua(self):
         with tempfile.TemporaryDirectory() as carpeta:
             plan = planear(

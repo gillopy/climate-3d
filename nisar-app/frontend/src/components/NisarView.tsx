@@ -525,13 +525,14 @@ export function NisarView() {
   const enMarcha = trabajo?.status === "queued" || trabajo?.status === "running";
   const esGcov = seleccion?.level === "GCOV";
   const esSme2 = seleccion?.level === "SME2";
+  const esGunw = seleccion?.level === "GUNW";
 
   async function renderizar() {
     if (!seleccion || !caja) return;
     const nivel = seleccion.level;
-    if (nivel !== "GCOV" && nivel !== "SME2") {
+    if (nivel !== "GCOV" && nivel !== "SME2" && nivel !== "GUNW") {
       setError(
-        `La escena es ${nivel}. Los productos disponibles usan GCOV o SME2; ` +
+        `La escena es ${nivel}. Los productos disponibles usan GCOV, SME2 o GUNW; ` +
           "elegí una escena de esos niveles para analizar.",
       );
       return;
@@ -544,7 +545,8 @@ export function NisarView() {
     const modoFinal =
       modo === "color" && seleccion.polarization.length < 2 ? "gris" : modo;
     const params: Params = {
-      producto: nivel === "SME2" ? "sme2" : producto,
+      producto:
+        nivel === "SME2" ? "sme2" : nivel === "GUNW" ? "gunw" : producto,
       nivel,
       granulo: seleccion.id,
       url: seleccion.download,
@@ -555,6 +557,8 @@ export function NisarView() {
     if (nivel === "SME2") {
       params.algoritmo = algoritmoSme2;
       params.solo_calidad = soloCalidadSme2;
+    } else if (nivel === "GUNW") {
+      // GUNW no necesita parametros extra: el renderer muestra coherencia y fase.
     } else if (producto === "recorte") {
       params.pol = polFinal;
       params.modo = modoFinal;
@@ -1578,10 +1582,54 @@ export function NisarView() {
                     ) : null}
                   </div>
                 </>
+              ) : esGunw ? (
+                <>
+                  <p className="nisar__sub">
+                    Interferograma del par: coherencia (0–1), fase envuelta a 20 m
+                    y fase desenvuelta a 80 m. La fase es la del producto: no trae
+                    correcciones atmosféricas ni ionosféricas.
+                  </p>
+                  <div className="nisar__render-ctrl">
+                    <label>
+                      Tamaño máx.
+                      <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                        <option value="1600">1600 px</option>
+                        <option value="2400">2400 px</option>
+                        <option value="3200">3200 px</option>
+                        <option value="4096">4096 px</option>
+                      </select>
+                    </label>
+                  </div>
+                  <p className="nisar__estado">
+                    Par de 12 días, co-pol (HH o VV). El desplazamiento es relativo:
+                    para deslizamientos hay que corregir atmósfera/ionósfera y tomar
+                    una referencia. 1 franja (2π) ≈ 12.2 cm LOS.
+                  </p>
+                  {!catalogo?.earthdata_configured ? (
+                    <p className="nisar__aviso">
+                      Falta EARTHDATA_USER y EARTHDATA_PASSWORD en .env para bajar el .h5.
+                    </p>
+                  ) : null}
+                  <div className="nisar__acciones">
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      disabled={!caja || enMarcha || !catalogo?.earthdata_configured}
+                      onClick={() => void renderizar()}
+                    >
+                      Descargar y renderizar
+                    </button>
+                    {enMarcha ? (
+                      <button type="button" className="btn" onClick={() => void cancelarRender()}>
+                        Cancelar
+                      </button>
+                    ) : null}
+                  </div>
+                </>
               ) : (
                 <p className="nisar__aviso">
                   {seleccion.level} todavía no tiene un producto de análisis en esta
-                  app. Podés descargar el .h5 o elegir una escena GCOV/SME2.
+                  app. Podés descargar el .h5 o elegir una escena GCOV/SME2/GUNW.
                 </p>
               )}
             </div>
