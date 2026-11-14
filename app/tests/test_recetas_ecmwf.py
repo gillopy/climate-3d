@@ -261,6 +261,7 @@ class CatalogoDeLaApp(unittest.TestCase):
             "goes_banda",
             "geocolor",
             "goes_c13",
+            "goes_lst",
             "goes_truecolor",
             "goes_airmass",
             "goes_dust",

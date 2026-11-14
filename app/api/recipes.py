@@ -1459,6 +1459,144 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
 
 
 
+# --- LST: temperatura de superficie, cadencia horaria -------------------
+_PASO_LST = 60          # minutos entre slots: el ABI L2 LST publica uno por hora
+_MAX_CUADROS_LST = 72   # 3 dias a un cuadro por hora
+_TOLERANCIA_LST = timedelta(minutes=30)
+
+
+def _ultimos_goes_lst(sat: str, n: int) -> list[datetime]:
+    """Los `n` slots LST mas nuevos publicados, con el disco como respaldo.
+
+    El listado horario vive en `comun/goes_lst.py` (solo stdlib, para que lo
+    importe el venv de la API). Si no hay red, se cae a los `.nc` que ya estan
+    en `goes_lst_<sat>`: el job renderiza igual y la descarga avisa en su log.
+    """
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    try:
+        from goes_lst import ultimos_slots
+
+        slots = ultimos_slots(sat, n)
+    except Exception:  # noqa: BLE001 - offline: molesta mas un job muerto que el fallback
+        slots = []
+    if slots:
+        return slots
+    locales = _slots_goes(sat, "lst")
+    if locales:
+        return locales[-n:]
+    raise ValueError(
+        f"No hay datos de {sat} LST: NOAA S3 no respondio y el disco esta vacio. "
+        "Revisa la conexion y volve a intentar."
+    )
+
+
+def _plan_lst(
+    disponibles: set[datetime],
+    cenital: datetime,
+    animar: bool,
+    ventana: tuple[datetime, datetime],
+) -> tuple[datetime, int, int]:
+    """Slot inicial, cantidad de cuadros y paso para la cadencia horaria del LST.
+
+    `_plan_slots` fija el paso del ABI en 10 minutos; el LST publica uno por hora,
+    asi que necesita su propio planificador. Poster: el cenit del dia (o el slot
+    local mas cercano). Animacion: cada hora UTC pedida, con tope de 72 cuadros.
+    """
+    cenital = cenital.replace(minute=0, second=0, microsecond=0)
+    if animar:
+        desde, hasta = ventana
+        desde = desde.replace(minute=0, second=0, microsecond=0)
+        n = max(1, int((hasta - desde).total_seconds() // (_PASO_LST * 60)))
+        return desde, min(n, _MAX_CUADROS_LST), _PASO_LST
+
+    if cenital in disponibles:
+        return cenital, 1, _PASO_LST
+    cercanos = [
+        s for s in disponibles
+        if abs((s - cenital).total_seconds()) <= _TOLERANCIA_LST.total_seconds()
+    ]
+    if cercanos:
+        elegido = min(cercanos, key=lambda s: abs((s - cenital).total_seconds()))
+        return elegido, 1, _PASO_LST
+    return cenital, 1, _PASO_LST
+
+
+def _goes_lst(params: dict[str, Any], work: Path) -> Plan:
+    inicio, fin = _rango(params)
+    sat = str(params.get("satelite", "G19"))
+    px = _px(params, 2712)
+    n_ultimos = _ultimos(params)
+    animar = bool(n_ultimos) or (_bool(params, "animar") and not _snapshot(params))
+    lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
+
+    if n_ultimos:
+        # "Ultimos datos": la ventana de fechas no manda y siempre se baja.
+        slots_nuevos = _ultimos_goes_lst(sat, n_ultimos)
+        desde, n, paso = slots_nuevos[0], len(slots_nuevos), _PASO_LST
+    elif _snapshot(params):
+        # Snapshot: hora entera UTC, sin minutos (la cadencia del LST es horaria).
+        desde, n, paso = _slot_snapshot(
+            params, fin, lambda k: _ultimos_goes_lst(sat, k)), 1, _PASO_LST
+    else:
+        disponibles = [s for s in _slots_goes(sat, "lst") if inicio <= s.date() <= fin]
+        cenital = _slot_cenital(inicio, lon_sub)
+        ventana = _ventana_animacion(
+            inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+        )
+        desde, n, paso = _plan_lst(set(disponibles), cenital, animar, ventana)
+
+    desde = desde.replace(minute=0, second=0, microsecond=0)
+
+    descarga = Step(
+        kind="download",
+        label=(f"bajando los ultimos {n} slots de LST ({sat})"
+               if n_ultimos else f"bajando LST de {sat} ({n} slot(s))"),
+        script="descargar/descargar_goes_lst.py",
+        args=[
+            "--sat", sat,
+            "--desde", desde.isoformat(),
+            "--hasta", (desde + timedelta(minutes=_PASO_LST * n)).isoformat(),
+            "--paso", str(_PASO_LST),
+        ],
+        expected=max(1, math.ceil(n / 24)),
+    )
+
+    marco = _encuadre_paraguay(params, "recorte") or [
+        "--centro", f"{lon_sub:g}", "0", "--recorte", "1.0",
+    ]
+    comunes = [
+        "--sat", sat,
+        "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
+        "--n", str(n),
+        "--paso", str(paso),
+        "--px", str(px),
+        *marco,
+        "--borde", _borde_paraguay(params),
+        *(["--limpio"] if _bool(params, "paraguay") else []),
+    ]
+    if animar and n > 1:
+        render_step = Step(
+            kind="render",
+            label=f"{n} cuadro(s) de LST",
+            script="prototipos/poster_goes_lst.py",
+            args=[*comunes, "--frames", str(work / "frames")],
+            expected=n,
+        )
+    else:
+        render_step = Step(
+            kind="render",
+            label=f"poster LST {px}px",
+            script="prototipos/poster_goes_lst.py",
+            args=[*comunes, "--out",
+                  str(work / f"{sat}_LST_{desde:%Y-%m-%dT%H%M}.png")],
+            expected=1,
+        )
+    pasos = [descarga, render_step]  # el origen se consulta en cada corrida
+    return Plan(pasos=pasos, descarga=descarga)
+
+
 # --- GEOCOLOR: color real de dia + IR y luces de noche -----------------
 def _geocolor(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
@@ -1931,6 +2069,7 @@ _CONSTRUCTORES = {
     "goes_c13": _goes,
     "goes_truecolor": _goes_truecolor,
     "goes_banda": _goes_banda,
+    "goes_lst": _goes_lst,
     "goes_dust": lambda p, w: _goes_rgb(p, w, "dust"),
     "goes_airmass": lambda p, w: _goes_rgb(p, w, "airmass"),
     "goes_firetemp": lambda p, w: _goes_rgb(p, w, "firetemp"),

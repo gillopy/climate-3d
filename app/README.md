@@ -202,6 +202,7 @@ GET  /media/...
 | --- | --- | --- | --- |
 | GOES IR (C13, G19/G18/G16) | `descargar_goes.py --sat --banda C13 --desde --hasta --paso` | `cuadros_c13_ir.py --desde --n --paso --px --centro LON 0 --radio 90 --datos --out --frames --lote 1` | `armar.py --frames --fps --formato mp4 --salida` |
 | GOES banda ABI (C01-C16) | `descargar_goes.py --sat --banda --desde --hasta --paso` | `poster_goes_banda.py --banda --sat --desde --n --paso --px --paleta --centro --recorte` | `armar.py` sobre `--frames` |
+| GOES LST (ABI L2, 2 km) | `descargar_goes_lst.py --sat --desde --hasta --paso 60` | `poster_goes_lst.py --sat --desde --n --paso 60 --px --vmin --vmax --out` | `armar.py` sobre `--frames` |
 | GOES color real (C01+C02+C03) | `truecolor_goes.py --desde --n --paso --sat` | `poster_goes_truecolor.py --centro LON 0 --px --out` o `poster_goes_disco.py --px --out` | `armar.py` sobre la serie |
 | MUR SST (globo oscuro) | `mur_sst.py --desde --hasta --paso --px --out` | `cuadros_mur.py --desde --hasta --paso --px --out` | `armar.py` |
 | MUR SST poster realista | `mur_sst.py ...` | `poster_mur_realista.py --crudo --px --paleta [--trend] --out` | — |
