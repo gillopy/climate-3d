@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cancelJob, getJob, getJobs, revealJob, subscribeJob } from "../api";
 import { pesoArchivo, resumenStats } from "../formato";
@@ -30,22 +30,19 @@ function enMarcha(job: JobSummary | Job | null): boolean {
 }
 
 interface Props {
-  abierto: boolean;
-  onCerrar: () => void;
-  /** Id del trabajo recién creado: se selecciona al abrir el panel. */
+  /** Id del trabajo recién creado: se selecciona y se trae a la vista. */
   jobInicial: string | null;
-  /** Total de corridas, para el contador del botón que abre el panel. */
-  onTotal: (total: number) => void;
 }
 
 /**
  * Panel de trabajos: historial de corridas con logs y resultados.
  *
- * El backend ya persiste el historial (`/api/jobs`) y el detalle de cada job
- * (`/api/jobs/{id}`), ademas del stream SSE. Este panel los muestra juntos para
- * poder volver a una corrida anterior sin perder la vista del mapa.
+ * Vive en la misma columna que los hiperparámetros. El backend ya persiste el
+ * historial (`/api/jobs`) y el detalle de cada job (`/api/jobs/{id}`), ademas
+ * del stream SSE: aca se muestran juntos para volver a una corrida anterior.
  */
-export function JobsPanel({ abierto, onCerrar, jobInicial, onTotal }: Props) {
+export function JobsPanel({ jobInicial }: Props) {
+  const raiz = useRef<HTMLElement | null>(null);
   const [corridas, setCorridas] = useState<JobSummary[]>([]);
   const [seleccionId, setSeleccionId] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<Job | null>(null);
@@ -56,15 +53,16 @@ export function JobsPanel({ abierto, onCerrar, jobInicial, onTotal }: Props) {
     try {
       const lista = await getJobs();
       setCorridas(lista);
-      onTotal(lista.length);
     } catch {
       // El sondeo no discute: si falla, se reintenta en el proximo tic.
     }
-  }, [onTotal]);
+  }, []);
 
-  // Una corrida nueva se selecciona sola.
+  // Una corrida nueva se selecciona sola y se trae a la vista.
   useEffect(() => {
-    if (jobInicial) setSeleccionId(jobInicial);
+    if (!jobInicial) return;
+    setSeleccionId(jobInicial);
+    raiz.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [jobInicial]);
 
   // Sin seleccion (o si la corrida se podó), abre la mas nueva.
@@ -75,7 +73,7 @@ export function JobsPanel({ abierto, onCerrar, jobInicial, onTotal }: Props) {
     if (corridas.length > 0) setSeleccionId(corridas[0].id);
   }, [corridas, seleccionId]);
 
-  // Lista: se refresca siempre, aunque el panel este cerrado, para el contador.
+  // Lista: se refresca siempre, sin depender de un boton que abra el panel.
   useEffect(() => {
     void refrescarLista();
     const tic = window.setInterval(() => void refrescarLista(), 4000);
@@ -101,7 +99,7 @@ export function JobsPanel({ abierto, onCerrar, jobInicial, onTotal }: Props) {
 
   // Detalle + stream en vivo del trabajo elegido.
   useEffect(() => {
-    if (!abierto || !seleccionId) return;
+    if (!seleccionId) return;
     let vigente = true;
     setError(null);
 
@@ -153,7 +151,7 @@ export function JobsPanel({ abierto, onCerrar, jobInicial, onTotal }: Props) {
       vigente = false;
       corte();
     };
-  }, [abierto, seleccionId, actualizarFila, refrescarLista]);
+  }, [seleccionId, actualizarFila, refrescarLista]);
 
   // El JSON de estadisticas que deja el producto.
   const statsArtifact =
@@ -204,18 +202,13 @@ export function JobsPanel({ abierto, onCerrar, jobInicial, onTotal }: Props) {
     }
   }
 
-  if (!abierto) return null;
-
   return (
-    <section className="trabajos" aria-label="Trabajos NISAR">
+    <section className="trabajos" aria-label="Trabajos NISAR" ref={raiz}>
       <header className="trabajos__head">
         <h2 className="trabajos__title">Trabajos</h2>
         <span className="trabajos__count" aria-live="polite">
           {String(corridas.length).padStart(2, "0")}
         </span>
-        <button type="button" className="btn trabajos__cerrar" onClick={onCerrar}>
-          Cerrar
-        </button>
       </header>
 
       <div className="trabajos__cuerpo">

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import type { FeatureCollection } from "geojson";
 
-import { cancelJob, createJob, revealJob, subscribeJob } from "../api";
+import { cancelJob, createJob, subscribeJob } from "../api";
 import {
   getLocalScenes,
   getNisarCatalog,
@@ -19,7 +19,7 @@ import type {
   NisarSearch,
   NisarTimelineScene,
 } from "../nisar";
-import { fechaCorta, pesoArchivo, resumenStats } from "../formato";
+import { fechaCorta } from "../formato";
 import type { Job, Params } from "../types";
 import { JobsPanel } from "./JobsPanel";
 
@@ -78,7 +78,6 @@ export function NisarView() {
   const [modo, setModo] = useState("gris");
   const [px, setPx] = useState("2400");
   const [trabajo, setTrabajo] = useState<Job | null>(null);
-  const [stats, setStats] = useState<Record<string, unknown> | null>(null);
   const [locales, setLocales] = useState<NisarLocalScene[]>([]);
   const [fechasSerie, setFechasSerie] = useState<string[]>([]);
   const [producto, setProducto] = useState("recorte");
@@ -106,8 +105,6 @@ export function NisarView() {
   const [dias, setDias] = useState("15");
   const [nubes, setNubes] = useState("40");
   // Panel de trabajos: historial de corridas con logs y resultados.
-  const [panelTrabajos, setPanelTrabajos] = useState(true);
-  const [contadorTrabajos, setContadorTrabajos] = useState(0);
   const [jobNuevo, setJobNuevo] = useState<string | null>(null);
 
   const elegirGranulo = useCallback((granulo: NisarGranule) => {
@@ -472,30 +469,6 @@ export function NisarView() {
     }
   }, [producto, px]);
 
-  const statsArtifact =
-    trabajo?.artifacts.find(
-      (arte) => arte.kind === "file" && arte.name.endsWith(".json"),
-    ) ?? null;
-
-  useEffect(() => {
-    if (!statsArtifact) {
-      setStats(null);
-      return;
-    }
-    let vigente = true;
-    fetch(statsArtifact.url)
-      .then((respuesta) => (respuesta.ok ? respuesta.json() : null))
-      .then((datos) => {
-        if (vigente) setStats(datos as Record<string, unknown> | null);
-      })
-      .catch(() => {
-        if (vigente) setStats(null);
-      });
-    return () => {
-      vigente = false;
-    };
-  }, [statsArtifact?.url]);
-
   useEffect(() => {
     if (
       !seleccion ||
@@ -525,7 +498,6 @@ export function NisarView() {
     };
   }, [seleccion?.id, seleccion?.path, seleccion?.frame, seleccion?.collection]);
 
-  const resumen = stats ? resumenStats(stats) : [];
   const enMarcha = trabajo?.status === "queued" || trabajo?.status === "running";
   const esGcov = seleccion?.level === "GCOV";
 
@@ -617,7 +589,6 @@ export function NisarView() {
       const job = await createJob("nisar_render", params);
       setTrabajo(job);
       setJobNuevo(job.id);
-      setPanelTrabajos(true);
     } catch (exc) {
       setError(
         exc instanceof Error ? exc.message : "No se pudo crear el trabajo NISAR.",
@@ -632,17 +603,6 @@ export function NisarView() {
     } catch (exc) {
       setError(
         exc instanceof Error ? exc.message : "No se pudo cancelar el trabajo.",
-      );
-    }
-  }
-
-  async function revelarCarpeta() {
-    if (!trabajo) return;
-    try {
-      await revealJob(trabajo.id);
-    } catch (exc) {
-      setError(
-        exc instanceof Error ? exc.message : "No se pudo abrir la carpeta.",
       );
     }
   }
@@ -724,7 +684,6 @@ export function NisarView() {
       });
       setTrabajo(job);
       setJobNuevo(job.id);
-      setPanelTrabajos(true);
     } catch (exc) {
       setError(
         exc instanceof Error ? exc.message : "No se pudo crear la descarga.",
@@ -797,15 +756,6 @@ export function NisarView() {
           <button type="button" className="btn" onClick={limpiar}>
             Limpiar
           </button>
-          <button
-            type="button"
-            className={panelTrabajos ? "btn btn--primary" : "btn"}
-            aria-pressed={panelTrabajos}
-            aria-expanded={panelTrabajos}
-            onClick={() => setPanelTrabajos((previo) => !previo)}
-          >
-            Trabajos{contadorTrabajos ? ` (${contadorTrabajos})` : ""}
-          </button>
           <div className="nisar__coords">
             <input
               type="text"
@@ -830,12 +780,6 @@ export function NisarView() {
             {caja ? bboxTexto(caja) : "Sin caja"}
           </span>
         </div>
-        <JobsPanel
-          abierto={panelTrabajos}
-          onCerrar={() => setPanelTrabajos(false)}
-          jobInicial={jobNuevo}
-          onTotal={setContadorTrabajos}
-        />
       </div>
 
       <aside className="nisar__panel" aria-label="Escenas NISAR">
@@ -1516,69 +1460,6 @@ export function NisarView() {
                       </button>
                     ) : null}
                   </div>
-
-                  {trabajo ? (
-                    <div className="nisar__job">
-                      <div className="nisar__job-head">
-                        <span>{trabajo.stage}</span>
-                        <span>{Math.round(trabajo.progress * 100)} %</span>
-                      </div>
-                      <div className="nisar__bar">
-                        <i style={{ width: `${Math.round(trabajo.progress * 100)}%` }} />
-                      </div>
-                      {resumen.length > 0 ? (
-                        <dl className="nisar__stats">
-                          {resumen.map((fila) => (
-                            <div key={`${fila.label}-${fila.value}`} className="nisar__stat">
-                              <dt>{fila.label}</dt>
-                              <dd>{fila.value}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                      ) : null}
-                      {trabajo.logs.length > 0 ? (
-                        <ul className="nisar__logs">
-                          {trabajo.logs.slice(-6).map((linea, indice) => (
-                            <li key={`${linea.at}-${indice}`}>{linea.text}</li>
-                          ))}
-                        </ul>
-                      ) : null}
-                      {trabajo.error ? (
-                        <p className="nisar__aviso">{trabajo.error}</p>
-                      ) : null}
-                      {trabajo.artifacts
-                        .filter((arte) => arte.kind === "image")
-                        .map((arte) => (
-                          <img
-                            key={arte.url}
-                            className="nisar__imagen"
-                            src={arte.url}
-                            alt="Resultado NISAR"
-                          />
-                        ))}
-                      {trabajo.artifacts
-                        .filter((arte) => arte.kind === "file")
-                        .map((arte) => (
-                          <a
-                            key={arte.url}
-                            className="nisar__archivo"
-                            href={arte.url}
-                            download={arte.name}
-                          >
-                            {arte.name} · {pesoArchivo(arte.bytes)}
-                          </a>
-                        ))}
-                      <div className="nisar__acciones">
-                        <button
-                          type="button"
-                          className="btn"
-                          onClick={() => void revelarCarpeta()}
-                        >
-                          Abrir carpeta
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
                 </>
               ) : (
                 <p className="nisar__aviso">
@@ -1590,6 +1471,7 @@ export function NisarView() {
             </div>
           </div>
         ) : null}
+        <JobsPanel jobInicial={jobNuevo} />
       </aside>
     </section>
   );

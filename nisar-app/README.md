@@ -95,16 +95,18 @@ puerto.
 
 ## Panel de trabajos
 
-El visor trae un panel sobre el mapa ("Trabajos") con el historial de corridas
-que el backend persiste en `var/media/historial.jsonl`:
+El visor trae un panel de "Trabajos" en la misma columna que los
+hiperparámetros, al final de la vista de la escena. El backend persiste el
+historial en `var/media/historial.jsonl`:
 
 - lista de trabajos con estado, avance y última etapa;
 - detalle del trabajo elegido: plan, log completo, imágenes, JSON/GeoTIFF y
   estadísticas del producto;
 - acciones para cancelar una corrida en curso o abrir la carpeta del job.
 
-Se abre solo al generar un análisis y se cierra con "Cerrar". Las corridas
-terminadas siguen ahí después de reiniciar el backend.
+Al generar un análisis, la corrida nueva se selecciona y la columna se desplaza
+hasta el panel. Las corridas terminadas siguen ahí después de reiniciar el
+backend.
 
 ## Configuración
 

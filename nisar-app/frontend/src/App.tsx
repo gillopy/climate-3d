@@ -13,15 +13,21 @@ export default function App() {
 
   useEffect(() => {
     let vigente = true;
-    getHealth()
-      .then((datos) => {
-        if (vigente) setSalud(datos);
-      })
-      .catch(() => {
-        if (vigente) setSalud(null);
-      });
+    const cargar = () => {
+      getHealth()
+        .then((datos) => {
+          if (vigente) setSalud(datos);
+        })
+        .catch(() => {
+          if (vigente) setSalud(null);
+        });
+    };
+    void cargar();
+    // La raiz de NISAR puede aparecer despues de bajar la primera escena.
+    const tic = window.setInterval(cargar, 15000);
     return () => {
       vigente = false;
+      window.clearInterval(tic);
     };
   }, []);
 
