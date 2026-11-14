@@ -2393,7 +2393,7 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             hv_min = -15.5
         if producto == "cambio":
             modo_cambio = str(params.get("modo_cambio") or "mascara").lower()
-            if modo_cambio not in ("delta", "mascara", "rgb"):
+            if modo_cambio not in ("delta", "mascara", "rgb", "comparar"):
                 modo_cambio = "mascara"
             verificar = bool(params.get("verificar_s2"))
             try:

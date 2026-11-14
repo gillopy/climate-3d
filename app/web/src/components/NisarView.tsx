@@ -200,7 +200,7 @@ export function NisarView() {
   // Confirmar la caida de HV con NDVI de Sentinel-2 y descartar parches chicos:
   // sin esto el "rojo" incluye cosechas, anegamientos y estacionalidad.
   const [verificarS2, setVerificarS2] = useState(true);
-  const [modoCambio, setModoCambio] = useState("mascara");
+  const [modoCambio, setModoCambio] = useState("comparar");
   const [umbral, setUmbral] = useState("3");
   const [hvMin, setHvMin] = useState("-15.5");
   const [modoGeo, setModoGeo] = useState("db");
@@ -1338,7 +1338,8 @@ export function NisarView() {
                                 value={modoCambio}
                                 onChange={(evento) => setModoCambio(evento.target.value)}
                               >
-                                <option value="mascara">Máscara</option>
+                                <option value="comparar">Antes | después + máscara</option>
+                                <option value="mascara">Máscara sola</option>
                                 <option value="delta">Delta</option>
                                 <option value="rgb">RGB</option>
                               </select>

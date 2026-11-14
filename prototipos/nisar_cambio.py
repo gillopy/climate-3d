@@ -37,7 +37,12 @@ def main() -> int:
     ap.add_argument("--despues", required=True)
     ap.add_argument("--bbox", required=True)
     ap.add_argument("--px", type=int, default=2400)
-    ap.add_argument("--modo", default="mascara", choices=("delta", "mascara", "rgb"))
+    ap.add_argument(
+        "--modo",
+        default="mascara",
+        choices=("delta", "mascara", "rgb", "comparar"),
+        help="comparar = antes | despues con la mascara encima",
+    )
     ap.add_argument("--umbral", type=float, default=3.0, help="caida minima de HV en dB")
     ap.add_argument("--hv-min", type=float, default=-15.5, help="HV minimo para considerar bosque")
     ap.add_argument(
@@ -230,6 +235,66 @@ def main() -> int:
             azul = np.clip((delta + rango) / (2.0 * rango), 0.0, 1.0)
             rgb = (np.dstack([rojo, verde, azul]) * 255.0).astype(np.uint8)
             rgb = np.where(valido[..., None], rgb, 0)
+        elif args.modo == "comparar":
+            # Dos paneles con la MISMA escala de grises: antes | despues+mascara.
+            juntos = np.concatenate(
+                [db_antes[np.isfinite(db_antes)], db_despues[np.isfinite(db_despues)]]
+            )
+            vmin, vmax = nisar.limites(juntos)
+            gris_antes = nisar.paleta("gray", nisar.normalizar(db_antes, vmin, vmax))
+            gris_antes = np.where(np.isfinite(db_antes)[..., None], gris_antes, 0)
+            gris_despues = nisar.paleta(
+                "gray", nisar.normalizar(db_despues, vmin, vmax)
+            )
+            gris_despues = np.where(np.isfinite(db_despues)[..., None], gris_despues, 0)
+            gris_despues = np.where(
+                perdida[..., None],
+                np.array([205, 35, 35], dtype=np.uint8),
+                gris_despues,
+            )
+            gris_despues = np.where(
+                ganancia[..., None],
+                np.array([45, 95, 205], dtype=np.uint8),
+                gris_despues,
+            )
+            alto_panel, ancho_panel = gris_antes.shape[:2]
+            separacion = max(6, ancho_panel // 150)
+            hueco = np.zeros((alto_panel, separacion, 3), dtype=np.uint8)
+            hueco[:, :] = (8, 9, 10)
+            rgb = np.concatenate([gris_antes, hueco, gris_despues], axis=1)
+            # Etiquetas de panel dibujadas sobre el compuesto antes de guardarlo.
+            from PIL import Image, ImageDraw  # import local: solo lo usa este modo
+
+            lienzo = Image.fromarray(rgb)
+            dibujo = ImageDraw.Draw(lienzo)
+            fuente = nisar._fuente(max(12, int(alto_panel * 0.022)))
+            verificado = bool(args.verificar_s2 and optico_meta["disponible"])
+            etiqueta_despues = (
+                "rojo = pérdida confirmada" if verificado else "rojo = pérdida"
+            )
+            for x0_panel, texto in (
+                (0, f"ANTES  {(antes.fecha or antes.ruta.stem)[:10]}"),
+                (
+                    ancho_panel + separacion,
+                    f"DESPUÉS  {(despues.fecha or despues.ruta.stem)[:10]}"
+                    f"  ·  {etiqueta_despues}",
+                ),
+            ):
+                caja = dibujo.textbbox((0, 0), texto, font=fuente)
+                dibujo.rectangle(
+                    [
+                        x0_panel + 4,
+                        6,
+                        x0_panel + 12 + (caja[2] - caja[0]),
+                        14 + (caja[3] - caja[1]),
+                    ],
+                    fill=(8, 9, 10),
+                )
+                dibujo.text(
+                    (x0_panel + 8, 8), texto, font=fuente, fill=(247, 248, 248)
+                )
+            rgb = np.asarray(lienzo)
+            px = min(4096, rgb.shape[1])
         else:
             vmin, vmax = nisar.limites(db_despues)
             base = nisar.paleta("gray", nisar.normalizar(db_despues, vmin, vmax))
@@ -259,6 +324,7 @@ def main() -> int:
                 ),
                 "delta": "rojo = caída de HV · azul = aumento",
                 "rgb": "R = antes · G = después · B = ΔHV",
+                "comparar": "izquierda = antes · derecha = después con el cambio encima",
             }[args.modo],
         ]
         ancho, alto = nisar.guardar(
@@ -267,7 +333,7 @@ def main() -> int:
             lineas,
             mpp,
             px,
-            geojson=args.geojson,
+            geojson=None if args.modo == "comparar" else args.geojson,
             epsg=rec_antes.epsg,
             x0=rec_antes.x0,
             x1=rec_antes.x1,

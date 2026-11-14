@@ -502,7 +502,7 @@ class VisorNisar(unittest.TestCase):
             "antes_coleccion": "NISAR_L2_GCOV_V1",
             "bbox": "-55.6,-24.5,-55.2,-23.9",
             "px": 1600,
-            "modo_cambio": "mascara",
+            "modo_cambio": "comparar",
             "umbral": 3,
             "hv_min": -15.5,
         }
@@ -513,6 +513,7 @@ class VisorNisar(unittest.TestCase):
 
         args_con = con.pasos[-1].args
         self.assertIn("--verificar-s2", args_con)
+        self.assertEqual(args_con[args_con.index("--modo") + 1], "comparar")
         self.assertIn("--mmu-ha", args_con)
         self.assertEqual(args_con[args_con.index("--mmu-ha") + 1], "0.5")
 
