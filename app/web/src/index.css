@@ -2794,6 +2794,30 @@ input[type="range"]:disabled {
   min-width: 0;
 }
 
+/* Caja por coordenadas: dibujar 7 km a mano en el mapa es imposible. */
+.nisar__coords {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nisar__coords input {
+  width: 230px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  color: var(--mist);
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.nisar__coords input:focus-visible {
+  border-color: var(--iris-line);
+  outline: none;
+}
+
 .nisar__coord {
   padding-right: 4px;
   font-family: var(--mono);

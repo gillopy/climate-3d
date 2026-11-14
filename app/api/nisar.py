@@ -495,6 +495,19 @@ def _raiz_nisar() -> Path:
     return raiz_nisar()
 
 
+def _rango_coleccion(nombre: str) -> int:
+    """Preferencia entre copias del mismo granulo: VALIDATED > BETA > PROVISIONAL.
+
+    El id del granulo no incluye la coleccion, asi que la misma fecha puede
+    existir en dos carpetas. Se analiza la copia mas estable.
+    """
+    if "PROVISIONAL" in nombre:
+        return 2
+    if "BETA" in nombre:
+        return 1
+    return 0
+
+
 def _ids_locales() -> dict[str, str]:
     """id del granulo -> coleccion, para los ``.h5`` que ya estan en disco."""
     vistas: dict[str, str] = {}
@@ -506,7 +519,9 @@ def _ids_locales() -> dict[str, str]:
             if not carpeta.is_dir():
                 continue
             for ruta in carpeta.glob("*.h5"):
-                vistas[ruta.stem] = carpeta.name
+                previa = vistas.get(ruta.stem)
+                if previa is None or _rango_coleccion(carpeta.name) < _rango_coleccion(previa):
+                    vistas[ruta.stem] = carpeta.name
     except OSError:
         return vistas
     return vistas
@@ -525,7 +540,10 @@ def _local_por_fecha(
         raiz = _raiz_nisar()
         if not raiz.is_dir():
             return None
-        carpetas = sorted(carpeta for carpeta in raiz.iterdir() if carpeta.is_dir())
+        carpetas = sorted(
+            (carpeta for carpeta in raiz.iterdir() if carpeta.is_dir()),
+            key=lambda carpeta: (_rango_coleccion(carpeta.name), carpeta.name),
+        )
     except OSError:
         return None
     buscado = dia.strftime("%Y%m%d")
@@ -624,7 +642,12 @@ def buscar(
     granulos = [_granulo(feature) for feature in (features or []) if isinstance(feature, dict)]
     locales = _ids_locales()
     for granulo in granulos:
-        granulo.local = granulo.id in locales
+        # El .h5 en disco manda: si ya esta, se analiza ESA copia y con su
+        # coleccion real (el id no la distingue y ASF puede listar otra).
+        coleccion_local = locales.get(granulo.id)
+        if coleccion_local:
+            granulo.local = True
+            granulo.collection = coleccion_local
     granulos.sort(key=lambda granulo: granulo.start, reverse=True)
 
     notas: list[str] = []
@@ -704,21 +727,27 @@ def linea_de_tiempo(
         granulo = _granulo(feature)
         if granulo.path not in (None, track) or granulo.frame not in (None, frame):
             continue
-        if coleccion and granulo.collection != coleccion:
+        coleccion_local = locales.get(granulo.id)
+        efectiva = coleccion_local or granulo.collection
+        # BETA es una coleccion de pre-publicacion: solo se ofrece si ya esta en
+        # disco (bajarla para comparar cambia el producto, no el terreno).
+        if "BETA" in efectiva and not coleccion_local:
+            continue
+        if coleccion and efectiva != coleccion:
             continue
         clave = granulo.start[:10]
         previa = escenas.get(clave)
         if previa is not None and not _coleccion_preferida(
-            granulo.collection, previa.collection, coleccion
+            efectiva, previa.collection, coleccion
         ):
             continue
         escenas[clave] = TimelineScene(
             id=granulo.id,
             date=clave,
             start=granulo.start,
-            collection=granulo.collection,
+            collection=efectiva,
             size_mb=granulo.size_mb,
-            local=granulo.id in locales,
+            local=bool(coleccion_local),
             download=granulo.download,
         )
 
@@ -810,6 +839,8 @@ def escena_por_fecha(
             continue
         if granulo.start[:10] != dia.isoformat():
             continue
+        if "BETA" in granulo.collection:
+            continue  # pre-publicacion: no se ofrece para analisis
         if coleccion and granulo.collection != coleccion:
             continue
         candidatos.append(granulo)

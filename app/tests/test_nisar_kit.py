@@ -42,6 +42,23 @@ with tempfile.TemporaryDirectory() as carpeta:
     assert ancho == 80, f"ancho {ancho}"
     assert 100 <= alto < 200, f"alto {alto}"
     assert salida.is_file(), "no escribio el PNG"
+
+# Multilook: promedia potencia y baja el speckle sin tocar la media.
+rng = np.random.default_rng(7)
+plano = np.full((60, 60), 0.02)
+assert np.allclose(nisar.multilook(plano, 5), plano), "el campo constante cambio"
+assert np.isnan(nisar.multilook(np.where(np.ones((20, 20)) > 0, np.nan, 1.0), 3)).all(), "NaN no se propago"
+
+speckle = rng.gamma(shape=1.0, scale=0.02, size=(120, 120))
+suave = nisar.multilook(speckle, 9)
+assert np.nanstd(suave) < np.nanstd(speckle) * 0.35, "el multilook no redujo el ruido"
+assert abs(np.nanmean(suave) - np.nanmean(speckle)) < 0.002, "el multilook cambio la media"
+
+assert nisar.ventana_para(10.0) == 9, nisar.ventana_para(10.0)
+assert nisar.ventana_para(20.0) == 5, nisar.ventana_para(20.0)
+for mpp in (1.0, 3.7, 6.0, 10.0, 20.0, 40.0):
+    assert nisar.ventana_para(mpp) % 2 == 1, f"ventana par para {mpp}"
+    assert 1 <= nisar.ventana_para(mpp) <= 9
 '''
 
 

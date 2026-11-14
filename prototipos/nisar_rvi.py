@@ -31,6 +31,12 @@ def main() -> int:
     ap.add_argument("--h5", required=True, help="escena NISAR GCOV (.h5)")
     ap.add_argument("--bbox", required=True, help="oeste,sur,este,norte")
     ap.add_argument("--px", type=int, default=2400)
+    ap.add_argument(
+        "--ventana",
+        type=int,
+        default=0,
+        help="lado del multilook (impar); 0 = automatico para ~50 m",
+    )
     ap.add_argument("--out", required=True)
     ap.add_argument("--geojson", default=None)
     args = ap.parse_args()
@@ -51,23 +57,31 @@ def main() -> int:
 
         hh, xs, ys = nisar.orientar(rec_hh)
         hv, _, _ = nisar.orientar(rec_hv)
-        valores = nisar.rvi(hh, hv)
+        mpp = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
+        ventana = int(args.ventana) if args.ventana > 1 else nisar.ventana_para(mpp)
+        if ventana % 2 == 0:
+            ventana += 1
+        hh_suave = nisar.multilook(hh, ventana)
+        hv_suave = nisar.multilook(hv, ventana)
+        valores = nisar.rvi(hh_suave, hv_suave)
         validos = valores[np.isfinite(valores)]
         if validos.size == 0:
             raise SystemExit("La caja no tiene pixeles validos para RVI.")
 
         p10, p50, p90 = [float(v) for v in np.percentile(validos, [10, 50, 90])]
         media = float(np.mean(validos))
-        mpp = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
         area_ha = validos.size * mpp * mpp / 10000.0
+        vmin, vmax = nisar.limites(valores)
 
-        rgb = nisar.paleta("RdYlGn", np.clip(valores / 1.0, 0.0, 1.0))
+        # Secuencial en verde: la escala categorica rojo-verde hacia ruido.
+        rgb = nisar.paleta("YlGn", nisar.normalizar(valores, vmin, vmax))
         rgb = np.where(np.isfinite(valores)[..., None], rgb, 0)
+        resolucion = f"multilook {ventana}x{ventana} (~{ventana * mpp:.0f} m)" if ventana > 1 else "sin multilook"
         lineas = [
             f"NISAR GCOV · RVI · {escena.fecha or escena.ruta.stem}",
-            f"medio {media:.2f} · p10 {p10:.2f} · p90 {p90:.2f} · "
+            f"medio {media:.2f} · rango {vmin:.2f} a {vmax:.2f} · "
             f"{area_ha:.0f} ha · {mpp:.0f} m/px · EPSG:{rec_hh.epsg}",
-            "verde = más RVI · rojo = menos",
+            f"{resolucion} · claro = más RVI · oscuro = menos",
         ]
         ancho, alto = nisar.guardar(
             rgb,
@@ -92,16 +106,19 @@ def main() -> int:
             "px": [ancho, alto],
             "epsg": rec_hh.epsg,
             "mpp": round(mpp, 3),
+            "multilook": ventana,
+            "multilook_m": round(ventana * mpp, 1),
             "rvi_medio": round(media, 4),
             "rvi_p10": round(p10, 4),
             "rvi_p50": round(p50, 4),
             "rvi_p90": round(p90, 4),
+            "rvi_rango": [round(vmin, 4), round(vmax, 4)],
             "area_ha": round(area_ha, 1),
             "pixeles": int(validos.size),
         }
         nisar.guardar_json(salida, meta)
 
-    print(f"RVI medio {media:.2f} | p10 {p10:.2f} | p90 {p90:.2f} | {area_ha:.0f} ha")
+    print(f"RVI medio {media:.2f} | rango {vmin:.2f}-{vmax:.2f} | multilook {ventana}x{ventana} | {area_ha:.0f} ha")
     print(f"listo: {salida} ({ancho}x{alto} px)")
     return 0
 

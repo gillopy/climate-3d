@@ -905,6 +905,70 @@ class VisorNisar(unittest.TestCase):
         self.assertIn("--destino", plan.pasos[0].args)
         self.assertEqual(plan.pasos[0].args[plan.pasos[0].args.index("--destino") + 1], str(carpeta))
 
+    def test_la_busqueda_reporta_la_coleccion_del_archivo_en_disco(self):
+        # El id del granulo no incluye la coleccion: si el .h5 esta en otra
+        # carpeta hay que analizar ESA copia, no la que lista ASF.
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta) / "NISAR_L2_GCOV_PROVISIONAL_V1"
+            base.mkdir(parents=True)
+            (base / f"{GRANULO}.h5").write_bytes(b"x")
+            with (
+                patch.object(nisar, "_raiz_nisar", return_value=Path(carpeta)),
+                patch.object(nisar, "_contar", return_value=1),
+                patch.object(
+                    nisar,
+                    "_json_asf",
+                    return_value={"type": "FeatureCollection", "features": [FEATURE]},
+                ),
+            ):
+                cuerpo = self.cliente.get(
+                    "/api/nisar/search",
+                    params={"bbox": "-55.6,-24.5,-55.2,-23.9", "level": "GCOV"},
+                ).json()
+
+        granulo = cuerpo["granules"][0]
+        self.assertTrue(granulo["local"])
+        self.assertEqual(granulo["collection"], "NISAR_L2_GCOV_PROVISIONAL_V1")
+
+    def test_timeline_omite_la_coleccion_beta_si_no_esta_en_disco(self):
+        beta = self._feature("20261001", "NISAR_L2_GCOV_BETA_V1")
+        with tempfile.TemporaryDirectory() as carpeta:
+            with (
+                patch.object(nisar, "_raiz_nisar", return_value=Path(carpeta)),
+                patch.object(
+                    nisar,
+                    "_json_asf",
+                    return_value={
+                        "type": "FeatureCollection",
+                        "features": [FEATURE, beta],
+                    },
+                ),
+            ):
+                cuerpo = self.cliente.get(
+                    "/api/nisar/timeline",
+                    params={"track": 82, "frame": 101},
+                ).json()
+
+        self.assertEqual([escena["date"] for escena in cuerpo["scenes"]], ["2026-10-29"])
+
+    def test_escena_por_fecha_omite_beta(self):
+        beta = self._feature("20261001", "NISAR_L2_GCOV_BETA_V1")
+        with tempfile.TemporaryDirectory() as carpeta:
+            with (
+                patch.object(nisar, "_raiz_nisar", return_value=Path(carpeta)),
+                patch.object(
+                    nisar,
+                    "_json_asf",
+                    return_value={"type": "FeatureCollection", "features": [beta]},
+                ),
+            ):
+                respuesta = self.cliente.get(
+                    "/api/nisar/scene",
+                    params={"track": 82, "frame": 101, "date": "2026-10-01"},
+                )
+
+        self.assertEqual(respuesta.status_code, 404)
+
     def test_paraguay_sale_del_geojson_del_repo(self):
         respuesta = self.cliente.get("/api/nisar/paraguay")
 

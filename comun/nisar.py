@@ -296,6 +296,60 @@ def rvi(hh: np.ndarray, hv: np.ndarray) -> np.ndarray:
     return salida.astype(np.float32)
 
 
+def _boxcar_eje(datos: np.ndarray, ventana: int, eje: int) -> np.ndarray:
+    """Suma movil de ``ventana`` muestras a lo largo de ``eje`` (borde replicado)."""
+    if ventana <= 1:
+        return datos
+    mitad = ventana // 2
+    relleno = [(0, 0), (0, 0)]
+    relleno[eje] = (mitad, ventana - 1 - mitad)
+    ampliado = np.pad(datos, relleno, mode="edge")
+    acumulado = np.cumsum(ampliado, axis=eje, dtype=np.float64)
+    largo = acumulado.shape[eje]
+    ceros = np.zeros_like(np.take(acumulado, [0], axis=eje))
+    previo = np.concatenate(
+        [ceros, np.take(acumulado, np.arange(largo - ventana), axis=eje)], axis=eje
+    )
+    return np.take(acumulado, np.arange(ventana - 1, largo), axis=eje) - previo
+
+
+def multilook(potencia: np.ndarray, ventana: int) -> np.ndarray:
+    """Promedio ``ventana``x``ventana`` sobre potencia lineal, ignorando NaN.
+
+    Un indice por pixel calculado sobre dos canales con speckle es ruido puro:
+    promediar la potencia (nunca el dB) antes de dividir deja ver la estructura
+    del terreno a costa de resolucion (``ventana`` x metros por pixel).
+    """
+    if ventana <= 1:
+        return np.asarray(potencia, dtype=np.float32)
+    datos = np.asarray(potencia, dtype=np.float64)
+    valido = np.isfinite(datos)
+    numerador = np.where(valido, datos, 0.0)
+    cuenta = valido.astype(np.float64)
+    for eje in (0, 1):
+        numerador = _boxcar_eje(numerador, ventana, eje)
+        cuenta = _boxcar_eje(cuenta, ventana, eje)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        salida = numerador / cuenta
+    salida[cuenta <= 0] = np.nan
+    return salida.astype(np.float32)
+
+
+def ventana_para(mpp: float, metros: float = 90.0, tope: int = 9) -> int:
+    """Ventana impar para que el multilook llegue a ~``metros`` de resolucion.
+
+    Un indice de razon (RVI) calculado pixel a pixel es casi todo speckle: con
+    ~90 m se ve la estructura del terreno y sigue siendo util para vegetacion.
+    """
+    if not np.isfinite(mpp) or mpp <= 0:
+        return 1
+    ventana = int(round(float(metros) / float(mpp)))
+    ventana = max(1, min(tope, ventana))
+    if ventana % 2 == 0:
+        ventana = ventana + 1 if ventana < tope else ventana - 1
+    return max(1, ventana)
+
+
 def limites(datos: np.ndarray, vmin: float | None = None, vmax: float | None = None) -> tuple[float, float]:
     validos = datos[np.isfinite(datos)]
     if validos.size == 0:

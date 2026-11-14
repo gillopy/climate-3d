@@ -132,6 +132,10 @@ function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("Focos FIRMS", "focos", texto);
   agregar("Resolución", "mpp", (valor) => `${Number(valor).toFixed(0)} m/px`);
   agregar("Resolución", "metros_por_px", (valor) => `${Number(valor).toFixed(0)} m/px`);
+  agregar("Salida", "px", (valor) =>
+    Array.isArray(valor) ? `${valor[0]} × ${valor[1]} px` : String(valor),
+  );
+  agregar("Multilook", "multilook_m", (valor) => `~${Number(valor).toFixed(0)} m`);
   agregar("EPSG", "epsg", texto);
   agregar("Polarización", "polarizaciones", (valor) =>
     Array.isArray(valor) ? valor.join(" · ") : String(valor),
@@ -182,6 +186,7 @@ export function NisarView() {
   const [cargandoFechas, setCargandoFechas] = useState(false);
   const [fechaNueva, setFechaNueva] = useState("");
   const [resolviendo, setResolviendo] = useState(false);
+  const [coordTexto, setCoordTexto] = useState("");
   const [modoCambio, setModoCambio] = useState("mascara");
   const [umbral, setUmbral] = useState("3");
   const [hvMin, setHvMin] = useState("-15.5");
@@ -675,16 +680,16 @@ export function NisarView() {
         return;
       }
       params.fechas = fechasSerie.join(",");
-      // Las que no estan en disco se bajan en el mismo job: la UI no tiene que
-      // esperar a que la busqueda o el disco tengan esa fecha.
-      const bajar = fechasDelTrack
-        .filter((escena) => fechasSerie.includes(escena.id) && !escena.local)
+      // Todas las fechas elegidas viajan con su coleccion: si el .h5 no esta se
+      // baja, y si esta en otra carpeta de coleccion la serie la incluye igual.
+      const elegidas = fechasDelTrack
+        .filter((escena) => fechasSerie.includes(escena.id))
         .map((escena) => ({
           id: escena.id,
           url: escena.download,
           coleccion: escena.collection,
         }));
-      if (bajar.length > 0) params.escenas = JSON.stringify(bajar);
+      if (elegidas.length > 0) params.escenas = JSON.stringify(elegidas);
     } else if (producto === "geotiff") {
       params.pol = polFinal;
       params.modo_geo = modoGeo;
@@ -822,6 +827,36 @@ export function NisarView() {
     setDibujando((previo) => !previo);
   }
 
+  // Permite pegar la caja exacta (oeste,sur,este,norte) en vez de dibujarla:
+  // una caja de 7 km a mano en el mapa es casi imposible de acertar.
+  function aplicarCoordenadas() {
+    const partes = coordTexto
+      .split(/[,\s;]+/)
+      .map((parte) => Number(parte.replace(",", ".")))
+      .filter((valor) => Number.isFinite(valor));
+    if (partes.length !== 4) {
+      setError("Las coordenadas van como oeste,sur,este,norte.");
+      return;
+    }
+    const [oeste, sur, este, norte] = partes;
+    if (
+      !(
+        -180 <= oeste &&
+        oeste < este &&
+        este <= 180 &&
+        -90 <= sur &&
+        sur < norte &&
+        norte <= 90
+      )
+    ) {
+      setError("Coordenadas fuera de rango o invertidas: van oeste,sur,este,norte.");
+      return;
+    }
+    setError(null);
+    setDibujando(false);
+    setCaja({ oeste, sur, este, norte });
+  }
+
   return (
     <section className="nisar" aria-label="Visor NISAR">
       <div className="nisar__mapa">
@@ -838,6 +873,26 @@ export function NisarView() {
           <button type="button" className="btn" onClick={limpiar}>
             Limpiar
           </button>
+          <div className="nisar__coords">
+            <input
+              type="text"
+              value={coordTexto}
+              aria-label="Caja por coordenadas"
+              placeholder="oeste,sur,este,norte"
+              onChange={(evento) => setCoordTexto(evento.target.value)}
+              onKeyDown={(evento) => {
+                if (evento.key === "Enter") aplicarCoordenadas();
+              }}
+            />
+            <button
+              type="button"
+              className="btn"
+              disabled={!coordTexto.trim()}
+              onClick={aplicarCoordenadas}
+            >
+              Usar caja
+            </button>
+          </div>
           <span className="nisar__coord">
             {caja ? bboxTexto(caja) : "Sin caja"}
           </span>
@@ -1181,7 +1236,7 @@ export function NisarView() {
                     ) : null}
 
                     <label>
-                      Tamaño
+                      Tamaño máx.
                       {producto === "serie" ? (
                         <select value={px} onChange={(evento) => setPx(evento.target.value)}>
                           <option value="1200">1200 px</option>
