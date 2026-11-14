@@ -212,6 +212,8 @@ def main() -> int:
             "despues": despues.ruta.stem,
             "fecha_antes": antes.fecha,
             "fecha_despues": despues.fecha,
+            "coleccion_antes": antes.ruta.parent.name,
+            "coleccion_despues": despues.ruta.parent.name,
             "track": antes.track,
             "frame": antes.frame,
             "bbox": [float(v) for v in args.bbox.split(",")],

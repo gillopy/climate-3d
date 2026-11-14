@@ -31,7 +31,7 @@ import requests
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
-from rutas import DATOS  # noqa: E402
+from rutas import raiz_nisar  # noqa: E402
 
 BLOQUE = 8 * 1024 * 1024
 MIN_BYTES = 10_000_000  # un H5 real pesa cientos de MB; menos que esto es un error
@@ -228,15 +228,43 @@ def bajar(s: requests.Session, url: str, destino: Path) -> None:
     print(f"listo: {destino} ({destino.stat().st_size / 1e6:.0f} MB)")
 
 
+def _sello(
+    ruta: Path, granulo: str, coleccion: str, destino: Path, ya_estaba: bool
+) -> None:
+    """Deja un JSON con lo que quedo en disco (el visor lo muestra como artefacto)."""
+    datos = {
+        "producto": "descarga",
+        "granulo": granulo,
+        "coleccion": coleccion,
+        "ruta": str(destino),
+        "bytes": destino.stat().st_size if destino.is_file() else 0,
+        "ya_estaba": ya_estaba,
+    }
+    try:
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        parcial = ruta.with_suffix(ruta.suffix + ".part")
+        parcial.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+        parcial.replace(ruta)
+    except OSError as exc:
+        print(f"aviso: no se pudo escribir el sello {ruta}: {exc}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--url", required=True, help="URL del .h5 en ASF")
     ap.add_argument("--granulo", required=True, help="id de la escena (nombre del archivo)")
-    ap.add_argument("--destino", default=str(DATOS / "nisar"), help="carpeta raiz de datos NISAR")
+    ap.add_argument(
+        "--destino", default=str(raiz_nisar()), help="carpeta raiz de datos NISAR"
+    )
     ap.add_argument("--coleccion", default="NISAR_L2_GCOV_V1", help="subcarpeta por coleccion")
     ap.add_argument("--usuario", default=None)
     ap.add_argument("--clave", default=None)
     ap.add_argument("--cookies", default=None, help="JSON de cookies del navegador logueado")
+    ap.add_argument(
+        "--sello",
+        default=None,
+        help="JSON de resumen de la descarga (lo usa el visor para mostrarla)",
+    )
     args = ap.parse_args()
 
     granulo = args.granulo.strip()
@@ -251,9 +279,13 @@ def main() -> int:
     # Re-renderizar no puede exigir credenciales si el .h5 ya esta en disco.
     if destino.is_file() and destino.stat().st_size >= MIN_BYTES:
         print(f"= {destino.name} ya esta ({destino.stat().st_size / 1e6:.0f} MB)")
+        if args.sello:
+            _sello(Path(args.sello), granulo, coleccion, destino, True)
         return 0
     sesion = _sesion(args.usuario, args.clave, Path(args.cookies) if args.cookies else None)
     bajar(sesion, args.url, destino)
+    if args.sello:
+        _sello(Path(args.sello), granulo, coleccion, destino, False)
     return 0
 
 

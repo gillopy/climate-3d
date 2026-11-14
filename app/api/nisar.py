@@ -1,8 +1,8 @@
-"""Visor NISAR (Fase 1): busqueda en ASF y browse publico cacheado.
+"""Visor NISAR: busqueda en ASF, browse publico y fechas del track/frame.
 
-La app no baja los ``.h5``: un GCOV pesa ~1.9 GB y exige Earthdata Login. Para
-elegir una escena alcanza con lo que ASF ya publica: la busqueda por caja,
-el poligono de cada granulo y sus imagenes browse, que son publicas.
+Este modulo no baja los ``.h5``: eso lo hace la receta ``nisar_render`` con el
+Python del repo. Aca se consulta ASF (busqueda, browse y una fecha suelta) y se
+mira el disco para decir que granulos ya estan y donde viven.
 
 Ninguna imagen se inventa: el backend proxya el PNG de ASF tal cual y lo cachea
 en ``app/var/nisar``. Solo se aceptan URLs del host de browse de ASF, asi el
@@ -33,6 +33,7 @@ USER_AGENT = "climate3d-nisar/0.1 (+local)"
 MAX_BROWSE_BYTES = 40 * 1024 * 1024
 MAX_RESULTADOS = 500
 MAX_DIAS = 366
+MAX_DIAS_TIMELINE = 730
 MAX_LADO_GRADOS = 20.0
 
 RAIZ_APP = Path(__file__).resolve().parents[1]
@@ -87,6 +88,7 @@ class NisarCatalog(BaseModel):
     default_days: int
     earthdata_configured: bool
     data_root: str
+    nisar_root: str
 
 
 class GranuleImage(BaseModel):
@@ -110,6 +112,8 @@ class Granule(BaseModel):
     images: list[GranuleImage] = Field(default_factory=list)
     download: str = ""
     asf_url: str = ""
+    #: True si el ``.h5`` ya esta en la raiz NISAR: bajar de nuevo no hace falta.
+    local: bool = False
 
 
 class LocalScene(BaseModel):
@@ -136,6 +140,27 @@ class NisarSearch(BaseModel):
     returned: int
     granules: list[Granule]
     notes: list[str] = Field(default_factory=list)
+
+
+class TimelineScene(BaseModel):
+    """Una fecha del track/frame, venga de ASF o del disco."""
+
+    id: str
+    date: str
+    start: str
+    collection: str
+    size_mb: float | None = None
+    local: bool = False
+    download: str = ""
+
+
+class NisarTimeline(BaseModel):
+    track: int
+    frame: int
+    level: str
+    coleccion: str
+    total: int
+    scenes: list[TimelineScene]
 
 
 router = APIRouter()
@@ -203,6 +228,19 @@ def _fecha(valor: str | None, por_defecto: date) -> date:
         return date.fromisoformat(valor[:10])
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"fecha invalida: {valor}") from exc
+
+
+def _fecha_obligatoria(valor: str) -> date:
+    try:
+        return date.fromisoformat((valor or "")[:10])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"fecha invalida: {valor}") from exc
+
+
+def _coleccion_valida(coleccion: str) -> str:
+    if coleccion and any(c in coleccion for c in '\\/:*?"<>|'):
+        raise HTTPException(status_code=400, detail="coleccion invalida")
+    return coleccion
 
 
 def _ventana(inicio: str | None, fin: str | None) -> tuple[date, date]:
@@ -415,6 +453,25 @@ def _entero(valor: Any) -> int | None:
         return None
 
 
+def _iso(dia: str, hora: str) -> str:
+    """``20261017`` + ``214920`` -> ``2026-10-17T21:49:20Z``."""
+    return f"{dia[:4]}-{dia[4:6]}-{dia[6:]}T{hora[:2]}:{hora[2:4]}:{hora[4:6]}Z"
+
+
+def _tamano_local(nombre: str, coleccion: str) -> float | None:
+    try:
+        return round((_raiz_nisar() / coleccion / f"{nombre}.h5").stat().st_size / 1e6, 1)
+    except OSError:
+        return None
+
+
+def _coleccion_preferida(nueva: str, previa: str, pedida: str) -> bool:
+    """Con dos granulos el mismo dia gana la coleccion pedida y, si no, la validada."""
+    if pedida:
+        return nueva == pedida and previa != pedida
+    return "PROVISIONAL" in previa and "PROVISIONAL" not in nueva
+
+
 def _datos() -> Path:
     """Raiz de datos del pipeline (``CLIMATE3D_DATOS`` o el default)."""
     comun = RAIZ_REPO / "comun"
@@ -423,6 +480,88 @@ def _datos() -> Path:
     from rutas import DATOS
 
     return DATOS
+
+
+def _raiz_nisar() -> Path:
+    """Raiz de los .h5 NISAR: ``CLIMATE3D_NISAR`` o ``E:\\nisar`` en Windows.
+
+    Los GCOV pesan ~1.9 GB, asi que viven fuera de la raiz de datos general.
+    """
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from rutas import raiz_nisar
+
+    return raiz_nisar()
+
+
+def _ids_locales() -> dict[str, str]:
+    """id del granulo -> coleccion, para los ``.h5`` que ya estan en disco."""
+    vistas: dict[str, str] = {}
+    try:
+        raiz = _raiz_nisar()
+        if not raiz.is_dir():
+            return vistas
+        for carpeta in raiz.iterdir():
+            if not carpeta.is_dir():
+                continue
+            for ruta in carpeta.glob("*.h5"):
+                vistas[ruta.stem] = carpeta.name
+    except OSError:
+        return vistas
+    return vistas
+
+
+def _local_por_fecha(
+    track: int, frame: int, dia: date, nivel: str, coleccion: str
+) -> Granule | None:
+    """Escena local del track/frame en ese dia, sin consultar ASF.
+
+    El nombre del archivo ya trae todo lo que necesita la receta: ciclo, track,
+    frame, coleccion y los dos instantes. Asi, con la red caida, una fecha que ya
+    esta en disco se sigue pudiendo analizar.
+    """
+    try:
+        raiz = _raiz_nisar()
+        if not raiz.is_dir():
+            return None
+        carpetas = sorted(carpeta for carpeta in raiz.iterdir() if carpeta.is_dir())
+    except OSError:
+        return None
+    buscado = dia.strftime("%Y%m%d")
+    for carpeta in carpetas:
+        if coleccion and carpeta.name != coleccion:
+            continue
+        for ruta in sorted(carpeta.glob("*.h5")):
+            partes = _TRACK_FRAME.search(ruta.stem)
+            if (
+                not partes
+                or int(partes.group(2)) != track
+                or int(partes.group(3)) != frame
+            ):
+                continue
+            fecha = _FECHA_NISAR.search(ruta.stem)
+            if not fecha or fecha.group(1) != buscado:
+                continue
+            hora = fecha.group(2)
+            return Granule(
+                id=ruta.stem,
+                level=nivel,
+                start=f"{dia.isoformat()}T{hora[:2]}:{hora[2:4]}:{hora[4:6]}Z",
+                stop="",
+                direction="",
+                path=track,
+                frame=frame,
+                collection=carpeta.name,
+                size_mb=round(ruta.stat().st_size / 1e6, 1),
+                download="",
+                asf_url=(
+                    "https://search.asf.alaska.edu/#/?dataset=NISAR&granule="
+                    + urllib.parse.quote(ruta.stem, safe="")
+                ),
+                local=True,
+            )
+    return None
 
 
 def _earthdata_configurada() -> bool:
@@ -451,6 +590,7 @@ def catalogo() -> NisarCatalog:
         default_days=30,
         earthdata_configured=_earthdata_configurada(),
         data_root=str(_datos()),
+        nisar_root=str(_raiz_nisar()),
     )
 
 
@@ -482,6 +622,9 @@ def buscar(
     datos = _json_asf({**base, "output": "geojson", "maxResults": str(max_resultados)})
     features = datos.get("features") if isinstance(datos, dict) else None
     granulos = [_granulo(feature) for feature in (features or []) if isinstance(feature, dict)]
+    locales = _ids_locales()
+    for granulo in granulos:
+        granulo.local = granulo.id in locales
     granulos.sort(key=lambda granulo: granulo.start, reverse=True)
 
     notas: list[str] = []
@@ -496,7 +639,8 @@ def buscar(
         notas.append("SME2 suele publicarse sin imagen browse.")
     if not _earthdata_configurada():
         notas.append(
-            "Los .h5 no se descargan en esta fase; el browse no necesita credenciales."
+            "Los .h5 necesitan EARTHDATA_USER y EARTHDATA_PASSWORD para bajarse; "
+            "el browse no pide credenciales."
         )
 
     return NisarSearch(
@@ -510,6 +654,179 @@ def buscar(
         granules=granulos,
         notes=notas,
     )
+
+
+@router.get("/timeline", response_model=NisarTimeline)
+def linea_de_tiempo(
+    track: int = Query(..., ge=1, le=999),
+    frame: int = Query(..., ge=1, le=999),
+    coleccion: str = "",
+    level: str = "GCOV",
+    start: str | None = None,
+    end: str | None = None,
+    max_resultados: int = Query(200, alias="max", ge=1, le=MAX_RESULTADOS),
+) -> NisarTimeline:
+    """Fechas del track/frame: lo que publica ASF mas lo que ya esta en disco.
+
+    Es lo que alimenta el selector de "fecha anterior" y la serie temporal. ASF
+    solo devuelve la coleccion vigente; los ``.h5`` viejos que ya no lista se
+    agregan desde el disco para que sigan siendo analizables.
+    """
+    _coleccion_valida(coleccion)
+    nivel = _nivel(level)
+    hoy = datetime.now(timezone.utc).date()
+    desde = _fecha(start, hoy - timedelta(days=365))
+    hasta = _fecha(end, hoy)
+    if hasta < desde:
+        desde, hasta = hasta, desde
+    if (hasta - desde).days > MAX_DIAS_TIMELINE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"ventana demasiado larga: maximo {MAX_DIAS_TIMELINE} dias",
+        )
+
+    base = {
+        "dataset": "NISAR",
+        "processingLevel": nivel,
+        "relativeOrbit": str(track),
+        "frame": str(frame),
+        "start": desde.isoformat(),
+        "end": hasta.isoformat(),
+    }
+    datos = _json_asf({**base, "output": "geojson", "maxResults": str(max_resultados)})
+    features = datos.get("features") if isinstance(datos, dict) else None
+    locales = _ids_locales()
+
+    escenas: dict[str, TimelineScene] = {}
+    for feature in features or []:
+        if not isinstance(feature, dict):
+            continue
+        granulo = _granulo(feature)
+        if granulo.path not in (None, track) or granulo.frame not in (None, frame):
+            continue
+        if coleccion and granulo.collection != coleccion:
+            continue
+        clave = granulo.start[:10]
+        previa = escenas.get(clave)
+        if previa is not None and not _coleccion_preferida(
+            granulo.collection, previa.collection, coleccion
+        ):
+            continue
+        escenas[clave] = TimelineScene(
+            id=granulo.id,
+            date=clave,
+            start=granulo.start,
+            collection=granulo.collection,
+            size_mb=granulo.size_mb,
+            local=granulo.id in locales,
+            download=granulo.download,
+        )
+
+    for nombre, coleccion_local in locales.items():
+        partes = _TRACK_FRAME.search(nombre)
+        if (
+            not partes
+            or int(partes.group(2)) != track
+            or int(partes.group(3)) != frame
+        ):
+            continue
+        if coleccion and coleccion_local != coleccion:
+            continue
+        fecha = _FECHA_NISAR.search(nombre)
+        if not fecha:
+            continue
+        instante = _iso(fecha.group(1), fecha.group(2))
+        if not (desde.isoformat() <= instante[:10] <= hasta.isoformat()):
+            continue
+        clave = instante[:10]
+        previa = escenas.get(clave)
+        if previa is None:
+            escenas[clave] = TimelineScene(
+                id=nombre,
+                date=clave,
+                start=instante,
+                collection=coleccion_local,
+                size_mb=_tamano_local(nombre, coleccion_local),
+                local=True,
+                download="",
+            )
+        else:
+            # El .h5 local es el de esta fila solo si es de la misma coleccion.
+            if previa.collection == coleccion_local:
+                previa.local = True
+                previa.size_mb = _tamano_local(nombre, coleccion_local) or previa.size_mb
+
+    ordenadas = sorted(escenas.values(), key=lambda escena: escena.start)
+    return NisarTimeline(
+        track=track,
+        frame=frame,
+        level=nivel,
+        coleccion=coleccion,
+        total=len(ordenadas),
+        scenes=ordenadas,
+    )
+
+
+@router.get("/scene", response_model=Granule)
+def escena_por_fecha(
+    track: int = Query(..., ge=1, le=999),
+    frame: int = Query(..., ge=1, le=999),
+    date: str = Query(..., description="AAAA-MM-DD del inicio del granulo"),
+    level: str = "GCOV",
+    coleccion: str = "",
+) -> Granule:
+    """Resuelve una fecha suelta a su granulo del track/frame.
+
+    Primero mira el disco: si el ``.h5`` ya esta, no hace falta ASF ni red. Si
+    falta, consulta ASF por ``relativeOrbit``/``frame`` en una ventana de tres
+    dias y se queda con el granulo de ese dia exacto.
+    """
+    _coleccion_valida(coleccion)
+    nivel = _nivel(level)
+    dia = _fecha_obligatoria(date)
+    local = _local_por_fecha(track, frame, dia, nivel, coleccion)
+    if local is not None:
+        return local
+
+    datos = _json_asf(
+        {
+            "dataset": "NISAR",
+            "processingLevel": nivel,
+            "relativeOrbit": str(track),
+            "frame": str(frame),
+            "start": (dia - timedelta(days=1)).isoformat(),
+            "end": (dia + timedelta(days=2)).isoformat(),
+            "output": "geojson",
+            "maxResults": "20",
+        }
+    )
+    features = datos.get("features") if isinstance(datos, dict) else None
+    candidatos: list[Granule] = []
+    for feature in features or []:
+        if not isinstance(feature, dict):
+            continue
+        granulo = _granulo(feature)
+        if granulo.path not in (None, track) or granulo.frame not in (None, frame):
+            continue
+        if granulo.start[:10] != dia.isoformat():
+            continue
+        if coleccion and granulo.collection != coleccion:
+            continue
+        candidatos.append(granulo)
+
+    if not candidatos:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No hay escena NISAR {nivel} para track {track} frame {frame} el "
+                f"{dia.isoformat()}. Probá otra fecha de ese track/frame."
+            ),
+        )
+    # El mismo dia puede existir en PROVISIONAL y VALIDATED: gana la validada.
+    candidatos.sort(key=lambda granulo: "PROVISIONAL" in granulo.collection)
+    elegido = candidatos[0]
+    elegido.local = elegido.id in _ids_locales()
+    return elegido
 
 
 @router.get("/browse")
@@ -541,7 +858,7 @@ def locales(
     """
     if any(c in coleccion for c in '\\/:*?"<>|'):
         raise HTTPException(status_code=400, detail="coleccion invalida")
-    carpeta = _datos() / "nisar" / coleccion
+    carpeta = _raiz_nisar() / coleccion
     escenas: list[LocalScene] = []
     if carpeta.is_dir():
         for ruta in sorted(carpeta.glob("*.h5")):

@@ -9,6 +9,10 @@ tenía andando— y en el resto, donde corre el contenedor, se usa ``/data``, qu
 punto de montaje del volumen.
 
 ``CLIMATE3D_EXTRA_DIRS`` agrega ubicaciones alternativas separadas por ``os.pathsep``.
+
+Los ``.h5`` de NISAR no viven con el resto: cada GCOV pesa ~1.9 GB. Su raíz se
+configura con ``CLIMATE3D_NISAR`` y, sin la variable, en Windows apunta a
+``E:\\nisar`` para no llenar el disco de datos.
 """
 from __future__ import annotations
 
@@ -24,6 +28,9 @@ RUTA_LEGADA = r"D:\Users\guill\dataset era5"
 
 #: Punto de montaje del volumen en el contenedor (y default fuera de Windows).
 RUTA_CONTENEDOR = "/data"
+
+#: Raíz propia de los .h5 NISAR en Windows: pesan ~1.9 GB cada uno.
+RUTA_NISAR_WINDOWS = r"E:\nisar"
 
 #: Ubicaciones históricas donde se buscaba el NetCDF de ERA5.
 _EXTRA_LEGADAS = (Path(r"D:\Users\guill\Desktop"), RAIZ)
@@ -48,6 +55,23 @@ def raiz_datos(
     return Path(RUTA_LEGADA) if _plataforma(plataforma) == "nt" else Path(RUTA_CONTENEDOR)
 
 
+def raiz_nisar(
+    entorno: Mapping[str, str] | None = None,
+    plataforma: str | None = None,
+) -> Path:
+    """Raíz de los ``.h5`` de NISAR: ``CLIMATE3D_NISAR`` manda.
+
+    Sin la variable, en Windows es ``E:\\nisar`` (el disco de datos se llena con
+    los ~1.9 GB por escena) y fuera de Windows queda junto al resto de los datos.
+    """
+    valor = (_entorno(entorno).get("CLIMATE3D_NISAR") or "").strip()
+    if valor:
+        return Path(valor)
+    if _plataforma(plataforma) == "nt":
+        return Path(RUTA_NISAR_WINDOWS)
+    return raiz_datos(entorno, plataforma) / "nisar"
+
+
 def carpetas_extra(
     entorno: Mapping[str, str] | None = None,
     plataforma: str | None = None,
@@ -68,6 +92,9 @@ def carpetas_extra(
 # Raíz de datos: los .nc (varios GB) y las salidas viven fuera del repositorio.
 DATOS = raiz_datos()
 SALIDAS = DATOS / "salidas"
+
+# Raíz de los .h5 NISAR: separada de DATOS por tamaño (ver `raiz_nisar`).
+NISAR = raiz_nisar()
 
 # El NetCDF de ERA5 puede haberse movido fuera de DATOS: se buscan también estas
 # ubicaciones (no recursivas) para no caer en datos sintéticos sin darse cuenta.

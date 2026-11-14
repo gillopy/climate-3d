@@ -17,8 +17,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 RAIZ = Path(__file__).resolve().parents[2]
-if str(RAIZ) not in sys.path:
-    sys.path.insert(0, str(RAIZ))
+for candidato in (RAIZ, RAIZ / "comun"):
+    if str(candidato) not in sys.path:
+        sys.path.insert(0, str(candidato))
 
 try:
     from fastapi.testclient import TestClient
@@ -27,10 +28,12 @@ try:
     from app.api.catalog import get_product, productos_disponibles
     from app.api.main import app
     from app.api.recipes import planear
+    import rutas
 except ImportError:  # pragma: no cover - faltan dependencias del venv de la app
     TestClient = None
     nisar = None
     app = None
+    rutas = None
 
 GRANULO = "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_20261029T214921_20261029T214955_P05036_N_F_J_001"
 BASE_BROWSE = f"https://nisar.asf.earthdatacloud.nasa.gov/BROWSE/NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}"
@@ -406,30 +409,31 @@ class VisorNisar(unittest.TestCase):
 
     def test_receta_incendio_con_dos_fechas_y_firms(self):
         with tempfile.TemporaryDirectory() as carpeta:
-            plan = planear(
-                "nisar_render",
-                {
-                    "producto": "incendio",
-                    "granulo": GRANULO,
-                    "url": (
-                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
-                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
-                    ),
-                    "coleccion": "NISAR_L2_GCOV_V1",
-                    "antes_granulo": "ANTES",
-                    "antes_url": (
-                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
-                        "NISAR_L2_GCOV_V1/ANTES/ANTES.h5"
-                    ),
-                    "antes_coleccion": "NISAR_L2_GCOV_V1",
-                    "bbox": "-55.6,-24.5,-55.2,-23.9",
-                    "px": 1400,
-                    "umbral": 3,
-                    "hv_min": -15.5,
-                    "firms": True,
-                },
-                Path(carpeta),
-            )
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                plan = planear(
+                    "nisar_render",
+                    {
+                        "producto": "incendio",
+                        "granulo": GRANULO,
+                        "url": (
+                            "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                            f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                        ),
+                        "coleccion": "NISAR_L2_GCOV_V1",
+                        "antes_granulo": "ANTES",
+                        "antes_url": (
+                            "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                            "NISAR_L2_GCOV_V1/ANTES/ANTES.h5"
+                        ),
+                        "antes_coleccion": "NISAR_L2_GCOV_V1",
+                        "bbox": "-55.6,-24.5,-55.2,-23.9",
+                        "px": 1400,
+                        "umbral": 3,
+                        "hv_min": -15.5,
+                        "firms": True,
+                    },
+                    Path(carpeta),
+                )
 
         self.assertEqual(
             [paso.script for paso in plan.pasos],
@@ -439,24 +443,25 @@ class VisorNisar(unittest.TestCase):
 
     def test_receta_cambio_descarga_dos_fechas_y_compara(self):
         with tempfile.TemporaryDirectory() as carpeta:
-            plan = planear(
-                "nisar_render",
-                {
-                    "producto": "cambio",
-                    "granulo": GRANULO,
-                    "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
-                    "coleccion": "NISAR_L2_GCOV_V1",
-                    "antes_granulo": "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_20261017T214920_20261017T214955_P05023_N_F_J_001",
-                    "antes_url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/ANTES/ANTES.h5",
-                    "antes_coleccion": "NISAR_L2_GCOV_V1",
-                    "bbox": "-55.6,-24.5,-55.2,-23.9",
-                    "px": 2400,
-                    "modo_cambio": "mascara",
-                    "umbral": 3,
-                    "hv_min": -15.5,
-                },
-                Path(carpeta),
-            )
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                plan = planear(
+                    "nisar_render",
+                    {
+                        "producto": "cambio",
+                        "granulo": GRANULO,
+                        "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                        "coleccion": "NISAR_L2_GCOV_V1",
+                        "antes_granulo": "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_20261017T214920_20261017T214955_P05023_N_F_J_001",
+                        "antes_url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/ANTES/ANTES.h5",
+                        "antes_coleccion": "NISAR_L2_GCOV_V1",
+                        "bbox": "-55.6,-24.5,-55.2,-23.9",
+                        "px": 2400,
+                        "modo_cambio": "mascara",
+                        "umbral": 3,
+                        "hv_min": -15.5,
+                    },
+                    Path(carpeta),
+                )
 
         self.assertEqual(
             [paso.script for paso in plan.pasos],
@@ -516,33 +521,45 @@ class VisorNisar(unittest.TestCase):
 
         self.assertEqual(granulo.collection, "NISAR_L2_GCOV_PROVISIONAL_V1")
 
-    def test_receta_cambio_rechaza_mezclar_colecciones(self):
-        with self.assertRaises(ValueError):
-            planear(
-                "nisar_render",
-                {
-                    "producto": "cambio",
-                    "granulo": GRANULO,
-                    "url": (
-                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
-                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
-                    ),
-                    "coleccion": "NISAR_L2_GCOV_V1",
-                    "antes_granulo": "ANTES",
-                    "antes_url": (
-                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
-                        "NISAR_L2_GCOV_PROVISIONAL_V1/ANTES/ANTES.h5"
-                    ),
-                    "antes_coleccion": "NISAR_L2_GCOV_PROVISIONAL_V1",
-                    "bbox": "-55.6,-24.5,-55.2,-23.9",
-                    "px": 1200,
-                },
-                Path("."),
-            )
+    def test_receta_cambio_permite_mezclar_colecciones_con_aviso_en_el_json(self):
+        # El archivo real publica las fechas viejas solo como PROVISIONAL: bloquear
+        # la mezcla dejaria la comparacion sin segundas fechas.
+        with tempfile.TemporaryDirectory() as carpeta:
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                plan = planear(
+                    "nisar_render",
+                    {
+                        "producto": "cambio",
+                        "granulo": GRANULO,
+                        "url": (
+                            "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                            f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                        ),
+                        "coleccion": "NISAR_L2_GCOV_V1",
+                        "antes_granulo": "ANTES",
+                        "antes_url": (
+                            "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                            "NISAR_L2_GCOV_PROVISIONAL_V1/ANTES/ANTES.h5"
+                        ),
+                        "antes_coleccion": "NISAR_L2_GCOV_PROVISIONAL_V1",
+                        "bbox": "-55.6,-24.5,-55.2,-23.9",
+                        "px": 1200,
+                    },
+                    Path(carpeta),
+                )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "descargar/nisar.py", "prototipos/nisar_cambio.py"],
+        )
+        self.assertEqual(
+            plan.pasos[1].args[plan.pasos[1].args.index("--coleccion") + 1],
+            "NISAR_L2_GCOV_PROVISIONAL_V1",
+        )
 
     def test_locales_lista_solo_track_frame_y_coleccion(self):
         with tempfile.TemporaryDirectory() as carpeta:
-            base = Path(carpeta) / "nisar" / "COL"
+            base = Path(carpeta) / "COL"
             base.mkdir(parents=True)
             nombres = [
                 "NISAR_L2_PR_GCOV_032_082_D_101_2005_DHDH_A_"
@@ -554,7 +571,7 @@ class VisorNisar(unittest.TestCase):
             ]
             for nombre in nombres:
                 (base / nombre).write_bytes(b"x")
-            with patch.object(nisar, "_datos", return_value=Path(carpeta)):
+            with patch.object(nisar, "_raiz_nisar", return_value=Path(carpeta)):
                 respuesta = self.cliente.get(
                     "/api/nisar/local",
                     params={"track": 82, "frame": 101, "coleccion": "COL"},
@@ -567,6 +584,326 @@ class VisorNisar(unittest.TestCase):
             [escena["date"][:10] for escena in cuerpo["scenes"]],
             ["2026-10-05", "2026-10-17"],
         )
+
+    # --- fechas del track/frame y descarga bajo demanda -------------------
+    def _feature(self, sufijo: str, coleccion: str = "NISAR_L2_GCOV_V1") -> dict:
+        """FEATURE con otra fecha/coleccion, para armar un track con historia."""
+        copia = copy.deepcopy(FEATURE)
+        granulo = (
+            "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+            f"{sufijo}T214920_{sufijo}T214955_P05023_N_F_J_001"
+        )
+        props = copia["properties"]
+        props["fileID"] = granulo
+        props["sceneName"] = granulo
+        props["startTime"] = f"{sufijo[:4]}-{sufijo[4:6]}-{sufijo[6:]}T21:49:20Z"
+        props["stopTime"] = f"{sufijo[:4]}-{sufijo[4:6]}-{sufijo[6:]}T21:49:55Z"
+        props["collectionName"] = coleccion
+        props["fileName"] = f"{granulo}.h5"
+        props["url"] = (
+            "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+            f"{coleccion}/{granulo}/{granulo}.h5"
+        )
+        props["bytes"] = {f"{granulo}.h5": {"bytes": 1_874_853_888, "format": "HDF5"}}
+        props["browse"] = []
+        return copia
+
+    def test_el_catalogo_declara_la_raiz_de_nisar(self):
+        with patch.object(nisar, "_raiz_nisar", return_value=Path(r"E:\nisar")):
+            cuerpo = self.cliente.get("/api/nisar/catalog").json()
+
+        self.assertEqual(cuerpo["nisar_root"], r"E:\nisar")
+        self.assertIn("data_root", cuerpo)
+
+    def test_la_busqueda_marca_los_granulos_que_ya_estan_en_disco(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta) / "NISAR_L2_GCOV_V1"
+            base.mkdir(parents=True)
+            (base / f"{GRANULO}.h5").write_bytes(b"x")
+            with (
+                patch.object(nisar, "_raiz_nisar", return_value=Path(carpeta)),
+                patch.object(nisar, "_contar", return_value=1),
+                patch.object(
+                    nisar,
+                    "_json_asf",
+                    return_value={"type": "FeatureCollection", "features": [FEATURE]},
+                ),
+            ):
+                cuerpo = self.cliente.get(
+                    "/api/nisar/search",
+                    params={"bbox": "-55.6,-24.5,-55.2,-23.9", "level": "GCOV"},
+                ).json()
+
+        self.assertTrue(cuerpo["granules"][0]["local"])
+
+    def test_timeline_mezcla_asf_con_lo_que_esta_en_disco(self):
+        local_solo = (
+            "NISAR_L2_PR_GCOV_032_082_D_101_2005_DHDH_A_"
+            "20261005T214920_20261005T214955_P05023_N_F_J_001"
+        )
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta) / "NISAR_L2_GCOV_V1"
+            base.mkdir(parents=True)
+            (base / f"{GRANULO}.h5").write_bytes(b"x" * 20)
+            (base / f"{local_solo}.h5").write_bytes(b"x" * 20)
+            with (
+                patch.object(nisar, "_raiz_nisar", return_value=Path(carpeta)),
+                patch.object(
+                    nisar,
+                    "_json_asf",
+                    return_value={
+                        "type": "FeatureCollection",
+                        "features": [FEATURE, self._feature("20261001", "OTRA")],
+                    },
+                ),
+            ):
+                respuesta = self.cliente.get(
+                    "/api/nisar/timeline",
+                    params={
+                        "track": 82,
+                        "frame": 101,
+                        "coleccion": "NISAR_L2_GCOV_V1",
+                    },
+                )
+
+        self.assertEqual(respuesta.status_code, 200)
+        cuerpo = respuesta.json()
+        self.assertEqual(cuerpo["total"], 2)
+        self.assertEqual(
+            [escena["date"] for escena in cuerpo["scenes"]],
+            ["2026-10-05", "2026-10-29"],
+        )
+        self.assertTrue(all(escena["local"] for escena in cuerpo["scenes"]))
+        # La fecha que ASF lista trae URL; la que solo esta en disco, no.
+        self.assertEqual(cuerpo["scenes"][1]["download"], FEATURE["properties"]["url"])
+        self.assertEqual(cuerpo["scenes"][0]["download"], "")
+
+    def test_escena_por_fecha_usa_el_disco_sin_consultar_asf(self):
+        local = (
+            "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+            "20261017T214920_20261017T214955_P05023_N_F_J_001"
+        )
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta) / "NISAR_L2_GCOV_V1"
+            base.mkdir(parents=True)
+            (base / f"{local}.h5").write_bytes(b"x" * 20)
+            with (
+                patch.object(nisar, "_raiz_nisar", return_value=Path(carpeta)),
+                patch.object(
+                    nisar, "_json_asf", side_effect=AssertionError("no debe consultar ASF")
+                ),
+            ):
+                respuesta = self.cliente.get(
+                    "/api/nisar/scene",
+                    params={"track": 82, "frame": 101, "date": "2026-10-17"},
+                )
+
+        self.assertEqual(respuesta.status_code, 200)
+        cuerpo = respuesta.json()
+        self.assertEqual(cuerpo["id"], local)
+        self.assertTrue(cuerpo["local"])
+        self.assertEqual(cuerpo["collection"], "NISAR_L2_GCOV_V1")
+        self.assertEqual(cuerpo["start"], "2026-10-17T21:49:20Z")
+
+    def test_escena_por_fecha_sin_datos_es_404(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            with (
+                patch.object(nisar, "_raiz_nisar", return_value=Path(carpeta)),
+                patch.object(
+                    nisar,
+                    "_json_asf",
+                    return_value={"type": "FeatureCollection", "features": []},
+                ),
+            ):
+                respuesta = self.cliente.get(
+                    "/api/nisar/scene",
+                    params={"track": 82, "frame": 101, "date": "2026-09-20"},
+                )
+
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertIn("No hay escena NISAR GCOV para track 82 frame 101", respuesta.json()["detail"])
+
+    def test_receta_cambio_usa_la_anterior_local_sin_url(self):
+        anterior = (
+            "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+            "20261017T214920_20261017T214955_P05023_N_F_J_001"
+        )
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta) / "NISAR_L2_GCOV_V1"
+            base.mkdir(parents=True)
+            (base / f"{anterior}.h5").write_bytes(b"x")
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                plan = planear(
+                    "nisar_render",
+                    {
+                        "producto": "cambio",
+                        "granulo": GRANULO,
+                        "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                        "coleccion": "NISAR_L2_GCOV_V1",
+                        "antes_granulo": anterior,
+                        "antes_coleccion": "NISAR_L2_GCOV_V1",
+                        "bbox": "-55.6,-24.5,-55.2,-23.9",
+                        "px": 1200,
+                    },
+                    Path(carpeta),
+                )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_cambio.py"],
+        )
+
+    def test_receta_cambio_exige_url_si_la_anterior_no_esta_en_disco(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                with self.assertRaises(ValueError) as contexto:
+                    planear(
+                        "nisar_render",
+                        {
+                            "producto": "cambio",
+                            "granulo": GRANULO,
+                            "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                            "coleccion": "NISAR_L2_GCOV_V1",
+                            "antes_granulo": "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_20261017T214920_20261017T214955_P05023_N_F_J_001",
+                            "antes_coleccion": "NISAR_L2_GCOV_V1",
+                            "bbox": "-55.6,-24.5,-55.2,-23.9",
+                            "px": 1200,
+                        },
+                        Path(carpeta),
+                    )
+
+        self.assertIn("no esta en disco", str(contexto.exception))
+
+    def test_receta_serie_baja_las_fechas_que_faltan(self):
+        faltan = [
+            {
+                "id": "NISAR_L2_PR_GCOV_032_082_D_101_2005_DHDH_A_20261005T214920_20261005T214955_P05023_N_F_J_001",
+                "url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/A/A.h5",
+                "coleccion": "NISAR_L2_GCOV_V1",
+            },
+            {
+                "id": "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_20261017T214920_20261017T214955_P05023_N_F_J_001",
+                "url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/B/B.h5",
+                "coleccion": "NISAR_L2_GCOV_V1",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as carpeta:
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                plan = planear(
+                    "nisar_render",
+                    {
+                        "producto": "serie",
+                        "granulo": GRANULO,
+                        "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                        "coleccion": "NISAR_L2_GCOV_V1",
+                        "bbox": "-55.6,-24.5,-55.2,-23.9",
+                        "px": 1200,
+                        "track": 82,
+                        "frame": 101,
+                        "escenas": json.dumps(faltan),
+                    },
+                    Path(carpeta),
+                )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            [
+                "descargar/nisar.py",
+                "descargar/nisar.py",
+                "descargar/nisar.py",
+                "prototipos/nisar_serie.py",
+            ],
+        )
+        indice = plan.pasos[-1].args.index("--fechas")
+        fechas = plan.pasos[-1].args[indice + 1].split(",")
+        self.assertEqual(fechas, [escena["id"] for escena in faltan])
+
+    def test_receta_serie_no_baja_lo_que_ya_esta_en_disco(self):
+        ya_esta = {
+            "id": "NISAR_L2_PR_GCOV_032_082_D_101_2005_DHDH_A_20261005T214920_20261005T214955_P05023_N_F_J_001",
+            "url": "",
+            "coleccion": "NISAR_L2_GCOV_V1",
+        }
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta) / "NISAR_L2_GCOV_V1"
+            base.mkdir(parents=True)
+            (base / f"{ya_esta['id']}.h5").write_bytes(b"x")
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                plan = planear(
+                    "nisar_render",
+                    {
+                        "producto": "serie",
+                        "granulo": GRANULO,
+                        "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                        "coleccion": "NISAR_L2_GCOV_V1",
+                        "bbox": "-55.6,-24.5,-55.2,-23.9",
+                        "px": 1200,
+                        "track": 82,
+                        "frame": 101,
+                        "escenas": json.dumps([ya_esta]),
+                    },
+                    Path(carpeta),
+                )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_serie.py"],
+        )
+
+    def test_receta_serie_acepta_fechas_de_otra_coleccion(self):
+        extra = {
+            "id": "NISAR_L2_PR_GCOV_032_082_D_101_2005_DHDH_A_20261005T214920_20261005T214955_P05023_N_F_J_001",
+            "url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/X/X.h5",
+            "coleccion": "NISAR_L2_GCOV_PROVISIONAL_V1",
+        }
+        with tempfile.TemporaryDirectory() as carpeta:
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                plan = planear(
+                    "nisar_render",
+                    {
+                        "producto": "serie",
+                        "granulo": GRANULO,
+                        "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                        "coleccion": "NISAR_L2_GCOV_V1",
+                        "bbox": "-55.6,-24.5,-55.2,-23.9",
+                        "px": 1200,
+                        "track": 82,
+                        "frame": 101,
+                        "escenas": json.dumps([extra]),
+                    },
+                    Path(carpeta),
+                )
+
+        args = plan.pasos[-1].args
+        carpetas = [args[i + 1] for i, valor in enumerate(args) if valor == "--coleccion-dir"]
+        self.assertEqual(len(carpetas), 2)
+        self.assertTrue(carpetas[1].endswith("NISAR_L2_GCOV_PROVISIONAL_V1"))
+        # La descarga extra va a su propia carpeta de coleccion.
+        self.assertEqual(
+            plan.pasos[1].args[plan.pasos[1].args.index("--coleccion") + 1],
+            "NISAR_L2_GCOV_PROVISIONAL_V1",
+        )
+
+    def test_receta_descarga_solo_baja_el_h5(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                plan = planear(
+                    "nisar_render",
+                    {
+                        "producto": "descarga",
+                        "nivel": "GSLC",
+                        "granulo": GRANULO,
+                        "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+                        "coleccion": "NISAR_L2_GCOV_V1",
+                    },
+                    Path(carpeta),
+                )
+
+        self.assertEqual([paso.script for paso in plan.pasos], ["descargar/nisar.py"])
+        self.assertEqual(plan.pasos[0].kind, "download")
+        self.assertIn("--sello", plan.pasos[0].args)
+        self.assertIn("--destino", plan.pasos[0].args)
+        self.assertEqual(plan.pasos[0].args[plan.pasos[0].args.index("--destino") + 1], str(carpeta))
 
     def test_paraguay_sale_del_geojson_del_repo(self):
         respuesta = self.cliente.get("/api/nisar/paraguay")

@@ -366,6 +366,47 @@ class RenderNisar(unittest.TestCase):
             meta2 = json.loads((tmp / "serie2.json").read_text(encoding="utf-8"))
             self.assertEqual(len(meta2["fechas"]), 2)
 
+            # --fechas filtra sobre TODAS las escenas del track/frame, no sobre las
+            # ultimas --max: una fecha vieja elegida a mano tambien tiene que entrar.
+            prefijo3 = tmp / "serie3"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_serie.py",
+                    "--h5",
+                    str(rutas[-1]),
+                    "--coleccion-dir",
+                    str(coleccion),
+                    "--track",
+                    "82",
+                    "--frame",
+                    "101",
+                    "--bbox",
+                    bbox,
+                    "--px",
+                    "900",
+                    "--umbral",
+                    "3",
+                    "--hv-min",
+                    "-30",
+                    "--bosque",
+                    "hv",
+                    "--max",
+                    "2",
+                    "--fechas",
+                    f"{rutas[0].stem},{rutas[2].stem}",
+                    "--out",
+                    str(prefijo3),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            meta3 = json.loads((tmp / "serie3.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(meta3["fechas"]), 2)
+            self.assertTrue(meta3["fechas"][0].startswith("2026-10-05"))
+
             tif = tmp / "corte.tif"
             corrida = subprocess.run(
                 [
@@ -492,6 +533,49 @@ class RenderNisar(unittest.TestCase):
             self.assertGreater(meta_fuego["cicatriz_ha"], 0.0)
             self.assertFalse(meta_fuego["firms"])
             self.assertEqual(meta_fuego["focos"], 0)
+
+
+    def test_descarga_con_sello_no_baja_si_ya_esta(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            tmp = Path(carpeta)
+            coleccion = tmp / "NISAR_L2_GCOV_V1"
+            coleccion.mkdir()
+            granulo = (
+                "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_"
+                "20261029T214921_20261029T214955_P05036_N_F_J_001"
+            )
+            destino = coleccion / f"{granulo}.h5"
+            with destino.open("wb") as fh:
+                fh.truncate(10_000_001)  # >= MIN_BYTES: el script no baja nada
+            sello = tmp / "nisar_descarga.json"
+
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "descargar/nisar.py",
+                    "--url",
+                    "https://example.com/no-se-usa.h5",
+                    "--granulo",
+                    granulo,
+                    "--destino",
+                    str(tmp),
+                    "--coleccion",
+                    "NISAR_L2_GCOV_V1",
+                    "--sello",
+                    str(sello),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            self.assertIn("ya esta", corrida.stdout)
+            datos = json.loads(sello.read_text(encoding="utf-8"))
+            self.assertTrue(datos["ya_estaba"])
+            self.assertEqual(datos["granulo"], granulo)
+            self.assertEqual(datos["bytes"], 10_000_001)
+            self.assertEqual(Path(datos["ruta"]), destino)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ con la descarga que queda guardada en ``Plan.descarga``.
 """
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -2121,6 +2122,29 @@ def _nisar_nombre(valor: str, nombre: str) -> str:
     return valor
 
 
+def _nisar_instante(nombre: str) -> str:
+    """Instante de adquisicion del granulo, como `AAAAMMDDTHHMMSS` (ordenable)."""
+    encontrado = re.search(r"(\d{8})T(\d{6})", nombre or "")
+    return f"{encontrado.group(1)}T{encontrado.group(2)}" if encontrado else ""
+
+
+def _exigir_orden(antes: str, despues: str) -> None:
+    """Comparar dos escenas solo tiene sentido si la anterior es mas vieja.
+
+    Sin este control, elegir una escena posterior como "anterior" invierte el
+    signo del cambio y produce hectareas que no existen.
+    """
+    i_antes = _nisar_instante(antes)
+    i_despues = _nisar_instante(despues)
+    if not i_antes or not i_despues:
+        return
+    if i_antes >= i_despues:
+        raise ValueError(
+            "La escena anterior tiene que ser mas vieja que la seleccionada: "
+            f"llego antes={i_antes} y despues={i_despues}."
+        )
+
+
 def _nisar_coleccion(url: str, valor: str) -> str:
     """La URL de ASF manda: `.../NISAR/<coleccion>/<granulo>/...`.
 
@@ -2135,37 +2159,88 @@ def _nisar_coleccion(url: str, valor: str) -> str:
 
 
 def _nisar_descarga(
-    granulo: str, url: str, coleccion: str, raiz_datos: Path, etiqueta: str
+    granulo: str,
+    url: str,
+    coleccion: str,
+    raiz: Path,
+    etiqueta: str,
+    sello: Path | None = None,
 ) -> Step:
+    args = [
+        "--url", url,
+        "--granulo", granulo,
+        "--destino", str(raiz),
+        "--coleccion", coleccion,
+    ]
+    if sello is not None:
+        args += ["--sello", str(sello)]
     return Step(
         kind="download",
         label=f"descargando {etiqueta} {granulo[-24:]}",
         script="descargar/nisar.py",
-        args=[
-            "--url", url,
-            "--granulo", granulo,
-            "--destino", str(raiz_datos / "nisar"),
-            "--coleccion", coleccion,
-        ],
+        args=args,
         expected=40,
     )
+
+
+def _nisar_en_disco(raiz: Path, coleccion: str, granulo: str) -> bool:
+    """Si el .h5 ya esta, no se agrega el paso de descarga ni se pide URL."""
+    return (raiz / coleccion / f"{granulo}.h5").is_file()
+
+
+def _nisar_escenas(params: dict[str, Any]) -> list[dict[str, str]]:
+    """Fechas extra de la serie: ``[{"id","url","coleccion"}]`` en un JSON.
+
+    La UI manda las que no estan en disco con su URL de ASF para que la receta
+    las baje antes de correr el CUSUM. Las que ya estan se pueden mandar sin URL.
+    """
+    crudo = params.get("escenas")
+    if crudo in (None, ""):
+        return []
+    if isinstance(crudo, str):
+        try:
+            crudo = json.loads(crudo)
+        except json.JSONDecodeError as exc:
+            raise ValueError("La lista de escenas de la serie no es JSON valido.") from exc
+    if not isinstance(crudo, list):
+        raise ValueError("La lista de escenas de la serie tiene que ser un arreglo.")
+    escenas: list[dict[str, str]] = []
+    for indice, entrada in enumerate(crudo):
+        if not isinstance(entrada, dict):
+            raise ValueError(f"Escena {indice + 1} de la serie invalida.")
+        granulo = _nisar_nombre(str(entrada.get("id") or "").strip(), f"escena {indice + 1}")
+        url = str(entrada.get("url") or "").strip()
+        coleccion = str(entrada.get("coleccion") or "").strip()
+        if url and not url.startswith("https://"):
+            raise ValueError(f"La escena {granulo} no trae una URL https de descarga.")
+        escenas.append({"id": granulo, "url": url, "coleccion": coleccion})
+    return escenas
 
 
 def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
     """Plan del visor: descarga la/s escena/s y corre el producto elegido.
 
-    Productos: ``recorte``, ``rvi``, ``cambio``, ``serie`` y ``geotiff``. La
-    descarga es reanudable y saltea el archivo si ya esta: cambiar de producto no
-    vuelve a bajar 1.9 GB por escena.
+    Productos: ``recorte``, ``rvi``, ``cambio``, ``serie``, ``geotiff``, ``agua``,
+    ``incendio``, ``fusion`` y ``descarga`` (solo baja el .h5). La descarga es
+    reanudable y saltea el archivo si ya esta: cambiar de producto no vuelve a
+    bajar 1.9 GB por escena.
     """
     producto = str(params.get("producto") or "recorte").strip().lower()
     if producto not in (
-        "recorte", "rvi", "cambio", "serie", "geotiff", "agua", "incendio", "fusion"
+        "recorte",
+        "rvi",
+        "cambio",
+        "serie",
+        "geotiff",
+        "agua",
+        "incendio",
+        "fusion",
+        "descarga",
     ):
         raise ValueError(f"Producto NISAR desconocido: {producto}")
 
     nivel = str(params.get("nivel") or "GCOV").strip().upper()
-    if nivel != "GCOV":
+    if nivel != "GCOV" and producto != "descarga":
         raise ValueError(
             f"El producto {producto} usa GCOV; la escena elegida es {nivel}. "
             "Elegí una escena GCOV. GUNW/GSLC/SME2 quedan como búsqueda y "
@@ -2175,30 +2250,41 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
     granulo = _nisar_nombre(str(params.get("granulo") or "").strip(), "granulo")
     url = str(params.get("url") or "").strip()
     coleccion = _nisar_coleccion(url, str(params.get("coleccion") or ""))
-    bbox = str(params.get("bbox") or "").strip()
     if not url.startswith("https://"):
         raise ValueError("La escena NISAR no trae una URL https de descarga.")
-    try:
-        oeste, sur, este, norte = [float(v) for v in bbox.split(",")]
-    except (AttributeError, ValueError) as exc:
-        raise ValueError("La caja NISAR debe ser oeste,sur,este,norte") from exc
-    if not (-180 <= oeste < este <= 180 and -90 <= sur < norte <= 90):
-        raise ValueError("La caja NISAR esta fuera de rango o invertida.")
 
     comun = RAIZ_REPO / "comun"
     if str(comun) not in sys.path:
         sys.path.insert(0, str(comun))
-    from rutas import DATOS  # import local: igual que los otros helpers
+    from rutas import raiz_nisar  # import local: igual que los otros helpers
+
+    raiz_h5 = raiz_nisar()
+    h5 = raiz_h5 / coleccion / f"{granulo}.h5"
+
+    # Bajar una escena no necesita caja: el .h5 es el mismo para cualquier recorte.
+    bbox = str(params.get("bbox") or "").strip()
+    oeste = sur = este = norte = 0.0
+    if bbox or producto != "descarga":
+        try:
+            oeste, sur, este, norte = [float(v) for v in bbox.split(",")]
+        except (AttributeError, ValueError) as exc:
+            raise ValueError("La caja NISAR debe ser oeste,sur,este,norte") from exc
+        if not (-180 <= oeste < este <= 180 and -90 <= sur < norte <= 90):
+            raise ValueError("La caja NISAR esta fuera de rango o invertida.")
 
     try:
         px = max(800, min(int(params.get("px", 2400)), 4096))
     except (TypeError, ValueError):
         px = 2400
 
-    raiz_nisar = DATOS / "nisar"
-    h5 = raiz_nisar / coleccion / f"{granulo}.h5"
+    if producto == "descarga":
+        sello = work / "nisar_descarga.json"
+        return Plan(
+            pasos=[_nisar_descarga(granulo, url, coleccion, raiz_h5, "escena", sello)]
+        )
+
     pasos: list[Step] = [
-        _nisar_descarga(granulo, url, coleccion, DATOS, "escena"),
+        _nisar_descarga(granulo, url, coleccion, raiz_h5, "escena"),
     ]
     geojson = str(RAIZ_REPO / "datos" / "paraguay_gadm.json")
     bbox_final = f"{oeste:g},{sur:g},{este:g},{norte:g}"
@@ -2270,24 +2356,32 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
         antes_granulo = _nisar_nombre(
             str(params.get("antes_granulo") or "").strip(), "antes_granulo"
         )
+        _exigir_orden(antes_granulo, granulo)
         antes_url = str(params.get("antes_url") or "").strip()
-        if not antes_url.startswith("https://"):
-            raise ValueError("La escena anterior no trae una URL https de descarga.")
         antes_coleccion = _nisar_coleccion(
             antes_url, str(params.get("antes_coleccion") or "")
         )
         if antes_granulo == granulo:
             raise ValueError("La fecha anterior no puede ser la misma escena.")
-        if antes_coleccion != coleccion:
-            raise ValueError(
-                "Para comparar fechas, las dos escenas tienen que ser de la misma "
-                "coleccion. No mezcles PROVISIONAL con VALIDATED: el cambio puede "
-                "venir del procesamiento, no del terreno."
+        # Mezclar PROVISIONAL con VALIDATED cambia el procesamiento, no solo el
+        # terreno: el JSON de la comparacion deja las dos colecciones a la vista.
+        # No se bloquea porque el archivo real publica las fechas viejas solo como
+        # PROVISIONAL y bloquear dejaria la comparacion sin segundas fechas.
+        h5_antes = raiz_h5 / antes_coleccion / f"{antes_granulo}.h5"
+        if _nisar_en_disco(raiz_h5, antes_coleccion, antes_granulo):
+            # Ya esta: no se pide URL ni se agrega un paso que no baja nada.
+            pass
+        elif antes_url.startswith("https://"):
+            pasos.append(
+                _nisar_descarga(
+                    antes_granulo, antes_url, antes_coleccion, raiz_h5, "anterior"
+                )
             )
-        h5_antes = raiz_nisar / antes_coleccion / f"{antes_granulo}.h5"
-        pasos.append(
-            _nisar_descarga(antes_granulo, antes_url, antes_coleccion, DATOS, "anterior")
-        )
+        else:
+            raise ValueError(
+                f"La escena anterior {antes_granulo} no esta en disco y no trae una "
+                "URL https de descarga."
+            )
 
         try:
             umbral = max(0.5, min(abs(float(params.get("umbral", 3.0))), 20.0))
@@ -2359,9 +2453,33 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             ids_fechas = [parte.strip() for parte in fechas.split(",") if parte.strip()]
             for rid in ids_fechas:
                 _nisar_nombre(rid, "fecha")
+
+        # Fechas elegidas en el visor: si el .h5 ya esta se usa tal cual; si no,
+        # se baja antes de apilar la serie. Asi la serie no depende de que ASF
+        # haya devuelto esa fecha en la ventana de busqueda.
+        colecciones = [coleccion]
+        for extra in _nisar_escenas(params):
+            coleccion_extra = extra["coleccion"] or coleccion
+            if coleccion_extra not in colecciones:
+                colecciones.append(coleccion_extra)
+            if extra["id"] not in ids_fechas:
+                ids_fechas.append(extra["id"])
+            if _nisar_en_disco(raiz_h5, coleccion_extra, extra["id"]):
+                continue
+            if not extra["url"].startswith("https://"):
+                raise ValueError(
+                    f"La fecha {extra['id']} no esta en disco y no trae una URL https "
+                    "de descarga."
+                )
+            pasos.append(
+                _nisar_descarga(
+                    extra["id"], extra["url"], coleccion_extra, raiz_h5, "fecha"
+                )
+            )
+
         args_serie = [
             "--h5", str(h5),
-            "--coleccion-dir", str(raiz_nisar / coleccion),
+            *[parte for nombre in colecciones for parte in ("--coleccion-dir", str(raiz_h5 / nombre))],
             "--track", str(track),
             "--frame", str(frame),
             "--bbox", bbox_final,

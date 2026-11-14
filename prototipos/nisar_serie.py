@@ -52,11 +52,26 @@ def _track_frame(nombre: str) -> tuple[int, int] | None:
 
 
 def _escenas_locales(
-    carpeta: Path, seleccionada: Path, track: int, frame: int, maximo: int
+    carpetas: list[Path],
+    seleccionada: Path,
+    track: int,
+    frame: int,
+    maximo: int,
+    seleccionadas: set[str] | None = None,
 ) -> list[Path]:
+    """Escenas .h5 del track/frame en las carpetas, en orden cronologico.
+
+    Se pueden pasar varias carpetas porque NISAR publica las fechas viejas como
+    PROVISIONAL y las nuevas como VALIDATED: una serie de meses mezcla las dos.
+
+    Con ``--fechas`` se filtran sobre *todas* las escenas del track/frame, no
+    sobre las ultimas ``maximo``: una fecha vieja elegida a mano tambien tiene que
+    entrar aunque haya muchas mas nuevas en disco.
+    """
     candidatas: list[Path] = []
-    if carpeta.is_dir():
-        candidatas.extend(sorted(carpeta.glob("*.h5")))
+    for carpeta in carpetas:
+        if carpeta.is_dir():
+            candidatas.extend(sorted(carpeta.glob("*.h5")))
     candidatas.append(seleccionada)
     vistas: dict[str, Path] = {}
     for ruta in candidatas:
@@ -67,13 +82,20 @@ def _escenas_locales(
             continue
         vistas[ruta.stem] = ruta
     ordenadas = sorted(vistas.values(), key=lambda r: r.stem)
+    if seleccionadas:
+        return [ruta for ruta in ordenadas if ruta.stem in seleccionadas]
     return ordenadas[-maximo:]
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--h5", required=True, help="escena seleccionada")
-    ap.add_argument("--coleccion-dir", required=True, help="carpeta con los .h5 de la coleccion")
+    ap.add_argument(
+        "--coleccion-dir",
+        action="append",
+        required=True,
+        help="carpeta con los .h5 de una coleccion (repetible)",
+    )
     ap.add_argument("--track", type=int, default=0)
     ap.add_argument("--frame", type=int, default=0)
     ap.add_argument("--bbox", required=True)
@@ -115,12 +137,15 @@ def main() -> int:
     mediana_png = prefijo.with_name(prefijo.name + "_mediana.png")
     cusum_png = prefijo.with_name(prefijo.name + "_cusum.png")
 
-    escenas = _escenas_locales(
-        Path(args.coleccion_dir), seleccionada, track, frame, max(2, int(args.max))
-    )
     seleccionadas = {parte.strip() for parte in args.fechas.split(",") if parte.strip()}
-    if seleccionadas:
-        escenas = [ruta for ruta in escenas if ruta.stem in seleccionadas]
+    escenas = _escenas_locales(
+        [Path(carpeta) for carpeta in args.coleccion_dir],
+        seleccionada,
+        track,
+        frame,
+        max(2, int(args.max)),
+        seleccionadas,
+    )
     if len(escenas) < 2:
         raise SystemExit(
             f"Hay {len(escenas)} escena(s) local(es) para track {track} frame {frame} "
@@ -369,7 +394,8 @@ def main() -> int:
         "producto": "serie",
         "track": track,
         "frame": frame,
-        "coleccion": Path(args.coleccion_dir).name,
+        "coleccion": Path(args.coleccion_dir[0]).name,
+        "colecciones": sorted({ruta.parent.name for ruta in escenas}),
         "fechas": fechas,
         "escenas": ids,
         "bbox": [float(v) for v in args.bbox.split(",")],

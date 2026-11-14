@@ -56,6 +56,30 @@ class RaizDeDatos(unittest.TestCase):
                 os.environ["CLIMATE3D_DATOS"] = original
 
 
+class RaizDeNisar(unittest.TestCase):
+    def test_windows_usa_e_nisar_por_defecto(self) -> None:
+        # S1: los .h5 pesan ~1.9 GB y no pueden convivir con el resto de los datos.
+        self.assertEqual(rutas.raiz_nisar({}, "nt"), Path(r"E:\nisar"))
+
+    def test_la_variable_de_nisar_manda(self) -> None:
+        for plataforma in ("nt", "posix"):
+            self.assertEqual(
+                rutas.raiz_nisar({"CLIMATE3D_NISAR": "/mi/nisar"}, plataforma),
+                Path("/mi/nisar"),
+            )
+
+    def test_fuera_de_windows_queda_con_los_datos(self) -> None:
+        self.assertEqual(
+            rutas.raiz_nisar({"CLIMATE3D_DATOS": "/data"}, "posix"),
+            Path("/data/nisar"),
+        )
+
+    def test_una_variable_vacia_no_pisa_el_default(self) -> None:
+        self.assertEqual(
+            rutas.raiz_nisar({"CLIMATE3D_NISAR": "   "}, "nt"), Path(r"E:\nisar")
+        )
+
+
 class CarpetasExtra(unittest.TestCase):
     def test_las_extra_del_entorno_van_primero(self) -> None:
         crudo = os.pathsep.join(["/uno", "/dos"])
