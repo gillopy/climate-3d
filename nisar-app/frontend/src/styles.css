@@ -327,7 +327,9 @@ h3 {
   z-index: 600;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  max-width: calc(100% - 24px);
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
@@ -345,6 +347,47 @@ h3 {
   min-width: 0;
 }
 
+/* Herramientas de dibujo: cuadro o lápiz. El estado activo usa el mismo ámbar
+   que la caja, para que se entienda qué se está dibujando. */
+.nisar__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--carbon);
+}
+
+.nisar__tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--fog);
+  font-family: var(--narrow);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nisar__tool:hover {
+  background: var(--obsidian);
+  color: var(--mist);
+}
+
+.nisar__tool--on,
+.nisar__tool--on:hover {
+  background: rgba(245, 165, 36, 0.16);
+  color: #ffc35c;
+}
+
 /* Caja por coordenadas: dibujar 7 km a mano en el mapa es imposible. */
 .nisar__coords {
   display: flex;
@@ -352,8 +395,14 @@ h3 {
   gap: 6px;
 }
 
+.nisar__coords-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .nisar__coords input {
-  width: 230px;
+  width: 280px;
   min-height: 30px;
   padding: 4px 8px;
   border: 1px solid var(--line-strong);
@@ -364,18 +413,44 @@ h3 {
   font-size: 10.5px;
 }
 
+/* Formato y ejemplo siempre visibles: el placeholder se pierde al escribir. */
+.nisar__coords-hint {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  line-height: 1.1;
+  color: var(--ash);
+  white-space: nowrap;
+}
+
 .nisar__coords input:focus-visible {
   border-color: var(--iris-line);
   outline: none;
 }
 
 .nisar__coord {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding-right: 4px;
   font-family: var(--mono);
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   color: var(--fog);
   white-space: nowrap;
+}
+
+.nisar__coord-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 2px;
+  background: #f5a524;
+}
+
+/* El trazo de la caja lleva una sombra suave para despegarse del mapa. */
+.nisar__caja {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
 }
 
 .nisar__panel {

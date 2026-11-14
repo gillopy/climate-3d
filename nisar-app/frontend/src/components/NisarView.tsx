@@ -26,6 +26,28 @@ import { JobsPanel } from "./JobsPanel";
 const CENTRO_PARAGUAY: L.LatLngTuple = [-23.4, -58.4];
 const COLOR = "#5e6ad2";
 const COLOR_SEL = "#828fff";
+//: La caja de selección va en ámbar: no se confunde con las huellas ASF (iris).
+const COLOR_CAJA = "#f5a524";
+
+const ESTILO_CAJA: L.PathOptions = {
+  color: COLOR_CAJA,
+  weight: 2.5,
+  opacity: 1,
+  fillColor: COLOR_CAJA,
+  fillOpacity: 0.12,
+  className: "nisar__caja",
+  interactive: false,
+};
+
+const ESTILO_BORRADOR: L.PathOptions = {
+  color: COLOR_CAJA,
+  weight: 2,
+  opacity: 0.9,
+  fillColor: COLOR_CAJA,
+  fillOpacity: 0.08,
+  dashArray: "5 4",
+  interactive: false,
+};
 
 function hoyISO(diasAtras = 0): string {
   return new Date(Date.now() - diasAtras * 86_400_000).toISOString().slice(0, 10);
@@ -61,6 +83,7 @@ export function NisarView() {
   const mapaRef = useRef<L.Map | null>(null);
   const huellasRef = useRef<L.LayerGroup | null>(null);
   const cajaLayerRef = useRef<L.Rectangle | null>(null);
+  const borradorRef = useRef<L.Rectangle | null>(null);
 
   const [catalogo, setCatalogo] = useState<NisarCatalog | null>(null);
   const [nivel, setNivel] = useState("GCOV");
@@ -194,6 +217,7 @@ export function NisarView() {
       mapaRef.current = null;
       huellasRef.current = null;
       cajaLayerRef.current = null;
+      borradorRef.current = null;
     };
   }, []);
 
@@ -203,13 +227,22 @@ export function NisarView() {
       .catch(() => setError("No se pudo leer el catalogo NISAR."));
   }, []);
 
-  // Dibujo de la caja: mouse abajo, mover, soltar.
+  // Dibujo del cuadro: mouse abajo, mover, soltar.
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa) return;
+
+    const quitarBorrador = () => {
+      if (borradorRef.current) {
+        mapa.removeLayer(borradorRef.current);
+        borradorRef.current = null;
+      }
+    };
+
     if (!dibujando) {
       mapa.dragging.enable();
       mapa.getContainer().style.cursor = "";
+      quitarBorrador();
       return;
     }
 
@@ -218,20 +251,17 @@ export function NisarView() {
     let inicio: L.LatLng | null = null;
 
     const alMover = (evento: L.LeafletMouseEvent) => {
-      if (!inicio || !cajaLayerRef.current) return;
-      cajaLayerRef.current.setBounds(L.latLngBounds(inicio, evento.latlng));
+      if (!inicio || !borradorRef.current) return;
+      borradorRef.current.setBounds(L.latLngBounds(inicio, evento.latlng));
     };
 
     const alBajar = (evento: L.LeafletMouseEvent) => {
       inicio = evento.latlng;
-      if (cajaLayerRef.current) mapa.removeLayer(cajaLayerRef.current);
-      cajaLayerRef.current = L.rectangle(L.latLngBounds(inicio, inicio), {
-        color: COLOR_SEL,
-        weight: 1.5,
-        fillColor: COLOR_SEL,
-        fillOpacity: 0.08,
-        dashArray: "4 4",
-      }).addTo(mapa);
+      quitarBorrador();
+      borradorRef.current = L.rectangle(
+        L.latLngBounds(inicio, inicio),
+        ESTILO_BORRADOR,
+      ).addTo(mapa);
       mapa.on("mousemove", alMover);
     };
 
@@ -240,22 +270,24 @@ export function NisarView() {
       if (!inicio) return;
       const bounds = L.latLngBounds(inicio, evento.latlng);
       inicio = null;
+      quitarBorrador();
       setDibujando(false);
-      const nueva = cajaDeBounds(bounds);
-      if (nueva) {
-        setCaja(nueva);
-      } else if (cajaLayerRef.current) {
-        mapa.removeLayer(cajaLayerRef.current);
-        cajaLayerRef.current = null;
-      }
+      setCaja(cajaDeBounds(bounds));
+    };
+
+    const alTeclear = (evento: KeyboardEvent) => {
+      if (evento.key === "Escape") setDibujando(false);
     };
 
     mapa.on("mousedown", alBajar);
     mapa.on("mouseup", alSoltar);
+    window.addEventListener("keydown", alTeclear);
     return () => {
       mapa.off("mousedown", alBajar);
       mapa.off("mouseup", alSoltar);
       mapa.off("mousemove", alMover);
+      window.removeEventListener("keydown", alTeclear);
+      quitarBorrador();
     };
   }, [dibujando]);
 
@@ -263,28 +295,18 @@ export function NisarView() {
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa) return;
-    if (!caja) {
-      if (cajaLayerRef.current) {
-        mapa.removeLayer(cajaLayerRef.current);
-        cajaLayerRef.current = null;
-      }
-      return;
+
+    if (cajaLayerRef.current) {
+      mapa.removeLayer(cajaLayerRef.current);
+      cajaLayerRef.current = null;
     }
+    if (!caja) return;
+
     const bounds = L.latLngBounds(
       [caja.sur, caja.oeste],
       [caja.norte, caja.este],
     );
-    if (cajaLayerRef.current) {
-      cajaLayerRef.current.setBounds(bounds);
-    } else {
-      cajaLayerRef.current = L.rectangle(bounds, {
-        color: COLOR_SEL,
-        weight: 1.5,
-        fillColor: COLOR_SEL,
-        fillOpacity: 0.08,
-        dashArray: "4 4",
-      }).addTo(mapa);
-    }
+    cajaLayerRef.current = L.rectangle(bounds, ESTILO_CAJA).addTo(mapa);
   }, [caja]);
 
   // Toda caja nueva (o cambio de filtros) vuelve a consultar ASF.
@@ -706,10 +728,6 @@ export function NisarView() {
     setFechaNueva("");
   }
 
-  function alternarCaja() {
-    setDibujando((previo) => !previo);
-  }
-
   // Permite pegar la caja exacta (oeste,sur,este,norte) en vez de dibujarla:
   // una caja de 7 km a mano en el mapa es casi imposible de acertar.
   function aplicarCoordenadas() {
@@ -745,28 +763,48 @@ export function NisarView() {
       <div className="nisar__mapa">
         <div ref={contenedor} className="nisar__leaflet" />
         <div className="nisar__herramientas">
-          <button
-            type="button"
-            className={dibujando ? "btn btn--primary" : "btn"}
-            aria-pressed={dibujando}
-            onClick={alternarCaja}
-          >
-            {dibujando ? "Soltar cierra la caja" : "Dibujar caja"}
-          </button>
+          <div className="nisar__tools" role="group" aria-label="Herramienta de dibujo">
+            <button
+              type="button"
+              className={`nisar__tool${dibujando ? " nisar__tool--on" : ""}`}
+              aria-pressed={dibujando}
+              title="Cuadro: arrastrá sobre el mapa para dibujar un rectángulo"
+              onClick={() => setDibujando((previo) => !previo)}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect
+                  x="2.5"
+                  y="4"
+                  width="11"
+                  height="8"
+                  rx="1.2"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                />
+              </svg>
+              Cuadro
+            </button>
+          </div>
           <button type="button" className="btn" onClick={limpiar}>
             Limpiar
           </button>
           <div className="nisar__coords">
-            <input
-              type="text"
-              value={coordTexto}
-              aria-label="Caja por coordenadas"
-              placeholder="oeste,sur,este,norte"
-              onChange={(evento) => setCoordTexto(evento.target.value)}
-              onKeyDown={(evento) => {
-                if (evento.key === "Enter") aplicarCoordenadas();
-              }}
-            />
+            <div className="nisar__coords-field">
+              <input
+                type="text"
+                value={coordTexto}
+                aria-label="Caja por coordenadas: oeste, sur, este, norte"
+                placeholder="-61.16,-21.07,-60.83,-20.74"
+                title="Formato: oeste,sur,este,norte (grados). Ejemplo: -61.16,-21.07,-60.83,-20.74"
+                onChange={(evento) => setCoordTexto(evento.target.value)}
+                onKeyDown={(evento) => {
+                  if (evento.key === "Enter") aplicarCoordenadas();
+                }}
+              />
+              <span className="nisar__coords-hint">
+                oeste,sur,este,norte · ej. -61.16,-21.07,-60.83,-20.74
+              </span>
+            </div>
             <button
               type="button"
               className="btn"
@@ -776,7 +814,11 @@ export function NisarView() {
               Usar caja
             </button>
           </div>
-          <span className="nisar__coord">
+          <span
+            className="nisar__coord"
+            title="Caja de selección (oeste, sur, este, norte)"
+          >
+            <i className="nisar__coord-dot" aria-hidden="true" />
             {caja ? bboxTexto(caja) : "Sin caja"}
           </span>
         </div>
@@ -835,7 +877,9 @@ export function NisarView() {
             ? "Consultando ASF…"
             : resultado
               ? `${resultado.total} escena(s) · mostrando ${resultado.returned}`
-              : "Dibujá una caja sobre el mapa para empezar."}
+              : dibujando
+                ? "Arrastrá sobre el mapa para dibujar el cuadro."
+                : "Dibujá una caja sobre el mapa para empezar."}
         </p>
 
         <ul className="nisar__lista">
