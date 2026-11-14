@@ -1,0 +1,957 @@
+/* =====================================================================
+   NISAR — visor de radar
+   Mismo mundo visual que la consola general: instrumento de precisión,
+   canvas casi negro, superficies escalonadas y un solo acento cromático.
+   ===================================================================== */
+
+@font-face {
+  font-family: "Archivo";
+  src: url("./fonts/archivo-latin.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Archivo Narrow";
+  src: url("./fonts/archivo-narrow-latin.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Escalera de superficies */
+  --void: #08090a;
+  --carbon: #0f1011;
+  --obsidian: #161718;
+  --slate: #1c1e21;
+  --raised: #202226;
+
+  /* Filetes */
+  --line: #23252a;
+  --line-strong: #34343a;
+
+  /* Tinta */
+  --paper: #f7f8f8;
+  --mist: #d0d6e0;
+  --fog: #8a8f98;
+  --ash: #7c818a;
+
+  /* Acento único: lavanda-azul (acción, foco, selección) */
+  --iris: #5e6ad2;
+  --iris-hi: #828fff;
+  --iris-deep: #4f59bd;
+  --iris-soft: rgba(94, 106, 210, 0.16);
+  --iris-line: rgba(94, 106, 210, 0.42);
+
+  /* Semánticos: solo estado */
+  --success: #3fb950;
+  --success-soft: rgba(63, 185, 80, 0.14);
+  --warn: #d29922;
+  --warn-soft: rgba(210, 153, 34, 0.14);
+  --danger: #f85149;
+  --danger-soft: rgba(248, 81, 73, 0.13);
+
+  --sans: "Inter", "Archivo", "Segoe UI", system-ui, sans-serif;
+  --narrow: "Archivo Narrow", "Archivo", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+
+  --pad: 20px;
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --pill: 999px;
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--void);
+  caret-color: var(--iris-hi);
+  color: var(--mist);
+  font-family: var(--sans);
+  font-size: 13.5px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--iris);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--iris-hi);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+/* --- Barra superior -------------------------------------------------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  height: 56px;
+  padding: 0 var(--pad);
+  border-bottom: 1px solid var(--line);
+  background: var(--void);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand__mark {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--iris-line);
+  border-radius: 7px;
+  background: var(--iris-soft);
+  color: var(--iris-hi);
+}
+
+.brand__txt {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand h1 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.brand__sub {
+  font-family: var(--narrow);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ash);
+  white-space: nowrap;
+}
+
+.health {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.health__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--pill);
+  background: var(--carbon);
+  font-family: var(--narrow);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fog);
+  white-space: nowrap;
+}
+
+.health__swatch {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ash);
+}
+
+.health__item--ok {
+  color: var(--mist);
+  border-color: rgba(63, 185, 80, 0.32);
+}
+
+.health__item--ok .health__swatch {
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
+}
+
+.health__item--warn {
+  color: var(--mist);
+  border-color: rgba(210, 153, 34, 0.32);
+}
+
+.health__item--warn .health__swatch {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-soft);
+}
+
+.health__item--count {
+  color: var(--ash);
+}
+
+/* --- Retícula -------------------------------------------------------- */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* --- Botones ---------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--slate);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms var(--ease), color 120ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--raised);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--obsidian);
+  transform: scale(0.96);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  min-width: 168px;
+  background: var(--iris);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--iris-hi);
+}
+
+.btn--primary:active:not(:disabled) {
+  background: var(--iris-deep);
+}
+
+.btn--primary:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.btn--primary:disabled::after {
+  content: "";
+  width: 11px;
+  height: 11px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: btn-spin 700ms linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* --- Visor NISAR ------------------------------------------------------ */
+.nisar {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nisar__mapa {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.nisar__leaflet {
+  position: absolute;
+  inset: 0;
+  background: var(--carbon);
+}
+
+.nisar__herramientas {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: rgba(15, 16, 17, 0.9);
+  backdrop-filter: blur(6px);
+}
+
+.nisar__herramientas .btn {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+}
+
+.nisar__herramientas .btn--primary {
+  min-width: 0;
+}
+
+/* Caja por coordenadas: dibujar 7 km a mano en el mapa es imposible. */
+.nisar__coords {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nisar__coords input {
+  width: 230px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--obsidian);
+  color: var(--mist);
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.nisar__coords input:focus-visible {
+  border-color: var(--iris-line);
+  outline: none;
+}
+
+.nisar__coord {
+  padding-right: 4px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fog);
+  white-space: nowrap;
+}
+
+.nisar__panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  background: var(--carbon);
+}
+
+.nisar__head {
+  padding: 14px var(--pad);
+  border-bottom: 1px solid var(--line);
+}
+
+.nisar__title {
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+
+.nisar__sub {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--ash);
+}
+
+.nisar__filtros {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px var(--pad);
+  border-bottom: 1px solid var(--line);
+}
+
+.nisar__filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.nisar__filtros select,
+.nisar__filtros input {
+  height: 28px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--obsidian);
+  color: var(--mist);
+  font: inherit;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.nisar__ancho {
+  grid-column: 1 / -1;
+}
+
+.nisar__filtros .btn {
+  min-height: 32px;
+}
+
+/* Deshabilitado por "falta la caja" no es "trabajando": sin anillo. */
+.nisar__btn-espera:disabled::after {
+  display: none;
+}
+
+.nisar__aviso {
+  margin: 0;
+  padding: 9px var(--pad);
+  border-bottom: 1px solid rgba(248, 81, 73, 0.32);
+  background: var(--danger-soft);
+  color: #ffb4ae;
+  font-size: 11.5px;
+}
+
+.nisar__estado {
+  margin: 0;
+  padding: 9px var(--pad);
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--fog);
+}
+
+.nisar__lista {
+  flex: 1 1 auto;
+  min-height: 90px;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nisar__item {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  padding: 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nisar__item:hover {
+  background: var(--obsidian);
+}
+
+.nisar__item[aria-current="true"] {
+  border-color: var(--iris-line);
+  background: var(--iris-soft);
+}
+
+.nisar__thumb {
+  display: block;
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--r-xs);
+  background: var(--slate);
+}
+
+.nisar__item-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nisar__item-fecha {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mist);
+}
+
+.nisar__item-meta {
+  font-size: 10.5px;
+  color: var(--ash);
+}
+
+.nisar__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.nisar__chip {
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--pill);
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--fog);
+}
+
+/* Un .h5 que ya esta en disco: no se vuelve a bajar. */
+.nisar__chip--local {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.nisar__notas {
+  margin: 0;
+  padding: 8px var(--pad);
+  border-top: 1px solid var(--line);
+  list-style: none;
+  font-size: 10.5px;
+  color: var(--ash);
+}
+
+.nisar__notas li + li {
+  margin-top: 3px;
+}
+
+.nisar__detalle {
+  flex: 0 0 auto;
+  max-height: 44%;
+  padding: 12px var(--pad);
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+
+.nisar__detalle h3 {
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.nisar__imagen {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--void);
+}
+
+.nisar__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.nisar__tab {
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--pill);
+  background: var(--obsidian);
+  color: var(--fog);
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nisar__tab:hover {
+  color: var(--mist);
+}
+
+.nisar__tab--on {
+  border-color: var(--iris-line);
+  background: var(--iris-soft);
+  color: var(--iris-hi);
+}
+
+.nisar__dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 8px 0 0;
+  font-size: 10.5px;
+}
+
+.nisar__dl dt {
+  font-family: var(--narrow);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.nisar__dl dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--mist);
+}
+
+.nisar__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.nisar__acciones .btn {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  text-decoration: none;
+}
+
+.nisar__vacio {
+  margin: 0;
+  padding: 10px 0;
+  font-size: 11.5px;
+  color: var(--ash);
+}
+
+.nisar__render {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.nisar__render h3 {
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.nisar__render .nisar__sub {
+  margin: 0 0 8px;
+}
+
+.nisar__render-ctrl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.nisar__render-ctrl label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.nisar__render-ctrl select,
+.nisar__render-ctrl input {
+  width: 100%;
+  height: 26px;
+  min-width: 0;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  background: var(--obsidian);
+  color: var(--mist);
+  font: inherit;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.nisar__job {
+  margin-top: 10px;
+}
+
+.nisar__job-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--fog);
+}
+
+.nisar__bar {
+  height: 4px;
+  margin: 5px 0 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--slate);
+}
+
+.nisar__bar i {
+  display: block;
+  height: 100%;
+  background: var(--iris-hi);
+  transition: width 200ms var(--ease);
+}
+
+.nisar__logs {
+  max-height: 104px;
+  margin: 0 0 8px;
+  padding: 0 0 0 12px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--ash);
+}
+
+.nisar__logs li {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nisar__job .nisar__imagen {
+  margin-top: 8px;
+}
+
+.nisar__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  margin: 8px 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--obsidian);
+}
+
+.nisar__stat {
+  min-width: 0;
+}
+
+.nisar__stat dt {
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.nisar__stat dd {
+  margin: 1px 0 0;
+  font-size: 11px;
+  color: var(--mist);
+  overflow-wrap: anywhere;
+}
+
+.nisar__archivo {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--iris-hi);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.nisar__archivo:hover {
+  text-decoration: underline;
+}
+
+.nisar__fechas {
+  margin: 8px 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--obsidian);
+}
+
+.nisar__fechas-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.nisar__fechas-head span {
+  margin-right: auto;
+}
+
+.nisar__fechas-head .btn {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 10px;
+}
+
+.nisar__fechas-lista {
+  max-height: 150px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.nisar__fechas-lista li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.nisar__fechas-lista li label {
+  flex: 1;
+}
+
+.nisar__fechas-lista label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 10.5px;
+  color: var(--mist);
+  cursor: pointer;
+}
+
+.nisar__fechas-lista input[type="checkbox"] {
+  accent-color: var(--iris);
+}
+
+.nisar__fechas-peso {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--ash);
+}
+
+/* Leaflet sobre el mundo oscuro de la consola. */
+.nisar .leaflet-container {
+  background: #0b0c0d;
+  font-family: var(--sans);
+}
+
+.nisar .leaflet-control-attribution {
+  background: rgba(8, 9, 10, 0.78);
+  color: var(--ash);
+  font-size: 9px;
+}
+
+.nisar .leaflet-control-attribution a {
+  color: var(--fog);
+}
+
+.nisar .leaflet-bar a {
+  border-bottom-color: var(--line);
+  background: var(--obsidian);
+  color: var(--mist);
+}
+
+.nisar .leaflet-bar a:hover {
+  background: var(--slate);
+}
+
+.nisar .leaflet-tooltip {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--obsidian);
+  color: var(--mist);
+  font-size: 11px;
+  box-shadow: none;
+}
+
+.nisar .leaflet-tooltip-top::before {
+  border-top-color: var(--line);
+}
+
+@media (max-width: 900px) {
+  .nisar {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, 45vh) minmax(0, 1fr);
+  }
+
+  .nisar__panel {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .nisar__detalle {
+    max-height: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+
+  .btn--primary:disabled::after {
+    animation: none;
+  }
+
+  .nisar__bar i {
+    transition: none;
+  }
+}
