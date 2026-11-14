@@ -135,7 +135,13 @@ function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("Salida", "px", (valor) =>
     Array.isArray(valor) ? `${valor[0]} × ${valor[1]} px` : String(valor),
   );
-  agregar("Multilook", "multilook_m", (valor) => `~${Number(valor).toFixed(0)} m`);
+  const multilook = _get(meta, "multilook");
+  if (typeof multilook === "number" && multilook > 1) {
+    filas.push({
+      label: "Multilook",
+      value: `~${Math.round(Number(_get(meta, "multilook_m")))} m`,
+    });
+  }
   agregar("EPSG", "epsg", texto);
   agregar("Polarización", "polarizaciones", (valor) =>
     Array.isArray(valor) ? valor.join(" · ") : String(valor),

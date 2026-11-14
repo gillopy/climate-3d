@@ -166,17 +166,18 @@ def _norm(db: np.ndarray, vmin: float, vmax: float) -> np.ndarray:
 
 
 def _dimensiones(ancho: int, alto: int, px: int) -> tuple[int, int]:
-    """Tamano de salida: el pedido, reduciendo o interpolando segun haga falta.
+    """Tamano de salida: el pedido, pero nunca mayor que el recorte nativo.
 
-    Achicar no pierde detalle; agrandar no lo inventa, pero deja el PNG del
-    tamano pedido para presentaciones (el log lo avisa).
+    Agrandar no agrega detalle y estira el speckle; el crudo nativo es el que
+    mas informacion tiene.
     """
     objetivo = max(1, min(int(px), 4096))
     ancho = max(1, int(ancho))
     alto = max(1, int(alto))
+    lado = min(objetivo, max(ancho, alto))
     if ancho >= alto:
-        return objetivo, max(1, round(objetivo * alto / ancho))
-    return max(1, round(objetivo * ancho / alto)), objetivo
+        return lado, max(1, round(lado * alto / ancho))
+    return max(1, round(lado * ancho / alto)), lado
 
 
 def _fuente(tamano: int) -> ImageFont.FreeTypeFont:
@@ -320,8 +321,8 @@ def main() -> int:
     ap.add_argument(
         "--ventana",
         type=int,
-        default=0,
-        help="lado del multilook (impar); 0 = automatico para ~90 m, 1 = sin filtro",
+        default=1,
+        help="lado del multilook (impar); 1 = crudo (default), 0 = automatico ~90 m",
     )
     args = ap.parse_args()
 
@@ -366,24 +367,22 @@ def main() -> int:
             f"recorte {r1 - r0}x{c1 - c0} px nativos | pols {', '.join(disponibles)}"
         )
 
-        # Multilook: un color SAR a resolucion nativa es casi todo speckle. Se
-        # promedia la potencia (nunca el dB) a ~90 m para que se vea el terreno.
+        # Crudo por defecto: el pixel nativo es lo que mas detalle tiene. El
+        # multilook (--ventana N, o 0 = ~90 m) es opcional, para mapas de contexto.
         mpp_nativo = abs(float(x[min(c0 + 1, x.size - 1)] - x[c0]))
         paso_lectura = max(
             1, int(math.ceil(max(r1 - r0, c1 - c0) / max(1, int(px * 1.5))))
         )
-        if args.ventana == 1:
-            ventana = 1
-        elif args.ventana > 1:
-            ventana = int(args.ventana)
-        else:
+        if args.ventana == 0:
             ventana = kit.ventana_para(mpp_nativo * paso_lectura, metros=90.0)
+        else:
+            ventana = max(1, int(args.ventana))
         if ventana % 2 == 0:
             ventana += 1
         resolucion = (
             f"multilook {ventana}x{ventana} (~{ventana * mpp_nativo * paso_lectura:.0f} m)"
             if ventana > 1
-            else "sin filtro (speckle nativo)"
+            else "crudo (sin filtro)"
         )
         print(f"{resolucion} · {mpp_nativo:.0f} m/px nativos")
 
@@ -438,11 +437,6 @@ def main() -> int:
             rgb = np.flip(rgb, axis=0)
         alto, ancho = rgb.shape[:2]
         ancho_salida, alto_salida = _dimensiones(ancho, alto, px)
-        if ancho_salida > ancho or alto_salida > alto:
-            print(
-                f"aviso: el recorte nativo es {ancho}x{alto} px; la salida "
-                f"{ancho_salida}x{alto_salida} px se interpola (no agrega detalle)"
-            )
         img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB")
         img = img.resize((ancho_salida, alto_salida), Image.LANCZOS)
 
