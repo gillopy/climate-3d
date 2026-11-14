@@ -52,7 +52,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
@@ -60,7 +60,7 @@ sys.path.insert(0, str(RAIZ / "prototipos"))
 
 import poster_goes_truecolor as tc  # noqa: E402
 from poster_goes_banda import CORTE_PLANETA, _muestrear_banda  # noqa: E402
-from poster_goes_realista import radio_visible  # noqa: E402
+from poster_goes_realista import _lineas_geojson, radio_visible  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
 
 SAT = "G19"
@@ -325,6 +325,92 @@ def _campo_compuesto(nc: Path, tope: int, horas: int, sat: str):
     return media, x, y, h, lon0, usadas
 
 
+def _componer_plano(nc: Path, args) -> tuple[np.ndarray, dict]:
+    """Square map of a lon/lat box: the Paraguay capture, like the other products.
+
+    No globe and no disk alpha: every pixel of the frame is a lon/lat pair inside
+    `--bbox`, so the result is a plain square map with the base map under the
+    gaps, exactly like the precipitation snapshot.
+    """
+    horas = int(getattr(args, "compuesto", 1) or 1)
+    campo, x, y, h, lon0, usadas = _campo_compuesto(nc, args.tope, horas, args.sat)
+    relleno = int(getattr(args, "relleno", 0) or 0)
+    if relleno > 0:
+        campo = _rellenar(campo, relleno)
+
+    o, s, e, n = (float(v) for v in args.bbox)
+    o, e = min(o, e), max(o, e)
+    s, n = min(s, n), max(s, n)
+    px = int(args.px)
+    alto = max(1, int(round(px * (n - s) / (e - o)))) if e > o else px
+    # Caja casi cuadrada: se fuerza el cuadrado, como el snapshot de lluvia.
+    if abs(alto - px) <= px * 0.12:
+        alto = px
+
+    lut = _lut()
+    base = None
+    if getattr(args, "mapa", "base") == "base":
+        base = _leer_base(int(getattr(args, "fondo_ancho", ANCHO_FONDO)),
+                          getattr(args, "capa_fondo", CAPA_FONDO))
+
+    lon = np.linspace(o, e, px)
+    lat = np.linspace(n, s, alto)
+    rgb = np.zeros((alto, px, 3), np.uint8)
+    for f0 in range(0, alto, tc.FILAS):
+        f1 = min(f0 + tc.FILAS, alto)
+        lon2d, lat2d = np.meshgrid(lon, lat[f0:f1])
+        valores = _muestrear_banda(campo, x, y, lon0, h, lon2d, lat2d)
+        normalizado = np.clip((valores - args.vmin) / (args.vmax - args.vmin), 0.0, 1.0)
+        normalizado = np.nan_to_num(normalizado, nan=0.0)
+        indice = (normalizado * (len(lut) - 1)).astype(np.uint16)
+        bloque = lut[indice]
+        vacio = ~np.isfinite(valores)
+        if base is None:
+            bloque[vacio] = 0
+        else:
+            bloque[vacio] = _muestrear_base(base, lon2d, lat2d)[vacio]
+        rgb[f0:f1] = bloque
+
+    finitos = np.isfinite(campo)
+    datos = campo[finitos]
+    stats = {
+        "px": px, "alto": alto,
+        "cobertura": float(datos.size) / float(campo.size) if campo.size else 0.0,
+        "cubiertos": float(finitos.sum()) / float(campo.size) if campo.size else 0.0,
+        "relleno": relleno, "compuesto": usadas,
+        "fondo": getattr(args, "mapa", "base"),
+        "min": float(datos.min()) if datos.size else float("nan"),
+        "mean": float(datos.mean()) if datos.size else float("nan"),
+        "max": float(datos.max()) if datos.size else float("nan"),
+    }
+    del datos, finitos
+    return rgb, stats
+
+
+def _guardar_plano(rgb: np.ndarray, args, destino: Path) -> None:
+    """Write the square map; the outlined border goes on top when asked."""
+    imagen = Image.fromarray(rgb)
+    alto, ancho = rgb.shape[:2]
+    if args.borde:
+        anillos = _lineas_geojson(args.borde)
+        if anillos:
+            o, s, e, n = (float(v) for v in args.bbox)
+            o, e = min(o, e), max(o, e)
+            s, n = min(s, n), max(s, n)
+            lapiz = ImageDraw.Draw(imagen)
+            grosor = max(1, ancho // 900)
+            for anillo in anillos:
+                puntos = [((lon - o) / (e - o) * (ancho - 1),
+                           (n - lat) / (n - s) * (alto - 1))
+                          for lon, lat in anillo]
+                if len(puntos) >= 3:
+                    lapiz.line(puntos + [puntos[0]], fill=(18, 22, 26), width=grosor)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    parcial = destino.with_suffix(".png.parcial")
+    imagen.save(parcial, format="png")
+    parcial.replace(destino)
+
+
 def componer_lst(nc: Path, args) -> tuple[np.ndarray, float, dict]:
     """LST granule -> RGBA of the Orthographic globe, with the true color geometry."""
     horas = int(getattr(args, "compuesto", 1) or 1)
@@ -501,6 +587,9 @@ def main(argv=None) -> int:
                     default=list(CENTRO), help="globe center")
     ap.add_argument("--recorte", type=float, default=1.0,
                     help="fraction of the visible radius (1 = full disk)")
+    ap.add_argument("--bbox", nargs=4, type=float, metavar=("O", "S", "E", "N"),
+                    help="square flat map of that lon/lat box instead of the globe "
+                         "(the Paraguay capture of the other products)")
     ap.add_argument("--vmin", type=float, default=VMIN, help="scale minimum in C")
     ap.add_argument("--vmax", type=float, default=VMAX, help="scale maximum in C")
     ap.add_argument("--titulo", default=None, help="poster title")
@@ -539,6 +628,11 @@ def main(argv=None) -> int:
             destino = salida / f"cuadro_{i:03d}.png"
             if destino.exists() and not args.forzar:
                 continue
+            if args.bbox:
+                rgb, _ = _componer_plano(nc, args)
+                _guardar_plano(rgb, args, destino)
+                print(f"  [{i}/{len(lista)}] {instante:%Y-%m-%d %H:%M} UTC", flush=True)
+                continue
             disco, escala, cuadro = componer_lst(nc, args)
             fig = tc.dibujar(disco, escala, args.titulo,
                              _etiqueta_tiempo(nc, cuadro["compuesto"]),
@@ -557,6 +651,20 @@ def main(argv=None) -> int:
     print(f"{nc.name}\nslot: {instante:%Y-%m-%d %H:%M} UTC | globe {args.px} px | "
           f"center {tuple(args.centro)} | scale {args.vmin:g} to {args.vmax:g} C",
           flush=True)
+    out = Path(args.out) if args.out else (
+        SALIDAS / f"poster_{args.sat}_LST_{instante:%Y-%m-%dT%H%M}.png")
+    if args.bbox:
+        rgb, plano = _componer_plano(nc, args)
+        print(f"map {plano['px']}x{plano['alto']} px | box {tuple(args.bbox)}")
+        print(f"field {plano['min']:.1f} to {plano['max']:.1f} C | "
+              f"mean {plano['mean']:.1f} C | {plano['cobertura'] * 100.0:.1f} % "
+              "of the grid")
+        print(f"fondo {plano['fondo']} | relleno {plano['relleno']} px | "
+              f"compuesto {plano['compuesto']} h", flush=True)
+        _guardar_plano(rgb, args, out)
+        print(f"PNG: {out}")
+        return 0
+
     disco, escala, stats = componer_lst(nc, args)
     print(f"globe {stats['px']} px | {stats['validos']:,} px with data")
     print(f"field {stats['min']:.1f} to {stats['max']:.1f} C | "

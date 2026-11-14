@@ -1579,9 +1579,11 @@ def _goes_lst(params: dict[str, Any], work: Path) -> Plan:
         expected=max(1, math.ceil(n / 24)),
     )
 
-    marco = _encuadre_paraguay(params, "recorte") or [
-        "--centro", f"{lon_sub:g}", "0", "--recorte", "1.0",
-    ]
+    if _bool(params, "paraguay"):
+        # Encaje Paraguay: mapa plano cuadrado, igual que el snapshot de lluvia.
+        marco = _encuadre_paraguay(params, "bbox")
+    else:
+        marco = ["--centro", f"{lon_sub:g}", "0", "--recorte", "1.0"]
     comunes = [
         "--sat", sat,
         "--desde", desde.strftime("%Y-%m-%dT%H:%M"),

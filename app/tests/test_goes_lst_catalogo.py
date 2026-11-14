@@ -181,6 +181,19 @@ class Plan(unittest.TestCase):
         self.assertEqual(render.args[render.args.index("--relleno") + 1], "2")
         self.assertEqual(render.args[render.args.index("--compuesto") + 1], "1")
 
+    def test_paraguay_pide_mapa_plano_cuadrado(self):
+        render = [p for p in self._plan(paraguay=True).pasos if p.kind == "render"][0]
+        self.assertIn("--bbox", render.args)
+        self.assertIn("--limpio", render.args)
+        self.assertNotIn("--centro", render.args)
+        self.assertNotIn("--recorte", render.args)
+
+    def test_sin_paraguay_pide_el_globo(self):
+        render = [p for p in self._plan().pasos if p.kind == "render"][0]
+        self.assertIn("--centro", render.args)
+        self.assertIn("--recorte", render.args)
+        self.assertNotIn("--bbox", render.args)
+
     def test_el_compuesto_adelanta_la_descarga(self):
         plan = self._plan(compuesto="3")
 
