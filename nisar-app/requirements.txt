@@ -1,0 +1,6 @@
+# Dependencias del backend NISAR (entorno propio: nisar-app\.venv).
+# El pipeline corre con el .venv de la raiz del repo: no se mezclan.
+fastapi==0.162.*
+uvicorn==0.54.*
+# Corte de arbol de procesos al cancelar un job (Windows).
+psutil==7.*

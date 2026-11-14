@@ -1,0 +1,12 @@
+# Estado propio de esta app: artefactos de jobs y cache de browse.
+/var/
+
+# Entorno del backend
+/.venv/
+
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+
+# Configuracion local (credenciales)
+/.env
