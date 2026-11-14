@@ -12,7 +12,8 @@ baja el dato        imagen fija             render cuadro a cuadro     MP4 / GIF
 ```
 
 > Todo va a `D:\Users\guill\dataset era5` salvo que exportes `CLIMATE3D_DATOS`. Los `.nc`
-> (varios GB) y las salidas (PNG/MP4) **nunca** van dentro del repositorio.
+> (varios GB) y las salidas (PNG/MP4) **nunca** van dentro del repositorio. Los `.h5` de
+> NISAR van aparte (`E:\nisar` en Windows, o lo que diga `CLIMATE3D_NISAR`).
 
 **Sólo la etapa 1 necesita internet.** Las otras tres trabajan sobre lo que ya bajaste; si les
 falta un dato, te dicen qué comando correr.

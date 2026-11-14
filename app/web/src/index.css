@@ -2977,6 +2977,12 @@ input[type="range"]:disabled {
   color: var(--fog);
 }
 
+/* Un .h5 que ya esta en disco: no se vuelve a bajar. */
+.nisar__chip--local {
+  border-color: var(--success);
+  color: var(--success);
+}
+
 .nisar__notas {
   margin: 0;
   padding: 8px var(--pad);
@@ -3271,7 +3277,14 @@ input[type="range"]:disabled {
 }
 
 .nisar__fechas-lista li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
+}
+
+.nisar__fechas-lista li label {
+  flex: 1;
 }
 
 .nisar__fechas-lista label {

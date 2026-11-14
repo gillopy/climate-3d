@@ -3,13 +3,21 @@ import L from "leaflet";
 import type { FeatureCollection } from "geojson";
 
 import { cancelJob, createJob, revealJob, subscribeJob } from "../api";
-import { getLocalScenes, getNisarCatalog, getParaguay, searchNisar } from "../nisar";
+import {
+  getLocalScenes,
+  getNisarCatalog,
+  getNisarScene,
+  getNisarTimeline,
+  getParaguay,
+  searchNisar,
+} from "../nisar";
 import type {
   Caja,
   NisarCatalog,
   NisarGranule,
   NisarLocalScene,
   NisarSearch,
+  NisarTimelineScene,
 } from "../nisar";
 import type { Job, Params } from "../types";
 
@@ -35,6 +43,14 @@ function bboxTexto(caja: Caja): string {
 function fechaCorta(iso: string): string {
   if (!iso) return "-";
   return iso.replace("T", " ").replace("Z", " UTC");
+}
+
+/** `NISAR_..._20261017T214920_...` -> `2026-10-17T21:49:20Z` (ordenable). */
+function instanteDeId(id: string): string {
+  const partes = /(\d{8})T(\d{6})/.exec(id);
+  if (!partes) return "";
+  const [, dia, hora] = partes;
+  return `${dia.slice(0, 4)}-${dia.slice(4, 6)}-${dia.slice(6)}T${hora.slice(0, 2)}:${hora.slice(2, 4)}:${hora.slice(4, 6)}Z`;
 }
 
 function imagenInicial(granulo: NisarGranule | null): string | null {
@@ -160,6 +176,12 @@ export function NisarView() {
   const [fechasSerie, setFechasSerie] = useState<string[]>([]);
   const [producto, setProducto] = useState("recorte");
   const [antesId, setAntesId] = useState("");
+  // Fecha anterior elegida a mano: puede no venir de la ventana de busqueda.
+  const [antesExterno, setAntesExterno] = useState<NisarTimelineScene | null>(null);
+  const [timeline, setTimeline] = useState<NisarTimelineScene[]>([]);
+  const [cargandoFechas, setCargandoFechas] = useState(false);
+  const [fechaNueva, setFechaNueva] = useState("");
+  const [resolviendo, setResolviendo] = useState(false);
   const [modoCambio, setModoCambio] = useState("mascara");
   const [umbral, setUmbral] = useState("3");
   const [hvMin, setHvMin] = useState("-15.5");
@@ -173,6 +195,8 @@ export function NisarView() {
   const elegirGranulo = useCallback((granulo: NisarGranule) => {
     setSeleccion(granulo);
     setImagen(imagenInicial(granulo));
+    // Otra escena principal invalida la fecha anterior elegida a mano.
+    setAntesExterno(null);
     const mapa = mapaRef.current;
     if (mapa && granulo.footprint.length >= 3) {
       const puntos = granulo.footprint.map(
@@ -196,6 +220,7 @@ export function NisarView() {
         const primero = datos.granules[0] ?? null;
         setSeleccion(primero);
         setImagen(imagenInicial(primero));
+        setAntesExterno(null);
         const mapa = mapaRef.current;
         if (mapa) {
           mapa.fitBounds(
@@ -416,41 +441,109 @@ export function NisarView() {
   }, [trabajoId]);
 
   // Fechas del mismo track/frame para comparar.
-  const candidatos = (resultado?.granules ?? [])
+  //
+  // Tres fuentes, una sola lista: el timeline de ASF (que ya trae las fechas
+  // fuera de la ventana de busqueda), los .h5 que estan en disco y, como red de
+  // seguridad, lo que devolvio la busqueda actual.
+  const localesComoEscenas: NisarTimelineScene[] = locales.map((escena) => ({
+    id: escena.id,
+    date: instanteDeId(escena.id),
+    start: instanteDeId(escena.id),
+    collection: seleccion?.collection ?? "",
+    size_mb: escena.size_mb,
+    local: true,
+    download: "",
+  }));
+  const fechasDelTrack: NisarTimelineScene[] = (() => {
+    const mapa = new Map<string, NisarTimelineScene>();
+    for (const escena of timeline) mapa.set(escena.id, escena);
+    for (const granulo of resultado?.granules ?? []) {
+      if (
+        granulo.path !== seleccion?.path ||
+        granulo.frame !== seleccion?.frame ||
+        granulo.collection !== seleccion?.collection ||
+        mapa.has(granulo.id)
+      ) {
+        continue;
+      }
+      mapa.set(granulo.id, {
+        id: granulo.id,
+        date: granulo.start.slice(0, 10),
+        start: granulo.start,
+        collection: granulo.collection,
+        size_mb: granulo.size_mb,
+        local: granulo.local,
+        download: granulo.download,
+      });
+    }
+    for (const escena of localesComoEscenas) {
+      if (!mapa.has(escena.id)) mapa.set(escena.id, escena);
+    }
+    return [...mapa.values()].sort((a, b) => a.start.localeCompare(b.start));
+  })();
+  const candidatos = fechasDelTrack
     .filter(
-      (granulo) =>
-        granulo.id !== seleccion?.id &&
-        granulo.path !== null &&
-        granulo.path === seleccion?.path &&
-        granulo.frame === seleccion?.frame &&
-        granulo.collection === seleccion?.collection,
+      (escena) => escena.id !== seleccion?.id && escena.start < (seleccion?.start ?? ""),
     )
     .sort((a, b) => b.start.localeCompare(a.start));
-  const antes = candidatos.find((granulo) => granulo.id === antesId) ?? null;
+  const antes =
+    antesExterno ?? candidatos.find((escena) => escena.id === antesId) ?? null;
+  const coleccionesSerie = [
+    ...new Set(
+      fechasDelTrack
+        .filter((escena) => fechasSerie.includes(escena.id))
+        .map((escena) => escena.collection),
+    ),
+  ];
 
   useEffect(() => {
     if (!seleccion) {
       setAntesId("");
       return;
     }
-    const lista = (resultado?.granules ?? [])
-      .filter(
-        (granulo) =>
-          granulo.id !== seleccion.id &&
-          granulo.path !== null &&
-          granulo.path === seleccion.path &&
-          granulo.frame === seleccion.frame &&
-          granulo.collection === seleccion.collection,
-      )
-      .sort((a, b) => b.start.localeCompare(a.start));
+    if (antesExterno) return;
+    const lista = candidatos;
     if (lista.length === 0) {
       setAntesId("");
       return;
     }
-    if (lista.some((granulo) => granulo.id === antesId)) return;
-    const previas = lista.filter((granulo) => granulo.start < seleccion.start);
-    setAntesId((previas[0] ?? lista[0]).id);
-  }, [seleccion, resultado, antesId]);
+    if (lista.some((escena) => escena.id === antesId)) return;
+    // Solo escenas anteriores: comparar hacia adelante invierte el signo del cambio.
+    setAntesId(lista[0].id);
+    // `fechasDelTrack` se rearma en cada render; los disparadores reales son estos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seleccion, antesId, antesExterno, timeline.length, locales.length, resultado]);
+
+  // El timeline se pide solo para los productos que comparan fechas.
+  const necesitaFechas =
+    producto === "cambio" || producto === "incendio" || producto === "serie";
+  const track = seleccion?.path ?? null;
+  const frame = seleccion?.frame ?? null;
+  const coleccion = seleccion?.collection ?? "";
+  useEffect(() => {
+    if (!necesitaFechas || track === null || frame === null || !coleccion) {
+      setTimeline([]);
+      return;
+    }
+    let vigente = true;
+    setCargandoFechas(true);
+    // Sin filtro de coleccion: NISAR publica las fechas viejas solo como
+    // PROVISIONAL y las nuevas como VALIDATED. Filtrar dejaria una sola fecha.
+    getNisarTimeline(track, frame, "", "GCOV")
+      .then((datos) => {
+        if (vigente) setTimeline(datos.scenes);
+      })
+      .catch(() => {
+        // Sin timeline queda la busqueda y el disco: no se bloquea nada.
+        if (vigente) setTimeline([]);
+      })
+      .finally(() => {
+        if (vigente) setCargandoFechas(false);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [necesitaFechas, track, frame, coleccion]);
 
   // La serie lee como máximo 1600 px para no apilar 11 escenas gigantes.
   useEffect(() => {
@@ -546,12 +639,15 @@ export function NisarView() {
       params.modo = modoFinal;
     } else if (producto === "cambio" || producto === "incendio") {
       if (!antes) {
-        setError("Elegí una fecha anterior del mismo track/frame.");
+        setError(
+          "Elegí una fecha anterior del mismo track/frame, o agregá una con el calendario.",
+        );
         return;
       }
       params.antes_granulo = antes.id;
-      params.antes_url = antes.download;
       params.antes_coleccion = antes.collection;
+      // Si no esta en disco hace falta la URL; el backend la exige solo si falta.
+      if (antes.download) params.antes_url = antes.download;
       params.umbral = Number(umbral);
       params.hv_min = Number(hvMin);
       if (producto === "cambio") {
@@ -575,10 +671,20 @@ export function NisarView() {
       params.umbral = Number(umbral);
       params.hv_min = Number(hvMin);
       if (fechasSerie.length < 2) {
-        setError("Elegí al menos 2 fechas locales para la serie.");
+        setError("Elegí al menos 2 fechas para la serie.");
         return;
       }
       params.fechas = fechasSerie.join(",");
+      // Las que no estan en disco se bajan en el mismo job: la UI no tiene que
+      // esperar a que la busqueda o el disco tengan esa fecha.
+      const bajar = fechasDelTrack
+        .filter((escena) => fechasSerie.includes(escena.id) && !escena.local)
+        .map((escena) => ({
+          id: escena.id,
+          url: escena.download,
+          coleccion: escena.collection,
+        }));
+      if (bajar.length > 0) params.escenas = JSON.stringify(bajar);
     } else if (producto === "geotiff") {
       params.pol = polFinal;
       params.modo_geo = modoGeo;
@@ -615,6 +721,88 @@ export function NisarView() {
     }
   }
 
+  async function agregarFecha() {
+    if (!seleccion || seleccion.path === null || seleccion.frame === null) {
+      setError("Elegí una escena GCOV con track/frame para agregar fechas.");
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaNueva)) {
+      setError("Elegí una fecha (AAAA-MM-DD) para buscarla.");
+      return;
+    }
+    setResolviendo(true);
+    setError(null);
+    try {
+      const escena = await getNisarScene(
+        seleccion.path,
+        seleccion.frame,
+        fechaNueva,
+        "",
+      );
+      const entrada: NisarTimelineScene = {
+        id: escena.id,
+        date: escena.start.slice(0, 10),
+        start: escena.start,
+        collection: escena.collection,
+        size_mb: escena.size_mb,
+        local: escena.local,
+        download: escena.download,
+      };
+      setTimeline((previo) =>
+        [...previo.filter((vieja) => vieja.id !== entrada.id), entrada].sort(
+          (a, b) => a.start.localeCompare(b.start),
+        ),
+      );
+      if (producto === "serie") {
+        setFechasSerie((previo) =>
+          previo.includes(entrada.id) ? previo : [...previo, entrada.id],
+        );
+      } else if (entrada.start >= seleccion.start) {
+        setError(
+          "Para comparar, la fecha anterior tiene que ser más vieja que la escena elegida.",
+        );
+      } else {
+        setAntesExterno(entrada);
+      }
+      setFechaNueva("");
+    } catch (exc) {
+      setError(
+        exc instanceof Error ? exc.message : "No pude resolver esa fecha en ASF.",
+      );
+    } finally {
+      setResolviendo(false);
+    }
+  }
+
+  async function descargarEscena(escena: {
+    id: string;
+    download: string;
+    collection: string;
+    level?: string;
+  }) {
+    if (!escena.download) {
+      setError(
+        "Esa fecha no trae URL de ASF: ya está en disco o hay que buscarla de nuevo.",
+      );
+      return;
+    }
+    setError(null);
+    try {
+      const job = await createJob("nisar_render", {
+        producto: "descarga",
+        nivel: escena.level ?? "GCOV",
+        granulo: escena.id,
+        url: escena.download,
+        coleccion: escena.collection,
+      });
+      setTrabajo(job);
+    } catch (exc) {
+      setError(
+        exc instanceof Error ? exc.message : "No se pudo crear la descarga.",
+      );
+    }
+  }
+
   function limpiar() {
     setCaja(null);
     setResultado(null);
@@ -625,6 +813,9 @@ export function NisarView() {
     setTrabajo(null);
     setProducto("recorte");
     setAntesId("");
+    setAntesExterno(null);
+    setTimeline([]);
+    setFechaNueva("");
   }
 
   function alternarCaja() {
@@ -731,6 +922,9 @@ export function NisarView() {
                     {granulo.size_mb !== null ? ` · ${granulo.size_mb} MB` : ""}
                   </span>
                   <span className="nisar__chips">
+                    {granulo.local ? (
+                      <span className="nisar__chip nisar__chip--local">local</span>
+                    ) : null}
                     {granulo.polarization.map((pol) => (
                       <span className="nisar__chip" key={pol}>
                         {pol}
@@ -804,6 +998,23 @@ export function NisarView() {
               <a className="btn" href={seleccion.download} target="_blank" rel="noreferrer">
                 Descargar .h5 (Earthdata)
               </a>
+              <button
+                type="button"
+                className="btn"
+                disabled={enMarcha || seleccion.local}
+                onClick={() =>
+                  void descargarEscena({
+                    id: seleccion.id,
+                    download: seleccion.download,
+                    collection: seleccion.collection,
+                    level: seleccion.level,
+                  })
+                }
+              >
+                {seleccion.local
+                  ? "Ya está en disco"
+                  : `Descargar a ${catalogo?.nisar_root ?? "E:\\nisar"}`}
+              </button>
             </div>
 
             <div className="nisar__render">
@@ -826,9 +1037,9 @@ export function NisarView() {
                                 : producto === "fusion"
                                   ? "Compone Sentinel-2 L2A (NDVI sin nubes) sobre la caja y la cruza con HV. Clasificación rule-based, no un modelo entrenado."
                                   : `Baja el .h5 a ${
-                                      catalogo?.data_root
-                                        ? `${catalogo.data_root}/nisar`
-                                        : "la carpeta de datos"
+                                      catalogo?.nisar_root
+                                        ? catalogo.nisar_root
+                                        : "la carpeta de datos NISAR"
                                     } y recorta esta caja.`}
                     {seleccion.size_mb !== null
                       ? ` Pesa ~${seleccion.size_mb} MB.`
@@ -991,20 +1202,60 @@ export function NisarView() {
                         <label className="nisar__ancho">
                           Fecha anterior
                           <select
-                            value={antesId}
-                            onChange={(evento) => setAntesId(evento.target.value)}
+                            value={antes?.id ?? ""}
+                            onChange={(evento) => {
+                              setAntesExterno(null);
+                              setAntesId(evento.target.value);
+                            }}
                             disabled={candidatos.length === 0}
                           >
                             {candidatos.length === 0 ? (
-                              <option value="">Sin otra fecha</option>
+                              <option value="">Sin otra fecha en el track/frame</option>
                             ) : null}
-                            {candidatos.map((granulo) => (
-                              <option key={granulo.id} value={granulo.id}>
-                                {fechaCorta(granulo.start)}
+                            {candidatos.map((escena) => (
+                              <option key={escena.id} value={escena.id}>
+                                {fechaCorta(escena.start)}
+                                {escena.local ? " · local" : " · se descarga"}
                               </option>
                             ))}
                           </select>
                         </label>
+                        <label className="nisar__ancho">
+                          Agregar fecha anterior
+                          <input
+                            type="date"
+                            value={fechaNueva}
+                            max={
+                              seleccion.start
+                                ? new Date(Date.parse(seleccion.start) - 86_400_000)
+                                    .toISOString()
+                                    .slice(0, 10)
+                                : undefined
+                            }
+                            onChange={(evento) => setFechaNueva(evento.target.value)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={!fechaNueva || resolviendo}
+                          onClick={() => void agregarFecha()}
+                        >
+                          {resolviendo ? "Buscando…" : "Usar esa fecha"}
+                        </button>
+                        {antes ? (
+                          <span className="nisar__estado">
+                            Anterior: {fechaCorta(antes.start)} ·{" "}
+                            {antes.local
+                              ? "ya está en disco"
+                              : antes.size_mb !== null
+                                ? `se descarga (${antes.size_mb} MB)`
+                                : "se descarga al comparar"}
+                            {antes.collection !== seleccion.collection
+                              ? ` · otra colección (${antes.collection})`
+                              : ""}
+                          </span>
+                        ) : null}
                         {producto === "cambio" ? (
                           <label>
                             Modo
@@ -1086,12 +1337,15 @@ export function NisarView() {
                   {producto === "serie" ? (
                     <div className="nisar__fechas">
                       <div className="nisar__fechas-head">
-                        <span>Fechas locales ({locales.length})</span>
+                        <span>
+                          Fechas del track/frame ({fechasDelTrack.length})
+                          {cargandoFechas ? " · consultando ASF…" : ""}
+                        </span>
                         <button
                           type="button"
                           className="btn"
                           onClick={() =>
-                            setFechasSerie(locales.map((escena) => escena.id))
+                            setFechasSerie(fechasDelTrack.map((escena) => escena.id))
                           }
                         >
                           Todas
@@ -1104,13 +1358,29 @@ export function NisarView() {
                           Ninguna
                         </button>
                       </div>
-                      {locales.length === 0 ? (
+                      <div className="nisar__fechas-head">
+                        <input
+                          type="date"
+                          value={fechaNueva}
+                          onChange={(evento) => setFechaNueva(evento.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={!fechaNueva || resolviendo}
+                          onClick={() => void agregarFecha()}
+                        >
+                          {resolviendo ? "Buscando…" : "Buscar y agregar fecha"}
+                        </button>
+                      </div>
+                      {fechasDelTrack.length === 0 ? (
                         <p className="nisar__vacio">
-                          No hay fechas locales de ese track/frame/colección.
+                          No hay fechas para ese track/frame. Agregá una con el
+                          calendario: si existe, se descarga al generar la serie.
                         </p>
                       ) : (
                         <ul className="nisar__fechas-lista">
-                          {locales.map((escena) => (
+                          {fechasDelTrack.map((escena) => (
                             <li key={escena.id}>
                               <label>
                                 <input
@@ -1124,18 +1394,39 @@ export function NisarView() {
                                     )
                                   }
                                 />
-                                <span>{escena.date}</span>
+                                <span>{fechaCorta(escena.start)}</span>
                                 <span className="nisar__fechas-peso">
-                                  {escena.size_mb} MB
+                                  {escena.local
+                                    ? "local"
+                                    : escena.size_mb !== null
+                                      ? `${escena.size_mb} MB`
+                                      : "por bajar"}
                                 </span>
                               </label>
+                              {!escena.local && escena.download ? (
+                                <button
+                                  type="button"
+                                  className="btn"
+                                  disabled={enMarcha}
+                                  onClick={() => void descargarEscena(escena)}
+                                >
+                                  Descargar
+                                </button>
+                              ) : null}
                             </li>
                           ))}
                         </ul>
                       )}
                       {fechasSerie.length < 2 ? (
-                        <p className="nisar__aviso">
-                          Elegí al menos 2 fechas para la serie.
+                        <p className="nisar__estado">
+                          Marcá al menos 2 fechas: las que no estén en disco se bajan al
+                          generar la serie.
+                        </p>
+                      ) : null}
+                      {coleccionesSerie.length > 1 ? (
+                        <p className="nisar__estado">
+                          Mezclás {coleccionesSerie.slice().sort().join(" con ")}: parte
+                          del cambio puede venir del procesamiento, no del terreno.
                         </p>
                       ) : null}
                     </div>
@@ -1143,9 +1434,10 @@ export function NisarView() {
 
                   {(producto === "cambio" || producto === "incendio") &&
                   candidatos.length === 0 ? (
-                    <p className="nisar__aviso">
-                      No hay otra fecha del mismo track/frame en esta búsqueda. Ampliá la
-                      ventana de fechas.
+                    <p className="nisar__estado">
+                      {cargandoFechas
+                        ? "Consultando las fechas del track/frame en ASF…"
+                        : "No aparecen otras fechas para este track/frame. Elegí una con el calendario: si existe en ASF se descarga al comparar."}
                     </p>
                   ) : null}
 

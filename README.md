@@ -58,6 +58,17 @@ Si tus datos están en otro lado, no toques código:
 $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 ```
 
+Los `.h5` de NISAR tienen su propia raíz: cada GCOV pesa ~1.9 GB y llenaría el disco de
+datos. Por defecto en Windows va a `E:\nisar` (y fuera de Windows a `<DATOS>/nisar`):
+
+```powershell
+$env:CLIMATE3D_NISAR = "E:\nisar"
+```
+
+Los archivos ya bajados en otra ruta no se mueven solos: copiá la carpeta `nisar` completa
+al disco nuevo (o apuntá `CLIMATE3D_NISAR` a la vieja). El visor muestra la ruta vigente y
+marca cada fecha como `local` cuando el `.h5` ya está ahí.
+
 Dentro de un contenedor la ruta es siempre `/data` y no hace falta exportar nada: lo
 configura el volumen. Ver [Correr en Docker](#correr-en-docker).
 

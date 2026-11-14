@@ -22,6 +22,7 @@ export interface NisarCatalog {
   default_days: number;
   earthdata_configured: boolean;
   data_root: string;
+  nisar_root: string;
 }
 
 export interface NisarImage {
@@ -46,6 +47,8 @@ export interface NisarGranule {
   images: NisarImage[];
   download: string;
   asf_url: string;
+  /** El .h5 ya esta en disco: renderizar no lo vuelve a bajar. */
+  local: boolean;
 }
 
 export interface NisarSearch {
@@ -72,6 +75,26 @@ export interface NisarLocalScenes {
   collection: string;
   total: number;
   scenes: NisarLocalScene[];
+}
+
+/** Una fecha del track/frame: viene de ASF o del disco. */
+export interface NisarTimelineScene {
+  id: string;
+  date: string;
+  start: string;
+  collection: string;
+  size_mb: number | null;
+  local: boolean;
+  download: string;
+}
+
+export interface NisarTimeline {
+  track: number;
+  frame: number;
+  level: string;
+  coleccion: string;
+  total: number;
+  scenes: NisarTimelineScene[];
 }
 
 export interface NisarFiltros {
@@ -116,6 +139,40 @@ export function getLocalScenes(
   return fetch(`/api/nisar/local?${query}`).then((r) =>
     leer<NisarLocalScenes>(r),
   );
+}
+
+/** Fechas del track/frame: ASF mas lo que ya esta en disco. */
+export function getNisarTimeline(
+  track: number,
+  frame: number,
+  coleccion: string,
+  level: string,
+): Promise<NisarTimeline> {
+  const query = new URLSearchParams({
+    track: String(track),
+    frame: String(frame),
+    coleccion,
+    level,
+  });
+  return fetch(`/api/nisar/timeline?${query}`).then((r) =>
+    leer<NisarTimeline>(r),
+  );
+}
+
+/** Resuelve una fecha suelta a su granulo del track/frame (local o en ASF). */
+export function getNisarScene(
+  track: number,
+  frame: number,
+  date: string,
+  coleccion: string,
+): Promise<NisarGranule> {
+  const query = new URLSearchParams({
+    track: String(track),
+    frame: String(frame),
+    date,
+    coleccion,
+  });
+  return fetch(`/api/nisar/scene?${query}`).then((r) => leer<NisarGranule>(r));
 }
 
 export function getParaguay(): Promise<FeatureCollection> {
