@@ -90,6 +90,53 @@ def fecha_granulo(nombre: str) -> str:
     return f"{dia[:4]}-{dia[4:6]}-{dia[6:]} {hora[:2]}:{hora[2:4]} UTC"
 
 
+def fecha_orden(nombre: str) -> str:
+    """``..._20261029T214921_...`` -> ``20261029T214921`` (para ordenar)."""
+    encontrado = re.search(r"(\d{8})T(\d{6})", nombre)
+    return "".join(encontrado.groups()) if encontrado else ""
+
+
+_PATRON_PAR = re.compile(r"_\d{3}_(\d{3})_([AD])_(\d{3})_")
+
+
+def par_track_frame(nombre: str) -> tuple[int, int] | None:
+    """Track/frame desde el nombre del granulo: ``_029_031_A_165_`` -> (31, 165).
+
+    Se lee del nombre y no del HDF5 para poder recorrer una carpeta sin abrir
+    escenas de varios GB. Es el mismo patron que usa ``nisar_serie.py``.
+    """
+    encontrado = _PATRON_PAR.search(nombre)
+    if not encontrado:
+        return None
+    return int(encontrado.group(1)), int(encontrado.group(3))
+
+
+def escenas_posteriores(despues: str | Path, maximo: int = 1) -> list[Path]:
+    """Escenas del mismo track/frame posteriores a ``despues``, en orden.
+
+    Solo mira la carpeta de ``despues`` (la coleccion): una confirmacion
+    temporal tiene que ser de la misma version de procesamiento. Devuelve como
+    mucho ``maximo``; la lista vacia significa que no hay con que confirmar.
+    """
+    ruta = Path(despues)
+    if maximo <= 0:
+        return []
+    par = par_track_frame(ruta.stem)
+    limite = fecha_orden(ruta.stem)
+    if par is None or not limite:
+        return []
+    posteriores = [
+        candidata
+        for candidata in ruta.parent.glob("*.h5")
+        if candidata.is_file()
+        and candidata != ruta
+        and par_track_frame(candidata.stem) == par
+        and fecha_orden(candidata.stem) > limite
+    ]
+    posteriores.sort(key=lambda candidata: fecha_orden(candidata.stem))
+    return posteriores[:maximo]
+
+
 def _epsg(grupo: h5py.Group) -> int:
     if "projection" not in grupo:
         raise SystemExit("El GCOV no trae el dataset projection.")
@@ -266,6 +313,29 @@ def a_db(potencia: np.ndarray) -> np.ndarray:
     np.log10(datos, out=salida, where=valido)
     salida *= 10.0
     return salida
+
+
+def corrimiento_db(delta: np.ndarray, valido: np.ndarray | None = None) -> float:
+    """Corrimiento radiometrico global entre dos fechas, en dB.
+
+    Dos pasadas del mismo track/frame no salen con el mismo nivel absoluto:
+    calibracion, humedad del suelo y version de procesamiento mueven el
+    histograma entero varios dB. Si eso no se resta, un umbral fijo de perdida
+    termina midiendo el offset del par y no la deforestacion: en la caja del
+    Este el par 2026-06-28 -> 2026-08-27 venia 3,7 dB mas oscuro y el detector
+    pintaba el 37 % del area como perdida.
+
+    La mediana sobre los pixeles validos es robusta mientras la mayor parte de
+    la caja no cambie, que es el supuesto normal de una comparacion corta.
+    """
+    if delta.size == 0:
+        return 0.0
+    muestra = delta if valido is None else delta[valido & np.isfinite(delta)]
+    muestra = np.asarray(muestra)
+    muestra = muestra[np.isfinite(muestra)]
+    if muestra.size == 0:
+        return 0.0
+    return float(np.median(muestra))
 
 
 def mayoria3(mascara: np.ndarray) -> np.ndarray:
@@ -662,3 +732,25 @@ def guardar_geotiff(
         metadata=None,
         description=descripcion,
     )
+
+
+def argv_bbox(argv: list[str], opcion: str = "--bbox") -> list[str]:
+    """Une ``--bbox -55.5,-24.5,-55.2,-23.9`` en el token ``--bbox=...``.
+
+    ``argparse`` lee como opcion cualquier token que empiece con ``-``, asi que
+    una caja con longitud negativa (Paraguay entero) parece no traer valor y el
+    parser muere con "argument --bbox: expected one argument". Pegar el valor
+    con ``=`` es la forma que entiende, y deja funcionar las dos: ``--bbox
+    -55,...`` y ``--bbox=-55,...``.
+    """
+    salida: list[str] = []
+    i = 0
+    while i < len(argv):
+        token = argv[i]
+        if token == opcion and i + 1 < len(argv) and argv[i + 1].startswith("-"):
+            salida.append(f"{opcion}={argv[i + 1]}")
+            i += 2
+            continue
+        salida.append(token)
+        i += 1
+    return salida

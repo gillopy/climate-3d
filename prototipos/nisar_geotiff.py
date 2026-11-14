@@ -30,7 +30,7 @@ def main() -> int:
     ap.add_argument("--modo", default="db", choices=("db", "lineal"))
     ap.add_argument("--out", required=True, help="ruta del .tif")
     ap.add_argument("--geojson", default=None)
-    args = ap.parse_args()
+    args = ap.parse_args(nisar.argv_bbox(sys.argv[1:]))
 
     px = max(800, min(int(args.px), 4096))
     salida = Path(args.out)

@@ -116,7 +116,7 @@ def main() -> int:
     ap.add_argument("--out", required=True, help="prefijo de salida (sin extension)")
     ap.add_argument("--fechas", default="", help="IDs separados por coma; vacío = todas")
     ap.add_argument("--geojson", default=None)
-    args = ap.parse_args()
+    args = ap.parse_args(nisar.argv_bbox(sys.argv[1:]))
 
     seleccionada = Path(args.h5)
     track, frame = int(args.track), int(args.frame)

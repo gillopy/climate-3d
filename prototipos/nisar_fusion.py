@@ -183,7 +183,7 @@ def main() -> int:
     ap.add_argument("--ndvi-cultivo", type=float, default=0.25)
     ap.add_argument("--hv-bosque", type=float, default=-15.5)
     ap.add_argument("--hv-agua", type=float, default=-20.0)
-    args = ap.parse_args()
+    args = ap.parse_args(nisar.argv_bbox(sys.argv[1:]))
 
     px = max(800, min(int(args.px), 2000))
     oeste, sur, este, norte = nisar.caja(args.bbox)

@@ -324,7 +324,7 @@ def main() -> int:
         default=1,
         help="lado del multilook (impar); 1 = crudo (default), 0 = automatico ~90 m",
     )
-    args = ap.parse_args()
+    args = ap.parse_args(kit.argv_bbox(sys.argv[1:]))
 
     h5 = Path(args.h5)
     if not h5.is_file():
