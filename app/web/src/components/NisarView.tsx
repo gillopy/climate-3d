@@ -110,6 +110,7 @@ function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("Área", "area_ha", ha);
   agregar("Bosque", "bosque_ha", ha);
   agregar("Pérdida (área)", "perdida_ha", ha);
+  agregar("Pérdida candidata", "perdida_candidata_ha", ha);
   agregar("Pérdida radar", "perdida_radar_ha", ha);
   agregar("Pérdida (%)", "perdida_pct", pct);
   agregar("Pérdida del bosque", "perdida_bosque_pct", pct);
@@ -121,6 +122,7 @@ function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("RVI medio", "rvi_medio", num);
   agregar("RVI p10 / p90", "rvi_p10", (valor) => `${num(valor)} / ${num(_get(meta, "rvi_p90"))}`);
   agregar("Umbral", "umbral_db", db);
+  agregar("Corrimiento del par", "offset_db", db);
   agregar("HV mínimo", "hv_min_db", db);
   agregar("HH máximo", "hh_max_db", db);
   agregar("HV máximo", "hv_max_db", db);
@@ -132,6 +134,10 @@ function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("NDVI confirma", "optico.verificado", (valor) =>
     valor ? "sí" : "no",
   );
+  agregar("Persistencia", "temporal.disponible", (valor) =>
+    valor ? "sí" : "no",
+  );
+  agregar("Recuperado", "temporal.recuperados_ha", ha);
   agregar("Cobertura NDVI", "optico.cobertura_valida_pct", pct);
   agregar("Focos FIRMS", "focos", texto);
   agregar("Resolución", "mpp", (valor) => `${Number(valor).toFixed(0)} m/px`);
@@ -141,9 +147,13 @@ function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   );
   const multilook = _get(meta, "multilook");
   if (typeof multilook === "number" && multilook > 1) {
+    const mpp = Number(_get(meta, "mpp"));
     filas.push({
       label: "Multilook",
-      value: `~${Math.round(Number(_get(meta, "multilook_m")))} m`,
+      value:
+        Number.isFinite(mpp) && mpp > 0
+          ? `${multilook}×${multilook} (~${Math.round(multilook * mpp)} m)`
+          : `${multilook}×${multilook}`,
     });
   }
   agregar("EPSG", "epsg", texto);
@@ -200,8 +210,11 @@ export function NisarView() {
   // Confirmar la caida de HV con NDVI de Sentinel-2 y descartar parches chicos:
   // sin esto el "rojo" incluye cosechas, anegamientos y estacionalidad.
   const [verificarS2, setVerificarS2] = useState(true);
+  // Persistencia: un cambio tiene que seguir ahi en la fecha siguiente. Usa los
+  // .h5 que ya estan en disco; si no hay fecha posterior, el producto avisa.
+  const [persistencia, setPersistencia] = useState("1");
   const [modoCambio, setModoCambio] = useState("comparar");
-  const [umbral, setUmbral] = useState("3");
+  const [umbral, setUmbral] = useState("2");
   const [hvMin, setHvMin] = useState("-15.5");
   const [modoGeo, setModoGeo] = useState("db");
   const [hhMax, setHhMax] = useState("-20");
@@ -673,7 +686,9 @@ export function NisarView() {
       if (producto === "cambio") {
         params.modo_cambio = modoCambio;
         params.verificar_s2 = verificarS2;
-        if (verificarS2) params.mmu_ha = 0.5;
+        params.confirmar_temporal = Number(persistencia);
+        // La MMU no depende de la confirmacion: un desmonte es un bloque.
+        params.mmu_ha = 0.5;
       } else {
         params.firms = firms;
       }
@@ -1353,9 +1368,26 @@ export function NisarView() {
                                 }
                               >
                                 <option value="si">
-                                  Sí · solo bosque con caída de NDVI, parches ≥ 0.5 ha
+                                  Sí · pérdida en rojo, candidata en naranja, parches ≥ 0.5 ha
                                 </option>
-                                <option value="no">No · solo radar (rápido, sin red)</option>
+                                <option value="no">No · solo radar (cambio candidato, sin red)</option>
+                              </select>
+                            </label>
+                            <label className="nisar__ancho">
+                              Persistencia temporal
+                              <select
+                                value={persistencia}
+                                onChange={(evento) =>
+                                  setPersistencia(evento.target.value)
+                                }
+                              >
+                                <option value="0">No · solo el par de fechas</option>
+                                <option value="1">
+                                  Sí · tiene que seguir en la fecha siguiente (local)
+                                </option>
+                                <option value="2">
+                                  Sí · dos fechas siguientes (más estricto)
+                                </option>
                               </select>
                             </label>
                           </>

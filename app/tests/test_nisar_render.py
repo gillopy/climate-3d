@@ -9,6 +9,7 @@ prueba el recorte, la conversion a dB y el PNG sin red ni credenciales.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -57,6 +58,12 @@ if modo == "agua":
     # Parche de agua abierta: HH y HV muy bajos en el centro de la caja.
     hh[150:230, 250:330] = 1e-5
     hv[150:230, 250:330] = 1e-6
+if modo in ("oscuro", "perdida_oscuro"):
+    # La escena entera 3 dB mas oscura: corrimiento del par, no cambio de suelo.
+    hh *= 0.5
+    hv *= 0.5
+if modo == "perdida_oscuro":
+    hv[150:250, 250:350] *= 0.2
 
 salida.parent.mkdir(parents=True, exist_ok=True)
 with h5py.File(salida, "w") as f:
@@ -88,6 +95,13 @@ print(f"{oeste:.6f},{sur:.6f},{este:.6f},{norte:.6f}")
 class RenderNisar(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        # Los scripts del pipeline corren con el Python del repo (encoding local)
+        # y este test los lee con text=True. Un interprete 3.15+ decodifica en
+        # UTF-8 por defecto, asi que un `·` en cp1252 rompe el hilo lector. La
+        # app ya exporta estas dos variables al hijo (api/jobs.py); aca se hace
+        # lo mismo para que el test mida el render y no el encoding.
+        os.environ.setdefault("PYTHONUTF8", "1")
+        os.environ.setdefault("PYTHONIOENCODING", "utf-8")
         chequeo = subprocess.run(
             [str(python_repo()), "-c", "import h5py, pyproj, matplotlib, PIL, tifffile"],
             capture_output=True,
@@ -249,6 +263,161 @@ class RenderNisar(unittest.TestCase):
             self.assertGreater(meta["area_ha"], meta["perdida_ha"])
             with Image.open(cambio) as imagen:
                 self.assertEqual(imagen.mode, "RGB")
+
+    def test_cambio_normaliza_el_corrimiento_del_par(self):
+        """Una segunda escena 3 dB mas oscura, sin deforestacion, no es perdida.
+
+        Es el defecto que se veia en el visor: el 2026-06-28 al 2026-08-27 venia
+        3,7 dB mas oscuro y el detector pintaba el 37 % de la caja. La mediana de
+        ΔHV es el corrimiento y hay que restarlo antes de umbralar.
+        """
+        with tempfile.TemporaryDirectory() as carpeta:
+            tmp = Path(carpeta)
+            fixture = tmp / "fixture.py"
+            fixture.write_text(FIXTURE, encoding="utf-8")
+            antes = tmp / (
+                "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+                "20261017T214920_20261017T214955_P05023_N_F_J_001.h5"
+            )
+            despues = tmp / (
+                "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_"
+                "20261029T214921_20261029T214955_P05036_N_F_J_001.h5"
+            )
+            for ruta, modo in ((antes, "base"), (despues, "oscuro")):
+                creado = subprocess.run(
+                    [str(python_repo()), str(fixture), str(ruta), modo],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(creado.returncode, 0, creado.stderr)
+                bbox = creado.stdout.strip().splitlines()[-1]
+
+            comunes = [
+                str(python_repo()),
+                "prototipos/nisar_cambio.py",
+                "--antes",
+                str(antes),
+                "--despues",
+                str(despues),
+                "--bbox",
+                bbox,
+                "--px",
+                "900",
+                "--modo",
+                "mascara",
+                "--hv-min",
+                "-30",
+                "--bosque",
+                "hv",
+                "--mmu-ha",
+                "0.5",
+            ]
+            areas = {}
+            for nombre, extra in (
+                ("normalizado", ["--umbral", "2"]),
+                ("crudo", ["--sin-normalizar", "--ml", "1", "--umbral", "3"]),
+            ):
+                salida = tmp / f"{nombre}.png"
+                corrida = subprocess.run(
+                    [*comunes, *extra, "--out", str(salida)],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+                areas[nombre] = json.loads(
+                    salida.with_suffix(".json").read_text(encoding="utf-8")
+                )
+
+            normalizado, crudo = areas["normalizado"], areas["crudo"]
+            self.assertAlmostEqual(normalizado["offset_db"], -3.01, delta=0.2)
+            self.assertLessEqual(
+                normalizado["perdida_ha"], normalizado["area_ha"] * 0.01
+            )
+            self.assertGreater(crudo["perdida_ha"], normalizado["perdida_ha"] + 100.0)
+            self.assertGreater(crudo["perdida_ha"], crudo["area_ha"] * 0.5)
+
+    def test_confirmacion_temporal_descarta_lo_que_revierte(self):
+        """Un cambio que no sigue en la fecha posterior no es deforestacion.
+
+        La confirmacion usa los .h5 que ya estan en la carpeta de la fecha
+        "despues": no descarga nada. Si no hay fecha posterior, el producto
+        tiene que seguir funcionando y avisarlo.
+        """
+        with tempfile.TemporaryDirectory() as carpeta:
+            tmp = Path(carpeta)
+            fixture = tmp / "fixture.py"
+            fixture.write_text(FIXTURE, encoding="utf-8")
+
+            def crear(carpeta_escena: Path, orbit: str, fecha: str, modo: str):
+                carpeta_escena.mkdir(parents=True, exist_ok=True)
+                ruta = carpeta_escena / (
+                    f"NISAR_L2_PR_GCOV_{orbit}_082_D_101_2005_DHDH_A_"
+                    f"{fecha}_P05023_N_F_J_001.h5"
+                )
+                creado = subprocess.run(
+                    [str(python_repo()), str(fixture), str(ruta), modo],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(creado.returncode, 0, creado.stderr)
+                return ruta, creado.stdout.strip().splitlines()[-1]
+
+            def correr(carpeta_escena: Path, antes, despues, bbox, extra):
+                salida = carpeta_escena / "cambio.png"
+                corrida = subprocess.run(
+                    [
+                        str(python_repo()),
+                        "prototipos/nisar_cambio.py",
+                        "--antes", str(antes),
+                        "--despues", str(despues),
+                        "--bbox", bbox,
+                        "--px", "900",
+                        "--modo", "mascara",
+                        "--umbral", "3",
+                        "--hv-min", "-30",
+                        "--mmu-ha", "0.5",
+                        *extra,
+                        "--out", str(salida),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+                return json.loads(salida.with_suffix(".json").read_text(encoding="utf-8"))
+
+            # Escenario 1: la perdida revierte en la fecha siguiente.
+            revierte = tmp / "revierte"
+            antes, bbox = crear(revierte, "033", "20261017T214920_20261017T214955", "base")
+            despues, _ = crear(revierte, "034", "20261029T214921_20261029T214955", "perdida")
+            crear(revierte, "035", "20261110T214921_20261110T214955", "base")
+            sin_temporal = correr(revierte, antes, despues, bbox, [])
+            con_temporal = correr(revierte, antes, despues, bbox, ["--confirmar-temporal", "1"])
+            self.assertTrue(con_temporal["temporal"]["disponible"])
+            self.assertEqual(len(con_temporal["temporal"]["fechas"]), 1)
+            self.assertGreater(con_temporal["temporal"]["recuperados_ha"], 300.0)
+            self.assertLess(con_temporal["perdida_ha"], sin_temporal["perdida_ha"] * 0.05)
+
+            # Escenario 2: la perdida persiste -> se mantiene.
+            persiste = tmp / "persiste"
+            antes2, bbox2 = crear(persiste, "033", "20261017T214920_20261017T214955", "base")
+            despues2, _ = crear(persiste, "034", "20261029T214921_20261029T214955", "perdida")
+            crear(persiste, "035", "20261110T214921_20261110T214955", "perdida")
+            quedo = correr(persiste, antes2, despues2, bbox2, ["--confirmar-temporal", "1"])
+            self.assertTrue(quedo["temporal"]["disponible"])
+            self.assertGreater(quedo["perdida_ha"], 300.0)
+
+            # Escenario 3: no hay fecha posterior -> avisa y no rompe.
+            sola = tmp / "sola"
+            antes3, bbox3 = crear(sola, "033", "20261017T214920_20261017T214955", "base")
+            despues3, _ = crear(sola, "034", "20261029T214921_20261029T214955", "perdida")
+            huerfana = correr(sola, antes3, despues3, bbox3, ["--confirmar-temporal", "1"])
+            self.assertFalse(huerfana["temporal"]["disponible"])
+            self.assertIn("posterior", huerfana["temporal"]["motivo"])
+            self.assertGreater(huerfana["perdida_ha"], 300.0)
 
     def test_serie_temporal_y_geotiff(self):
         with tempfile.TemporaryDirectory() as carpeta:

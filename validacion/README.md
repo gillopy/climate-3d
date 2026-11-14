@@ -64,6 +64,71 @@ la referencia) porque exige NDVI > 0,55 antes del cambio.
 El script de validación usa ahora [`comun/sentinel2.py`](../comun/sentinel2.py)
 (el módulo compartido); antes importaba `nisar_fusion.STAC`, que ya no existe.
 
+## Corrimiento del par y multilook (2026-11)
+
+Dos pasadas del mismo track/frame **no salen al mismo nivel radiométrico**. En
+estas escenas la mediana de ΔHV es −3,1 dB en la caja grande del Este y −2,6 dB
+en la caja chica: la escena de agosto está más oscura que la de junio. Un umbral
+fijo sin restar ese offset mide el offset, no la deforestación.
+
+Regla nueva (`nisar_cambio.py` por defecto): multilook 5×5 en potencia (~50 m,
+σ de ΔHV baja de 3,3 a 1,7 dB), se resta la mediana de ΔHV y recién ahí se
+umbrala. La MMU de 0,5 ha aplica siempre.
+
+Misma caja chica (10 m, 2026-06-28 → 2026-08-27), referencia NDVI 1.033 ha:
+
+| Regla | Área predicha | Precisión densa | Recall | F1 | Sesgo |
+|---|---:|---:|---:|---:|---:|
+| HV > −15,5 dB y ΔHV < −3 dB, 1 mirada (viejo) | 4.770 ha | 0,15 | 0,70 | 0,25 | +362 % |
+| ΔHV normalizado, multilook 5, umbral 2 dB (nuevo) | 4.340 ha | 0,17 | 0,70 | 0,27 | +320 % |
+
+```powershell
+.venv\Scripts\python.exe validacion\deforestacion_este.py `
+  --antes ANTES.h5 --despues DESPUES.h5 `
+  "--bbox=-54.688225,-24.5212,-54.600334,-24.398071" --px 2000 `
+  --pre-desde 2026-06-01 --pre-hasta 2026-06-30 `
+  --post-desde 2026-10-01 --post-hasta 2026-10-31 `
+  --umbral 2 --out validacion\este_2026
+```
+
+**Lo que cambia y lo que no.** El F1 denso del radar solo casi no se mueve: con
+este paisaje y esta resolución, ΔHV no alcanza para separar deforestación de
+cosecha/estacionalidad. Lo que arregla la normalización es la *estabilidad*: el
+mismo umbral significa lo mismo en cualquier par, y dos corridas con y sin
+`--verificar-s2` dejan de ser incomparables (antes la verificación reemplazaba
+la máscara de bosque por NDVI > 0,55, que en la estación seca es el 6 % del
+área). Con confirmación óptica el producto queda en rojo = pérdida confirmada
+(117 ha en la caja de 4 km del visor) y naranja = candidata (364 ha), en vez de
+618 ha todas rojas.
+
+**Índices descartados.** Se probó RFDI `(HH−HV)/(HH+HV)`, que la literatura
+L-band propone para bosque amazónico denso (`1-s2.0-S0034425725005371`). Contra
+la referencia NDVI de esta caja discrimina peor que el azar: AUC 0,41-0,47 para
+el cambio y 0,44-0,47 para bosque/no bosque. RVI tampoco mejora a ΔHV
+(AUC 0,59-0,60). Por eso el detector sigue siendo ΔHV.
+
+**Confirmación temporal.** `--confirmar-temporal N` remide la caída contra la
+misma escena base en las N fechas posteriores (mismo track/frame, ya en disco).
+En la caja de 4 km del visor (2026-06-28 → 2026-08-27, control 2026-10-02):
+
+| | pérdida confirmada | candidata | radar |
+|---|---:|---:|---:|
+| sin persistencia | 117 ha | 364 ha | 494 ha |
+| 1 fecha posterior | 81 ha | 246 ha | 340 ha |
+| 2 fechas posteriores | 14 ha | 100 ha | 128 ha |
+
+Con dos fechas el filtro es demasiado estricto para datos PROVISIONAL: la
+escena del 2026-10-14 viene +3,2 dB en HV y +2,0 dB en HH respecto de la del
+2026-10-02 (no es un simple corrimiento, cambia el contraste), así que solo el
+26 % de los candidatos sigue 2 dB abajo de la base. Por eso el default es **1**.
+
+**Límites del resultado.** La referencia NDVI exige NDVI previo ≥ 0,50: en la
+estación seca la mediana de la caja es 0,45, así que la referencia misma es
+conservadora. Los compuestos NDVI pre/post correlacionan solo 0,26 entre sí:
+parte de la "referencia" es cambio fenológico. Con dos fechas no se puede exigir
+persistencia temporal, que es lo que el método NASA usa para bajar falsos
+positivos.
+
 ## Límites
 
 - Referencia óptica, no campo; una cosecha o el agua también bajan el NDVI.

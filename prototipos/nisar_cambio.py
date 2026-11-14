@@ -2,11 +2,34 @@
 
 La deforestacion y la cicatriz de incendio se ven como una caida del
 backscatter cross-pol (HV) cuando el volumen del dosel pasa a superficie. El
-script recorta las dos escenas en la misma grilla, calcula ΔHV en dB, aplica
+script recorta las dos escenas en la misma grilla, promedia speckle (multilook
+en potencia), calcula ΔHV en dB, le resta el corrimiento global del par, aplica
 una mayoria 3x3 para no contar pixeles aislados y escribe:
 
 - un PNG (delta, mascara sobre HV o composicion RGB),
 - un JSON con hectareas de perdida/ganancia y los umbrales usados.
+
+Dos cosas que el producto anterior no hacia y que dominan el resultado:
+
+1. **Normalizacion por el corrimiento del par.** Dos pasadas no salen con el
+   mismo nivel: calibracion, humedad y version de procesamiento mueven el
+   histograma 3-4 dB. Un umbral fijo sin restar ese offset pinta el offset
+   como perdida (el par 2026-06-28 -> 2026-08-27 venia 3,7 dB mas oscuro y
+   marcaba el 37 % del area). La mediana de ΔHV es el offset.
+2. **Multilook.** A 10 m el pixel es de una sola mirada: el ruido de speckle
+   tiene σ ≈ 3-4 dB, mas grande que cualquier umbral util. Promediar en
+   potencia (nunca en dB) a ~50 m baja σ a ~1,5 dB y deja el umbral por
+   encima del piso de ruido.
+3. **Confirmacion temporal.** Un desmonte no vuelve. `--confirmar-temporal N`
+   vuelve a medir la caida contra la misma escena base en las N fechas
+   posteriores del mismo track/frame que ya estan en disco (no descarga nada):
+   el pixel sobrevive solo si sigue `--umbral` dB por debajo. `--recuperacion-db`
+   permite aflojar cuanto puede achicarse la caida.
+
+El indice de cambio sigue siendo ΔHV: medido contra la referencia NDVI de
+Sentinel-2 en la caja del Este, da AUC 0,71 con multilook 5x5. RFDI (el indice
+que la literatura L-band prefiere sobre bosque amazonico denso) aca discrimina
+peor que el azar (AUC 0,41-0,47), asi que no se usa como detector.
 
 Ojo: un incendio puede iluminar HH al principio; este producto mira HV, que es
 la banda que el SAR Handbook marca como sensible al volumen del bosque.
@@ -30,6 +53,10 @@ sys.path.insert(0, str(RAIZ / "comun"))
 import nisar  # noqa: E402
 import sentinel2  # noqa: E402
 
+ROJO = np.array([205, 35, 35], dtype=np.uint8)
+NARANJA = np.array([222, 138, 58], dtype=np.uint8)
+AZUL = np.array([45, 95, 205], dtype=np.uint8)
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -43,19 +70,48 @@ def main() -> int:
         choices=("delta", "mascara", "rgb", "comparar"),
         help="comparar = antes | despues con la mascara encima",
     )
-    ap.add_argument("--umbral", type=float, default=3.0, help="caida minima de HV en dB")
+    ap.add_argument("--umbral", type=float, default=2.0, help="caida minima de HV en dB")
     ap.add_argument("--hv-min", type=float, default=-15.5, help="HV minimo para considerar bosque")
+    ap.add_argument(
+        "--ml",
+        type=int,
+        default=0,
+        help="ventana de multilook en potencia; 0 = automatica (~50 m de pixel)",
+    )
+    ap.add_argument(
+        "--sin-normalizar",
+        action="store_true",
+        help="no restar el corrimiento global de ΔHV (solo para reproducir corridas viejas)",
+    )
     ap.add_argument(
         "--bosque",
         default="hv",
         choices=("ndvi", "hv"),
         help="como decidir donde habia dosel antes del cambio",
     )
-    ap.add_argument("--ndvi-bosque", type=float, default=0.55, help="NDVI minimo de bosque")
+    ap.add_argument("--ndvi-bosque", type=float, default=0.50, help="NDVI minimo de bosque")
+    ap.add_argument(
+        "--ndvi-piso",
+        type=float,
+        default=0.30,
+        help="NDVI minimo previo para confirmar una caida (descarta suelo ya desnudo)",
+    )
     ap.add_argument(
         "--verificar-s2",
         action="store_true",
         help="confirmar la caida de HV con NDVI de Sentinel-2 (pre y post)",
+    )
+    ap.add_argument(
+        "--confirmar-temporal",
+        type=int,
+        default=0,
+        help="cuantas fechas posteriores exigir sin recuperacion de HV (0 = no)",
+    )
+    ap.add_argument(
+        "--recuperacion-db",
+        type=float,
+        default=0.0,
+        help="cuanto puede achicarse la caida original y seguir contando como perdida",
     )
     ap.add_argument(
         "--dndvi",
@@ -69,13 +125,18 @@ def main() -> int:
         default=0.0,
         help="unidad minima de mapeo: descarta parches menores a estas hectareas",
     )
+    ap.add_argument(
+        "--ganancia",
+        action="store_true",
+        help="pintar y contar tambien el aumento de HV (por defecto solo perdida)",
+    )
     ap.add_argument("--dias", type=int, default=15, help="ventana de Sentinel-2 en dias")
     ap.add_argument("--nubes", type=float, default=40.0, help="nubes maximas de Sentinel-2")
     ap.add_argument("--max-items", type=int, default=8, help="items maximos de Sentinel-2")
     ap.add_argument("--rango", type=float, default=6.0, help="rango de la paleta de delta en dB")
     ap.add_argument("--out", required=True)
     ap.add_argument("--geojson", default=None)
-    args = ap.parse_args()
+    args = ap.parse_args(nisar.argv_bbox(sys.argv[1:]))
 
     px = max(800, min(int(args.px), 4096))
     salida = Path(args.out)
@@ -105,10 +166,31 @@ def main() -> int:
 
         hv_antes, xs, ys = nisar.orientar(rec_antes)
         hv_despues, _, _ = nisar.orientar(rec_despues)
+
+        mpp_x = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
+        mpp_y = abs(float(ys[-1] - ys[0])) / max(1, len(ys) - 1)
+        mpp = mpp_x
+        ml = max(1, int(args.ml)) if args.ml > 0 else nisar.ventana_para(mpp, 50.0, 5)
+        if ml > 1:
+            hv_antes = nisar.multilook(hv_antes, ml)
+            hv_despues = nisar.multilook(hv_despues, ml)
+            print(f"multilook {ml}x{ml} en potencia (~{ml * mpp:.0f} m de pixel)")
+
         db_antes = nisar.a_db(hv_antes)
         db_despues = nisar.a_db(hv_despues)
         delta = db_despues - db_antes
         valido = np.isfinite(delta)
+        offset_db = 0.0
+        if not args.sin_normalizar:
+            offset_db = nisar.corrimiento_db(delta, valido)
+            delta = delta - offset_db
+            print(f"corrimiento del par: {offset_db:+.2f} dB (restado)")
+            if abs(offset_db) >= 2.0:
+                print(
+                    "aviso: las dos fechas no estan al mismo nivel radiometrico "
+                    f"({offset_db:+.2f} dB). Se normalizo, pero conviene revisar la "
+                    "version de procesamiento de cada escena."
+                )
 
         bosque_meta: dict = {"fuente": "hv", "ndvi_umbral": None, "items": []}
         pre_bosque = valido & (db_antes > float(args.hv_min))
@@ -155,22 +237,120 @@ def main() -> int:
             motivo = ""
             ndvi_pre, usados_pre, motivo = _ndvi(antes.fecha)
             bosque_meta["items"] = usados_pre
-            if ndvi_pre is not None:
-                pre_bosque = (
-                    valido & np.isfinite(ndvi_pre) & (ndvi_pre > float(args.ndvi_bosque))
-                )
-                bosque_meta["fuente"] = "ndvi"
-                bosque_meta["ndvi_umbral"] = float(args.ndvi_bosque)
-                print(
-                    f"bosque: NDVI > {args.ndvi_bosque:g} "
-                    f"({100.0 * pre_bosque.sum() / max(1, int(valido.sum())):.1f}% del area)"
-                )
-            else:
-                bosque_meta["fuente"] = f"hv (sin NDVI: {motivo or 'sin datos'})"
-                print(f"aviso: mascara de bosque por HV ({motivo or 'sin datos'})")
+            if args.bosque == "ndvi":
+                if ndvi_pre is not None:
+                    pre_bosque = (
+                        valido
+                        & np.isfinite(ndvi_pre)
+                        & (ndvi_pre > float(args.ndvi_bosque))
+                    )
+                    bosque_meta["fuente"] = "ndvi"
+                    bosque_meta["ndvi_umbral"] = float(args.ndvi_bosque)
+                    print(
+                        f"bosque: NDVI > {args.ndvi_bosque:g} "
+                        f"({100.0 * pre_bosque.sum() / max(1, int(valido.sum())):.1f}% del area)"
+                    )
+                else:
+                    bosque_meta["fuente"] = f"hv (sin NDVI: {motivo or 'sin datos'})"
+                    print(f"aviso: mascara de bosque por HV ({motivo or 'sin datos'})")
+                    optico_meta["motivo"] = motivo
+            elif motivo:
+                # Verificar no debe cambiar la mascara de bosque: solo confirma.
                 optico_meta["motivo"] = motivo
 
         perdida_radar = nisar.mayoria3(valido & pre_bosque & (delta < -umbral)) & valido
+
+        temporal_meta: dict = {
+            "solicitadas": max(0, int(args.confirmar_temporal)),
+            "disponible": False,
+            "motivo": "",
+            "fechas": [],
+            "umbral_db": umbral,
+            "tolerancia_db": max(0.0, umbral - float(args.recuperacion_db)),
+            "recuperados_ha": 0.0,
+        }
+        if temporal_meta["solicitadas"] > 0:
+            posteriores = nisar.escenas_posteriores(
+                despues.ruta, temporal_meta["solicitadas"]
+            )
+            if not posteriores:
+                temporal_meta["motivo"] = (
+                    "no hay fechas posteriores del mismo track/frame en la carpeta"
+                )
+                print(
+                    "aviso: no hay fecha posterior para confirmar; la perdida "
+                    "radar queda sin persistencia"
+                )
+            else:
+                sobrevive = np.ones(valido.shape, dtype=bool)
+                for ruta in posteriores:
+                    with nisar.Escena(ruta) as conf:
+                        if "HV" not in conf.pols:
+                            temporal_meta["motivo"] = f"{ruta.stem} no tiene HV"
+                            continue
+                        rec_conf = conf.recortar("HV", args.bbox, px)
+                        if not nisar.compatibles(rec_antes, rec_conf):
+                            temporal_meta["motivo"] = f"{ruta.stem} no comparte grilla"
+                            continue
+                        hv_conf, _, _ = nisar.orientar(rec_conf)
+                        if ml > 1:
+                            hv_conf = nisar.multilook(hv_conf, ml)
+                        db_conf = nisar.a_db(hv_conf)
+                        # La caida se vuelve a medir contra la MISMA escena base.
+                        # Si el pixel recupero, la caida se achica y deja de
+                        # pasar el umbral; si sigue desmontado, sigue igual.
+                        caida_conf = db_antes - db_conf
+                        caida_conf = caida_conf - nisar.corrimiento_db(
+                            caida_conf, np.isfinite(caida_conf)
+                        )
+                        # Sin dato en la fecha de control no se puede afirmar
+                        # que recupero: se deja pasar en vez de descartar.
+                        vigente = ~np.isfinite(caida_conf) | (
+                            caida_conf > temporal_meta["tolerancia_db"]
+                        )
+                        sobrevive &= vigente
+                        recuperado = ~vigente
+                        temporal_meta["fechas"].append(
+                            {
+                                "granulo": ruta.stem,
+                                "fecha": conf.fecha,
+                                "recuperado_ha": round(
+                                    nisar.hectareas(
+                                        int((recuperado & perdida_radar).sum()),
+                                        mpp_x,
+                                        mpp_y,
+                                    ),
+                                    1,
+                                ),
+                            }
+                        )
+                if temporal_meta["fechas"]:
+                    antes_px = int(perdida_radar.sum())
+                    perdida_radar = perdida_radar & sobrevive
+                    # La persistencia es pixel a pixel y deja huecos de 1 px
+                    # dentro de un bloque que si siguio: se cierra con la misma
+                    # mayoria 3x3 que ya usa el producto.
+                    perdida_radar = nisar.mayoria3(perdida_radar) & valido
+                    temporal_meta["disponible"] = True
+                    temporal_meta["recuperados_ha"] = round(
+                        nisar.hectareas(
+                            antes_px - int(perdida_radar.sum()), mpp_x, mpp_y
+                        ),
+                        1,
+                    )
+                    print(
+                        "temporal: HV sin recuperar en "
+                        f"{len(temporal_meta['fechas'])} fecha(s) "
+                        f"({', '.join(f['fecha'][:10] for f in temporal_meta['fechas'])}); "
+                        f"se descartan {temporal_meta['recuperados_ha']:.0f} ha"
+                    )
+                elif not temporal_meta["motivo"]:
+                    temporal_meta["motivo"] = "ninguna fecha posterior sirvio"
+                    print(
+                        "aviso: ninguna fecha posterior sirvio para confirmar; "
+                        "la perdida radar queda sin persistencia"
+                    )
+
         perdida = perdida_radar
         if args.verificar_s2:
             if ndvi_pre is None or not np.isfinite(ndvi_pre).any():
@@ -179,44 +359,59 @@ def main() -> int:
                 ndvi_post, usados_post, motivo = _ndvi(despues.fecha)
                 optico_meta["items_post"] = usados_post
                 if ndvi_post is not None:
+                    # La confirmacion es la CAIDA de NDVI, no un NDVI absoluto:
+                    # en el Este la referencia de bosque da 0,45 de mediana en la
+                    # estacion seca, asi que exigir NDVI > 0,55 dejaba pasar solo
+                    # el 6 % del area. El piso solo descarta pixeles ya desnudos.
+                    vegetado = ndvi_pre >= float(args.ndvi_piso)
                     confirmado = (
                         np.isfinite(ndvi_pre)
                         & np.isfinite(ndvi_post)
-                        & (ndvi_pre >= float(args.ndvi_bosque))
+                        & vegetado
                         & ((ndvi_post - ndvi_pre) <= -float(args.dndvi))
                     )
                     perdida = perdida_radar & confirmado
                     optico_meta["disponible"] = True
+                    optico_meta["ndvi_piso"] = float(args.ndvi_piso)
+                    optico_meta["vegetado_pct"] = round(
+                        100.0 * float(vegetado.sum()) / max(1, int(valido.sum())), 2
+                    )
                     print(
                         f"optico: NDVI cae >= {args.dndvi:g} en "
                         f"{100.0 * (perdida.sum() / max(1, perdida_radar.sum())):.0f}% "
-                        "de la perdida radar"
+                        f"de la perdida radar (piso NDVI {args.ndvi_piso:g})"
                     )
                 else:
                     optico_meta["motivo"] = motivo
         if not args.verificar_s2 or not optico_meta["disponible"]:
             optico_meta["motivo"] = optico_meta["motivo"] or "sin verificar"
-        ganancia = nisar.mayoria3(valido & (delta > umbral)) & valido
-
-        mpp_x = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
-        mpp_y = abs(float(ys[-1] - ys[0])) / max(1, len(ys) - 1)
-        mpp = mpp_x
+        candidato_mask = perdida_radar & ~perdida
+        if args.ganancia:
+            ganancia = nisar.mayoria3(valido & (delta > umbral)) & valido
+        else:
+            # El aumento de HV simetrico es casi todo speckle: pintarlo llena el
+            # mapa de azul y tapa la perdida. Se cuenta solo si se pide.
+            ganancia = np.zeros(valido.shape, dtype=bool)
 
         pixeles_validos = int(valido.sum())
         if pixeles_validos == 0:
             raise SystemExit("La caja no tiene pixeles validos en las dos fechas.")
         area_px_ha = mpp_x * mpp_y / 10000.0
         minimo_px = 0
+        candidato = candidato_mask
         if float(args.mmu_ha) > 0:
             minimo_px = max(1, int(round(float(args.mmu_ha) / area_px_ha)))
             perdida = nisar.filtrar_mmu(perdida, minimo_px)
+            candidato = nisar.filtrar_mmu(candidato, minimo_px)
             ganancia = nisar.filtrar_mmu(ganancia, minimo_px)
         perdida_px = int(perdida.sum())
+        candidato_px = int(candidato.sum())
         perdida_radar_ha = nisar.hectareas(int(perdida_radar.sum()), mpp_x, mpp_y)
         ganancia_px = int(ganancia.sum())
         bosque_px = int(pre_bosque.sum())
         area_ha = nisar.hectareas(pixeles_validos, mpp_x, mpp_y)
         perdida_ha = nisar.hectareas(perdida_px, mpp_x, mpp_y)
+        candidato_ha = nisar.hectareas(candidato_px, mpp_x, mpp_y)
         ganancia_ha = nisar.hectareas(ganancia_px, mpp_x, mpp_y)
         bosque_ha = nisar.hectareas(bosque_px, mpp_x, mpp_y)
         perdida_pct = 100.0 * perdida_px / pixeles_validos
@@ -247,16 +442,9 @@ def main() -> int:
                 "gray", nisar.normalizar(db_despues, vmin, vmax)
             )
             gris_despues = np.where(np.isfinite(db_despues)[..., None], gris_despues, 0)
-            gris_despues = np.where(
-                perdida[..., None],
-                np.array([205, 35, 35], dtype=np.uint8),
-                gris_despues,
-            )
-            gris_despues = np.where(
-                ganancia[..., None],
-                np.array([45, 95, 205], dtype=np.uint8),
-                gris_despues,
-            )
+            gris_despues = np.where(candidato[..., None], NARANJA, gris_despues)
+            gris_despues = np.where(perdida[..., None], ROJO, gris_despues)
+            gris_despues = np.where(ganancia[..., None], AZUL, gris_despues)
             alto_panel, ancho_panel = gris_antes.shape[:2]
             separacion = max(6, ancho_panel // 150)
             hueco = np.zeros((alto_panel, separacion, 3), dtype=np.uint8)
@@ -268,16 +456,11 @@ def main() -> int:
             lienzo = Image.fromarray(rgb)
             dibujo = ImageDraw.Draw(lienzo)
             fuente = nisar._fuente(max(12, int(alto_panel * 0.022)))
-            verificado = bool(args.verificar_s2 and optico_meta["disponible"])
-            etiqueta_despues = (
-                "rojo = pérdida confirmada" if verificado else "rojo = pérdida"
-            )
             for x0_panel, texto in (
                 (0, f"ANTES  {(antes.fecha or antes.ruta.stem)[:10]}"),
                 (
                     ancho_panel + separacion,
-                    f"DESPUÉS  {(despues.fecha or despues.ruta.stem)[:10]}"
-                    f"  ·  {etiqueta_despues}",
+                    f"DESPUÉS  {(despues.fecha or despues.ruta.stem)[:10]}",
                 ),
             ):
                 caja = dibujo.textbbox((0, 0), texto, font=fuente)
@@ -299,32 +482,33 @@ def main() -> int:
             vmin, vmax = nisar.limites(db_despues)
             base = nisar.paleta("gray", nisar.normalizar(db_despues, vmin, vmax))
             rgb = np.where(valido[..., None], base, 0)
-            rgb = np.where(
-                perdida[..., None],
-                np.array([205, 35, 35], dtype=np.uint8),
-                rgb,
-            )
-            rgb = np.where(
-                ganancia[..., None],
-                np.array([45, 95, 205], dtype=np.uint8),
-                rgb,
-            )
+            rgb = np.where(candidato[..., None], NARANJA, rgb)
+            rgb = np.where(perdida[..., None], ROJO, rgb)
+            rgb = np.where(ganancia[..., None], AZUL, rgb)
 
         confirmado = args.verificar_s2 and optico_meta["disponible"]
+        persistente = bool(temporal_meta["disponible"])
+        if confirmado and persistente:
+            leyenda_mascara = (
+                "rojo = pérdida confirmada y persistente · naranja = candidata"
+            )
+        elif confirmado:
+            leyenda_mascara = "rojo = pérdida confirmada · naranja = candidata"
+        elif persistente:
+            leyenda_mascara = "rojo = cambio persistente (sin confirmar óptico)"
+        else:
+            leyenda_mascara = "rojo = pérdida (cambio de HV, sin confirmar)"
         lineas = [
             f"NISAR GCOV · cambio HV · {antes.fecha or antes.ruta.stem} -> "
             f"{despues.fecha or despues.ruta.stem}",
             f"perdida {perdida_ha:.0f} ha ({perdida_pct:.1f}%) · "
-            f"umbral {umbral:g} dB · {mpp:.0f} m/px · EPSG:{rec_antes.epsg}",
+            f"dHV < -{umbral:g} dB · offset {offset_db:+.1f} dB · "
+            f"{mpp:.0f} m/px · ml {ml}",
             {
-                "mascara": (
-                    "rojo = pérdida confirmada con NDVI · azul = ganancia"
-                    if confirmado
-                    else "rojo = pérdida · azul = ganancia"
-                ),
+                "mascara": leyenda_mascara,
                 "delta": "rojo = caída de HV · azul = aumento",
                 "rgb": "R = antes · G = después · B = ΔHV",
-                "comparar": "izquierda = antes · derecha = después con el cambio encima",
+                "comparar": f"izquierda = antes · derecha = después · {leyenda_mascara}",
             }[args.modo],
         ]
         ancho, alto = nisar.guardar(
@@ -355,8 +539,12 @@ def main() -> int:
             "epsg": rec_antes.epsg,
             "mpp": round(mpp, 3),
             "modo": args.modo,
+            "indice": "dHV",
             "umbral_db": umbral,
             "hv_min_db": float(args.hv_min),
+            "multilook": ml,
+            "normalizado": not args.sin_normalizar,
+            "offset_db": round(offset_db, 2),
             "area_ha": round(area_ha, 1),
             "bosque_ha": round(bosque_ha, 1),
             "bosque": {
@@ -367,15 +555,18 @@ def main() -> int:
                 ),
             },
             "perdida_ha": round(perdida_ha, 1),
+            "perdida_candidata_ha": round(candidato_ha, 1),
             "perdida_radar_ha": round(perdida_radar_ha, 1),
             "perdida_pct": round(perdida_pct, 2),
             "perdida_bosque_pct": round(perdida_bosque_pct, 2),
             "ganancia_ha": round(ganancia_ha, 1),
+            "ganancia_activa": bool(args.ganancia),
             "delta_medio_perdida_db": round(delta_medio, 2),
             "optico": {
                 **optico_meta,
                 "verificado": bool(confirmado),
             },
+            "temporal": temporal_meta,
             "mmu_ha": float(args.mmu_ha),
             "mmu_px": minimo_px,
             "pixeles_validos": pixeles_validos,
@@ -388,8 +579,8 @@ def main() -> int:
     )
     if confirmado:
         print(
-            f"optico: {perdida_ha:.0f} ha confirmadas de {perdida_radar_ha:.0f} ha "
-            f"radar ({100.0 * perdida_ha / max(1e-9, perdida_radar_ha):.0f}%)"
+            f"optico: {perdida_ha:.0f} ha confirmadas + {candidato_ha:.0f} ha "
+            f"candidatas de {perdida_radar_ha:.0f} ha radar"
         )
     elif args.verificar_s2:
         print(f"aviso: sin confirmacion optica ({optico_meta.get('motivo')})")

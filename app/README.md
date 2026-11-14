@@ -596,8 +596,20 @@ El job `nisar_render` despacha por `producto`:
   `sqrt(HH/(HH+HV)) * 4·HV/(HH+HV)`, calculado en potencia lineal, con media,
   percentiles y hectáreas.
 - **Cambio de cobertura** (`nisar_cambio.py`): ΔHV entre dos fechas del mismo
-  track/frame. Aplica una mayoría 3×3, marca pérdida/ganancia y reporta
-  hectáreas, porcentaje del área y del bosque.
+  track/frame. **Resta el corrimiento radiométrico del par** (la mediana de ΔHV:
+  dos pasadas pueden venir 3-4 dB distintas) y promedia speckle con multilook en
+  potencia (~50 m) antes de umbralar. Aplica mayoría 3×3 y una unidad mínima de
+  mapeo de 0.5 ha. Con **Confirmar con Sentinel-2**, rojo = pérdida confirmada
+  por caída de NDVI y naranja = candidata solo-radar; sin confirmar, todo el
+  cambio se pinta rojo y el pie lo aclara. Con **Persistencia temporal**, la
+  caída se vuelve a medir contra la misma escena base en la fecha siguiente: si
+  el pixel recuperó, no era pérdida. Usa los `.h5` que ya están en disco (no
+  descarga nada) y, si no hay fecha posterior, sigue sin persistencia y avisa.
+  La ganancia de HV es opcional
+  (`--ganancia`) porque a este nivel de ruido es casi toda speckle. Medido contra
+  la referencia NDVI del Este, el radar solo queda en F1 denso ≈ 0.27: es un mapa
+  de cambio/screening, no un detector operativo de deforestación (ver
+  `validacion/README.md`).
 - **Serie temporal** (`nisar_serie.py`): usa todas las fechas locales del mismo
   track/frame/colección (mínimo 2), arma la serie de HV/HH/RVI, el compuesto
   mediano y el mapa CUSUM con la fecha de cambio y hectáreas por fecha.

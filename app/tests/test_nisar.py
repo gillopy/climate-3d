@@ -519,7 +519,11 @@ class VisorNisar(unittest.TestCase):
 
         args_sin = sin.pasos[-1].args
         self.assertNotIn("--verificar-s2", args_sin)
-        self.assertNotIn("--mmu-ha", args_sin)
+        # La MMU es del producto radar, no de la confirmacion optica: sin NDVI
+        # tambien se descartan los bloques menores a 0,5 ha.
+        self.assertIn("--mmu-ha", args_sin)
+        self.assertEqual(args_sin[args_sin.index("--mmu-ha") + 1], "0.5")
+        self.assertEqual(args_sin[args_sin.index("--umbral") + 1], "3")
 
     def test_receta_cambio_rechaza_la_misma_fecha(self):
         with self.assertRaises(ValueError):

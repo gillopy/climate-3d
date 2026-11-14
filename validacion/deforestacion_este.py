@@ -109,7 +109,13 @@ def main() -> int:
     ap.add_argument("--dndvi-perdida", type=float, default=0.20)
     ap.add_argument("--estable", type=float, default=0.10)
     ap.add_argument("--hv-min", type=float, default=-15.5)
-    ap.add_argument("--umbral", type=float, default=3.0)
+    ap.add_argument("--umbral", type=float, default=2.0)
+    ap.add_argument("--ml", type=int, default=0, help="0 = multilook automatico (~50 m)")
+    ap.add_argument(
+        "--sin-normalizar",
+        action="store_true",
+        help="no restar el corrimiento global de ΔHV (producto viejo)",
+    )
     ap.add_argument("--muestras", type=int, default=250)
     ap.add_argument("--separacion", type=int, default=2)
     ap.add_argument("--out", default=str(RAIZ / "validacion" / "este_2026"))
@@ -132,21 +138,33 @@ def main() -> int:
             raise SystemExit("Las escenas no comparten grilla.")
         hv_antes, xs, ys = nisar.orientar(rec_antes)
         hv_despues, _, _ = nisar.orientar(rec_despues)
+        mpp_x = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
+        mpp_y = abs(float(ys[0] - ys[-1])) / max(1, len(ys) - 1)
+        ml = max(1, int(args.ml)) if args.ml > 0 else nisar.ventana_para(mpp_x, 50.0, 5)
+        if ml > 1:
+            hv_antes = nisar.multilook(hv_antes, ml)
+            hv_despues = nisar.multilook(hv_despues, ml)
         db_antes = nisar.a_db(hv_antes)
         db_despues = nisar.a_db(hv_despues)
+        offset_db = 0.0
+        if not args.sin_normalizar:
+            offset_db = nisar.corrimiento_db(db_despues - db_antes)
+        dhv = db_despues - db_antes - offset_db
         track, frame = antes.track, antes.frame
         fecha_antes, fecha_despues = antes.fecha, despues.fecha
         epsg = rec_antes.epsg
 
-    dhv = db_despues - db_antes
     forma = dhv.shape
-    mpp_x = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
-    mpp_y = abs(float(ys[0] - ys[-1])) / max(1, len(ys) - 1)
     transform = Affine.translation(
         float(xs[0]) - mpp_x / 2.0, float(ys[0]) + mpp_y / 2.0
     ) * Affine.scale(mpp_x, -mpp_y)
     crs = f"EPSG:{epsg}"
-    print(f"grilla {forma[0]}x{forma[1]} Â· {mpp_x:.0f} m/px Â· track {track} frame {frame}")
+    print(f"grilla {forma[0]}x{forma[1]} · {mpp_x:.0f} m/px · track {track} frame {frame}")
+    print(
+        f"producto: dHV < -{args.umbral:g} dB - multilook {ml} - "
+        f"offset {offset_db:+.2f} dB"
+        + (" (sin normalizar)" if args.sin_normalizar else "")
+    )
 
     print(f"NDVI previo {args.pre_desde} a {args.pre_hasta}")
     ndvi_pre = _cache_npy(
@@ -239,7 +257,8 @@ def main() -> int:
     sesgo = (area_pred - area_ref) / area_ref * 100.0 if area_ref else 0.0
 
     # Curva de umbral sobre el mapa denso (la muestra balanceada no da precisiÃ³n).
-    umbrales = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0]
+    # Sobre ΔHV ya normalizado y con multilook, el piso de ruido baja a ~1,5 dB.
+    umbrales = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
     curva = []
     for umbral in umbrales:
         mascara = (
@@ -311,7 +330,13 @@ def main() -> int:
             "dndvi_perdida": args.dndvi_perdida,
             "estable": args.estable,
         },
-        "producto": {"hv_min_db": args.hv_min, "umbral_db": args.umbral},
+        "producto": {
+            "hv_min_db": args.hv_min,
+            "umbral_db": args.umbral,
+            "multilook": ml,
+            "normalizado": not args.sin_normalizar,
+            "offset_db": round(offset_db, 2),
+        },
         "pixeles": {
             "validos": int(valido.sum()),
             "referencia_perdida": int(perdida_ref.sum()),
@@ -469,7 +494,10 @@ def _informe(ruta, meta, tabla, ic, split, curva):
         f"Î”NDVI â‰¤ -{meta['referencia']['dndvi_perdida']:.2f}; "
         f"estable: |Î”NDVI| â‰¤ {meta['referencia']['estable']:.2f}",
         f"- Producto: HV antes > {meta['producto']['hv_min_db']:g} dB y "
-        f"Î”HV < -{meta['producto']['umbral_db']:g} dB, mayorÃ­a 3Ã—3",
+        f"Î”HV < -{meta['producto']['umbral_db']:g} dB, mayorÃ­a 3Ã—3, "
+        f"multilook {meta['producto']['multilook']}, "
+        f"offset del par {meta['producto']['offset_db']:+.2f} dB"
+        f"{' (sin normalizar)' if not meta['producto']['normalizado'] else ''}",
         f"- Muestras ciegas: {meta['muestras']}",
         "",
         "## MÃ©tricas",

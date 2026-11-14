@@ -2395,13 +2395,26 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             modo_cambio = str(params.get("modo_cambio") or "mascara").lower()
             if modo_cambio not in ("delta", "mascara", "rgb", "comparar"):
                 modo_cambio = "mascara"
+            try:
+                # ΔHV se resta el corrimiento del par y se promedia el speckle:
+                # 2 dB queda por encima del piso de ruido (~1,5 dB a 50 m).
+                umbral = max(0.5, min(abs(float(params.get("umbral", 2.0))), 20.0))
+            except (TypeError, ValueError):
+                umbral = 2.0
             verificar = bool(params.get("verificar_s2"))
             try:
-                mmu_ha = max(
-                    0.0, float(params.get("mmu_ha", 0.5 if verificar else 0.0))
+                # Confirmacion temporal con los .h5 que ya estan en disco: no
+                # agrega descargas. 0 apaga la persistencia.
+                confirmar_temporal = max(
+                    0, min(int(params.get("confirmar_temporal", 1)), 3)
                 )
             except (TypeError, ValueError):
-                mmu_ha = 0.5 if verificar else 0.0
+                confirmar_temporal = 1
+            try:
+                # Un desmonte es un bloque: 0,5 ha descarta el moteado de speckle.
+                mmu_ha = max(0.0, float(params.get("mmu_ha", 0.5)))
+            except (TypeError, ValueError):
+                mmu_ha = 0.5
             render = Step(
                 kind="render",
                 label=f"comparando fechas a {px} px",
@@ -2415,6 +2428,8 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                     "--umbral", f"{umbral:g}",
                     "--hv-min", f"{hv_min:g}",
                     *(["--verificar-s2"] if verificar else []),
+                    *(["--confirmar-temporal", str(confirmar_temporal)]
+                      if confirmar_temporal > 0 else []),
                     *(["--mmu-ha", f"{mmu_ha:g}"] if mmu_ha > 0 else []),
                     "--out", str(work / f"nisar_cambio_{modo_cambio}_{px}.png"),
                     "--geojson", geojson,
