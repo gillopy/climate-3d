@@ -1463,6 +1463,18 @@ def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
 _PASO_LST = 60          # minutos entre slots: el ABI L2 LST publica uno por hora
 _MAX_CUADROS_LST = 72   # 3 dias a un cuadro por hora
 _TOLERANCIA_LST = timedelta(minutes=30)
+#: Horas que puede promediar el compuesto temporal del poster.
+_COMPUESTOS_LST = (1, 3, 6)
+
+
+def _compuesto_lst(params: dict[str, Any]) -> int:
+    """Horas del compuesto temporal, acotadas a la lista cerrada de la UI."""
+    try:
+        horas = int(params.get("compuesto", 1) or 1)
+    except (TypeError, ValueError):
+        return 1
+    return min(_COMPUESTOS_LST, key=lambda valor: abs(valor - horas))
+
 
 
 def _ultimos_goes_lst(sat: str, n: int) -> list[datetime]:
@@ -1549,6 +1561,10 @@ def _goes_lst(params: dict[str, Any], work: Path) -> Plan:
 
     desde = desde.replace(minute=0, second=0, microsecond=0)
 
+    # El compuesto promedia horas HACIA ATRAS: hay que bajar las anteriores.
+    compuesto = _compuesto_lst(params)
+    previas = timedelta(minutes=_PASO_LST * (compuesto - 1))
+
     descarga = Step(
         kind="download",
         label=(f"bajando los ultimos {n} slots de LST ({sat})"
@@ -1556,7 +1572,7 @@ def _goes_lst(params: dict[str, Any], work: Path) -> Plan:
         script="descargar/descargar_goes_lst.py",
         args=[
             "--sat", sat,
-            "--desde", desde.isoformat(),
+            "--desde", (desde - previas).isoformat(),
             "--hasta", (desde + timedelta(minutes=_PASO_LST * n)).isoformat(),
             "--paso", str(_PASO_LST),
         ],
@@ -1572,6 +1588,10 @@ def _goes_lst(params: dict[str, Any], work: Path) -> Plan:
         "--n", str(n),
         "--paso", str(paso),
         "--px", str(px),
+        # Sin huecos negros: fondo Blue Marble y puente corto sobre la textura.
+        "--fondo", "base",
+        "--relleno", "2",
+        "--compuesto", str(compuesto),
         *marco,
         "--borde", _borde_paraguay(params),
         *(["--limpio"] if _bool(params, "paraguay") else []),

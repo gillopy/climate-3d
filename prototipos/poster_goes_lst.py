@@ -11,6 +11,19 @@ The design is the one from `poster_goes_truecolor.py` (white page, inscribed
 Orthographic globe, thin halo, no graticule), with a product-specific cold-to-warm
 ramp and a two-scale legend: Fahrenheit above the bar, Celsius below it.
 
+Two controls close the holes the retrieval leaves, without inventing weather:
+
+  * `--fondo base` paints the Blue Marble (ocean + shaded relief) under the data,
+    so "no retrieval" reads as terrain instead of a black hole. The base is
+    fetched once from GIBS and cached, then sampled with the same lon/lat grid
+    the data uses, so it costs nothing per animation frame.
+  * `--relleno N` grows the field up to N output-grid pixels into the gaps with
+    the mean of its valid neighbours. At 2 km per pixel, 2 px is a 4 km bridge:
+    enough to close the salt-and-pepper texture, not enough to fake a cloud deck.
+
+`--compuesto H` averages the H hours ending at the frame (poster only: it would
+flatten the diurnal cycle if used across an hourly animation).
+
 Reused from shared code (never modified here):
 
   * `poster_goes_truecolor` — `_orto_franja`, `_alfa`, `FILAS`, `dibujar`, `WHITE`.
@@ -34,10 +47,12 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
@@ -53,6 +68,12 @@ PX = 2712
 TOPE = 5424                       # native LST 2 km grid: 5424 x 5424
 CENTRO = (-75.2, 0.0)
 VMIN, VMAX = -53.0, 67.0          # degrees C, the reference image scale
+
+#: Base map under the data: ocean + shaded relief, a static GIBS layer.
+CAPA_FONDO = "BlueMarble_ShadedRelief_Bathymetry"
+GIBS = "https://wvs.earthdata.nasa.gov/api/v1/snapshot"
+CACHE_FONDO = SALIDAS / "_fondo_lst"
+ANCHO_FONDO = 4096               # 4096x2048 is enough for a 2712 px globe
 
 #: Product ramp, cold to warm, in the exact order the spec fixes.
 PALETA = (
@@ -166,9 +187,148 @@ def _campo_lst(nc: Path, tope: int):
     return campo, x, y, h, lon0
 
 
+def _leer_base(ancho: int, capa: str = CAPA_FONDO) -> np.ndarray:
+    """Blue Marble plate carree (2:1), downloaded once and cached in SALIDAS."""
+    destino = CACHE_FONDO / f"{capa}_{ancho}.jpg"
+    if not (destino.exists() and destino.stat().st_size > 50_000):
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        url = (f"{GIBS}?REQUEST=GetSnapshot&TIME=2020-01-01T00:00:00Z"
+               "&BBOX=-90,-180,90,180&CRS=EPSG:4326"
+               f"&LAYERS={capa}&FORMAT=image/jpeg"
+               f"&WIDTH={ancho}&HEIGHT={ancho // 2}")
+        with urllib.request.urlopen(url, timeout=180) as respuesta:
+            datos = respuesta.read()
+        if len(datos) < 50_000:
+            raise RuntimeError(
+                f"GIBS devolvio {len(datos)} B para el fondo: no es una imagen")
+        parcial = destino.with_suffix(".jpg.parcial")
+        parcial.write_bytes(datos)
+        parcial.replace(destino)
+    with Image.open(destino) as imagen:
+        return np.asarray(imagen.convert("RGB"))
+
+
+def _muestrear_base(base: np.ndarray, lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
+    """Bilinear sample of the plate carree base at the globe lon/lat grid."""
+    alto, ancho = base.shape[:2]
+    lon = np.where(np.isfinite(lon), ((np.asarray(lon, np.float64) + 180.0) % 360.0) - 180.0,
+                   np.nan)
+    u = (lon + 180.0) / 360.0 * (ancho - 1)
+    v = (90.0 - np.asarray(lat, np.float64)) / 180.0 * (alto - 1)
+    # Off-globe pixels land on the frame edge: the disk alpha hides them anyway.
+    u = np.clip(np.nan_to_num(u, nan=0.0), 0.0, ancho - 1.000001)
+    v = np.clip(np.nan_to_num(v, nan=0.0), 0.0, alto - 1.000001)
+    x0 = u.astype(np.int32)
+    y0 = v.astype(np.int32)
+    x1 = np.minimum(x0 + 1, ancho - 1)
+    y1 = np.minimum(y0 + 1, alto - 1)
+    fx = (u - x0)[..., None]
+    fy = (v - y0)[..., None]
+    b = base.astype(np.float32)
+    arriba = b[y0, x0] * (1.0 - fx) + b[y0, x1] * fx
+    abajo = b[y1, x0] * (1.0 - fx) + b[y1, x1] * fx
+    return (arriba * (1.0 - fy) + abajo * fy).astype(np.uint8)
+
+
+def _fondo_globo(nc: Path, sat: str, px: int, centro: tuple[float, float],
+                 recorte: float, ancho: int, capa: str = CAPA_FONDO) -> np.ndarray:
+    """Blue Marble painted on the same orthographic disk the data uses.
+
+    The geometry is the one already in the output space (`_orto_franja`), so the
+    base lines up with the field pixel for pixel and no re-projection runs per
+    frame: the result is cached as a PNG for the whole animation.
+    """
+    llave = (f"fondo_{sat}_{capa}_{px}_{centro[0]:g}_{centro[1]:g}"
+             f"_{recorte:g}_{ancho}.png")
+    cacheado = CACHE_FONDO / llave
+    if cacheado.exists():
+        with Image.open(cacheado) as imagen:
+            return np.asarray(imagen.convert("RGB"))
+
+    base = _leer_base(ancho, capa)
+    escala, _h, _lon0 = radio_visible(nc, centro, recorte)
+    salida = np.zeros((px, px, 3), np.uint8)
+    for f0 in range(0, px, tc.FILAS):
+        f1 = min(f0 + tc.FILAS, px)
+        lon, lat, _rho, _dentro = tc._orto_franja(px, escala, centro, f0, f1)
+        salida[f0:f1] = _muestrear_base(base, lon, lat)
+    del base
+
+    cacheado.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(salida).save(cacheado)
+    return salida
+
+
+def _rellenar(campo: np.ndarray, pasadas: int) -> np.ndarray:
+    """Grow the field up to `pasadas` grid pixels into the gaps.
+
+    Each pass fills an empty pixel with the mean of its valid 8-neighbours, so
+    the bridge follows the surrounding temperature instead of a flat colour. It
+    never touches ocean: that has no neighbour with data, ever.
+    """
+    if pasadas <= 0:
+        return campo
+    salida = campo.copy()
+    alto, ancho = salida.shape
+    for _ in range(pasadas):
+        vacio = ~np.isfinite(salida)
+        if not vacio.any():
+            break
+        borde = np.pad(salida, 1, constant_values=np.nan)
+        suma = np.zeros_like(salida)
+        cuenta = np.zeros(salida.shape, np.float32)
+        for dy in range(3):
+            for dx in range(3):
+                if dy == 1 and dx == 1:
+                    continue
+                vecino = borde[dy:dy + alto, dx:dx + ancho]
+                valido = np.isfinite(vecino)
+                suma += np.where(valido, vecino, 0.0)
+                cuenta += valido
+        relleno = vacio & (cuenta > 0)
+        salida[relleno] = suma[relleno] / cuenta[relleno]
+    return salida
+
+
+def _campo_compuesto(nc: Path, tope: int, horas: int, sat: str):
+    """Mean LST of the `horas` hours ending at this granule (1 = the granule).
+
+    Returns `(campo, x, y, h, lon0, usadas)`. Only the hours already on disk take
+    part: a missing granule just narrows the window instead of killing the
+    render, and one available hour behaves exactly like `--compuesto 1`.
+    """
+    if horas <= 1:
+        campo, x, y, h, lon0 = _campo_lst(nc, tope)
+        return campo, x, y, h, lon0, 1
+    instante = fecha_de(nc)
+    if instante is None:
+        campo, x, y, h, lon0 = _campo_lst(nc, tope)
+        return campo, x, y, h, lon0, 1
+    por_hora = {fecha_de(f): f for f in carpeta(sat).glob("*.nc") if fecha_de(f)}
+    campos = []
+    x = y = h = lon0 = None
+    for i in range(horas):
+        archivo = por_hora.get(instante - timedelta(hours=horas - 1 - i))
+        if archivo is None:
+            continue
+        campo, x, y, h, lon0 = _campo_lst(archivo, tope)
+        campos.append(campo)
+    if not campos:
+        campo, x, y, h, lon0 = _campo_lst(nc, tope)
+        return campo, x, y, h, lon0, 1
+    if len(campos) == 1:
+        return campos[0], x, y, h, lon0, 1
+    with np.errstate(invalid="ignore"):
+        media = np.nanmean(np.stack(campos), axis=0).astype(np.float32)
+    usadas = len(campos)
+    del campos
+    return media, x, y, h, lon0, usadas
+
+
 def componer_lst(nc: Path, args) -> tuple[np.ndarray, float, dict]:
     """LST granule -> RGBA of the Orthographic globe, with the true color geometry."""
-    campo, x, y, h, lon0 = _campo_lst(nc, args.tope)
+    horas = int(getattr(args, "compuesto", 1) or 1)
+    campo, x, y, h, lon0, usadas = _campo_compuesto(nc, args.tope, horas, args.sat)
 
     finitos = np.isfinite(campo)
     datos = campo[finitos]
@@ -182,6 +342,18 @@ def componer_lst(nc: Path, args) -> tuple[np.ndarray, float, dict]:
         estadisticas = {"min": float("nan"), "mean": float("nan"), "max": float("nan")}
     cobertura = float(datos.size) / float(campo.size) if campo.size else 0.0
     del datos, finitos
+
+    relleno = int(getattr(args, "relleno", 0) or 0)
+    if relleno > 0:
+        campo = _rellenar(campo, relleno)
+    cubiertos = float(np.isfinite(campo).sum()) / float(campo.size) if campo.size else 0.0
+
+    fondo = None
+    if getattr(args, "fondo", "negro") == "base":
+        fondo = _fondo_globo(nc, args.sat, args.px, tuple(args.centro),
+                             args.recorte,
+                             int(getattr(args, "fondo_ancho", ANCHO_FONDO)),
+                             getattr(args, "capa_fondo", CAPA_FONDO))
 
     escala, _h, _lon0 = radio_visible(nc, tuple(args.centro), args.recorte)
     lut = _lut()
@@ -206,7 +378,11 @@ def componer_lst(nc: Path, args) -> tuple[np.ndarray, float, dict]:
         n = len(lut)
         indice = (normalizado * (n - 1)).astype(np.uint16 if n > 256 else np.uint8)
         bloque = lut[indice]
-        bloque[~np.isfinite(valores)] = 0
+        vacio = ~np.isfinite(valores)
+        if fondo is None:
+            bloque[vacio] = 0
+        else:
+            bloque[vacio] = fondo[f0:f1][vacio]
 
         rgb[f0:f1] = bloque
         alfa[f0:f1] = (a * 255.0).astype(np.uint8)
@@ -215,13 +391,28 @@ def componer_lst(nc: Path, args) -> tuple[np.ndarray, float, dict]:
 
     # No bright rim: bilinear display instead of lanczos (no overshoot).
     args.interp = "bilinear"
-    stats = {"px": px, "validos": validos, "cobertura": cobertura, **estadisticas}
+    stats = {"px": px, "validos": validos, "cobertura": cobertura,
+             "cubiertos": cubiertos, "relleno": relleno, "compuesto": usadas,
+             "fondo": getattr(args, "fondo", "negro"), **estadisticas}
     return np.dstack([rgb, alfa]), escala, stats
 
 
 def _numero(v: float) -> str:
     """Number with a typographic minus, like the other poster legends."""
     return f"{v:g}".replace("-", "\u2212")
+
+
+def _etiqueta_tiempo(nc: Path, horas: int) -> str:
+    """Slot label; with a temporal composite the window is spelled out."""
+    if horas <= 1:
+        return time_label_nc(nc)
+    fin = fecha_de(nc)
+    if fin is None:
+        return time_label_nc(nc)
+    inicio = fin - timedelta(hours=horas - 1) - timedelta(hours=3)
+    final = fin - timedelta(hours=3)
+    fecha = time_label_nc(nc).split(" \u00b7 ")[0]
+    return f"{fecha} \u00b7 COMPUESTO {inicio:%H:%M}\u2013{final:%H:%M} UTC-3"
 
 
 def _leyenda(fig, args) -> None:
@@ -278,6 +469,19 @@ def main(argv=None) -> int:
     ap.add_argument("--dpi", type=int, help="dpi; inferred from --px when omitted")
     ap.add_argument("--tope", type=int, default=TOPE,
                     help=f"source grid of the field (default {TOPE}, native 2 km)")
+    ap.add_argument("--fondo", choices=("base", "negro"), default="base",
+                    help="under the data: the Blue Marble base map or black "
+                         "(default base: no black holes)")
+    ap.add_argument("--fondo-ancho", type=int, default=ANCHO_FONDO,
+                    help=f"width of the cached base map (default {ANCHO_FONDO})")
+    ap.add_argument("--capa-fondo", default=CAPA_FONDO,
+                    help=f"GIBS layer used as the base map (default {CAPA_FONDO})")
+    ap.add_argument("--relleno", type=int, default=2, metavar="N",
+                    help="grid pixels to grow the field into the gaps "
+                         "(default 2; 0 = off)")
+    ap.add_argument("--compuesto", type=int, default=1, metavar="H",
+                    help="average the H hours ending at the frame "
+                         "(default 1: this frame only; >1 is poster-only)")
     ap.add_argument("--centro", nargs=2, type=float, metavar=("LON", "LAT"),
                     default=list(CENTRO), help="globe center")
     ap.add_argument("--recorte", type=float, default=1.0,
@@ -318,8 +522,9 @@ def main(argv=None) -> int:
             destino = salida / f"cuadro_{i:03d}.png"
             if destino.exists() and not args.forzar:
                 continue
-            disco, escala, _ = componer_lst(nc, args)
-            fig = tc.dibujar(disco, escala, args.titulo, time_label_nc(nc),
+            disco, escala, cuadro = componer_lst(nc, args)
+            fig = tc.dibujar(disco, escala, args.titulo,
+                             _etiqueta_tiempo(nc, cuadro["compuesto"]),
                              args.fuente, args, args.px)
             _leyenda(fig, args)
             parcial = destino.with_suffix(".png.parcial")
@@ -339,9 +544,13 @@ def main(argv=None) -> int:
     print(f"globe {stats['px']} px | {stats['validos']:,} px with data")
     print(f"field {stats['min']:.1f} to {stats['max']:.1f} C | "
           f"mean {stats['mean']:.1f} C | {stats['cobertura'] * 100.0:.1f} % of the grid")
+    print(f"fondo {stats['fondo']} | relleno {stats['relleno']} px | "
+          f"compuesto {stats['compuesto']} h | con dato tras relleno "
+          f"{stats['cubiertos'] * 100.0:.1f} %", flush=True)
 
-    fig = tc.dibujar(disco, escala, args.titulo, time_label_nc(nc), args.fuente,
-                     args, args.px)
+    fig = tc.dibujar(disco, escala, args.titulo,
+                     _etiqueta_tiempo(nc, stats["compuesto"]),
+                     args.fuente, args, args.px)
     _leyenda(fig, args)
     out = Path(args.out) if args.out else (
         SALIDAS / f"poster_{args.sat}_LST_{instante:%Y-%m-%dT%H%M}.png")

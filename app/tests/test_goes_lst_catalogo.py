@@ -13,6 +13,7 @@ These fix the public contract of the product, never the network:
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -69,7 +70,8 @@ class Controles(unittest.TestCase):
             {
                 "snapshot", "paraguay", "margen",
                 "satelite", "ventana", "ultimos", "ultimos_n", "ultimo",
-                "hora", "resolucion", "hora_desde", "hora_hasta", "animar", "fps",
+                "hora", "resolucion", "compuesto",
+                "hora_desde", "hora_hasta", "animar", "fps",
             },
         )
         self.assertNotIn("minuto", self.params)
@@ -101,6 +103,13 @@ class Controles(unittest.TestCase):
             [o.value for o in resolucion.options],
             ["1400", "1800", "2000", "2400", "2712", "3200", "4000"],
         )
+
+    def test_compuesto_temporal(self):
+        compuesto = self.params["compuesto"]
+        self.assertEqual(compuesto.kind, "select")
+        self.assertEqual(compuesto.default, "1")
+        self.assertEqual([o.value for o in compuesto.options], ["1", "3", "6"])
+        self.assertIn("instantanea", compuesto.help)
 
     def test_animacion(self):
         self.assertEqual(self.params["animar"].kind, "toggle")
@@ -165,6 +174,26 @@ class Plan(unittest.TestCase):
         self.assertNotIn("--frames", render.args)
         self.assertNotIn("animate", [p.kind for p in plan.pasos])
 
+    def test_el_render_pide_fondo_y_relleno(self):
+        render = [p for p in self._plan().pasos if p.kind == "render"][0]
+        self.assertEqual(render.args[render.args.index("--fondo") + 1], "base")
+        self.assertEqual(render.args[render.args.index("--relleno") + 1], "2")
+        self.assertEqual(render.args[render.args.index("--compuesto") + 1], "1")
+
+    def test_el_compuesto_adelanta_la_descarga(self):
+        plan = self._plan(compuesto="3")
+
+        descarga = [p for p in plan.pasos if p.kind == "download"][0]
+        self.assertEqual(descarga.args[descarga.args.index("--desde") + 1],
+                         "2026-11-12T15:00:00")
+        render = [p for p in plan.pasos if p.kind == "render"][0]
+        self.assertEqual(render.args[render.args.index("--compuesto") + 1], "3")
+
+    def test_el_compuesto_se_acota_a_la_lista(self):
+        self.assertEqual(recipes._compuesto_lst({"compuesto": "5"}), 6)
+        self.assertEqual(recipes._compuesto_lst({"compuesto": "abc"}), 1)
+        self.assertEqual(recipes._compuesto_lst({}), 1)
+
     def test_animacion_horaria_usa_frames(self):
         with mock.patch.object(
             recipes,
@@ -199,6 +228,24 @@ class Plan(unittest.TestCase):
         self.assertEqual(render.args[render.args.index("--desde") + 1],
                          "2026-11-12T15:00")
         self.assertEqual(render.args[render.args.index("--n") + 1], "1")
+
+
+class FechasDisponibles(unittest.TestCase):
+    """The calendar reads the granules already on disk, never the network."""
+
+    def test_lee_los_granulos_de_lst(self):
+        nombre = ("OR_ABI-L2-LST2KMF-M6_G19_s20263172200207"
+                  "_e20263172209515_c20263172214319.nc")
+        with tempfile.TemporaryDirectory() as tmp:
+            carpeta = Path(tmp) / "goes_lst_g19"
+            carpeta.mkdir()
+            (carpeta / nombre).write_bytes(b"x")
+            with mock.patch.dict("os.environ", {"CLIMATE3D_DATOS": tmp}):
+                origen, fechas = catalog.available_dates(
+                    catalog.get_product("goes_lst"), {"satelite": "G19"},
+                )
+        self.assertEqual(origen, "descubierto")
+        self.assertIn("2026-11-13", fechas)
 
 
 if __name__ == "__main__":

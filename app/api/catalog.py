@@ -519,7 +519,8 @@ PRODUCTS: list[Product] = [
                       default=_rango(), enabled_when={"ultimos": False}),
             *_params_ultimos(),
             *_params_cuadro(),
-            ParamSpec(name="resolucion", label="Resolucion", kind="select", default="2712", options=_RESOLUCIONES),
+            ParamSpec(name="resolucion", label="Resolucion", kind="select",
+                      default="2712", options=_RESOLUCIONES),
             ParamSpec(
                 name="hora_desde",
                 label="Desde (UTC)",
@@ -583,6 +584,19 @@ PRODUCTS: list[Product] = [
             ),
             ParamSpec(name="resolucion", label="Resolucion", kind="select",
                       default="2712", options=_RESOLUCIONES),
+            ParamSpec(
+                name="compuesto",
+                label="Compuesto temporal (h)",
+                kind="select",
+                default="1",
+                options=[
+                    ParamOption(value="1", label="1 h (cuadro instantaneo)"),
+                    ParamOption(value="3", label="3 h (menos huecos)"),
+                    ParamOption(value="6", label="6 h (poster, mas suave)"),
+                ],
+                help="promedia las horas anteriores para tapar nubes; con mas de una "
+                     "hora el cuadro deja de ser una instantanea",
+            ),
             ParamSpec(
                 name="hora_desde",
                 label="Desde (UTC)",
@@ -1403,6 +1417,11 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
     if product.id in ("goes_dust", "goes_airmass", "goes_firetemp"):
         banda = "C07" if product.id == "goes_firetemp" else "C13"
         datos = raiz / f"goes_{banda.lower()}_{str(params.get('satelite', 'G19')).lower()}"
+        if datos.is_dir():
+            encontradas |= _fechas_de_nombres([f.name for f in datos.glob("*.nc")], _DIA_GOES)
+
+    if product.id == "goes_lst":
+        datos = raiz / f"goes_lst_{str(params.get('satelite', 'G19')).lower()}"
         if datos.is_dir():
             encontradas |= _fechas_de_nombres([f.name for f in datos.glob("*.nc")], _DIA_GOES)
 
