@@ -1,0 +1,21 @@
+{
+ "fuente": "D:\\Users\\guill\\dataset era5\\nisar\\NISAR_L2_GCOV_PROVISIONAL_V1\\NISAR_L2_PR_GCOV_015_161_A_167_2005_DHDH_A_20260321T095802_20260321T095839_P05023_N_F_J_001.h5",
+ "salida": "demo\\img\\despues_0321.png",
+ "bbox": [
+  -61.12896,
+  -20.856085,
+  -61.062527,
+  -20.81036
+ ],
+ "epsg": 32720,
+ "banda": "frequencyA",
+ "polarizaciones": [
+  "HV"
+ ],
+ "modo": "gris",
+ "tamano": [
+  349,
+  302
+ ],
+ "metros_por_px": 20.0
+}
