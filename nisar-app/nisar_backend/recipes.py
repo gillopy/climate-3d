@@ -184,8 +184,7 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
     elif nivel != "GCOV" and producto != "descarga":
         raise ValueError(
             f"El producto {producto} usa GCOV; la escena elegida es {nivel}. "
-            "Elegí una escena GCOV. GSLC queda como búsqueda y "
-            "descarga hasta tener su producto."
+            "Elegí una escena GCOV."
         )
 
     granulo = _nisar_nombre(str(params.get("granulo") or "").strip(), "granulo")
@@ -269,25 +268,40 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             expected=5,
         )
     elif producto == "sme2":
-        algoritmo = str(params.get("algoritmo") or "DSG").strip().upper()
-        if algoritmo not in ("DSG", "PMI", "TSR"):
-            algoritmo = "DSG"
-        solo_calidad = bool(params.get("solo_calidad", False))
-        render = Step(
-            kind="render",
-            label=f"humedad del suelo {algoritmo} a {px} px",
-            script="prototipos/nisar_sme2.py",
-            args=[
-                "--h5", str(h5),
-                "--bbox", bbox_final,
-                "--px", str(px),
-                "--algoritmo", algoritmo,
-                "--out", str(work / f"nisar_sme2_{algoritmo.lower()}_{px}.png"),
-                "--geojson", geojson,
-                *(["--solo-calidad"] if solo_calidad else []),
-            ],
-            expected=5,
-        )
+        algoritmo = str(params.get("algoritmo") or "PMI").strip().upper()
+        if algoritmo not in ("DSG", "PMI", "TSR", "COMPARAR"):
+            algoritmo = "PMI"
+        if algoritmo == "COMPARAR":
+            render = Step(
+                kind="render",
+                label=f"comparando DSG/PMI/TSR a {px} px",
+                script="prototipos/nisar_sme2_calibracion.py",
+                args=[
+                    "--h5", str(h5),
+                    "--bbox", bbox_final,
+                    "--px", str(px),
+                    "--out", str(work / f"nisar_sme2_comparar_{px}.png"),
+                    "--geojson", geojson,
+                ],
+                expected=8,
+            )
+        else:
+            solo_calidad = bool(params.get("solo_calidad", False))
+            render = Step(
+                kind="render",
+                label=f"humedad del suelo {algoritmo} a {px} px",
+                script="prototipos/nisar_sme2.py",
+                args=[
+                    "--h5", str(h5),
+                    "--bbox", bbox_final,
+                    "--px", str(px),
+                    "--algoritmo", algoritmo,
+                    "--out", str(work / f"nisar_sme2_{algoritmo.lower()}_{px}.png"),
+                    "--geojson", geojson,
+                    *(["--solo-calidad"] if solo_calidad else []),
+                ],
+                expected=5,
+            )
     elif producto == "gunw":
         render = Step(
             kind="render",

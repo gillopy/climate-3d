@@ -127,7 +127,7 @@ export function NisarView() {
   const [firms, setFirms] = useState(true);
   const [dias, setDias] = useState("15");
   const [nubes, setNubes] = useState("40");
-  const [algoritmoSme2, setAlgoritmoSme2] = useState("DSG");
+  const [algoritmoSme2, setAlgoritmoSme2] = useState("PMI");
   const [soloCalidadSme2, setSoloCalidadSme2] = useState(false);
   // Panel de trabajos: historial de corridas con logs y resultados.
   const [jobNuevo, setJobNuevo] = useState<string | null>(null);
@@ -1530,15 +1530,17 @@ export function NisarView() {
                         value={algoritmoSme2}
                         onChange={(evento) => setAlgoritmoSme2(evento.target.value)}
                       >
+                        <option value="PMI">PMI - modelo físico (recomendado)</option>
                         <option value="DSG">DSG - desagregación</option>
-                        <option value="PMI">PMI - modelo físico</option>
                         <option value="TSR">TSR - serie temporal</option>
+                        <option value="COMPARAR">Comparar (validación)</option>
                       </select>
                     </label>
                     <label>
                       Calidad
                       <select
                         value={soloCalidadSme2 ? "si" : "no"}
+                        disabled={algoritmoSme2 === "COMPARAR"}
                         onChange={(evento) =>
                           setSoloCalidadSme2(evento.target.value === "si")
                         }
@@ -1561,6 +1563,13 @@ export function NisarView() {
                     SME2 se publica cada ~12 días y no reemplaza al GCOV: es
                     humedad del suelo, no cambio de cobertura.
                   </p>
+                  {algoritmoSme2 === "COMPARAR" ? (
+                    <p className="nisar__estado">
+                      Compara DSG, PMI y TSR en la caja y escribe un informe de
+                      validación (cobertura, calidad, bias/RMSE/correlación). No
+                      produce una capa calibrada única.
+                    </p>
+                  ) : null}
                   {!catalogo?.earthdata_configured ? (
                     <p className="nisar__aviso">
                       Falta EARTHDATA_USER y EARTHDATA_PASSWORD en .env para bajar el .h5.
@@ -1573,7 +1582,9 @@ export function NisarView() {
                       disabled={!caja || enMarcha || !catalogo?.earthdata_configured}
                       onClick={() => void renderizar()}
                     >
-                      Descargar y renderizar
+                      {algoritmoSme2 === "COMPARAR"
+                        ? "Comparar algoritmos"
+                        : "Descargar y renderizar"}
                     </button>
                     {enMarcha ? (
                       <button type="button" className="btn" onClick={() => void cancelarRender()}>

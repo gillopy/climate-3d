@@ -62,11 +62,6 @@ NIVELES: tuple[tuple[str, str, str], ...] = (
         "Backscatter RTC gamma0 a 10/20 m. Es el producto para analisis de imagenes.",
     ),
     (
-        "GSLC",
-        "GSLC - SLC geocodificado",
-        "Amplitud compleja por polarizacion, ya geocodificada.",
-    ),
-    (
         "GUNW",
         "GUNW - interferograma geocodificado",
         "Interferograma desenvuelto: deformacion del terreno y coherencia.",

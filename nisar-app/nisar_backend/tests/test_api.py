@@ -92,6 +92,9 @@ class VisorNisar(unittest.TestCase):
         cuerpo = respuesta.json()
         valores = [nivel["value"] for nivel in cuerpo["levels"]]
         self.assertIn("GCOV", valores)
+        self.assertIn("SME2", valores)
+        self.assertIn("GUNW", valores)
+        self.assertNotIn("GSLC", valores)
         self.assertEqual(len(cuerpo["default_bbox"]), 4)
         self.assertIn("earthdata_configured", cuerpo)
 
@@ -440,6 +443,42 @@ class VisorNisar(unittest.TestCase):
             )
 
         self.assertIn("SME2", str(contexto.exception))
+
+    def test_receta_sme2_comparar_usa_el_script_de_calibracion(self):
+        granulo = (
+            "NISAR_L3_PR_SME2_099_999_A_999_2005_DHDH_A_"
+            "20260101T000000_20260101T000035_P05023_N_F_J_001"
+        )
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "sme2",
+                    "nivel": "SME2",
+                    "granulo": granulo,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L3_SME2_PROVISIONAL_V1/{granulo}/{granulo}.h5"
+                    ),
+                    "coleccion": "NISAR_L3_SME2_PROVISIONAL_V1",
+                    "bbox": "-55.491943,-25.083111,-54.610291,-24.246965",
+                    "px": 2400,
+                    "algoritmo": "COMPARAR",
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            [
+                "descargar/nisar.py",
+                "prototipos/nisar_sme2_calibracion.py",
+            ],
+        )
+        args = plan.pasos[1].args
+        self.assertTrue(
+            args[args.index("--out") + 1].endswith("nisar_sme2_comparar_2400.png")
+        )
 
     def test_receta_gunw_baja_y_renderiza_interferograma(self):
         granulo = (
@@ -1041,7 +1080,7 @@ class VisorNisar(unittest.TestCase):
                     "nisar_render",
                     {
                         "producto": "descarga",
-                        "nivel": "GSLC",
+                        "nivel": "GCOV",
                         "granulo": GRANULO,
                         "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
                         "coleccion": "NISAR_L2_GCOV_V1",

@@ -18,15 +18,21 @@ cual, porque es el código que realmente baja y procesa las escenas.
 | GCOV | recorte, RVI, cambio, serie, GeoTIFF, agua, incendio, fusión | completo |
 | SME2 | humedad del suelo (DSG, PMI, TSR) | completo, colección PROVISIONAL |
 | GUNW | interferograma: coherencia, fase envuelta y desenvuelta | completo, colección PROVISIONAL |
-| GSLC | búsqueda y descarga | pendiente de render |
 
 SME2 no reemplaza al GCOV: mide humedad del suelo a 200 m, no cambio de
 cobertura. El producto es PROVISIONAL y trae un `retrievalQualityFlag`; el visor
 permite ocultar los píxeles que no están limpios. GUNW muestra coherencia y fase
 del par de 12 días; la fase desenvuelta no trae correcciones atmosféricas, así
 que el desplazamiento que se muestra es relativo y sirve como diagnóstico, no
-como alerta automática de deslizamiento. GSLC es un SLC complejo, no RTC: aporta
-poco frente a GCOV para deforestación y queda como descarga por ahora.
+como alerta automática de deslizamiento. GSLC se sacó de la app: es un SLC
+complejo, no RTC, y no aporta más que GCOV para deforestación.
+
+En SME2, la opción **Comparar (validación)** recorta la misma caja sobre DSG,
+PMI y TSR y escribe un informe de cobertura, calidad, medianas y acuerdo entre
+pares (bias/RMSE/correlación). No inventa una capa calibrada absoluta: el
+producto es PROVISIONAL y no hay verdad de campo. En la caja de calibración
+(2026-10-17, track 082) PMI + quality flag 0 fue la lectura más consistente;
+DSG sobreestimó y TSR no trajo píxeles con calidad limpia.
 
 ## Estructura
 

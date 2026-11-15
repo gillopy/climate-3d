@@ -100,6 +100,17 @@ export function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("Cobertura válida", "cobertura_valida_pct", pct);
   agregar("Calidad limpia", "calidad_limpia_pct", pct);
   agregar("Área válida", "area_valida_ha", ha);
+  agregar("Modo", "modo", texto);
+  agregar("Mediana DSG", "dsg_mediana", num);
+  agregar("Mediana PMI", "pmi_mediana", num);
+  agregar("Mediana TSR", "tsr_mediana", num);
+  agregar("DSG limpio", "dsg_limpio_pct", pct);
+  agregar("PMI limpio", "pmi_limpio_pct", pct);
+  agregar("TSR limpio", "tsr_limpio_pct", pct);
+  agregar("DSG-PMI bias (limpio)", "dsg_pmi_bias_limpio", num);
+  agregar("DSG-PMI RMSE (limpio)", "dsg_pmi_rmse_limpio", num);
+  agregar("DSG-PMI corr (limpio)", "dsg_pmi_corr_limpio", num);
+  agregar("Recomendación", "recomendacion", texto);
   agregar("Par de fechas", "fecha_sec", (valor) =>
     `${_get(meta, "fecha_ref") ?? "?"} → ${valor}`,
   );
