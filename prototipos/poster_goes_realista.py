@@ -46,6 +46,7 @@ from goes_lectura import PATRON, cargar  # noqa: E402
 from paleta_gibs import CMAP_GIBS_CLEAN_IR, VMAX as VMAX_GIBS, VMIN as VMIN_GIBS  # noqa: E402
 from poster_mur_realista import sombra_exterior  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
+from estilo import FUENTE  # noqa: E402
 
 # ------------------------------------------------------------------------ constantes
 # Geometría del elipsoide/satélite: el ABI publica la altura del punto de perspectiva.
@@ -365,7 +366,7 @@ def dibujar(disco, centro, escala, titulo, tiempo, fuente, cmap, vmin, vmax,
     from matplotlib.collections import LineCollection
     from matplotlib.colors import Normalize
 
-    plt.rcParams.update({"font.family": ["Segoe UI", "DejaVu Sans"],
+    plt.rcParams.update({"font.family": [FUENTE],
                          "axes.unicode_minus": False})
     ancho_in, alto_in, dpi, gx, gy, gw, gh = _geometria_figura(px, args.dpi)
     fig = plt.figure(figsize=(ancho_in, alto_in), dpi=dpi)
@@ -463,26 +464,26 @@ def dibujar(disco, centro, escala, titulo, tiempo, fuente, cmap, vmin, vmax,
     cbar.set_ticklabels(rotulos)
     cbar.ax.tick_params(length=0, labelsize=9.5, colors=INK_SOFT, pad=4)
     for etiqueta in cbar.ax.get_xticklabels():
-        etiqueta.set_fontfamily("Segoe UI")
+        etiqueta.set_fontfamily(FUENTE)
 
     # Marca de agua sobre el globo: gris medio translúcido, sin contorno (como el MUR).
     if args.credito:
         fig.text(0.5, gy + 0.021, " ".join(args.credito.upper()), ha="center",
                  va="center", fontsize=8.6, color=(0.31, 0.35, 0.39, 0.32),
-                 fontfamily="Segoe UI", zorder=10)
+                 fontfamily=FUENTE, zorder=10)
 
     # Título y fecha arriba a la izquierda; la fecha ya viene en UTC-3.
     fig.text(0.027, 0.990, titulo, ha="left", va="top", fontsize=14.5, color=INK,
-             fontfamily="Segoe UI")
+             fontfamily=FUENTE)
     fig.text(0.027, 0.962, tiempo.upper(), ha="left", va="top", fontsize=9.2,
-             color=INK_SOFT, fontfamily="Segoe UI")
+             color=INK_SOFT, fontfamily=FUENTE)
 
     # Fuente y crédito al pie.
     fig.text(0.027, 0.012, fuente, ha="left", va="bottom", fontsize=8.2,
-             color="#a3a8ad", fontfamily="Segoe UI")
+             color="#a3a8ad", fontfamily=FUENTE)
     if args.credito:
         fig.text(0.973, 0.012, args.credito, ha="right", va="bottom", fontsize=8.4,
-                 color="#a3a8ad", fontfamily="Segoe UI")
+                 color="#a3a8ad", fontfamily=FUENTE)
     return fig
 
 

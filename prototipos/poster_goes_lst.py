@@ -62,6 +62,7 @@ import poster_goes_truecolor as tc  # noqa: E402
 from poster_goes_banda import CORTE_PLANETA, _muestrear_banda  # noqa: E402
 from poster_goes_realista import _lineas_geojson, radio_visible  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
+from estilo import FUENTE  # noqa: E402
 
 SAT = "G19"
 PX = 2712
@@ -456,7 +457,10 @@ def componer_lst(nc: Path, args) -> tuple[np.ndarray, float, dict]:
         valores = _muestrear_banda(campo, x, y, lon0, h, lon, lat)
         a = tc._alfa(rho, px, escala) * dentro
         # The planet edge, not the frame: same analytic 1.5 px ramp as the RGBs.
-        a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
+        # Globe mode only (escala ~= 1): with a regional zoom the data fills the
+        # frame and this cut would eat the corners into a circle.
+        if escala > 0.5:
+            a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
 
         normalizado = np.clip((valores - args.vmin) / (args.vmax - args.vmin), 0.0, 1.0)
         # NaN (no retrieval) must not reach the integer cast: quiet it first.
@@ -540,7 +544,7 @@ def _leyenda(fig, args) -> None:
     cbar.set_ticklabels(celsius)
     cbar.ax.tick_params(length=0, labelsize=8.2, colors=tc.INK_SOFT, pad=3)
     for etiqueta in cbar.ax.get_xticklabels():
-        etiqueta.set_fontfamily("Segoe UI")
+        etiqueta.set_fontfamily(FUENTE)
 
     for i, t in enumerate(ticks):
         fahrenheit = int(np.floor(t * 9.0 / 5.0 + 32.0))
@@ -548,7 +552,7 @@ def _leyenda(fig, args) -> None:
                  else _numero(fahrenheit))
         cbar.ax.text(t, 1.65, texto, transform=cbar.ax.get_xaxis_transform(),
                      ha="center", va="bottom", fontsize=8.0, color=tc.INK_SOFT,
-                     fontfamily="Segoe UI", clip_on=False)
+                     fontfamily=FUENTE, clip_on=False)
 
 
 def main(argv=None) -> int:

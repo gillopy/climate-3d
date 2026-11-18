@@ -50,23 +50,31 @@ def cargar(nc, tope_px=None, caja=None, escena="FULL DISK"):
     caja lon/lat `(oeste, este, sur, norte)`. `escena` es la etiqueta del póster.
     `rotulos` es `(titulo, subtitulo, fuente, datos, tiempo)`: el último es la
     fecha/hora del cuadro para el rótulo grande (`time_line` de `draw_goes_poster`).
+
+    Con `caja` el recorte se hace sobre la grilla nativa y recién después se
+    aplica `tope_px`: los índices de la caja se calculan con las coordenadas
+    completas, así el campo y los ejes quedan alineados.
     """
     with xr.open_dataset(nc, engine="h5netcdf") as ds:
         cmi = ds["CMI"]
         gp = ds["goes_imager_projection"].attrs
         h = float(gp["perspective_point_height"])
         paso = max(1, int(np.ceil(max(cmi.shape) / tope_px))) if tope_px else 1
-        x = ds["x"].values[::paso] * h
-        y = ds["y"].values[::paso] * h
+        x_nativo = ds["x"].values * h
+        y_nativo = ds["y"].values * h
         proj = ccrs.Geostationary(
             central_longitude=float(gp["longitude_of_projection_origin"]),
             satellite_height=h, sweep_axis=str(gp.get("sweep_angle_axis", "x")))
         if caja is not None:
-            i0, i1, j0, j1 = box_indices(proj, x, y, caja)
-            crudo = np.asarray(cmi[j0:j1, i0:i1].values, dtype=np.float64)
+            i0, i1, j0, j1 = box_indices(proj, x_nativo, y_nativo, caja)
+            crudo = np.asarray(cmi[j0:j1, i0:i1].values,
+                               dtype=np.float64)[::paso, ::paso]
             campo, unidad, tipo = to_display(crudo, cmi)
             rotulos = (*caption_lines(ds, cmi, tipo, escena), time_label(ds))
-            return campo, x[i0:i1], y[j0:j1], proj, unidad, rotulos
+            return (campo, x_nativo[i0:i1][::paso], y_nativo[j0:j1][::paso],
+                    proj, unidad, rotulos)
+        x = x_nativo[::paso]
+        y = y_nativo[::paso]
         crudo = np.asarray(cmi[::paso, ::paso].values, dtype=np.float64)
         campo, unidad, tipo = to_display(crudo, cmi)
         rotulos = (*caption_lines(ds, cmi, tipo, escena), time_label(ds))

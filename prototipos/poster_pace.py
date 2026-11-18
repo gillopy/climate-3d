@@ -32,6 +32,7 @@ import numpy as np
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 from rutas import SALIDAS  # noqa: E402
+from estilo import FUENTE  # noqa: E402
 
 # Longitudes de OCI para el color real (nm). Se busca la más cercana en el eje
 # `wavelength`, que trae 122 longitudes de 346 a 2258 nm.
@@ -167,7 +168,7 @@ def dibujar(disco, titulo, subtitulo, fuente, args, px):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    plt.rcParams.update({"font.family": ["Segoe UI", "DejaVu Sans"]})
+    plt.rcParams.update({"font.family": [FUENTE, "DejaVu Sans"]})
     lado_in = 10.4
     disco_in = 0.97 * lado_in
     dpi = args.dpi or (px / disco_in)
@@ -185,14 +186,14 @@ def dibujar(disco, titulo, subtitulo, fuente, args, px):
               interpolation="none", zorder=2)
 
     fig.text(0.016, 0.984, titulo, ha="left", va="top", fontsize=13.0, color=INK,
-             fontfamily="Segoe UI")
+             fontfamily=FUENTE)
     fig.text(0.016, 0.957, subtitulo.upper(), ha="left", va="top", fontsize=8.6,
-             color=INK_SOFT, fontfamily="Segoe UI")
+             color=INK_SOFT, fontfamily=FUENTE)
     fig.text(0.016, 0.016, fuente, ha="left", va="bottom", fontsize=7.4,
-             color=INK_FAINT, fontfamily="Segoe UI")
+             color=INK_FAINT, fontfamily=FUENTE)
     if args.credito:
         fig.text(0.984, 0.016, args.credito, ha="right", va="bottom", fontsize=7.8,
-                 color=INK_FAINT, fontfamily="Segoe UI")
+                 color=INK_FAINT, fontfamily=FUENTE)
     return fig
 
 

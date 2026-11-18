@@ -56,14 +56,7 @@ SOMBRA_ALFA = 55
 # `comun/firms.py`). El halo oscuro los hace legibles sobre nube blanca y el núcleo
 # casi blanco marca el centro del píxel.
 
-# Fuentes candidatas para el crédito opcional (si no hay ninguna, no se dibuja).
-FUENTES = (
-    "C:/Windows/Fonts/segoeuib.ttf",
-    "C:/Windows/Fonts/arialbd.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-)
-
-
+# La tipografía del crédito la resuelve `estilo.ruta_fuente` (ver `_fuente`).
 def _anillos(geometria) -> list[list[tuple[float, float]]]:
     """Anillos exteriores e interiores de un Polygon o MultiPolygon."""
     tipo = geometria.get("type")
@@ -159,10 +152,12 @@ def dibujar_focos(imagen: Image.Image, caja, focos, lado: int,
 
 def _fuente(lado: int):
     """Fuente del crédito y de la leyenda; `None` si no hay ninguna instalada."""
-    for ruta in FUENTES:
-        if Path(ruta).is_file():
-            return ImageFont.truetype(ruta, max(12, round(lado * 0.011)))
-    return None
+    from estilo import ruta_fuente
+
+    try:
+        return ImageFont.truetype(ruta_fuente(True), max(12, round(lado * 0.011)))
+    except OSError:
+        return None
 
 
 def _texto(imagen: Image.Image, texto: str, lado: int,
