@@ -449,7 +449,11 @@ def _granulo(feature: dict[str, Any]) -> Granule:
         direction=str(props.get("flightDirection") or ""),
         path=_entero(props.get("pathNumber")),
         frame=_entero(props.get("frameNumber")),
-        mpp=_mpp_de_granulo(granulo_id),
+        mpp=(
+            200.0
+            if str(props.get("processingLevel") or "").upper() == "SME2"
+            else _mpp_de_granulo(granulo_id)
+        ),
         polarization=[str(valor) for valor in pol],
         collection=coleccion,
         size_mb=_tamano_mb(props),
@@ -805,7 +809,7 @@ def linea_de_tiempo(
                 size_mb=_tamano_local(nombre, coleccion_local),
                 local=True,
                 download="",
-                mpp=_mpp_de_granulo(nombre),
+                mpp=200.0 if nivel == "SME2" else _mpp_de_granulo(nombre),
             )
         else:
             # El .h5 local es el de esta fila solo si es de la misma coleccion.

@@ -4,7 +4,7 @@ ASF se mockea a proposito: estos tests fijan la forma de la respuesta, la
 validacion de la caja y el proxy restringido. La busqueda real se comprueba a
 mano contra la API publica.
 
-    app\\.venv\\Scripts\\python.exe -m unittest app.tests.test_nisar -q
+    .venv\\Scripts\\python.exe -m unittest app.tests.test_nisar -q
 """
 from __future__ import annotations
 
@@ -1027,6 +1027,149 @@ class VisorNisar(unittest.TestCase):
         cuerpo = json.loads(respuesta.content)
         self.assertEqual(cuerpo["type"], "FeatureCollection")
         self.assertGreaterEqual(len(cuerpo["features"]), 1)
+
+
+SME2 = (
+    "NISAR_L3_PR_SME2_099_999_A_999_2005_DHDH_A_"
+    "20260101T000000_20260101T000035_P05023_N_F_J_001"
+)
+GUNW = (
+    "NISAR_L2_PR_GUNW_099_999_D_999_033_2000_SH_"
+    "20260101T000000_20260101T000030_20260113T000000_"
+    "20260113T000030_P05023_N_F_J_001"
+)
+
+
+@unittest.skipIf(TestClient is None, "la API necesita las dependencias del venv de la app")
+class RecetasDeNivel(unittest.TestCase):
+    """SME2 y GUNW dejaron de ser "solo búsqueda": renderizan en la misma app."""
+
+    def test_sme2_baja_y_renderiza_humedad(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "sme2",
+                    "nivel": "SME2",
+                    "granulo": SME2,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L3_SME2_PROVISIONAL_V1/{SME2}/{SME2}.h5"
+                    ),
+                    "coleccion": "NISAR_L3_SME2_PROVISIONAL_V1",
+                    "bbox": "-58.2,-26.5,-54.9,-23.6",
+                    "px": 2400,
+                    "algoritmo": "PMI",
+                    "solo_calidad": True,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_sme2.py"],
+        )
+        args = plan.pasos[1].args
+        self.assertEqual(args[args.index("--algoritmo") + 1], "PMI")
+        self.assertIn("--solo-calidad", args)
+        self.assertTrue(args[args.index("--out") + 1].endswith("nisar_sme2_pmi_2400.png"))
+        self.assertTrue(args[args.index("--geojson") + 1].endswith("paraguay_gadm.json"))
+
+    def test_sme2_exige_una_escena_sme2(self):
+        with self.assertRaises(ValueError) as contexto:
+            planear(
+                "nisar_render",
+                {
+                    "producto": "sme2",
+                    "nivel": "GCOV",
+                    "granulo": GRANULO,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1200,
+                },
+                Path("."),
+            )
+
+        self.assertIn("SME2", str(contexto.exception))
+
+    def test_sme2_comparar_usa_el_script_de_calibracion(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "sme2",
+                    "nivel": "SME2",
+                    "granulo": SME2,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L3_SME2_PROVISIONAL_V1/{SME2}/{SME2}.h5"
+                    ),
+                    "coleccion": "NISAR_L3_SME2_PROVISIONAL_V1",
+                    "bbox": "-55.491943,-25.083111,-54.610291,-24.246965",
+                    "px": 2400,
+                    "algoritmo": "COMPARAR",
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_sme2_calibracion.py"],
+        )
+        args = plan.pasos[1].args
+        self.assertTrue(args[args.index("--out") + 1].endswith("nisar_sme2_comparar_2400.png"))
+
+    def test_gunw_baja_y_renderiza_interferograma(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            plan = planear(
+                "nisar_render",
+                {
+                    "producto": "gunw",
+                    "nivel": "GUNW",
+                    "granulo": GUNW,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GUNW_PROVISIONAL_V1/{GUNW}/{GUNW}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GUNW_PROVISIONAL_V1",
+                    "bbox": "-60.0,-22.2,-58.0,-20.0",
+                    "px": 1600,
+                },
+                Path(carpeta),
+            )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["descargar/nisar.py", "prototipos/nisar_gunw.py"],
+        )
+        args = plan.pasos[1].args
+        self.assertIn("--bbox", args)
+        self.assertTrue(args[args.index("--out") + 1].endswith("nisar_gunw_1600.png"))
+
+    def test_gunw_exige_una_escena_gunw(self):
+        with self.assertRaises(ValueError) as contexto:
+            planear(
+                "nisar_render",
+                {
+                    "producto": "gunw",
+                    "nivel": "GCOV",
+                    "granulo": GRANULO,
+                    "url": (
+                        "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+                        f"NISAR_L2_GCOV_V1/{GRANULO}/{GRANULO}.h5"
+                    ),
+                    "coleccion": "NISAR_L2_GCOV_V1",
+                    "bbox": "-55.6,-24.5,-55.2,-23.9",
+                    "px": 1200,
+                },
+                Path("."),
+            )
+
+        self.assertIn("GUNW", str(contexto.exception))
 
 
 if __name__ == "__main__":

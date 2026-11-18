@@ -2217,34 +2217,48 @@ def _nisar_escenas(params: dict[str, Any]) -> list[dict[str, str]]:
     return escenas
 
 
+_PRODUCTOS_NISAR = (
+    "recorte",
+    "rvi",
+    "cambio",
+    "serie",
+    "geotiff",
+    "agua",
+    "incendio",
+    "fusion",
+    "sme2",
+    "gunw",
+    "descarga",
+)
+
+
 def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
     """Plan del visor: descarga la/s escena/s y corre el producto elegido.
 
-    Productos: ``recorte``, ``rvi``, ``cambio``, ``serie``, ``geotiff``, ``agua``,
-    ``incendio``, ``fusion`` y ``descarga`` (solo baja el .h5). La descarga es
-    reanudable y saltea el archivo si ya esta: cambiar de producto no vuelve a
-    bajar 1.9 GB por escena.
+    La descarga es reanudable y saltea el archivo si ya esta: cambiar de producto
+    no vuelve a bajar 1.9 GB por escena.
     """
     producto = str(params.get("producto") or "recorte").strip().lower()
-    if producto not in (
-        "recorte",
-        "rvi",
-        "cambio",
-        "serie",
-        "geotiff",
-        "agua",
-        "incendio",
-        "fusion",
-        "descarga",
-    ):
+    if producto not in _PRODUCTOS_NISAR:
         raise ValueError(f"Producto NISAR desconocido: {producto}")
 
     nivel = str(params.get("nivel") or "GCOV").strip().upper()
-    if nivel != "GCOV" and producto != "descarga":
+    if producto == "sme2":
+        if nivel != "SME2":
+            raise ValueError(
+                f"El producto sme2 usa una escena SME2; la escena elegida es "
+                f"{nivel}. Elegí una escena SME2 para humedad del suelo."
+            )
+    elif producto == "gunw":
+        if nivel != "GUNW":
+            raise ValueError(
+                f"El producto gunw usa una escena GUNW; la escena elegida es "
+                f"{nivel}. Elegí una escena GUNW para el interferograma."
+            )
+    elif nivel != "GCOV" and producto != "descarga":
         raise ValueError(
             f"El producto {producto} usa GCOV; la escena elegida es {nivel}. "
-            "Elegí una escena GCOV. GUNW/GSLC/SME2 quedan como búsqueda y "
-            "descarga hasta tener su producto."
+            "Elegí una escena GCOV."
         )
 
     granulo = _nisar_nombre(str(params.get("granulo") or "").strip(), "granulo")
@@ -2327,6 +2341,55 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             ],
             expected=5,
         )
+    elif producto == "sme2":
+        algoritmo = str(params.get("algoritmo") or "PMI").strip().upper()
+        if algoritmo not in ("DSG", "PMI", "TSR", "COMPARAR"):
+            algoritmo = "PMI"
+        if algoritmo == "COMPARAR":
+            render = Step(
+                kind="render",
+                label=f"comparando DSG/PMI/TSR a {px} px",
+                script="prototipos/nisar_sme2_calibracion.py",
+                args=[
+                    "--h5", str(h5),
+                    "--bbox", bbox_final,
+                    "--px", str(px),
+                    "--out", str(work / f"nisar_sme2_comparar_{px}.png"),
+                    "--geojson", geojson,
+                ],
+                expected=8,
+            )
+        else:
+            solo_calidad = bool(params.get("solo_calidad", False))
+            render = Step(
+                kind="render",
+                label=f"humedad del suelo {algoritmo} a {px} px",
+                script="prototipos/nisar_sme2.py",
+                args=[
+                    "--h5", str(h5),
+                    "--bbox", bbox_final,
+                    "--px", str(px),
+                    "--algoritmo", algoritmo,
+                    "--out", str(work / f"nisar_sme2_{algoritmo.lower()}_{px}.png"),
+                    "--geojson", geojson,
+                    *(["--solo-calidad"] if solo_calidad else []),
+                ],
+                expected=5,
+            )
+    elif producto == "gunw":
+        render = Step(
+            kind="render",
+            label=f"interferograma a {px} px",
+            script="prototipos/nisar_gunw.py",
+            args=[
+                "--h5", str(h5),
+                "--bbox", bbox_final,
+                "--px", str(px),
+                "--out", str(work / f"nisar_gunw_{px}.png"),
+                "--geojson", geojson,
+            ],
+            expected=5,
+        )
     elif producto == "fusion":
         try:
             dias = max(1, min(int(params.get("dias", 15)), 60))
@@ -2365,8 +2428,6 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             raise ValueError("La fecha anterior no puede ser la misma escena.")
         # Mezclar PROVISIONAL con VALIDATED cambia el procesamiento, no solo el
         # terreno: el JSON de la comparacion deja las dos colecciones a la vista.
-        # No se bloquea porque el archivo real publica las fechas viejas solo como
-        # PROVISIONAL y bloquear dejaria la comparacion sin segundas fechas.
         h5_antes = raiz_h5 / antes_coleccion / f"{antes_granulo}.h5"
         if _nisar_en_disco(raiz_h5, antes_coleccion, antes_granulo):
             # Ya esta: no se pide URL ni se agrega un paso que no baja nada.
@@ -2573,6 +2634,7 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
 
     pasos.append(render)
     return Plan(pasos=pasos)
+
 
 
 _CONSTRUCTORES = {
