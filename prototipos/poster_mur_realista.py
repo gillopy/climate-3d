@@ -35,6 +35,7 @@ from PIL import Image, ImageDraw
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 from rutas import SALIDAS  # noqa: E402
+from estilo import FUENTE  # noqa: E402
 
 # ------------------------------------------------------------------ contratos GIBS
 API = "https://wvs.earthdata.nasa.gov/api/v1/snapshot"
@@ -458,7 +459,7 @@ def dibujar(disco: np.ndarray, centro: tuple[float, float], fecha: datetime,
     import cartopy.feature as cfeature
     from matplotlib.colors import Normalize
 
-    plt.rcParams.update({"font.family": ["Segoe UI", "DejaVu Sans"],
+    plt.rcParams.update({"font.family": [FUENTE, "DejaVu Sans"],
                          "axes.unicode_minus": False})
     ancho_in, alto_in = 10.4, 11.4
     dpi = args.dpi or (args.px / (0.925 * ancho_in))
@@ -569,7 +570,7 @@ def dibujar(disco: np.ndarray, centro: tuple[float, float], fecha: datetime,
     cax_curva.text(VMIN + 0.06, 1.08,
                    f"normal fit  μ {mu:+.1f} · σ {sigma:.1f} °C",
                    ha="left", va="top", fontsize=6.8, color="#9aa0a5",
-                   fontfamily="Segoe UI")
+                   fontfamily=FUENTE)
 
     if serie is not None and len(serie) > 1 and idx is not None:
         # Mini trend de toda la serie: μ (sólida) y p95 (a trazos). Cada una se
@@ -602,7 +603,7 @@ def dibujar(disco: np.ndarray, centro: tuple[float, float], fecha: datetime,
     else:
         cax_curva.text(VMAX - 0.06, 1.08, "ocean pixels · area-weighted",
                        ha="right", va="top", fontsize=6.8, color="#9aa0a5",
-                       fontfamily="Segoe UI")
+                       fontfamily=FUENTE)
 
     # Barra de color alineada con la campana.
     cax = fig.add_axes([0.230, 0.055, 0.540, 0.010], zorder=9)
@@ -614,14 +615,14 @@ def dibujar(disco: np.ndarray, centro: tuple[float, float], fecha: datetime,
     cbar.set_ticklabels(["−3", "0", "+3 °C"])
     cbar.ax.tick_params(length=0, labelsize=9.5, colors=INK_SOFT, pad=4)
     for etiqueta in cbar.ax.get_xticklabels():
-        etiqueta.set_fontfamily("Segoe UI")
+        etiqueta.set_fontfamily(FUENTE)
 
     # Marca de agua sobre el globo: gris medio translúcido, sin contorno. Más
     # oscura que la versión blanca anterior, pero todavía discreta.
     if args.credito:
         marca = " ".join(args.credito.upper())
         fig.text(0.5, 0.163, marca, ha="center", va="center", fontsize=8.6,
-                 color=(0.31, 0.35, 0.39, 0.32), fontfamily="Segoe UI",
+                 color=(0.31, 0.35, 0.39, 0.32), fontfamily=FUENTE,
                  zorder=10)
 
     # Título y fecha en el ángulo superior izquierdo, con el mismo estilo de
@@ -629,20 +630,20 @@ def dibujar(disco: np.ndarray, centro: tuple[float, float], fecha: datetime,
     fecha_local = fecha - timedelta(hours=3)
     fig.text(0.027, 0.986, "Sea surface temperature anomaly",
              ha="left", va="top", fontsize=14.5, color=INK,
-             fontfamily="Segoe UI")
+             fontfamily=FUENTE)
     fig.text(0.027, 0.958,
              fecha_local.strftime("%d %b %Y  ·  %H:%M GMT-3").upper(),
              ha="left", va="top", fontsize=9.2, color=INK_SOFT,
-             fontfamily="Segoe UI")
+             fontfamily=FUENTE)
 
     # Fuente y crédito al pie, un poco más grandes que en la primera versión.
     fig.text(0.027, 0.008,
              "DATA: NASA GIBS · GHRSST MUR v4.1 · SST ANOMALY",
              ha="left", va="bottom", fontsize=8.2, color="#a3a8ad",
-             fontfamily="Segoe UI")
+             fontfamily=FUENTE)
     if args.credito:
         fig.text(0.973, 0.008, args.credito, ha="right", va="bottom",
-                 fontsize=8.4, color="#a3a8ad", fontfamily="Segoe UI")
+                 fontsize=8.4, color="#a3a8ad", fontfamily=FUENTE)
     return fig, ax
 
 

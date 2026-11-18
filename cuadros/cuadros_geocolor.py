@@ -42,14 +42,10 @@ BBOX = (-85.0, -40.0, -35.0, 15.0)      # oeste, sur, este, norte
 # es m?s chica, el limbo queda recortado y el globo sale incompleto.
 BBOX_GLOBO = (-160.0, -80.0, 15.0, 80.0)
 GLOBO_LON, GLOBO_LAT = -58.0, -23.0     # mismo centro por defecto del resto del repo
-# Dos l?neas, como el subt?tulo del p?ster: en una sola se sale del cuadro.
-_SUBTITULOS = {
-    "G19": "G19 GOES-EAST ? GEOCOLOR",
-    "G16": "G16 GOES-EAST ? GEOCOLOR",
-    "G18": "G18 GOES-WEST ? GEOCOLOR",
-}
-SUBTITULO = _SUBTITULOS["G19"] + "\nCOLOR REAL (D?A) ? IR Y LUCES (NOCHE)"
-FUENTE = "SOURCE: NOAA/NESDIS/STAR GEOCOLOR ? NASA GIBS"
+#: Línea de origen al pie del cuadro y la aclaración del compuesto, arriba a la
+#: derecha. El título sale de `--sat`, así que no hay subtítulo que mantener.
+SOURCE = "SOURCE: NOAA/NESDIS/STAR GEOCOLOR · NASA GIBS"
+DESCRIPCION = "COLOR REAL (DÍA) · IR Y LUCES (NOCHE)"
 # Los r?tulos est?n calibrados a la animaci?n de 720 px del repo (19 pt de t?tulo), pero
 # escalarlos linealmente hace que a 2048 px dominen el cuadro. Crecen sub-lineal (exponente
 # 0.45) y con este factor: legibles en chico, discretos en grande.
@@ -60,23 +56,19 @@ PASO_MIN = 10
 PX = 480
 CREDITO = "Graphic by @Gillo97"
 
-FUENTES = [
-    r"C:\Windows\Fonts\segoeuib.ttf",
-    r"C:\Windows\Fonts\segoeui.ttf",
-    r"C:\Windows\Fonts\arialbd.ttf",
-    r"C:\Windows\Fonts\arial.ttf",
-]
+def _fuente(px: int, negrita: bool = False) -> ImageFont.ImageFont:
+    """TTF de la tipografía compartida, al tamaño pedido.
 
+    La ruta la resuelve `estilo.ruta_fuente` con matplotlib, no un camino fijo a
+    `C:\\Windows\\Fonts`: en otra máquina ese directorio no existe y Pillow caía
+    a su fuente bitmap, que a tamaño de póster se ve pésimo.
+    """
+    from estilo import ruta_fuente
 
-def _fuente(px: int) -> ImageFont.ImageFont:
-    """Primera tipograf?a TrueType disponible; si no hay, la bitmap de Pillow."""
-    for ruta in FUENTES:
-        if Path(ruta).exists():
-            try:
-                return ImageFont.truetype(ruta, px)
-            except OSError:
-                continue
-    return ImageFont.load_default()
+    try:
+        return ImageFont.truetype(ruta_fuente(negrita), px)
+    except OSError:
+        return ImageFont.load_default()
 
 
 def etiquetar(img: Image.Image, t: datetime, credito: str) -> Image.Image:
@@ -256,9 +248,9 @@ def _carpeta_de_frames(salida: Path, vista: str, sat: str, t0: datetime,
 
 
 def _estilo_poster():
-    """Constantes del p?ster del repo, compartidas en `comun/estilo.py`."""
-    from estilo import BG, MONTHS_EN, TXT, TXT_DIM, WM_COLOR
-    return BG, TXT, TXT_DIM, WM_COLOR, MONTHS_EN
+    """Constantes del póster del repo, compartidas en `comun/estilo.py`."""
+    from estilo import BG, FUENTE, TXT, TXT_DIM, WM_COLOR
+    return BG, TXT, TXT_DIM, WM_COLOR, FUENTE
 
 
 def _borde_geojson(ax, ruta, color, ancho):
@@ -379,8 +371,8 @@ def render_globo(crudo: Path, t: datetime, args, destino: Path,
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
 
-    BG, TXT, TXT_DIM, WM_COLOR, MONTHS_EN = _estilo_poster()
-    BG = "#000000"                     # fondo negro puro (s?lo GeoColor)
+    BG, TXT, TXT_DIM, WM_COLOR, TIPOGRAFIA = _estilo_poster()
+    BG = "#000000"                     # fondo negro puro (solo GeoColor)
     lon0, lat0 = args.centro
     rgb = np.asarray(Image.open(crudo).convert("RGB"))
 
@@ -413,26 +405,26 @@ def render_globo(crudo: Path, t: datetime, args, destino: Path,
     if focos:
         _focos_globo(ax, focos, args)
 
-    # Referencia: la animaci?n de 720 px del repo, pero sub-lineal (ver ESCALA_TEXTO).
+    # Vestuario del póster de color real: la misma tipografía (Arial/Helvetica con
+    # DejaVu Sans de respaldo) y las mismas jerarquías, sin negritas. El dato manda
+    # y el texto acompaña, como en los RGB (Dust, Air Mass, Fire Temperature).
+    plt.rcParams.update({"font.family": TIPOGRAFIA})
     esc = ESCALA_TEXTO * (args.px / 720.0) ** 0.45
     # Halo bajo el texto (no caja): se lee sobre el planeta sin taparlo.
-    halo = [patheffects.withStroke(linewidth=3.2 * esc, foreground=BG)]
-    fig.text(0.026, 0.985, f"{MONTHS_EN[t.month - 1]} {t.year}", color=TXT,
-             fontsize=19 * esc, fontweight="bold", ha="left", va="top",
+    halo = [patheffects.withStroke(linewidth=2.4 * esc, foreground=BG)]
+    fig.text(0.026, 0.985, f"{args.sat.upper()} · GEOCOLOR", color=TXT,
+             fontsize=18 * esc, ha="left", va="top",
              path_effects=halo, zorder=11)
-    fig.text(0.026, 0.944, t.strftime("%d %b %Y ? %H:%M UTC").upper(), color=TXT,
-             fontsize=16 * esc, fontweight="bold", ha="left", va="top",
+    fig.text(0.026, 0.948, t.strftime("%d %b %Y · %H:%M UTC").upper(), color=TXT_DIM,
+             fontsize=11.5 * esc, ha="left", va="top",
              path_effects=halo, zorder=11)
-    fig.text(0.026, 0.898, SUBTITULO, color=TXT_DIM, fontsize=13.5 * esc,
-             fontweight="bold", ha="left", va="top", linespacing=1.12,
-             path_effects=halo, zorder=11)
-    fig.text(0.983, 0.983, args.credito, color=TXT_DIM, fontsize=12 * esc,
+    fig.text(0.974, 0.985, DESCRIPCION, color=TXT_DIM, fontsize=8.6 * esc,
              ha="right", va="top", path_effects=halo, zorder=11)
-    fig.text(0.026, 0.012, FUENTE, color=TXT_DIM, fontsize=7.4 * esc, ha="left",
+    fig.text(0.026, 0.012, SOURCE, color=TXT_DIM, fontsize=10 * esc, ha="left",
              va="bottom")
-    fig.text(0.980, 0.012, f"DATA: {t:%Y-%m-%dT%H:%M} UTC ? ZONA SA", color=TXT_DIM,
-             fontsize=7.4 * esc, ha="right", va="bottom")
     if args.credito:
+        fig.text(0.974, 0.012, args.credito, color=TXT_DIM, fontsize=10 * esc,
+                 ha="right", va="bottom")
         fig.text(0.5, 0.150, " ".join(args.credito.upper()), color=WM_COLOR,
                  fontsize=8.5 * esc, ha="center", va="bottom")
 
@@ -453,12 +445,17 @@ def _sello_render(args, salida_alto: int) -> str:
     """
     import hashlib
     import json
+
+    from estilo import tipografia
+
     datos = {
         "px": args.px, "dpi": args.dpi, "globo": args.globo, "alto": salida_alto,
         "centro": list(args.centro), "bbox": list(args.bbox), "credito": args.credito,
         "sin_fecha": args.sin_fecha, "geojson": args.geojson or "",
         "borde_color": args.borde_color, "borde_ancho": args.borde_ancho,
-        "escala_texto": ESCALA_TEXTO, "subtitulo": SUBTITULO,
+        "escala_texto": ESCALA_TEXTO, "descripcion": DESCRIPCION,
+        # v2: rótulo con la tipografía compartida y jerarquías sin negritas.
+        "diseno": 2, "fuente": tipografia(),
         "fondo": "#000000",
         "alfa": "circulo-suave",
     }
@@ -475,17 +472,17 @@ def _comando_descarga(t0: datetime, args) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        description="Cuadros (PNG) de una animaci?n GeoColor (GOES-East) desde los crudos.")
+        description="Cuadros (PNG) de una animación GeoColor (GOES-East) desde los crudos.")
     ap.add_argument("--desde", default=DESDE,
                     help=f"primer cuadro, UTC (por defecto {DESDE})")
     ap.add_argument("--n", type=int, default=N, help=f"cantidad de cuadros (por defecto {N})")
     ap.add_argument("--paso", type=int, default=PASO_MIN,
                     help=f"minutos entre cuadros (por defecto {PASO_MIN})")
     ap.add_argument("--bbox", nargs=4, type=float, metavar=("O", "S", "E", "N"),
-                    help="caja lon/lat de origen (por defecto, Sudam?rica; con --globo, "
+                    help="caja lon/lat de origen (por defecto, Sudamérica; con --globo, "
                          "la que cubre el hemisferio visible)")
     ap.add_argument("--sat", default="G19",
-                    help="sat?lite del r?tulo: G19/G16 = GOES-East, G18 = GOES-West")
+                    help="satélite del rótulo: G19/G16 = GOES-East, G18 = GOES-West")
     ap.add_argument("--globo", action="store_true",
                     help="reproyectar a Orthographic centrado en --centro (aspecto 'planeta')")
     ap.add_argument("--centro", nargs=2, type=float, metavar=("LON", "LAT"),
@@ -493,16 +490,16 @@ def main(argv=None) -> int:
                     help=f"centro del globo (por defecto {GLOBO_LON} {GLOBO_LAT})")
     ap.add_argument("--dpi", type=int, default=140, help="dpi del render del globo")
     ap.add_argument("--src-px", type=int,
-                    help="ancho de la imagen de origen; por defecto, seg?n el modo")
+                    help="ancho de la imagen de origen; por defecto, según el modo")
     ap.add_argument("--geojson", default=str(RAIZ / "datos" / "paraguay_gadm.json"),
-                    help="borde destacado en el globo (GeoJSON); vac?o = sin borde")
+                    help="borde destacado en el globo (GeoJSON); vacío = sin borde")
     ap.add_argument("--borde-color", default="#000000", help="color del borde destacado")
     ap.add_argument("--borde-ancho", type=float, default=0.8,
                     help="grosor del borde destacado")
     ap.add_argument("--px", type=int, default=PX,
-                    help=f"ancho de cada cuadro en p?xeles (por defecto {PX})")
-    ap.add_argument("--alto", type=int, help="alto en p?xeles (por defecto, seg?n la caja)")
-    ap.add_argument("--credito", default=CREDITO, help="cr?dito de la marca de agua")
+                    help=f"ancho de cada cuadro en píxeles (por defecto {PX})")
+    ap.add_argument("--alto", type=int, help="alto en píxeles (por defecto, según la caja)")
+    ap.add_argument("--credito", default=CREDITO, help="crédito de la marca de agua")
     ap.add_argument("--sin-fecha", action="store_true",
                     help="no estampar la fecha/hora en el cuadro")
     ap.add_argument("--firms", action="store_true",
@@ -518,10 +515,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", help="carpeta de salida (por defecto, comun.rutas.SALIDAS)")
     args = ap.parse_args(argv)
 
-    global SUBTITULO
     sat = args.sat.upper()
-    SUBTITULO = (f"{_SUBTITULOS.get(sat, _SUBTITULOS['G19'])}\n"
-                 "COLOR REAL (D?A) ? IR Y LUCES (NOCHE)")
 
     if args.bbox is None:
         # Mismo criterio que la descarga: el globo se centra en el sat?lite.
@@ -529,7 +523,7 @@ def main(argv=None) -> int:
                      if args.globo else list(BBOX))
     o, s, e, n = args.bbox
     if not (o < e and s < n):
-        raise SystemExit(f"caja inv?lida: {args.bbox}")
+        raise SystemExit(f"caja inválida: {args.bbox}")
 
     # El origen se pide con la proporci?n de la caja. En modo globo se pide m?s grande que
     # la salida: el warping a Orthographic remuestrea y conviene tener de d?nde tirar.
@@ -547,7 +541,7 @@ def main(argv=None) -> int:
         t0 = ajustado
 
     if not frames_dir.exists():
-        raise SystemExit(f"No existe {frames_dir}. Descarg? los cuadros con:\n"
+        raise SystemExit(f"No existe {frames_dir}. Descargá los cuadros con:\\n"
                          f"  {_comando_descarga(t0, args)}")
 
     # Si cambi? algo del aspecto, los cuadros ya renderizados quedaron viejos: se borran,
@@ -560,7 +554,7 @@ def main(argv=None) -> int:
         viejos = list(frames_dir.glob("cuadro_*.png"))
         for p in viejos:
             p.unlink()
-        print(f"Cambiaron los par?metros de render -> se descartan {len(viejos)} cuadros")
+        print(f"Cambiaron los parámetros de render -> se descartan {len(viejos)} cuadros")
     archivo_sello.write_text(sello, encoding="utf-8")
 
     tiempos = [t0 + timedelta(minutes=args.paso * i) for i in range(args.n)]
@@ -571,10 +565,10 @@ def main(argv=None) -> int:
               if not (frames_dir / f"crudo_{i:03d}.jpg").exists()]
     if len(faltan) == args.n:
         raise SystemExit(
-            f"No hay ning?n crudo en {frames_dir}. Gener?los con:\n"
-            f"  {_comando_descarga(t0, args)}\n"
-            "Si el slot elegido todav?a no est? publicado (GIBS publica con retraso), "
-            "marc? ??ltimo cuadro disponible?.")
+            f"No hay ningún crudo en {frames_dir}. Generalos con:\\n"
+            f"  {_comando_descarga(t0, args)}\\n"
+            "Si el slot elegido todavía no está publicado (GIBS publica con retraso), "
+            "marcá «último cuadro disponible».")
     if faltan:
         # GIBS tiene huecos de 10-20 min: se saltean esos cuadros en vez de tirar
         # abajo la animaci?n entera.
@@ -609,7 +603,7 @@ def main(argv=None) -> int:
         print(f"  {hechos}/{args.n} listos ({time.time() - inicio:.0f}s)", flush=True)
 
     print(f"{len(tiempos)} cuadros en {frames_dir}")
-    print(f"Arm? el video con: .venv\\Scripts\\python.exe animar\\armar.py "
+    print(f"Armá el video con: .venv\\Scripts\\python.exe animar\\armar.py "
           f"--frames \"{frames_dir}\"")
     return 0
 

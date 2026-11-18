@@ -90,23 +90,14 @@ ALPHA = 0.5                             # mezcla del Sandwich (50/50 es el clás
 RADIO = 90.0
 CREDITO = "Graphic by @Gillo97"
 
-FUENTES = [
-    r"C:\Windows\Fonts\segoeuib.ttf",
-    r"C:\Windows\Fonts\segoeui.ttf",
-    r"C:\Windows\Fonts\arialbd.ttf",
-    r"C:\Windows\Fonts\arial.ttf",
-]
-
-
 def _fuente(px: int) -> ImageFont.ImageFont:
     """Primera tipografía TrueType disponible; si no hay, la bitmap de Pillow."""
-    for ruta in FUENTES:
-        if Path(ruta).exists():
-            try:
-                return ImageFont.truetype(ruta, px)
-            except OSError:
-                continue
-    return ImageFont.load_default()
+    from estilo import ruta_fuente
+
+    try:
+        return ImageFont.truetype(ruta_fuente(), px)
+    except OSError:
+        return ImageFont.load_default()
 
 
 def _rampa_ir(t: np.ndarray) -> np.ndarray:

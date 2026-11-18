@@ -76,6 +76,7 @@ from poster_mur_realista import sombra_exterior  # noqa: E402
 from firms import (CELDA_FOCO, RADIO_FOCO, VENTANAS, agrupar,  # noqa: E402
                    color_hex, factor_gravedad, filtrar, leer_carpeta, ventana)
 from rutas import DATOS, SALIDAS  # noqa: E402
+from estilo import FUENTE as TIPOGRAFIA  # noqa: E402
 
 # ------------------------------------------------------------------------ constantes
 SAT = "G19"
@@ -553,7 +554,7 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
     import matplotlib.pyplot as plt
     from matplotlib.collections import LineCollection
 
-    plt.rcParams.update({"font.family": ["Segoe UI", "DejaVu Sans"]})
+    plt.rcParams.update({"font.family": [TIPOGRAFIA]})
     ancho_in, alto_in, dpi, gx, gy, gw, gh = _geometria(px, args.dpi)
 
     if getattr(args, "limpio", False):
@@ -659,17 +660,17 @@ def dibujar(disco, escala, titulo, tiempo, fuente, args, px, focos=()):
     if args.credito:
         fig.text(0.5, gy - 0.010, " ".join(args.credito.upper()), ha="center",
                  va="center", fontsize=8.6, color=(0.31, 0.35, 0.39, 0.40),
-                 fontfamily="Segoe UI", zorder=10)
+                 fontfamily=TIPOGRAFIA, zorder=10)
 
     fig.text(0.027, 0.988, titulo, ha="left", va="top", fontsize=14.5, color=INK,
-             fontfamily="Segoe UI")
+             fontfamily=TIPOGRAFIA)
     fig.text(0.027, 0.960, tiempo.upper(), ha="left", va="top", fontsize=9.2,
-             color=INK_SOFT, fontfamily="Segoe UI")
+             color=INK_SOFT, fontfamily=TIPOGRAFIA)
     fig.text(0.027, 0.012, fuente, ha="left", va="bottom", fontsize=8.2,
-             color="#a3a8ad", fontfamily="Segoe UI")
+             color="#a3a8ad", fontfamily=TIPOGRAFIA)
     if args.credito:
         fig.text(0.973, 0.012, args.credito, ha="right", va="bottom", fontsize=8.4,
-                 color="#a3a8ad", fontfamily="Segoe UI")
+                 color="#a3a8ad", fontfamily=TIPOGRAFIA)
     return fig
 
 

@@ -77,6 +77,7 @@ from poster_goes_truecolor import (  # noqa: E402
     time_label_nc,
 )
 from rutas import SALIDAS  # noqa: E402
+from estilo import FUENTE as TIPOGRAFIA  # noqa: E402
 
 R_EARTH = 6_378_137.0
 
@@ -294,7 +295,7 @@ def dibujar(disco, x, y, lon0, h, forma, titulo, tiempo, fuente, args, px,
     import matplotlib.pyplot as plt
     from matplotlib.collections import LineCollection
 
-    plt.rcParams.update({"font.family": ["Segoe UI", "DejaVu Sans"]})
+    plt.rcParams.update({"font.family": [TIPOGRAFIA]})
     ancho_in, alto_in, dpi, gx, gy, gw, gh = _geometria(px, args.dpi)
     fig = plt.figure(figsize=(ancho_in, alto_in), dpi=dpi)
     fig.patch.set_facecolor(BG)
@@ -355,14 +356,14 @@ def dibujar(disco, x, y, lon0, h, forma, titulo, tiempo, fuente, args, px,
     # Textos en las esquinas negras: el disco ocupa el 97 % del cuadro y no hay margen
     # reservado, así que cualquier rótulo tiene que caer fuera del planeta.
     fig.text(0.016, 0.984, titulo, ha="left", va="top", fontsize=13.0, color=INK,
-             fontfamily="Segoe UI")
+             fontfamily=TIPOGRAFIA)
     fig.text(0.016, 0.957, tiempo.upper(), ha="left", va="top", fontsize=8.6,
-             color=INK_SOFT, fontfamily="Segoe UI")
+             color=INK_SOFT, fontfamily=TIPOGRAFIA)
     fig.text(0.016, 0.016, fuente, ha="left", va="bottom", fontsize=7.4,
-             color=INK_FAINT, fontfamily="Segoe UI")
+             color=INK_FAINT, fontfamily=TIPOGRAFIA)
     if args.credito:
         fig.text(0.984, 0.016, args.credito, ha="right", va="bottom", fontsize=7.8,
-                 color=INK_FAINT, fontfamily="Segoe UI")
+                 color=INK_FAINT, fontfamily=TIPOGRAFIA)
     return fig
 
 
