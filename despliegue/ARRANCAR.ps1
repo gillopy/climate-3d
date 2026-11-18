@@ -166,7 +166,7 @@ if ($SoloConfigurar) {
     Write-Host ("  cache: {0}" -f $efectivo.media)
     Write-Host ("  nisar: {0}" -f $efectivo.nisar)
     Write-Host ''
-    Write-Host '  Listo. Para levantar la consola: .\ARRANCAR.ps1' -ForegroundColor Green
+    Write-Host '  Listo. Para levantar la consola: .\despliegue\ARRANCAR.ps1' -ForegroundColor Green
     exit 0
 }
 
