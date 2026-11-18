@@ -117,9 +117,10 @@ export function NisarView() {
   const [verificarS2, setVerificarS2] = useState(true);
   // Persistencia: un cambio tiene que seguir ahi en la fecha siguiente. Usa los
   // .h5 que ya estan en disco; si no hay fecha posterior, el producto avisa.
-  const [persistencia, setPersistencia] = useState("1");
+  // Por defecto no se exige persistencia: la corrida compara solo el par.
+  const [persistencia, setPersistencia] = useState("0");
   const [modoCambio, setModoCambio] = useState("comparar");
-  const [umbral, setUmbral] = useState("2");
+  const [umbral, setUmbral] = useState("2.5");
   const [hvMin, setHvMin] = useState("-15.5");
   const [modoGeo, setModoGeo] = useState("db");
   const [hhMax, setHhMax] = useState("-20");
@@ -199,6 +200,9 @@ export function NisarView() {
     huellasRef.current = L.layerGroup().addTo(mapa);
     mapaRef.current = mapa;
 
+    // El contorno del pais es opcional: `datos/paraguay_gadm.json` no se versiona
+    // (licencia GADM) y la imagen Docker no lo trae. Sin el archivo el mapa, las
+    // huellas y las cajas funcionan igual, asi que un 404 no se muestra como error.
     getParaguay()
       .then((datos: FeatureCollection) => {
         if (!mapaRef.current) return;
@@ -212,7 +216,7 @@ export function NisarView() {
           },
         }).addTo(mapaRef.current);
       })
-      .catch(() => setError("No se pudo cargar el contorno de Paraguay."));
+      .catch(() => undefined);
 
     return () => {
       mapa.remove();
@@ -845,7 +849,7 @@ export function NisarView() {
         </header>
 
         <div className="nisar__filtros">
-          <label>
+          <label className="nisar__ancho">
             Nivel
             <select value={nivel} onChange={(evento) => setNivel(evento.target.value)}>
               {(catalogo?.levels ?? [{ value: "GCOV", label: "GCOV", detail: "" }]).map(
@@ -861,7 +865,7 @@ export function NisarView() {
             Desde (UTC)
             <input type="date" value={desde} onChange={(evento) => setDesde(evento.target.value)} />
           </label>
-          <label className="nisar__ancho">
+          <label>
             Hasta (UTC)
             <input type="date" value={hasta} onChange={(evento) => setHasta(evento.target.value)} />
           </label>
@@ -1214,45 +1218,30 @@ export function NisarView() {
                             ))}
                           </select>
                         </label>
-                        <label className="nisar__ancho">
-                          Agregar fecha anterior
-                          <input
-                            type="date"
-                            value={fechaNueva}
-                            max={
-                              seleccion.start
-                                ? new Date(Date.parse(seleccion.start) - 86_400_000)
-                                    .toISOString()
-                                    .slice(0, 10)
-                                : undefined
-                            }
-                            onChange={(evento) => setFechaNueva(evento.target.value)}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="btn"
-                          disabled={!fechaNueva || resolviendo}
-                          onClick={() => void agregarFecha()}
-                        >
-                          {resolviendo ? "Buscando…" : "Usar esa fecha"}
-                        </button>
                         {antes ? (
-                          <span className="nisar__estado">
-                            Anterior: {fechaCorta(antes.start)} ·{" "}
-                            {antes.local
-                              ? "ya está en disco"
-                              : antes.size_mb !== null
-                                ? `se descarga (${antes.size_mb} MB)`
-                                : "se descarga al comparar"}
-                            {antes.collection !== seleccion.collection
-                              ? ` · otra colección (${antes.collection})`
-                              : ""}
-                          </span>
+                          <dl className="nisar__dl nisar__ancho">
+                            <dt>Fecha anterior</dt>
+                            <dd>{fechaCorta(antes.start)}</dd>
+                            <dt>Origen</dt>
+                            <dd>
+                              {antes.local
+                                ? "ya está en disco"
+                                : antes.size_mb !== null
+                                  ? `se descarga (${antes.size_mb} MB)`
+                                  : "se descarga al comparar"}
+                            </dd>
+                            <dt>Colección</dt>
+                            <dd>
+                              {antes.collection}
+                              {antes.collection !== seleccion.collection
+                                ? " · distinta a la escena actual"
+                                : ""}
+                            </dd>
+                          </dl>
                         ) : null}
                         {producto === "cambio" ? (
                           <>
-                            <label>
+                            <label className="nisar__ancho">
                               Modo
                               <select
                                 value={modoCambio}
@@ -1646,6 +1635,8 @@ export function NisarView() {
             </div>
           </div>
         ) : null}
+      </aside>
+      <aside className="nisar__resultados" aria-label="Resultados de los trabajos">
         <JobsPanel jobInicial={jobNuevo} />
       </aside>
     </section>
