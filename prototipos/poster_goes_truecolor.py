@@ -478,16 +478,16 @@ def render(nc_bandas: dict[str, Path], args) -> tuple:
 
 
 def _geometria(px: int, dpi: int | None):
-    """Layout del póster: el disco llena el ancho y deja el pie para los créditos.
+    """Layout del póster: el disco casi llena el cuadro, como el de GeoColor.
 
-    El disco queda al 93 % del ancho (no al 96.5 % del póster térmico): sin tarjeta de
-    leyenda, el margen superior es lo único que separa el planeta del título.
+    Lienzo cuadrado y disco al 97 % del lado: sólo quedan las esquinas negras, y
+    ahí caen los rótulos sin tapar al planeta. `px` es el lado del lienzo, así que
+    la salida mide exactamente lo que pide la app.
     """
-    ancho_in, alto_in = 10.4, 11.0
-    lado_in = 0.93 * ancho_in
+    lado_in = 10.4
     dpi = dpi or (px / lado_in)
-    gw, gh = lado_in / ancho_in, lado_in / alto_in
-    return ancho_in, alto_in, dpi, (1 - gw) / 2, 0.058, gw, gh
+    g = 0.97
+    return lado_in, lado_in, dpi, (1 - g) / 2, (1 - g) / 2, g, g
 
 
 _CACHE_FOCOS: dict[str, list] = {}

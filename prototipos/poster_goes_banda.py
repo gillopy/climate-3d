@@ -184,6 +184,8 @@ def componer_banda(nc: Path, args) -> tuple[np.ndarray, float, dict]:
             a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
 
         normalizado = np.clip((valores - args.vmin) / (args.vmax - args.vmin), 0.0, 1.0)
+        # NaN (fuera del disco) no puede llegar al cast a entero: avisa y ensucia el log.
+        normalizado = np.nan_to_num(normalizado, nan=0.0)
         n = len(lut)
         indice = (normalizado * (n - 1)).astype(np.uint16 if n > 256 else np.uint8)
         bloque = lut[indice]

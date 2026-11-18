@@ -44,7 +44,7 @@ from goes_descarga import clave_de  # noqa: E402
 from goes_reciente import ultimos_de  # noqa: E402
 from poster_goes import PALETTES  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
-from estilo import BG, TXT, TXT_DIM  # noqa: E402
+from estilo import BG, FUENTE, TXT, TXT_DIM  # noqa: E402
 
 SAT, BANDA = "G19", "C13"
 TITULO = "G19 GOES-EAST · BRIGHTNESS TEMPERATURE · BAND 13 (10.3 µm)"
@@ -118,6 +118,9 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
     import cartopy.feature as cfeature
 
     lon0, lat0 = args.centro
+    # Misma tipografía que el resto de los pósteres (Arial/Helvetica, DejaVu de
+    # respaldo): el rótulo no cambia de fuente según la máquina que renderiza.
+    plt.rcParams.update({"font.family": FUENTE})
     lado_fig = args.px / args.dpi
     fig = plt.figure(figsize=(lado_fig, lado_fig), dpi=args.dpi)
     fig.patch.set_facecolor(BG)
@@ -171,23 +174,21 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
         return destino
 
     # --------------------------------------------------------------- vestuario
-    # Estructura de tres líneas como los ECMWF: título (mes y año), fecha/hora del
-    # cuadro y rótulo del producto. El halo detrás de cada línea es lo que permite
-    # leerlas sobre el globo sin que se pisen entre sí.
+    # Mismo rótulo que GeoColor: título y fecha arriba a la izquierda, la
+    # aclaración del producto arriba a la derecha, fuente y crédito al pie. Sin
+    # negritas y con un halo leve para que se lea sobre el planeta sin taparlo.
     esc = 0.8 * (args.px / 720.0) ** 0.45
-    halo = [patheffects.withStroke(linewidth=3.2 * esc, foreground=BG)]
-    titulo, subtitulo, fuente, datos, tiempo = rot
+    halo = [patheffects.withStroke(linewidth=2.4 * esc, foreground=BG)]
+    titulo, subtitulo, fuente, _datos, tiempo = rot
     fig.text(0.026, 0.985, titulo, color=TXT,
-             fontsize=19 * esc, fontweight="bold", ha="left", va="top",
+             fontsize=18 * esc, ha="left", va="top",
              path_effects=halo, zorder=11)
-    fig.text(0.026, 0.946, tiempo.upper(), color=TXT,
-             fontsize=13.5 * esc, fontweight="bold", ha="left", va="top",
+    fig.text(0.026, 0.948, tiempo.upper(), color=TXT_DIM,
+             fontsize=11.5 * esc, ha="left", va="top",
              path_effects=halo, zorder=11)
-    fig.text(0.026, 0.912, subtitulo, color=TXT_DIM, fontsize=11.5 * esc,
-             fontweight="bold", ha="left", va="top", linespacing=1.15,
+    fig.text(0.974, 0.985, subtitulo, color=TXT_DIM, fontsize=8.6 * esc,
+             ha="right", va="top", linespacing=1.25,
              path_effects=halo, zorder=11)
-    fig.text(0.983, 0.983, args.credito, color=TXT_DIM, fontsize=12 * esc,
-             ha="right", va="top", path_effects=halo, zorder=11)
 
     # Barra de color horizontal sobre una pastilla oscura traslúcida, para que los
     # ticks se lean limpios sobre el borde del globo.
@@ -206,7 +207,7 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
     cbar.ax.tick_params(colors=TXT, length=3, width=0.8,
                         labelsize=max(6.5, 8.8 * esc), pad=2)
     fig.text(0.916, 0.0635, "°C", color=TXT,
-             fontsize=max(7.0, 9.8 * esc), fontweight="bold",
+             fontsize=max(7.0, 9.8 * esc),
              ha="left", va="center", zorder=11)
 
     # Marca de agua en el medio del disco, como en el póster de referencia: gris
@@ -216,10 +217,11 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
         fig.text(0.5, 0.150, " ".join(args.credito.upper()), color="#7c8698",
                  fontsize=8.5 * esc, ha="center", va="bottom", zorder=11)
 
-    fig.text(0.026, 0.012, fuente, color=TXT_DIM, fontsize=7.4 * esc,
+    fig.text(0.026, 0.012, fuente, color=TXT_DIM, fontsize=10 * esc,
              ha="left", va="bottom")
-    fig.text(0.980, 0.012, datos, color=TXT_DIM, fontsize=7.4 * esc,
-             ha="right", va="bottom")
+    if args.credito:
+        fig.text(0.974, 0.012, args.credito, color=TXT_DIM, fontsize=10 * esc,
+                 ha="right", va="bottom")
     # Guardado atómico: nunca queda un PNG truncado que después se reutilice.
     parcial = destino.with_suffix(".png.parcial")
     fig.savefig(parcial, format="png", facecolor=BG)
