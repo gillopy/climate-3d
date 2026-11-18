@@ -171,7 +171,14 @@ def _total_de(respuesta: requests.Response, ya: int) -> int | None:
 
 
 def bajar(s: requests.Session, url: str, destino: Path) -> None:
-    destino.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        destino.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise SystemExit(
+            f"No se pudo crear la carpeta de descarga {destino.parent}: {exc}. "
+            "Revisa que la unidad/ruta exista (por ejemplo, D:\\nisar) o cambia "
+            "CLIMATE3D_NISAR a otra carpeta."
+        ) from exc
     if destino.is_file() and destino.stat().st_size >= MIN_BYTES:
         print(f"= {destino.name} ya esta ({destino.stat().st_size / 1e6:.0f} MB)")
         return

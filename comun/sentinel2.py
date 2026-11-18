@@ -1,17 +1,26 @@
-"""Sentinel-2 L2A sobre un recorte NISAR: NDVI sin nubes en la grilla del radar.
+"""Sentinel-2 L2A sobre un recorte NISAR: indices sin nubes en la grilla del radar.
 
-Busca en Planetary Computer alrededor de una fecha, lee rojo (B04), NIR (B08) y
-la clasificación de escena (SCL), enmascara nubes/sombras, compone el NDVI
-mediano y lo reproyecta a la grilla del recorte NISAR.
+Busca en Planetary Computer alrededor de una fecha, lee las bandas pedidas y la
+clasificacion de escena (SCL), enmascara nubes/sombras, compone la mediana pixel a
+pixel y reproyecta a la grilla del recorte NISAR.
 
-Lo comparten la fusión óptico-radar y la máscara de bosque del cambio de
-cobertura: en L-band el HV solo no separa bosque de cultivo, así que el NDVI es
-el que decide dónde había dosel.
+Lo comparten la fusion optico-radar, la mascara de bosque del cambio de cobertura
+y el panel de indices: en L-band el HV solo no separa bosque de cultivo, asi que
+el NDVI es el que decide donde habia dosel.
+
+Las lecturas son remotas y caras (una apertura por banda y por item). Por eso el
+resultado compuesto se guarda en disco y se reutiliza: la misma caja y la misma
+fecha no se vuelven a bajar.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import os
+import tempfile
 from datetime import timedelta
+from pathlib import Path
 
 import numpy as np
 
@@ -35,6 +44,16 @@ except ImportError:  # pragma: no cover - depende del venv de los scripts
 
 STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
 
+#: Conjunto minimo para NDVI: rojo, infrarrojo cercano y la mascara de escena.
+BANDAS_NDVI = ("B04", "B08", "SCL")
+
+#: Conjunto para los indices: verde, rojo, NIR, SWIR1, SWIR2 y la mascara.
+#: SWIR2 (B12) entra por NBR: es la banda que separa dosel de suelo desnudo.
+BANDAS_INDICES = ("B03", "B04", "B08", "B11", "B12", "SCL")
+
+#: Subir esto invalida toda la cache en disco (cambia el prefijo de la clave).
+CACHE_VERSION = 1
+
 
 def _ventana(src, bbox):
     b = transform_bounds("EPSG:4326", src.crs, *bbox)
@@ -53,71 +72,114 @@ def grilla(xs: np.ndarray, ys: np.ndarray, epsg: int):
     return transform, f"EPSG:{epsg}"
 
 
-def _ndvi_item(item, bbox, destino_forma, destino_transform, destino_crs, px):
-    """NDVI de un ítem, enmascarado por SCL y reproyectado a la grilla NISAR."""
+# ---------------------------------------------------------------------------
+# Cache en disco
+# ---------------------------------------------------------------------------
+
+
+def carpeta_cache() -> Path:
+    """Donde se guardan los compuestos: NISAR_S2_CACHE, o al lado de los artefactos."""
+    valor = (os.environ.get("NISAR_S2_CACHE") or "").strip()
+    if valor:
+        return Path(valor)
+    media = (os.environ.get("NISAR_MEDIA") or "").strip()
+    if media:
+        return Path(media) / "cache" / "s2"
+    return Path(tempfile.gettempdir()) / "nisar-s2-cache"
+
+
+def _clave_cache(bbox, forma, transform, crs, px, bandas, items) -> str:
+    # Los ids de los items van en la clave: si cambia la busqueda (nubes, dias,
+    # max-items) cambia la lista y por lo tanto el resultado. Asi una cache vieja
+    # nunca se devuelve para una busqueda distinta.
+    partes = [
+        f"v{CACHE_VERSION}",
+        ",".join(f"{v:.6f}" for v in bbox),
+        f"{int(forma[0])}x{int(forma[1])}",
+        ",".join(f"{float(v):.4f}" for v in tuple(transform)[:6]),
+        str(crs),
+        str(int(px)),
+        ",".join(bandas),
+        "\n".join(str(getattr(item, "id", "")) for item in items),
+    ]
+    return hashlib.sha1("|".join(partes).encode("utf-8")).hexdigest()[:20]
+
+
+def _leer_cache(clave):
+    ruta = carpeta_cache() / f"{clave}.npz"
+    if not ruta.exists():
+        return None
+    try:
+        with np.load(ruta, allow_pickle=False) as guardado:
+            salida = {k: guardado[k] for k in guardado.files if k != "usados"}
+            usados = json.loads(str(guardado["usados"])) if "usados" in guardado.files else []
+        return salida, usados
+    except Exception as exc:  # noqa: BLE001 - una cache rota no corta el producto
+        print(f"aviso: cache ilegible ({type(exc).__name__}); se recalcula")
+        return None
+
+
+def _guardar_cache(clave, salida, usados) -> None:
+    try:
+        carpeta = carpeta_cache()
+        carpeta.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            carpeta / f"{clave}.npz",
+            usados=np.array(json.dumps(usados)),
+            **{k: v for k, v in salida.items()},
+        )
+    except Exception as exc:  # noqa: BLE001 - sin cache se sigue igual
+        print(f"aviso: no pude guardar la cache ({type(exc).__name__}: {exc})")
+
+
+# ---------------------------------------------------------------------------
+# Lectura de bandas
+# ---------------------------------------------------------------------------
+
+
+def _leer_bandas(item, bbox, bandas, px):
+    """Lee las bandas pedidas sobre `bbox`. Devuelve (dict, transform, crs, nubes)."""
     item = pc.sign(item)
-    faltan = [clave for clave in ("B04", "B08", "SCL") if clave not in item.assets]
+    faltan = [banda for banda in bandas if banda not in item.assets]
     if faltan:
         print(f"aviso: {item.id} sin assets {faltan}; se omite")
         return None
 
-    with rasterio.open(item.assets["B04"].href) as src_b04:
-        win_b04 = _ventana(src_b04, bbox)
-        escala = max(
-            1,
-            int(
-                math.ceil(
-                    max(win_b04.width, win_b04.height) / max(1, int(px * 1.5))
+    datos: dict[str, np.ndarray] = {}
+    transform_origen = None
+    crs_origen = None
+    alto = ancho = 0
+
+    for banda in bandas:
+        with rasterio.open(item.assets[banda].href) as src:
+            ventana = _ventana(src, bbox)
+            if transform_origen is None:
+                # La resolucion de trabajo sale de la primera banda: las demas se
+                # leen con la misma forma, aunque tengan otro tamano de pixel.
+                escala = max(
+                    1,
+                    int(
+                        math.ceil(
+                            max(ventana.width, ventana.height) / max(1, int(px * 1.5))
+                        )
+                    ),
                 )
-            ),
-        )
-        alto = max(1, int(round(win_b04.height / escala)))
-        ancho = max(1, int(round(win_b04.width / escala)))
-        rojo = src_b04.read(
-            1,
-            window=win_b04,
-            out_shape=(alto, ancho),
-            resampling=Resampling.bilinear,
-        ).astype(np.float32)
-        transform_origen = src_b04.window_transform(win_b04) * Affine.scale(
-            win_b04.width / ancho, win_b04.height / alto
-        )
-        crs_origen = src_b04.crs
+                alto = max(1, int(round(ventana.height / escala)))
+                ancho = max(1, int(round(ventana.width / escala)))
+                transform_origen = src.window_transform(ventana) * Affine.scale(
+                    ventana.width / ancho, ventana.height / alto
+                )
+                crs_origen = src.crs
+            remuestreo = Resampling.nearest if banda == "SCL" else Resampling.bilinear
+            datos[banda] = src.read(
+                1,
+                window=ventana,
+                out_shape=(alto, ancho),
+                resampling=remuestreo,
+            ).astype(np.float32)
 
-    with rasterio.open(item.assets["B08"].href) as src_b08:
-        win_b08 = _ventana(src_b08, bbox)
-        nir = src_b08.read(
-            1,
-            window=win_b08,
-            out_shape=(alto, ancho),
-            resampling=Resampling.bilinear,
-        ).astype(np.float32)
-
-    with rasterio.open(item.assets["SCL"].href) as src_scl:
-        win_scl = _ventana(src_scl, bbox)
-        scl = src_scl.read(
-            1,
-            window=win_scl,
-            out_shape=(alto, ancho),
-            resampling=Resampling.nearest,
-        )
-
-    nd = optico.ndvi(rojo, nir)
-    nd[~optico.mascara_scl(scl)] = np.nan
-
-    destino = np.full(destino_forma, np.nan, dtype=np.float32)
-    reproject(
-        source=nd,
-        destination=destino,
-        src_transform=transform_origen,
-        src_crs=crs_origen,
-        dst_transform=destino_transform,
-        dst_crs=destino_crs,
-        resampling=Resampling.bilinear,
-        src_nodata=np.nan,
-        dst_nodata=np.nan,
-    )
-    return destino, float(item.properties.get("eo:cloud_cover", 100.0))
+    nubes = float(item.properties.get("eo:cloud_cover", 100.0))
+    return datos, transform_origen, crs_origen, nubes
 
 
 def buscar_items(
@@ -128,7 +190,7 @@ def buscar_items(
     max_items: int = 8,
     cliente=None,
 ):
-    """Ítems L2A con menos nubes que ``nubes_max`` en ±``dias`` de ``centro``."""
+    """Items L2A con menos nubes que `nubes_max` en +-`dias` de `centro`."""
     if not DISPONIBLE:
         raise RuntimeError("faltan rasterio/pystac-client/planetary-computer")
     desde = centro - timedelta(days=max(1, int(dias)))
@@ -145,8 +207,111 @@ def buscar_items(
         list(busqueda.items()),
         key=lambda item: float(item.properties.get("eo:cloud_cover", 100.0)),
     )[: max(1, int(max_items))]
-    print(f"Sentinel-2: {len(items)} ítem(s)")
+    print(f"Sentinel-2: {len(items)} item(s)")
     return items
+
+
+# ---------------------------------------------------------------------------
+# Composicion
+# ---------------------------------------------------------------------------
+
+
+def _componer(
+    items,
+    bbox,
+    destino_forma,
+    destino_transform,
+    destino_crs,
+    px,
+    bandas,
+    calcular,
+    etiqueta,
+):
+    """Compone (mediana) los indices que devuelve `calcular` sobre los items.
+
+    Devuelve ``(dict, usados)`` o ``(None, usados)`` si ningun item dejo pixeles.
+    """
+    clave = _clave_cache(
+        bbox, destino_forma, destino_transform, destino_crs, px, bandas, items
+    )
+    cacheado = _leer_cache(clave)
+    if cacheado is not None:
+        print(f"  cache: reuso {etiqueta} ({len(cacheado[1])} item(s))")
+        return cacheado
+
+    pilas: dict[str, list[np.ndarray]] = {}
+    usados: list[dict] = []
+
+    for item in items:
+        try:
+            leido = _leer_bandas(item, bbox, bandas, px)
+        except Exception as exc:  # noqa: BLE001 - un item roto no mata el producto
+            print(
+                f"aviso: {item.id} fallo al leer/reproyectar "
+                f"({type(exc).__name__}: {exc}); se omite"
+            )
+            continue
+        if leido is None:
+            continue
+
+        datos, transform_origen, crs_origen, nubes = leido
+        indices = calcular(datos)
+
+        reproyectados: dict[str, np.ndarray] = {}
+        con_datos = False
+        for nombre, capa in indices.items():
+            destino = np.full(destino_forma, np.nan, dtype=np.float32)
+            reproject(
+                source=capa,
+                destination=destino,
+                src_transform=transform_origen,
+                src_crs=crs_origen,
+                dst_transform=destino_transform,
+                dst_crs=destino_crs,
+                resampling=Resampling.bilinear,
+                src_nodata=np.nan,
+                dst_nodata=np.nan,
+            )
+            reproyectados[nombre] = destino
+            if np.isfinite(destino).any():
+                con_datos = True
+
+        if not con_datos:
+            print(f"  {item.id}: sin pixeles validos tras SCL")
+            continue
+
+        for nombre, capa in reproyectados.items():
+            pilas.setdefault(nombre, []).append(capa)
+        usados.append({"id": item.id, "cloud": round(nubes, 2)})
+        principal = next(iter(reproyectados.values()))
+        print(
+            f"  {item.id}: {nubes:.1f}% nubes · "
+            f"{int(np.isfinite(principal).sum())} px"
+        )
+
+    if not pilas:
+        return None, usados
+
+    salida = {nombre: optico.compuesto_mediana(capas) for nombre, capas in pilas.items()}
+    _guardar_cache(clave, salida, usados)
+    return salida, usados
+
+
+def _calcular_ndvi(datos):
+    nd = optico.ndvi(datos["B04"], datos["B08"])
+    nd[~optico.mascara_scl(datos["SCL"])] = np.nan
+    return {"ndvi": nd}
+
+
+def _calcular_indices(datos):
+    valida = optico.mascara_scl(datos["SCL"])
+    ndvi = optico.ndvi(datos["B04"], datos["B08"])
+    ndbi = optico.ndbi(datos["B11"], datos["B08"])
+    ndwi = optico.ndwi(datos["B03"], datos["B08"])
+    nbr = optico.nbr(datos["B08"], datos["B12"])
+    for capa in (ndvi, ndbi, ndwi, nbr):
+        capa[~valida] = np.nan
+    return {"ndvi": ndvi, "ndbi": ndbi, "ndwi": ndwi, "nbr": nbr}
 
 
 def componer_ndvi(
@@ -157,34 +322,48 @@ def componer_ndvi(
     destino_crs,
     px: int,
 ) -> tuple[np.ndarray | None, list[dict]]:
-    """NDVI mediano de todos los ítems que se puedan leer.
+    """NDVI mediano de todos los items que se puedan leer.
 
-    Devuelve ``(None, [])`` si ningún ítem dejó píxeles válidos: el llamador
-    decide si cae a otro método o corta.
+    Devuelve ``(None, usados)`` si ningun item dejo pixeles validos: el llamador
+    decide si cae a otro metodo o corta.
     """
-    ndvis: list[np.ndarray] = []
-    usados: list[dict] = []
-    for item in items:
-        try:
-            resultado = _ndvi_item(
-                item, bbox, destino_forma, destino_transform, destino_crs, px
-            )
-        except Exception as exc:  # noqa: BLE001 - un ítem roto no mata el producto
-            print(
-                f"aviso: {item.id} fallo al leer/reproyectar "
-                f"({type(exc).__name__}: {exc}); se omite"
-            )
-            continue
-        if resultado is None:
-            continue
-        nd, nubes = resultado
-        validos = int(np.isfinite(nd).sum())
-        if validos == 0:
-            print(f"  {item.id}: sin píxeles válidos tras SCL")
-            continue
-        ndvis.append(nd)
-        usados.append({"id": item.id, "cloud": round(nubes, 2)})
-        print(f"  {item.id}: {nubes:.1f}% nubes · {validos} px")
-    if not ndvis:
+    salida, usados = _componer(
+        items,
+        bbox,
+        destino_forma,
+        destino_transform,
+        destino_crs,
+        px,
+        BANDAS_NDVI,
+        _calcular_ndvi,
+        "ndvi",
+    )
+    if salida is None:
         return None, usados
-    return optico.compuesto_mediana(ndvis), usados
+    return salida["ndvi"], usados
+
+
+def componer_indices(
+    items,
+    bbox: tuple[float, float, float, float],
+    destino_forma: tuple[int, int],
+    destino_transform,
+    destino_crs,
+    px: int,
+) -> tuple[dict[str, np.ndarray] | None, list[dict]]:
+    """NDVI, NDBI, NDWI y NBR medianos, alineados a la grilla del recorte NISAR.
+
+    Cuesta tres aperturas remotas mas por item que `componer_ndvi` (verde, SWIR1
+    y SWIR2), por eso vive en su propia entrada de cache.
+    """
+    return _componer(
+        items,
+        bbox,
+        destino_forma,
+        destino_transform,
+        destino_crs,
+        px,
+        BANDAS_INDICES,
+        _calcular_indices,
+        "indices",
+    )

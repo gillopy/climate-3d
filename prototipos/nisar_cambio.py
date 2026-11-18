@@ -7,6 +7,8 @@ en potencia), calcula ΔHV en dB, le resta el corrimiento global del par, aplica
 una mayoria 3x3 para no contar pixeles aislados y escribe:
 
 - un PNG (delta, mascara sobre HV o composicion RGB),
+- en el modo ``comparar``, las dos capas sueltas (``*_antes.png`` y
+  ``*_despues.png``) que alimentan el comparador de barrido del visor,
 - un JSON con hectareas de perdida/ganancia y los umbrales usados.
 
 Dos cosas que el producto anterior no hacia y que dominan el resultado:
@@ -58,6 +60,25 @@ NARANJA = np.array([222, 138, 58], dtype=np.uint8)
 AZUL = np.array([45, 95, 205], dtype=np.uint8)
 
 
+def _guardar_panel(ruta: Path, rgb: np.ndarray, px: int) -> Path:
+    """Guarda una capa suelta del comparador: sin pie ni barra de escala.
+
+    El compuesto lleva las dos capas juntas y un pie con la leyenda; el visor
+    necesita cada capa por separado para el barrido. Se guardan al tamano que
+    ocupan dentro del compuesto para no duplicar el peso del PNG.
+    """
+    from PIL import Image  # import local: solo lo usa el modo comparar
+
+    alto, ancho = rgb.shape[:2]
+    ancho_salida, alto_salida = nisar.dimensiones(ancho, alto, px)
+    imagen = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB")
+    if (ancho_salida, alto_salida) != (ancho, alto):
+        imagen = imagen.resize((ancho_salida, alto_salida), Image.LANCZOS)
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    imagen.save(ruta, "PNG", optimize=True)
+    return ruta
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--antes", required=True)
@@ -102,6 +123,11 @@ def main() -> int:
         help="confirmar la caida de HV con NDVI de Sentinel-2 (pre y post)",
     )
     ap.add_argument(
+        "--indices",
+        default=None,
+        help="ademas del cambio, escribir un panel NDVI/NDBI/NDWI/NBR (antes, despues, delta)",
+    )
+    ap.add_argument(
         "--confirmar-temporal",
         type=int,
         default=0,
@@ -132,7 +158,15 @@ def main() -> int:
     )
     ap.add_argument("--dias", type=int, default=15, help="ventana de Sentinel-2 en dias")
     ap.add_argument("--nubes", type=float, default=40.0, help="nubes maximas de Sentinel-2")
-    ap.add_argument("--max-items", type=int, default=8, help="items maximos de Sentinel-2")
+    ap.add_argument(
+        "--max-items",
+        type=int,
+        default=4,
+        help=(
+            "items maximos de Sentinel-2 (medido: 2 items dan 97.4%% de cobertura "
+            "y 8 dan 97.8%% por 65%% mas de tiempo)"
+        ),
+    )
     ap.add_argument("--rango", type=float, default=6.0, help="rango de la paleta de delta en dB")
     ap.add_argument("--out", required=True)
     ap.add_argument("--geojson", default=None)
@@ -180,6 +214,26 @@ def main() -> int:
         db_despues = nisar.a_db(hv_despues)
         delta = db_despues - db_antes
         valido = np.isfinite(delta)
+        if not valido.any():
+            px_antes = int(np.isfinite(db_antes).sum())
+            px_despues = int(np.isfinite(db_despues).sum())
+            detalle = (
+                "La caja no tiene pixeles validos en las dos fechas.\n"
+                f"  antes   ({Path(args.antes).name}): {px_antes} de {db_antes.size} px\n"
+                f"  despues ({Path(args.despues).name}): {px_despues} de {db_despues.size} px\n"
+            )
+            if px_antes == 0 or px_despues == 0:
+                detalle += (
+                    "  Una escena no tiene datos en esa caja: pasa cuando la caja cae\n"
+                    "  fuera de la huella con datos del granulo, o el producto la enmascara.\n"
+                    "  Movela o achicala hacia el centro de la escena."
+                )
+            else:
+                detalle += (
+                    "  Las dos tienen datos pero no quedan alineados despues del\n"
+                    "  multilook: revisa que sean el mismo track/frame y la misma version."
+                )
+            raise SystemExit(detalle)
         offset_db = 0.0
         if not args.sin_normalizar:
             offset_db = nisar.corrimiento_db(delta, valido)
@@ -231,6 +285,35 @@ def main() -> int:
                     return None, usados, "el compuesto NDVI quedo vacio"
                 return ndvi, usados, ""
             except Exception as exc:  # noqa: BLE001 - sin optico se sigue con HV
+                return None, [], f"{type(exc).__name__}: {exc}"
+
+        def _indices(fecha_texto: str):
+            """NDVI, NDBI, NDWI y NBR compuestos; (None, [], motivo) si falla."""
+            if not sentinel2.DISPONIBLE:
+                return None, [], "faltan rasterio/pystac-client"
+            try:
+                fecha = datetime.strptime(fecha_texto[:10], "%Y-%m-%d").date()
+                items = sentinel2.buscar_items(
+                    (oeste, sur, este, norte),
+                    fecha,
+                    int(args.dias),
+                    float(args.nubes),
+                    int(args.max_items),
+                )
+                if not items:
+                    return None, [], f"sin Sentinel-2 cerca de {fecha_texto[:10]}"
+                capas, usados = sentinel2.componer_indices(
+                    items,
+                    (oeste, sur, este, norte),
+                    db_antes.shape,
+                    transform,
+                    crs,
+                    px,
+                )
+                if not capas:
+                    return None, usados, "el compuesto de indices quedo vacio"
+                return capas, usados, ""
+            except Exception as exc:  # noqa: BLE001 - el panel es opcional
                 return None, [], f"{type(exc).__name__}: {exc}"
 
         if args.bosque == "ndvi" or args.verificar_s2:
@@ -385,6 +468,33 @@ def main() -> int:
                     optico_meta["motivo"] = motivo
         if not args.verificar_s2 or not optico_meta["disponible"]:
             optico_meta["motivo"] = optico_meta["motivo"] or "sin verificar"
+
+        if args.indices:
+            capas_antes, usados_a, motivo_a = _indices(antes.fecha)
+            capas_despues, usados_d, motivo_d = _indices(despues.fecha)
+            if capas_antes is None or capas_despues is None:
+                print(
+                    "aviso: sin panel de indices "
+                    f"({motivo_a or motivo_d or 'sin datos'})"
+                )
+            else:
+                try:
+                    import poster_indices
+
+                    titulo = (
+                        f"Sentinel-2 L2A · {antes.fecha[:10]} vs {despues.fecha[:10]} · "
+                        f"{len(usados_a)}+{len(usados_d)} item(s)"
+                    )
+                    panel = poster_indices.dibujar_panel(
+                        capas_antes, capas_despues, args.indices, titulo=titulo
+                    )
+                    print(f"indices: {panel}")
+                except Exception as exc:  # noqa: BLE001 - el panel es opcional
+                    print(
+                        "aviso: no pude dibujar el panel "
+                        f"({type(exc).__name__}: {exc})"
+                    )
+
         candidato_mask = perdida_radar & ~perdida
         if args.ganancia:
             ganancia = nisar.mayoria3(valido & (delta > umbral)) & valido
@@ -394,8 +504,6 @@ def main() -> int:
             ganancia = np.zeros(valido.shape, dtype=bool)
 
         pixeles_validos = int(valido.sum())
-        if pixeles_validos == 0:
-            raise SystemExit("La caja no tiene pixeles validos en las dos fechas.")
         area_px_ha = mpp_x * mpp_y / 10000.0
         minimo_px = 0
         candidato = candidato_mask
@@ -418,6 +526,7 @@ def main() -> int:
         perdida_bosque_pct = 100.0 * perdida_px / max(1, bosque_px)
         delta_medio = float(np.nanmean(delta[perdida])) if perdida_px else 0.0
 
+        paneles_meta: dict[str, str] = {}
         if args.modo == "delta":
             norm = np.clip((delta + rango) / (2.0 * rango), 0.0, 1.0)
             rgb = nisar.paleta("RdBu", norm)
@@ -478,6 +587,21 @@ def main() -> int:
                 )
             rgb = np.asarray(lienzo)
             px = min(4096, rgb.shape[1])
+            # Capas sueltas para el comparador de barrido del visor. El nombre
+            # (``_antes``/``_despues``) es el contrato con el frontend: no corta
+            # el compuesto, apila las dos capas y las arrastra.
+            paneles_meta = {
+                "antes": _guardar_panel(
+                    salida.with_name(f"{salida.stem}_antes.png"),
+                    gris_antes,
+                    max(1, px // 2),
+                ).name,
+                "despues": _guardar_panel(
+                    salida.with_name(f"{salida.stem}_despues.png"),
+                    gris_despues,
+                    max(1, px // 2),
+                ).name,
+            }
         else:
             vmin, vmax = nisar.limites(db_despues)
             base = nisar.paleta("gray", nisar.normalizar(db_despues, vmin, vmax))
@@ -526,6 +650,7 @@ def main() -> int:
         )
         meta = {
             "producto": "cambio",
+            **({"paneles": paneles_meta} if paneles_meta else {}),
             "antes": antes.ruta.stem,
             "despues": despues.ruta.stem,
             "fecha_antes": antes.fecha,
