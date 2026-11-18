@@ -418,6 +418,10 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                     *(["--confirmar-temporal", str(confirmar_temporal)]
                       if confirmar_temporal > 0 else []),
                     *(["--mmu-ha", f"{mmu_ha:g}"] if mmu_ha > 0 else []),
+                    # El panel de indices viaja con la verificacion optica: si
+                    # el usuario ya paga Sentinel-2, que se vea NDVI/NDBI/NDWI.
+                    *(["--indices", str(work / "nisar_cambio_indices.png")]
+                      if verificar else []),
                     "--out", str(work / f"nisar_cambio_{modo_cambio}_{px}.png"),
                     "--geojson", geojson,
                 ],

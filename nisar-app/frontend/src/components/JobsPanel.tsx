@@ -4,6 +4,8 @@ import { cancelJob, getJob, getJobs, revealJob, subscribeJob } from "../api";
 import { pesoArchivo, resumenStats } from "../formato";
 import type { StatsRow } from "../formato";
 import type { Job, JobSummary } from "../types";
+import { ComparadorBarrido } from "./ComparadorBarrido";
+import type { CapaBarrido } from "./ComparadorBarrido";
 
 const ETIQUETA: Record<Job["status"], string> = {
   queued: "en cola",
@@ -29,6 +31,15 @@ function enMarcha(job: JobSummary | Job | null): boolean {
   return job?.status === "queued" || job?.status === "running";
 }
 
+/**
+ * Fecha corta de una capa del comparador. El JSON de la corrida guarda la
+ * marca completa; en la etiqueta alcanza el día.
+ */
+function fechaDeCapa(valor: unknown, respaldo: string): string {
+  const texto = typeof valor === "string" ? valor.trim() : "";
+  return texto ? texto.slice(0, 10) : respaldo;
+}
+
 interface Props {
   /** Id del trabajo recién creado: se selecciona y se trae a la vista. */
   jobInicial: string | null;
@@ -43,11 +54,20 @@ interface Props {
  */
 export function JobsPanel({ jobInicial }: Props) {
   const raiz = useRef<HTMLElement | null>(null);
+  const logRef = useRef<HTMLOListElement | null>(null);
+  /** false cuando el usuario subio a leer una linea vieja: ahi no se autoscrollea. */
+  const seguirLog = useRef(true);
   const [corridas, setCorridas] = useState<JobSummary[]>([]);
   const [seleccionId, setSeleccionId] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<Job | null>(null);
   const [stats, setStats] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Comparador de barrido: lo que muestra la ventana flotante, o null cerrada.
+  const [comparador, setComparador] = useState<{
+    antes: CapaBarrido;
+    despues: CapaBarrido;
+    titulo: string;
+  } | null>(null);
 
   const refrescarLista = useCallback(async () => {
     try {
@@ -64,6 +84,26 @@ export function JobsPanel({ jobInicial }: Props) {
     setSeleccionId(jobInicial);
     raiz.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [jobInicial]);
+
+  // Al cambiar de corrida se vuelve a seguir el final del log.
+  useEffect(() => {
+    seguirLog.current = true;
+  }, [seleccionId]);
+
+  // Cada linea nueva baja el log, salvo que el usuario haya subido a leer.
+  // La dependencia es el array (identidad nueva por linea): con el largo, al
+  // llegar al tope de 400 lineas dejaria de seguir.
+  useEffect(() => {
+    const lista = logRef.current;
+    if (!lista || !seguirLog.current) return;
+    lista.scrollTop = lista.scrollHeight;
+  }, [detalle?.id, detalle?.logs]);
+
+  function alDesplazarLog() {
+    const lista = logRef.current;
+    if (!lista) return;
+    seguirLog.current = lista.scrollHeight - lista.scrollTop - lista.clientHeight < 32;
+  }
 
   // Sin seleccion (o si la corrida se podó), abre la mas nueva.
   useEffect(() => {
@@ -180,6 +220,28 @@ export function JobsPanel({ jobInicial }: Props) {
   const resumen: StatsRow[] = stats ? resumenStats(stats) : [];
   const imagenes = detalle?.artifacts.filter((arte) => arte.kind === "image") ?? [];
   const archivos = detalle?.artifacts.filter((arte) => arte.kind === "file") ?? [];
+  // El producto de cambio deja el par como `*_antes.png` / `*_despues.png`:
+  // ese sufijo es el contrato con el pipeline y lo unico que pide el barrido.
+  const capaAntes = imagenes.find((arte) => /_antes\.png$/i.test(arte.name)) ?? null;
+  const capaDespues =
+    imagenes.find((arte) => /_despues\.png$/i.test(arte.name)) ?? null;
+
+  function abrirComparador() {
+    if (!capaAntes || !capaDespues) return;
+    setComparador({
+      antes: {
+        url: capaAntes.url,
+        etiqueta: fechaDeCapa(stats?.fecha_antes, "Antes"),
+      },
+      despues: {
+        url: capaDespues.url,
+        etiqueta: fechaDeCapa(stats?.fecha_despues, "Después"),
+      },
+      titulo: `${String(detalle?.params.producto ?? "cambio")} · ${
+        detalle ? fechaHora(detalle.created_at) : "corrida"
+      }`,
+    });
+  }
 
   async function cancelar() {
     if (!detalle) return;
@@ -319,6 +381,47 @@ export function JobsPanel({ jobInicial }: Props) {
                       </a>
                     ))}
                   </div>
+                  {capaAntes && capaDespues ? (
+                    <div className="trabajos__barrido">
+                      <button
+                        type="button"
+                        className="btn btn--primary"
+                        title="Abre una ventana flotante con el antes y el después en el mismo mapa: arrastrás la línea"
+                        onClick={abrirComparador}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <rect
+                            x="1.5"
+                            y="4"
+                            width="13"
+                            height="8"
+                            rx="1.2"
+                            stroke="currentColor"
+                            strokeWidth="1.3"
+                          />
+                          <path d="M8 2.5v11" stroke="currentColor" strokeWidth="1.3" />
+                          <path
+                            d="M5.6 6.2 3.6 8l2 1.8M10.4 6.2l2 1.8-2 1.8"
+                            stroke="currentColor"
+                            strokeWidth="1.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        Comparar antes/después
+                      </button>
+                      <span className="trabajos__barrido-hint">
+                        Ventana flotante con barrido: arrastrás la línea y ves el antes y el
+                        después en el mismo mapa.
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -357,7 +460,11 @@ export function JobsPanel({ jobInicial }: Props) {
                 {detalle.logs.length === 0 ? (
                   <p className="trabajos__vacio">Sin líneas todavía.</p>
                 ) : (
-                  <ol className="trabajos__logs">
+                  <ol
+                    className="trabajos__logs"
+                    ref={logRef}
+                    onScroll={alDesplazarLog}
+                  >
                     {detalle.logs.map((linea, indice) => (
                       <li
                         key={`${linea.at}-${indice}`}
@@ -376,6 +483,16 @@ export function JobsPanel({ jobInicial }: Props) {
           )}
         </div>
       </div>
+
+      {/* `dialog` va en la capa superior del navegador: no lo recorta el panel. */}
+      {comparador ? (
+        <ComparadorBarrido
+          antes={comparador.antes}
+          despues={comparador.despues}
+          titulo={comparador.titulo}
+          alCerrar={() => setComparador(null)}
+        />
+      ) : null}
     </section>
   );
 }

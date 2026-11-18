@@ -253,6 +253,19 @@ class Escena:
         c0, c1 = ventana_x
         r0, r1 = ventana_y
 
+        # La caja se recorta a lo que cae dentro. Si queda mucho afuera, el
+        # resultado sale vacio y el error aparece lejos, asi que se avisa aca.
+        pedido = max(1e-9, (x_max - x_min) * (y_max - y_min))
+        cubierto = abs(float(self.x[c1 - 1] - self.x[c0])) * abs(
+            float(self.y[r0] - self.y[r1 - 1])
+        )
+        fraccion = cubierto / pedido
+        if fraccion < 0.95:
+            print(
+                f"aviso: la caja cae {100.0 * fraccion:.0f}% dentro de esta escena; "
+                "el resto queda afuera y se descarta."
+            )
+
         alto, ancho = r1 - r0, c1 - c0
         tope = max(1, int(px * 1.5))
         paso = max(1, int(math.ceil(max(alto, ancho) / tope)))

@@ -15,7 +15,7 @@ cual, porque es el código que realmente baja y procesa las escenas.
 
 | Nivel | Producto | Estado |
 | --- | --- | --- |
-| GCOV | recorte, RVI, cambio, serie, GeoTIFF, agua, incendio, fusión | completo |
+| GCOV | recorte, RVI, cambio (+ panel NDVI/NDBI/NDWI/NBR con Sentinel-2), serie, GeoTIFF, agua, incendio, fusión | completo |
 | SME2 | humedad del suelo (DSG, PMI, TSR) | completo, colección PROVISIONAL |
 | GUNW | interferograma: coherencia, fase envuelta y desenvuelta | completo, colección PROVISIONAL |
 

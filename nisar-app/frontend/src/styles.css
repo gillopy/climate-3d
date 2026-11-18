@@ -299,16 +299,21 @@ h3 {
 }
 
 /* --- Visor NISAR ------------------------------------------------------ */
+/* Tres columnas: configuracion del pedido, mapa y resultados de los jobs.
+   El DOM va mapa -> configuracion -> resultados; las areas fijan la posicion
+   visual sin mover bloques grandes de JSX. */
 .nisar {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-columns: 350px minmax(0, 1fr) 410px;
+  grid-template-areas: "config mapa resultados";
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
 
 .nisar__mapa {
+  grid-area: mapa;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -454,6 +459,19 @@ h3 {
 }
 
 .nisar__panel {
+  grid-area: config;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--carbon);
+}
+
+/* Columna derecha: historial de corridas, resultados y log en vivo. */
+.nisar__resultados {
+  grid-area: resultados;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -868,13 +886,12 @@ h3 {
 }
 
 /* --- Panel de trabajos ------------------------------------------------
-   Vive en la misma columna que los hiperparametros: lista de corridas
-   arriba y detalle (plan, resultados, estadisticas y log) abajo. */
+   Vive en la columna derecha (resultados): lista de corridas arriba y
+   detalle (plan, resultados, estadisticas y log) abajo. */
 .trabajos {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--line);
   background: var(--carbon);
 }
 
@@ -1199,6 +1216,11 @@ h3 {
   background: var(--void);
 }
 
+/* En la columna de resultados hay altura de sobra: el log respira mas. */
+.nisar__resultados .trabajos__logs {
+  max-height: min(42vh, 360px);
+}
+
 .trabajos__log {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);
@@ -1236,6 +1258,170 @@ h3 {
   padding: 10px 7px;
   font-size: 10.5px;
   color: var(--ash);
+}
+
+/* --- Comparador de barrido -------------------------------------------- */
+.trabajos__barrido {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.trabajos__barrido-hint {
+  max-width: 46ch;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--ash);
+}
+
+/* Ventana flotante: `showModal` la pone en la capa superior del navegador. */
+.barrido {
+  width: min(1120px, calc(100vw - 28px));
+  max-height: calc(100vh - 40px);
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--carbon);
+  color: var(--mist);
+  overflow: auto;
+}
+
+/* Sin padding en el `dialog`: un clic en el backdrop no toca el contenido. */
+.barrido__cuerpo {
+  padding: 14px 16px 12px;
+}
+
+.barrido::backdrop {
+  background: rgba(4, 5, 6, 0.74);
+}
+
+.barrido__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.barrido__title {
+  font-size: 13px;
+}
+
+.barrido__sub {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--fog);
+}
+
+.barrido__marco {
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* El aspecto lo fija la imagen: si el lienzo lo copia, las dos capas
+   coinciden píxel a píxel y el barrido no se corre. */
+.barrido__lienzo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--void);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.barrido__lienzo--arrastrando {
+  cursor: grabbing;
+}
+
+.barrido__capa {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.barrido__imagen {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+.barrido__sello {
+  position: absolute;
+  top: 10px;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid rgba(247, 248, 248, 0.16);
+  border-radius: var(--pill);
+  background: rgba(8, 9, 10, 0.74);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.barrido__sello--antes {
+  left: 10px;
+}
+
+.barrido__sello--despues {
+  right: 10px;
+}
+
+.barrido__linea {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(247, 248, 248, 0.92);
+  box-shadow: 0 0 0 1px rgba(8, 9, 10, 0.45);
+  pointer-events: none;
+}
+
+.barrido__asa {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(247, 248, 248, 0.9);
+  border-radius: 50%;
+  background: rgba(8, 9, 10, 0.82);
+  color: var(--paper);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.barrido__pie {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--ash);
+}
+
+.barrido__pos {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--fog);
 }
 
 /* Leaflet sobre el mundo oscuro de la consola. */
@@ -1277,15 +1463,41 @@ h3 {
   border-top-color: var(--line);
 }
 
-@media (max-width: 900px) {
+/* Menos ancho: las columnas laterales se angostan. */
+@media (max-width: 1400px) {
   .nisar {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(240px, 45vh) minmax(0, 1fr);
+    grid-template-columns: 320px minmax(0, 1fr) 370px;
+  }
+}
+
+/* Sin ancho para tres columnas: se apilan mapa, configuracion y resultados.
+   Flex (no grid): con filas auto dentro de una altura definida las filas se
+   estiraban y el contenido de la configuracion quedaba tapado. */
+@media (max-width: 1150px) {
+  .nisar {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .nisar__mapa {
+    flex: 0 0 auto;
+    height: 45vh;
+    min-height: 260px;
   }
 
   .nisar__panel {
+    flex: 0 0 auto;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    overflow-y: visible;
+  }
+
+  .nisar__resultados {
+    flex: 0 0 auto;
     border-left: 0;
     border-top: 1px solid var(--line);
+    overflow-y: visible;
   }
 
   .nisar__detalle {
