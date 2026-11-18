@@ -2748,16 +2748,42 @@ input[type="range"]:disabled {
   color: var(--iris-hi);
 }
 
+@media (max-width: 900px) {
+  .nisar {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, 45vh) minmax(0, 1fr);
+  }
+
+  .nisar__panel {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .nisar__detalle {
+    max-height: none;
+  }
+
+  .vista-switch {
+    order: 3;
+  }
+}
+
+/* --- Visor NISAR ------------------------------------------------------ */
+/* Tres columnas: configuracion del pedido, mapa y resultados de los jobs.
+   El DOM va mapa -> configuracion -> resultados; las areas fijan la posicion
+   visual sin mover bloques grandes de JSX. */
 .nisar {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-columns: 350px minmax(0, 1fr) 410px;
+  grid-template-areas: "config mapa resultados";
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
 
 .nisar__mapa {
+  grid-area: mapa;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -2776,7 +2802,9 @@ input[type="range"]:disabled {
   z-index: 600;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  max-width: calc(100% - 24px);
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
@@ -2794,6 +2822,47 @@ input[type="range"]:disabled {
   min-width: 0;
 }
 
+/* Herramientas de dibujo: cuadro o lápiz. El estado activo usa el mismo ámbar
+   que la caja, para que se entienda qué se está dibujando. */
+.nisar__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--carbon);
+}
+
+.nisar__tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--fog);
+  font-family: var(--narrow);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nisar__tool:hover {
+  background: var(--obsidian);
+  color: var(--mist);
+}
+
+.nisar__tool--on,
+.nisar__tool--on:hover {
+  background: rgba(245, 165, 36, 0.16);
+  color: #ffc35c;
+}
+
 /* Caja por coordenadas: dibujar 7 km a mano en el mapa es imposible. */
 .nisar__coords {
   display: flex;
@@ -2801,16 +2870,31 @@ input[type="range"]:disabled {
   gap: 6px;
 }
 
+.nisar__coords-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .nisar__coords input {
-  width: 230px;
+  width: 280px;
   min-height: 30px;
   padding: 4px 8px;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
-  background: var(--ink);
+  background: var(--obsidian);
   color: var(--mist);
   font-family: var(--mono);
   font-size: 10.5px;
+}
+
+/* Formato y ejemplo siempre visibles: el placeholder se pierde al escribir. */
+.nisar__coords-hint {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  line-height: 1.1;
+  color: var(--ash);
+  white-space: nowrap;
 }
 
 .nisar__coords input:focus-visible {
@@ -2819,6 +2903,9 @@ input[type="range"]:disabled {
 }
 
 .nisar__coord {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding-right: 4px;
   font-family: var(--mono);
   font-size: 10.5px;
@@ -2827,12 +2914,39 @@ input[type="range"]:disabled {
   white-space: nowrap;
 }
 
+.nisar__coord-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 2px;
+  background: #f5a524;
+}
+
+/* El trazo de la caja lleva una sombra suave para despegarse del mapa. */
+.nisar__caja {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
+}
+
 .nisar__panel {
+  grid-area: config;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--carbon);
+}
+
+/* Columna derecha: historial de corridas, resultados y log en vivo. */
+.nisar__resultados {
+  grid-area: resultados;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   border-left: 1px solid var(--line);
   background: var(--carbon);
 }
@@ -2921,7 +3035,8 @@ input[type="range"]:disabled {
 }
 
 .nisar__lista {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  max-height: 200px;
   min-height: 90px;
   margin: 0;
   padding: 8px;
@@ -3022,9 +3137,9 @@ input[type="range"]:disabled {
 
 .nisar__detalle {
   flex: 0 0 auto;
-  max-height: 44%;
+  max-height: none;
   padding: 12px var(--pad);
-  overflow-y: auto;
+  overflow-y: visible;
   border-top: 1px solid var(--line);
 }
 
@@ -3169,98 +3284,6 @@ input[type="range"]:disabled {
   text-transform: none;
 }
 
-.nisar__job {
-  margin-top: 10px;
-}
-
-.nisar__job-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 10.5px;
-  color: var(--fog);
-}
-
-.nisar__bar {
-  height: 4px;
-  margin: 5px 0 8px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--slate);
-}
-
-.nisar__bar i {
-  display: block;
-  height: 100%;
-  background: var(--iris-hi);
-  transition: width 200ms var(--ease);
-}
-
-.nisar__logs {
-  max-height: 104px;
-  margin: 0 0 8px;
-  padding: 0 0 0 12px;
-  overflow-y: auto;
-  font-family: var(--mono);
-  font-size: 9.5px;
-  color: var(--ash);
-}
-
-.nisar__logs li {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.nisar__job .nisar__imagen {
-  margin-top: 8px;
-}
-
-.nisar__stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 10px;
-  margin: 8px 0;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--obsidian);
-}
-
-.nisar__stat {
-  min-width: 0;
-}
-
-.nisar__stat dt {
-  font-family: var(--narrow);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ash);
-}
-
-.nisar__stat dd {
-  margin: 1px 0 0;
-  font-size: 11px;
-  color: var(--mist);
-  overflow-wrap: anywhere;
-}
-
-.nisar__archivo {
-  display: block;
-  margin-top: 6px;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--iris-hi);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-
-.nisar__archivo:hover {
-  text-decoration: underline;
-}
-
 .nisar__fechas {
   margin: 8px 0;
   padding: 9px 10px;
@@ -3332,6 +3355,397 @@ input[type="range"]:disabled {
   color: var(--ash);
 }
 
+/* --- Panel de trabajos ------------------------------------------------
+   Vive en la columna derecha (resultados): lista de corridas arriba y
+   detalle (plan, resultados, estadisticas y log) abajo. */
+.trabajos {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--carbon);
+}
+
+.trabajos__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 10px var(--pad);
+  border-bottom: 1px solid var(--line);
+}
+
+.trabajos__title {
+  font-size: 12px;
+  letter-spacing: -0.01em;
+}
+
+.trabajos__count {
+  padding: 0 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--pill);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--fog);
+}
+
+.trabajos__cuerpo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.trabajos__lista {
+  max-height: 210px;
+  min-height: 0;
+  margin: 0;
+  padding: 6px 8px;
+  overflow-y: auto;
+  border-right: 0;
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.trabajos__fila {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trabajos__fila:hover {
+  background: var(--obsidian);
+}
+
+.trabajos__fila[aria-current="true"] {
+  border-color: var(--iris-line);
+  background: var(--iris-soft);
+}
+
+.trabajos__punto {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--ash);
+}
+
+.trabajos__punto--done {
+  background: var(--success);
+  box-shadow: 0 0 0 2px var(--success-soft);
+}
+
+.trabajos__punto--running,
+.trabajos__punto--queued {
+  background: var(--iris-hi);
+  box-shadow: 0 0 0 2px var(--iris-soft);
+}
+
+.trabajos__punto--error {
+  background: var(--danger);
+  box-shadow: 0 0 0 2px var(--danger-soft);
+}
+
+.trabajos__punto--cancelled {
+  background: var(--warn);
+  box-shadow: 0 0 0 2px var(--warn-soft);
+}
+
+.trabajos__fila-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.trabajos__fila-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.trabajos__estado {
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mist);
+}
+
+.trabajos__hora {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ash);
+  white-space: nowrap;
+}
+
+.trabajos__fila-stage {
+  overflow: hidden;
+  font-size: 10.5px;
+  color: var(--fog);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.trabajos__mini {
+  height: 3px;
+  margin-top: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--slate);
+}
+
+.trabajos__mini i {
+  display: block;
+  height: 100%;
+  background: var(--iris-hi);
+}
+
+.trabajos__detalle {
+  min-height: 0;
+  padding: 10px var(--pad) 16px;
+  overflow-y: visible;
+}
+
+.trabajos__detalle-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trabajos__detalle-title {
+  font-size: 12px;
+}
+
+.trabajos__detalle-sub {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  color: var(--ash);
+}
+
+.trabajos__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.trabajos__acciones .btn {
+  min-height: 28px;
+  padding: 3px 9px;
+  font-size: 10.5px;
+}
+
+.trabajos__aviso {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(248, 81, 73, 0.32);
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
+  color: #ffb4ae;
+  font-size: 10.5px;
+}
+
+.trabajos__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--ash);
+}
+
+.trabajos__meta-bbox {
+  overflow-wrap: anywhere;
+}
+
+.trabajos__plan {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 10.5px;
+  color: var(--fog);
+}
+
+.trabajos__barra {
+  height: 3px;
+  margin: 8px 0 0;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--slate);
+}
+
+.trabajos__barra i {
+  display: block;
+  height: 100%;
+  background: var(--iris-hi);
+  transition: width 200ms var(--ease);
+}
+
+.trabajos__seccion {
+  margin-top: 12px;
+}
+
+.trabajos__seccion h4 {
+  margin: 0 0 6px;
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.trabajos__imagenes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.trabajos__imagenes a {
+  display: block;
+}
+
+.trabajos__imagenes img {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--void);
+}
+
+.trabajos__archivo {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--iris-hi);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.trabajos__archivo:hover {
+  text-decoration: underline;
+}
+
+.trabajos__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--obsidian);
+}
+
+.trabajos__stat {
+  min-width: 0;
+}
+
+.trabajos__stat dt {
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.trabajos__stat dd {
+  margin: 1px 0 0;
+  font-size: 11px;
+  color: var(--mist);
+  overflow-wrap: anywhere;
+}
+
+.trabajos__logs {
+  max-height: 200px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--void);
+}
+
+/* En la columna de resultados hay altura de sobra: el log respira mas. */
+.nisar__resultados .trabajos__logs {
+  max-height: min(42vh, 360px);
+}
+
+.trabajos__log {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  padding: 3px 8px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: var(--fog);
+}
+
+.trabajos__log + .trabajos__log {
+  border-top: 1px solid rgba(35, 37, 42, 0.55);
+}
+
+.trabajos__log time {
+  color: var(--ash);
+  font-variant-numeric: tabular-nums;
+}
+
+.trabajos__log span {
+  overflow-wrap: anywhere;
+}
+
+.trabajos__log--warn {
+  color: #e3b341;
+}
+
+.trabajos__log--error {
+  color: #ff9d97;
+}
+
+.trabajos__vacio {
+  margin: 0;
+  padding: 10px 7px;
+  font-size: 10.5px;
+  color: var(--ash);
+}
+
+/* --- Comparador de barrido -------------------------------------------- */
+.trabajos__barrido {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.trabajos__barrido-hint {
+  max-width: 46ch;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--ash);
+}
+
 /* Leaflet sobre el mundo oscuro de la consola. */
 .nisar .leaflet-container {
   background: #0b0c0d;
@@ -3371,22 +3785,57 @@ input[type="range"]:disabled {
   border-top-color: var(--line);
 }
 
-@media (max-width: 900px) {
+/* Menos ancho: las columnas laterales se angostan. */
+@media (max-width: 1400px) {
+
   .nisar {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(240px, 45vh) minmax(0, 1fr);
+    grid-template-columns: 320px minmax(0, 1fr) 370px;
+  }}
+
+
+/* Sin ancho para tres columnas: se apilan mapa, configuracion y resultados.
+   Flex (no grid): con filas auto dentro de una altura definida las filas se
+   estiraban y el contenido de la configuracion quedaba tapado. */
+@media (max-width: 1150px) {
+
+  .nisar {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .nisar__mapa {
+    flex: 0 0 auto;
+    height: 45vh;
+    min-height: 260px;
   }
 
   .nisar__panel {
+    flex: 0 0 auto;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    overflow-y: visible;
+  }
+
+  .nisar__resultados {
+    flex: 0 0 auto;
     border-left: 0;
     border-top: 1px solid var(--line);
+    overflow-y: visible;
   }
 
   .nisar__detalle {
     max-height: none;
   }
 
-  .vista-switch {
-    order: 3;
-  }
-}
+  .trabajos__lista {
+    max-height: 160px;
+  }}
+
+
+@media (prefers-reduced-motion: reduce) {
+
+
+  .nisar__bar i {
+    transition: none;
+  }}
