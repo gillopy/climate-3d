@@ -102,7 +102,7 @@ algo adelante que autentique.
 | `repo_ready: false` en `/api/health` | el venv no quedó en `/app/.venv` | `docker compose up -d --build` y mirá el log del build |
 | `data_root_exists: false` | la ruta del host no existe o está mal escrita | revisá `DATA_DIR` en `.env` |
 | `la raíz de datos … no es escribible` | en Linux, el UID 1000 del contenedor no es dueño de la carpeta | `sudo chown -R 1000:1000 "$DATA_DIR"` |
-| `no existe '/app/app/var/media'` | se saltó el asistente | borrá `$DATA_DIR/.media` y volvé a correrlo |
+| `'$DATA_DIR/.media' no es escribible` | el volumen no tiene permiso para el UID 1000 | `sudo mkdir -p "$DATA_DIR/.media" && sudo chown -R 1000:1000 "$DATA_DIR"` |
 | `port is already allocated` | el 8080 está ocupado | cambiá `PORT` en `.env` |
 | un render falla con `eccodes` | falta la librería del sistema | `docker compose build --no-cache` |
 | el primer render tarda muchísimo | está bajando datos satelitales | es normal: mirá `docker compose logs -f app` |
