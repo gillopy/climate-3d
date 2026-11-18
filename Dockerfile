@@ -20,6 +20,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HOME=/tmp/home \
     CLIMATE3D_CONTENEDOR=1 \
     CLIMATE3D_DATOS=/data \
+    CLIMATE3D_MEDIA=/data/.media \
     CLIMATE3D_PYTHON=/app/.venv/bin/python
 
 # `cartopy`, `shapely`, `pyproj`, `h5py`, `pykdtree` y `eccodes` llegan como wheels
@@ -66,10 +67,10 @@ COPY datos/README.md datos/paraguay_gadm.json ./datos/
 COPY --from=web /build/dist ./app/web/dist
 
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+# La raiz de artefactos vive en el volumen (/data/.media): la crea el entrypoint como
+# appuser, no el build. Dentro de la imagen no queda nada que escribir en /app/app/var.
 RUN chmod 0755 /usr/local/bin/entrypoint.sh \
- && useradd --create-home --uid 1000 --shell /bin/bash appuser \
- && mkdir -p /app/app/var/media \
- && chown -R appuser:appuser /app/app/var
+ && useradd --create-home --uid 1000 --shell /bin/bash appuser
 
 USER appuser
 

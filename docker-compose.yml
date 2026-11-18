@@ -14,10 +14,9 @@ services:
     ports:
       - "127.0.0.1:${PORT:-8080}:8000"
     volumes:
-      # Los .nc, las salidas y el estado de los jobs viven en tu disco, no en la imagen.
+      # Una sola raíz: los .nc, las salidas y los artefactos de los jobs (`.media/`)
+      # viven en tu disco, no en la imagen. Sobreviven a un rebuild.
       - "${DATA_DIR:?falta DATA_DIR: corré setup.ps1 o setup.sh, o copiá env.example a .env}:/data"
-      # Los artefactos de los jobs sobreviven a un rebuild de la imagen.
-      - "${DATA_DIR}/.media:/app/app/var/media"
     restart: unless-stopped
     stop_grace_period: 30s
     healthcheck:

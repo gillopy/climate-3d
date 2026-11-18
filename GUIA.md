@@ -11,9 +11,15 @@ baja el dato        imagen fija             render cuadro a cuadro     MP4 / GIF
 (necesita red)      (opcional, offline)     (offline)                  (offline)
 ```
 
-> Todo va a `D:\Users\guill\dataset era5` salvo que exportes `CLIMATE3D_DATOS`. Los `.nc`
+> Todo va a `D:\Users\guill\dataset era5` salvo que configures otra raíz. Los `.nc`
 > (varios GB) y las salidas (PNG/MP4) **nunca** van dentro del repositorio. Los `.h5` de
 > NISAR van aparte (`E:\nisar` en Windows, o lo que diga `CLIMATE3D_NISAR`).
+>
+> La consola pregunta la raíz al arrancar (`ARRANCAR.bat`) y la guarda en
+> `%LOCALAPPDATA%\climate3d\config.json`: de ahí cuelgan las descargas, `salidas\` y
+> `.media\` (artefactos de los jobs, historial y cachés). Precedencia: variable de entorno
+> (`CLIMATE3D_DATOS`, `CLIMATE3D_MEDIA`, `CLIMATE3D_NISAR`) → archivo → default de arriba.
+> Para ver o cambiar sin levantar nada: `.venv\Scripts\python.exe comun\rutas.py --show`.
 
 **Sólo la etapa 1 necesita internet.** Las otras tres trabajan sobre lo que ya bajaste; si les
 falta un dato, te dicen qué comando correr.

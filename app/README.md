@@ -69,17 +69,21 @@ equivocado vas a ver `No module named uvicorn`.
 
 ### 3. Arrancar
 
-Un solo comando, desde la raíz del repo:
-
-```powershell
-app\.venv\Scripts\python.exe -m uvicorn api.main:app --app-dir app --port 8000
-```
+Doble clic en `ARRANCAR.bat` (o `.\ARRANCAR.ps1` desde PowerShell, en la raíz del repo).
+Pregunta **dónde guardar todo** — datos, salidas y caché —, valida la carpeta, la recuerda
+para la próxima y levanta el servidor. Enter acepta la que ya está configurada.
 
 Esa terminal queda ocupada: **es el servidor**. Dejala abierta y abrí:
 
 **http://127.0.0.1:8000**
 
 Un solo puerto sirve la API y la UI. Para cortarlo: `Ctrl+C` en esa terminal.
+
+El comando largo, si preferís no usar el asistente (usa lo ya configurado):
+
+```powershell
+app\.venv\Scripts\python.exe -m uvicorn api.main:app --app-dir app --port 8000
+```
 
 ### 4. Confirmar que arrancó bien
 
@@ -129,17 +133,34 @@ npm run build
 Otro puerto (la UI va con el mismo, no hay nada más que tocar):
 
 ```powershell
-app\.venv\Scripts\python.exe -m uvicorn api.main:app --app-dir app --port 8001
+.\ARRANCAR.ps1 -Port 8001
 ```
 
-Otra carpeta de datos (por defecto `D:\Users\guill\dataset era5`):
+Otra raíz de trabajo:
 
 ```powershell
-$env:CLIMATE3D_DATOS = "E:\mis datos"
+.\ARRANCAR.ps1 -Raiz "D:\climate3d"
 ```
 
-Esa variable vive en la terminal actual: al cerrarla se pierde. Para dejarla
-fija, `setx CLIMATE3D_DATOS "E:\mis datos"` y abrí una terminal nueva.
+La raíz elegida queda guardada en `%LOCALAPPDATA%\climate3d\config.json` (no en el repo:
+el repo se sincroniza y las rutas son de esta máquina). De ella cuelgan las descargas, las
+`salidas\` y `.media\` — artefactos de los jobs, historial y cachés.
+
+Para ver o cambiar las raíces sin levantar el server:
+
+```powershell
+.venv\Scripts\python.exe comun\rutas.py --show
+```
+
+| Variable | Qué mueve | Default |
+| --- | --- | --- |
+| `CLIMATE3D_DATOS` | datos crudos y `salidas\` | el del archivo, o `D:\Users\guill\dataset era5` |
+| `CLIMATE3D_MEDIA` | artefactos, historial y cachés | `<datos>\.media` |
+| `CLIMATE3D_NISAR` | los `.h5` de NISAR (~1.9 GB cada uno) | `E:\nisar` |
+| `CLIMATE3D_CONFIG` | el archivo de configuración | `%LOCALAPPDATA%\climate3d\config.json` |
+
+Las variables viven en la terminal actual: al cerrarla se pierde. Lo que se guarda con el
+asistente, no.
 
 ### 7. Problemas comunes
 
@@ -563,7 +584,7 @@ no entra al catálogo: es un visor de búsqueda, no una receta.
 - Niveles: **GCOV** (backscatter RTC, el de imágenes), GSLC, GUNW y SME2.
 - Cada escena trae su polígono, miniatura y las imágenes browse públicas (mapa
   lat/lon y polarizaciones HH/HV). El backend las proxya y las cachea en
-  `app/var/nisar/cache`; solo acepta URLs
+  `<raíz>\.media\nisar\cache`; solo acepta URLs
   `https://nisar.asf.earthdatacloud.nasa.gov/BROWSE/…`.
 - La búsqueda y el browse no piden credenciales. La descarga del `.h5` sí:
   un GCOV pesa ~1.9 GB y exige Earthdata Login.
@@ -667,7 +688,7 @@ detector de deforestación; el detalle y los límites están en
 
 ## Caché de renders
 
-La carpeta de trabajo es `app/var/media/cache/<firma>/`, donde la firma es un
+La carpeta de trabajo es `<raíz>\.media\cache\<firma>\`, donde la firma es un
 hash de producto + parámetros (sin `descargar`, que no cambia el render).
 
 Consecuencias:
@@ -676,7 +697,7 @@ Consecuencias:
   existentes si el sello de render no cambió. Medido: 27 s → 6 s.
 - Un render largo se puede retomar: matá el server, volvé a pedir lo mismo.
 - La caché **no** se borra al podar el historial de jobs. Se limpia a mano:
-  `Remove-Item -Recurse app\var\media\cache`.
+  `Remove-Item -Recurse "$env:CLIMATE3D_MEDIA\cache"` (o `<raíz>\.media\cache`).
 
 ## Cómo se cancela
 
@@ -739,19 +760,19 @@ Qué cubre:
   `test_paraguay_ultimos.py`, `test_descargadores_gibs.py` — recetas, bandas,
   encuadre y descargadores.
 
-Resultado esperado al día de hoy: **314 tests, OK**. Si ves `skipped`, falta
+Resultado esperado al día de hoy: **405 tests, OK**. Si ves `skipped`, falta
 alguna dependencia de `requirements-dev.txt`; el mensaje del skip dice cuál.
 
 ## Límites conocidos
 
 - Un solo worker. Dos personas pidiendo renders a la vez ven la cola, no
   paralelismo.
-- El historial de jobs se guarda en `app/var/media/historial.jsonl` (las últimas
+- El historial de jobs se guarda en `<raíz>\.media\historial.jsonl` (las últimas
   40 corridas terminadas) y se relee al arrancar. Si el archivo se borra, la
-  lista arranca vacía; los artefactos quedan en `app/var/media/cache`.
+  lista arranca vacía; los artefactos quedan en `<raíz>\.media\cache`.
 - Sin autenticación: es local.
-- El repo vive en OneDrive: `node_modules`, `.venv` y la caché de renders generan
-  mucho tráfico de sincronización. Conviene moverlo fuera antes de crecer.
+- El repo vive en OneDrive: `node_modules` y `.venv` generan mucho tráfico de
+  sincronización. La caché de renders ya **no** está ahí: vive en la raíz de trabajo.
 - Progreso por líneas de log: en descargas largas la barra se queda quieta hasta
   que el script imprime. Es honesto, no inventado.
 - El archivo de cada fuente tiene retención: NOAA S3 conserva GOES unas semanas.

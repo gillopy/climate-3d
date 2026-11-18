@@ -7,7 +7,7 @@
 set -euo pipefail
 
 DATOS="${CLIMATE3D_DATOS:-/data}"
-MEDIA="/app/app/var/media"
+MEDIA="${CLIMATE3D_MEDIA:-$DATOS/.media}"
 
 fallar() {
     printf 'climate3d: %s\n' "$1" >&2
@@ -22,7 +22,7 @@ if [ ! -d "$DATOS" ]; then
 fi
 [ -w "$DATOS" ] || fallar "la raíz de datos '$DATOS' no es escribible. En Linux, el UID 1000 del contenedor necesita permiso sobre DATA_DIR."
 
-[ -d "$MEDIA" ] || fallar "no existe '$MEDIA'. En compose lo monta ${DATOS}/.media; corré setup.ps1 o setup.sh."
+mkdir -p "$MEDIA" || fallar "no se pudo crear '$MEDIA'. Revisá el volumen /data (DATA_DIR en .env)."
 [ -w "$MEDIA" ] || fallar "'$MEDIA' no es escribible. Borrá esa carpeta y volvé a correr el asistente."
 
 # Copernicus CDS: ~/.cdsapirc. El archivo nunca viaja en la imagen.

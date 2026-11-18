@@ -43,15 +43,15 @@ class ArtefactosDelContenedor(unittest.TestCase):
         dist = next(i for i, l in enumerate(lineas) if l.startswith("COPY --from=web"))
         self.assertLess(app, dist)
 
-    def test_el_runtime_prepara_la_carpeta_del_job(self) -> None:
-        # main.py hace MEDIA.mkdir() sobre /app, que es de root: tiene que existir antes.
+    def test_el_runtime_escribe_los_artefactos_en_el_volumen(self) -> None:
+        # S1: la raíz de artefactos no vive dentro de la imagen; el entrypoint la crea
+        # en /data/.media, que es el volumen montado desde el host.
         texto = (RAIZ / "Dockerfile").read_text(encoding="utf-8")
-        for esperado in (
-            "mkdir -p /app/app/var/media",
-            "chown -R appuser:appuser /app/app/var",
-            "USER appuser",
-        ):
+        for esperado in ("CLIMATE3D_MEDIA=/data/.media", "USER appuser"):
             self.assertIn(esperado, texto)
+        entrypoint = (RAIZ / "docker" / "entrypoint.sh").read_text(encoding="utf-8")
+        self.assertIn('mkdir -p "$MEDIA"', entrypoint)
+        self.assertNotIn("/app/app/var/media", entrypoint)
 
     def test_compose_publica_solo_en_loopback(self) -> None:
         texto = (RAIZ / "docker-compose.yml").read_text(encoding="utf-8")
