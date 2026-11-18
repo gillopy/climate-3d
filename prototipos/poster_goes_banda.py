@@ -177,8 +177,11 @@ def componer_banda(nc: Path, args) -> tuple[np.ndarray, float, dict]:
         valores = _muestrear_banda(campo, x, y, lon0, h, lon, lat)
         a = tc._alfa(rho, px, escala) * dentro
         # El corte va en el planeta, no en el marco: rampa analítica de
-        # 1.5 px sobre el círculo de corte, sin dientes ni banda.
-        a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
+        # 1.5 px sobre el círculo de corte, sin dientes ni banda. Sólo en
+        # modo globo (escala ~= 1): en el encuadre regional el dato válido
+        # llena el cuadro y el corte le comería las esquinas en círculo.
+        if escala > 0.5:
+            a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
 
         normalizado = np.clip((valores - args.vmin) / (args.vmax - args.vmin), 0.0, 1.0)
         n = len(lut)

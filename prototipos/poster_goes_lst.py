@@ -456,7 +456,10 @@ def componer_lst(nc: Path, args) -> tuple[np.ndarray, float, dict]:
         valores = _muestrear_banda(campo, x, y, lon0, h, lon, lat)
         a = tc._alfa(rho, px, escala) * dentro
         # The planet edge, not the frame: same analytic 1.5 px ramp as the RGBs.
-        a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
+        # Globe mode only (escala ~= 1): with a regional zoom the data fills the
+        # frame and this cut would eat the corners into a circle.
+        if escala > 0.5:
+            a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
 
         normalizado = np.clip((valores - args.vmin) / (args.vmax - args.vmin), 0.0, 1.0)
         # NaN (no retrieval) must not reach the integer cast: quiet it first.

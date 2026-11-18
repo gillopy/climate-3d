@@ -140,7 +140,11 @@ def componer_sandwich(vis_nc: Path, ir_nc: Path, args) -> tuple[np.ndarray, floa
         v = _muestrear_banda(vis, xv, yv, lon0, h, lon, lat)
         t_campo = _muestrear_banda(ir, xi, yi, lon0, h, lon, lat)
         a = tc._alfa(rho, px, escala) * dentro
-        a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
+        # El corte va en el planeta, no en el marco. Sólo en modo globo
+        # (escala ~= 1): en el encuadre regional el dato válido llena el
+        # cuadro y el corte le comería las esquinas en círculo.
+        if escala > 0.5:
+            a = a * tc._alfa(rho, px, 1.0 / CORTE_PLANETA)
 
         vis_n = np.clip(v / 100.0, 0.0, 1.0)
         t = np.clip((t_campo - args.vmin) / (args.vmax - args.vmin), 0.0, 1.0)
