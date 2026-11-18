@@ -441,10 +441,12 @@ script del compuesto es [`prototipos/poster_pace_gibs.py`](./prototipos/poster_p
 
 ## Requisitos
 
-- Python 3.14 y el entorno `.venv` de la raíz.
-- Las dependencias están fijadas en [`requirements.txt`](./requirements.txt).
+- Python 3.12 o superior y el entorno `.venv` de la raíz.
+- Las dependencias están en [`pyproject.toml`](./pyproject.toml) y fijadas, versión por
+  versión, en [`uv.lock`](./uv.lock): se instalan con [uv](https://docs.astral.sh/uv/).
 
 ```powershell
+uv sync                                                 # crea/actualiza .venv
 .venv\Scripts\python.exe -c "import cartopy, matplotlib, requests, PIL, eccodes, h5py; print('ok')"
 ```
 

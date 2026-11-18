@@ -29,7 +29,7 @@ PowerShell no molesta.
 
 | Cosa | Versión | Para qué |
 | --- | --- | --- |
-| Python | 3.11 o superior (probado con 3.14.2) | el backend |
+| Python | 3.12 o superior (probado con 3.14.2) | el backend |
 | Node.js + npm | Node 20.19 o superior (probado con 24.15.0) | compilar el frontend |
 | `.venv` de la raíz | — | un solo entorno: pipeline y consola |
 | carpeta de datos | — | los `.nc` / `.npz` ya descargados |
@@ -38,22 +38,21 @@ Comprobalo en dos segundos:
 
 ```powershell
 python --version
+uv --version
 node --version
 npm --version
 Test-Path .venv\Scripts\python.exe
 ```
 
-Si `python` no existe, usá `py` en su lugar (`py -3.14 -m venv ...`). Si
-`Test-Path` devuelve `False`, falta el entorno del pipeline: ver "Problemas
-comunes".
+Si `uv` no existe, instalalo con `winget install astral-sh.uv` (o `pip install uv`). Si
+`Test-Path` devuelve `False`, falta el entorno: `uv sync` lo crea (ver "Problemas
+comunes").
 
 ### 2. Instalación (una sola vez)
 
 ```powershell
-# entorno unico: pipeline y consola juntos
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install --upgrade pip
-.venv\Scripts\python.exe -m pip install -r requirements.txt
+# entorno unico: pipeline y consola juntos (uv lee pyproject.toml + uv.lock)
+uv sync
 
 # frontend: se compila una vez y el backend lo sirve
 cd app\web
@@ -62,9 +61,9 @@ npm run build
 cd ..\..
 ```
 
-Son **un solo entorno**: `requirements.txt` de la raíz incluye `app/requirements.txt`,
-así que el mismo `.venv` corre el pipeline (`cartopy`, `xarray`, etc.) y la consola
-(`fastapi`, `uvicorn`, `psutil`). No hay un segundo venv que instalar ni que elegir.
+Son **un solo entorno**: `pyproject.toml` declara el pipeline (`cartopy`, `xarray`, etc.) y
+la consola (`fastapi`, `uvicorn`, `psutil`), y `uv sync` arma el mismo `.venv` para los dos.
+No hay un segundo venv que instalar ni que elegir.
 
 ### 3. Arrancar
 
@@ -169,10 +168,10 @@ El asistente además apunta `TEMP`/`TMP` a `<raíz>\.tmp`: los temporales de los
 
 | Síntoma | Causa | Solución |
 | --- | --- | --- |
-| `No module named uvicorn` | el `.venv` se creó sin la parte web | `.venv\Scripts\python.exe -m pip install -r requirements.txt` |
+| `No module named uvicorn` | el `.venv` se creó sin la parte web | `uv sync` |
 | `[Errno 10048] error while attempting to bind ... :8000` | el puerto ya está ocupado por otra instancia | cerrá la otra terminal o usá `--port 8001` |
 | La página dice "Falta el build del frontend" | no corriste `npm run build` | `cd app\web; npm run build` |
-| Indicador `pipeline listo` apagado / `repo_ready: false` | falta el `.venv` de la raíz | `python -m venv .venv` y `.venv\Scripts\python.exe -m pip install -r requirements.txt` (es pesado) |
+| Indicador `pipeline listo` apagado / `repo_ready: false` | falta el `.venv` de la raíz | `python -m venv .venv` y `uv sync` (es pesado) |
 | Indicador `datos en disco` apagado / `data_root_exists: false` | la carpeta de datos no está en la ruta por defecto | `$env:CLIMATE3D_DATOS = "<ruta>"` y reiniciá el server |
 | `npm install` falla | Node demasiado viejo para Vite 7 | instalá Node 20.19+ |
 | `npm` no se reconoce | falta Node.js | instalá Node.js LTS y abrí una terminal nueva |
@@ -720,21 +719,21 @@ hijo renderizando y el pipe abierto. Verificado: cancelar en 79 % deja el job en
 ## Un solo entorno
 
 - `.venv` (raíz) — todo: el pipeline (`cartopy`, `xarray`, `h5py`…) y la consola
-  (`fastapi`, `uvicorn`, `psutil`). `requirements.txt` incluye `app/requirements.txt`.
+  (`fastapi`, `uvicorn`, `psutil`). Lo declara `pyproject.toml` y lo fija `uv.lock`.
 
 No hay un segundo venv: la consola y los renders comparten intérprete. Es el mismo
-acuerdo que usa la imagen de Docker, que ya instalaba los dos archivos juntos.
+acuerdo que usa la imagen de Docker, que instala ese único entorno con `uv sync`.
 
-Para correr las pruebas, el entorno suma las dependencias de
-`app/requirements-dev.txt` (`requests` para los descargadores y `httpx2` para
-`TestClient`). No son dependencias de runtime: la API arranca sin ellas.
+Para correr las pruebas, el entorno trae además el grupo `dev` de `pyproject.toml`
+(`requests` para los descargadores y `httpx2` para `TestClient`); `uv sync` lo instala
+por defecto.
 
 ## Pruebas
 
 Una sola vez:
 
 ```powershell
-.venv\Scripts\python.exe -m pip install -r app\requirements-dev.txt
+uv sync
 ```
 
 Toda la suite (unos 3 s, sin red):
@@ -764,7 +763,7 @@ Qué cubre:
   encuadre y descargadores.
 
 Resultado esperado al día de hoy: **405 tests, OK**. Si ves `skipped`, falta
-alguna dependencia de `requirements-dev.txt`; el mensaje del skip dice cuál.
+alguna dependencia del grupo `dev` de `pyproject.toml`; el mensaje del skip dice cuál.
 
 ## Límites conocidos
 

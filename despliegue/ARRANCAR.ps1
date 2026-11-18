@@ -61,7 +61,7 @@ if (-not (Test-Path -LiteralPath $python)) {
 # Un solo entorno: si falta la parte web, el mensaje dice que instalar.
 & $python -c "import fastapi, uvicorn" 2>$null
 if ($LASTEXITCODE -ne 0) {
-    Fallar 'al .venv le faltan las dependencias de la consola. Corre: .venv\Scripts\python.exe -m pip install -r requirements.txt'
+    Fallar 'al .venv le faltan las dependencias de la consola. Corre: uv sync'
 }
 
 # --- configuracion actual ---------------------------------------------------

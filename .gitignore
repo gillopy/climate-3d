@@ -4,6 +4,8 @@ __pycache__/
 
 # Virtual environment
 .venv/
+# Cache de uv si alguien la deja en el repo (por defecto va a %LOCALAPPDATA%)
+.uv-cache/
 venv/
 
 # Climate data (large binary downloads)

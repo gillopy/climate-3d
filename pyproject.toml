@@ -1,0 +1,52 @@
+[project]
+name = "climate-3d"
+version = "0.1.0"
+description = "Pipeline satelital y consola interactiva: descarga, render y animacion de productos meteorologicos."
+readme = "README.md"
+# numpy 2.5 (y el resto de los pins) piden 3.12+: 3.11 ya no resuelve.
+requires-python = ">=3.12"
+
+# Un solo entorno: el pipeline (cartopy, xarray, h5py, eccodes...) y la consola
+# (FastAPI + uvicorn) comparten el mismo .venv. Lo fija `uv.lock`.
+dependencies = [
+    # --- pipeline ---
+    "requests==2.34.*",
+    "numpy==2.5.*",
+    "pillow==13.0.*",
+    "matplotlib==3.11.*",
+    "cartopy==0.26.*",
+    "imageio-ffmpeg==0.6.*",
+    # GRIB2 de ECMWF IFS (dataRepresentationTemplate 42 / CCSDS-AEC); trae la libreria.
+    "eccodes==2.50.*",
+    # Lectura directa del NetCDF/HDF5 de ERA5 (t2m) sin xarray.
+    "h5py==3.16.*",
+    # comun/goes_lectura.py y varios prototipos abren los NetCDF de GOES con xarray.
+    "xarray==2025.12.*",
+    # Motor que pide `xr.open_dataset(..., engine="h5netcdf")`.
+    "h5netcdf==1.8.*",
+    # Deformacion de imagenes de cartopy (`imshow` con `transform=`): pykdtree o scipy.
+    "pykdtree==1.4.*",
+    # GeoTIFF de los recortes NISAR sin GDAL (prototipos/nisar_geotiff.py).
+    "tifffile==2026.11.*",
+    # Fusion optica: Sentinel-2 L2A desde Planetary Computer (prototipos/nisar_fusion.py).
+    "rasterio==1.5.*",
+    "pystac-client==0.9.*",
+    "planetary-computer==1.*",
+    # --- consola (app/) ---
+    "fastapi==0.162.*",
+    "uvicorn==0.54.*",
+    # Corte del arbol de procesos al cancelar un job (Windows).
+    "psutil==7.*",
+]
+
+[dependency-groups]
+dev = [
+    # `httpx2` es lo que usa `fastapi.testclient` en Starlette 1.x.
+    "httpx2==2.16.*",
+    # Los descargadores y las pruebas de red lo necesitan.
+    "requests==2.34.*",
+]
+
+[tool.uv]
+# El repo no es un paquete instalable: uv solo construye el entorno.
+package = false

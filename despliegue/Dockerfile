@@ -15,8 +15,9 @@ FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
     HOME=/tmp/home \
     CLIMATE3D_CONTENEDOR=1 \
     CLIMATE3D_DATOS=/data \
@@ -39,17 +40,18 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Dependencias primero: cambiar el código no reinstala nada de esto.
-COPY requirements.txt ./
-COPY app/requirements.txt ./app/requirements.txt
-RUN python -m venv /app/.venv \
- && /app/.venv/bin/pip install --upgrade pip \
- && /app/.venv/bin/pip install -r requirements.txt -r app/requirements.txt
+# uv instala exactamente lo que dice `uv.lock`: sin re-resolver y sin sorpresas de
+# version. El entorno queda en /app/.venv, igual que en una maquina de desarrollo.
+COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /uvx /bin/
+COPY pyproject.toml uv.lock ./
 
-# `cdsapi` queda solo en la imagen. El repo lo deja fuera a propósito porque el .nc de
-# ERA5 ya suele estar bajado; acá quien llega puede no tenerlo, y el asistente ofrece
+# Dependencias primero: cambiar el c��digo no reinstala nada de esto.
+RUN uv sync --frozen --no-dev --no-install-project
+
+# `cdsapi` queda solo en la imagen. El repo lo deja fuera a prop��sito porque el .nc de
+# ERA5 ya suele estar bajado; acǭ quien llega puede no tenerlo, y el asistente ofrece
 # la clave del CDS. Sin esto, `descargar_era5.py` muere con ModuleNotFoundError.
-RUN /app/.venv/bin/pip install cdsapi
+RUN uv pip install --python /app/.venv/bin/python cdsapi
 
 # ffmpeg queda horneado: el primer render no depende de la red.
 RUN /app/.venv/bin/python -c \

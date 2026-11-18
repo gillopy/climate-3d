@@ -35,7 +35,7 @@ ventana y resolución.
 .venv\Scripts\python.exe -c "import cartopy, matplotlib, requests, PIL, eccodes, h5py; print('ok')"
 ```
 
-- Python 3.14 y el `.venv` de la raíz; dependencias en [`../requirements.txt`](../requirements.txt).
+- Python 3.12 o superior y el `.venv` de la raíz; dependencias en [`../pyproject.toml`](../pyproject.toml), fijadas en [`../uv.lock`](../uv.lock) (`uv sync`).
 - `eccodes` para los GRIB2 de ECMWF; `h5py` para el NetCDF de ERA5; `pykdtree`
   para el `imshow(transform=...)` de cartopy en los mapas planos.
 - `cdsapi` **sólo** para `descargar/descargar_era5.py` (no está instalado por
