@@ -107,6 +107,9 @@ def entorno_pipeline() -> dict[str, str]:
         PYTHONIOENCODING="utf-8",
         PYTHONUNBUFFERED="1",
     )
+    # La cache de Sentinel-2 vive con los artefactos: la misma caja y la misma
+    # fecha no se vuelven a bajar entre corridas. NISAR_S2_CACHE explicito manda.
+    entorno.setdefault("NISAR_S2_CACHE", str(MEDIA / "cache" / "s2"))
     for clave, valor in variables_env().items():
         entorno.setdefault(clave, valor)
     return entorno

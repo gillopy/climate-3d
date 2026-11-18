@@ -1175,8 +1175,16 @@ class VisorNisar(unittest.TestCase):
         self.assertIsNone(nisar._mpp_de_granulo("NISAR_L2_PR_GCOV_SIN_MODO"))
         self.assertEqual(nisar._granulo(FEATURE).mpp, 20.0)
 
-    def test_paraguay_sale_del_geojson_del_repo(self):
+    def test_paraguay_responde_segun_el_geojson(self):
+        from nisar_backend.config import PARAGUAY
+
         respuesta = self.cliente.get("/api/nisar/paraguay")
+
+        # El limite viene de GADM, que no permite redistribuir el archivo: no se
+        # versiona. En un clon limpio el preset no esta y la API lo dice con 404.
+        if not PARAGUAY.exists():
+            self.assertEqual(respuesta.status_code, 404)
+            return
 
         self.assertEqual(respuesta.status_code, 200)
         cuerpo = json.loads(respuesta.content)
