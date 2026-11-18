@@ -14,16 +14,22 @@ Variables de entorno:
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 
 RAIZ_BACKEND = Path(__file__).resolve().parent
 RAIZ_APP = RAIZ_BACKEND.parent
 RAIZ_REPO = RAIZ_APP.parent
+if str(RAIZ_REPO) not in sys.path:
+    sys.path.insert(0, str(RAIZ_REPO))
 
-#: Artefactos de los jobs (imagenes, JSON, GeoTIFF) y cache de browse.
-MEDIA = Path(os.environ.get("NISAR_MEDIA") or RAIZ_APP / "var" / "media")
-CACHE = Path(os.environ.get("NISAR_BROWSE_CACHE") or RAIZ_APP / "var" / "nisar" / "cache")
+from comun.rutas import raiz_media  # noqa: E402  (necesita la raíz del repo de arriba)
+
+#: Artefactos de los jobs (imagenes, JSON, GeoTIFF) y cache de browse. Sin variable,
+#: cuelgan de la misma raíz de trabajo que la consola: nada queda dentro del repo.
+MEDIA = Path(os.environ.get("NISAR_MEDIA") or raiz_media() / "nisar-app")
+CACHE = Path(os.environ.get("NISAR_BROWSE_CACHE") or raiz_media() / "nisar" / "cache")
 
 #: Contorno del pais que dibujan los productos y el mapa.
 PARAGUAY = RAIZ_REPO / "datos" / "paraguay_gadm.json"

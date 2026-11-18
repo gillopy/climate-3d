@@ -36,7 +36,15 @@ from .schemas import (
 )
 
 RAIZ_APP = Path(__file__).resolve().parents[1]
-MEDIA = RAIZ_APP / "var" / "media"
+RAIZ_REPO = RAIZ_APP.parent
+if str(RAIZ_REPO) not in sys.path:
+    sys.path.insert(0, str(RAIZ_REPO))
+
+from comun.rutas import raiz_media  # noqa: E402
+
+# Artefactos de los jobs, historial y cachés. Se resuelven desde la raíz de trabajo
+# configurada (por defecto `<DATOS>/.media`), nunca dentro del repo.
+MEDIA = raiz_media()
 MEDIA.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(

@@ -38,7 +38,13 @@ MAX_LADO_GRADOS = 20.0
 
 RAIZ_APP = Path(__file__).resolve().parents[1]
 RAIZ_REPO = RAIZ_APP.parent
-CACHE = RAIZ_APP / "var" / "nisar" / "cache"
+if str(RAIZ_REPO) not in sys.path:
+    sys.path.insert(0, str(RAIZ_REPO))
+
+from comun.rutas import raiz_media  # noqa: E402
+
+# Browse de ASF: cachea en la raíz de trabajo, junto a los artefactos de los jobs.
+CACHE = raiz_media() / "nisar" / "cache"
 PARAGUAY = RAIZ_REPO / "datos" / "paraguay_gadm.json"
 
 #: Caja por defecto: Paraguay continental con un margen comodo.

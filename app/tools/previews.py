@@ -7,17 +7,20 @@ lo que el producto produce. Si cambia un estilo, se vuelve a correr este script.
 """
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
 from PIL import Image
 
 RAIZ = Path(__file__).resolve().parents[2]
-CACHE = RAIZ / "app" / "var" / "media" / "cache"
+for candidato in (RAIZ, RAIZ / "comun"):
+    if str(candidato) not in sys.path:
+        sys.path.insert(0, str(candidato))
+
+from rutas import CACHE, SALIDAS  # noqa: E402  (necesita la raíz del repo de arriba)
+
 VAR = RAIZ / "app" / "var"
 GALERIA = RAIZ / "docs" / "galeria"
-SALIDAS = Path(os.environ.get("CLIMATE3D_DATOS") or r"D:\Users\guill\dataset era5") / "salidas"
 DESTINO = RAIZ / "app" / "web" / "public" / "previews"
 
 ANCHO = 520
