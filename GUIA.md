@@ -15,7 +15,7 @@ baja el dato        imagen fija             render cuadro a cuadro     MP4 / GIF
 > (varios GB) y las salidas (PNG/MP4) **nunca** van dentro del repositorio. Los `.h5` de
 > NISAR van aparte (`E:\nisar` en Windows, o lo que diga `CLIMATE3D_NISAR`).
 >
-> La consola pregunta la raíz al arrancar (`ARRANCAR.bat`) y la guarda en
+> La consola pregunta la raíz al arrancar (`despliegue\ARRANCAR.bat`) y la guarda en
 > `%LOCALAPPDATA%\climate3d\config.json`: de ahí cuelgan las descargas, `salidas\` y
 > `.media\` (artefactos de los jobs, historial y cachés). Precedencia: variable de entorno
 > (`CLIMATE3D_DATOS`, `CLIMATE3D_MEDIA`, `CLIMATE3D_NISAR`) → archivo → default de arriba.

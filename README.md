@@ -97,11 +97,11 @@ La consola y el pipeline enteros en un contenedor, para que otra persona los use
 instalar Python ni Node:
 
 ```powershell
-.\setup.ps1      # Windows
+.\despliegue\setup.ps1      # Windows
 ```
 
 ```bash
-./setup.sh       # Linux / macOS
+./despliegue/setup.sh       # Linux / macOS
 ```
 
 El asistente pregunta dónde viven los datos, valida la carpeta, pide las credenciales

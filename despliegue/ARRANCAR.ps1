@@ -29,7 +29,8 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
-$raizRepo = Split-Path -Parent $MyInvocation.MyCommand.Definition
+# Este lanzador vive en despliegue/: la raiz del repo es la carpeta de arriba.
+$raizRepo = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 Set-Location -LiteralPath $raizRepo
 
 function Fallar {
@@ -223,8 +224,16 @@ $env:CLIMATE3D_DATOS = $efectivo.datos
 $env:CLIMATE3D_MEDIA = $efectivo.media
 if ($efectivo.nisar) { $env:CLIMATE3D_NISAR = $efectivo.nisar }
 
+# Los temporales de los renders (h5py, matplotlib, PIL) tambien van al disco de trabajo:
+# en C: un render grande se queda sin memoria al no poder crecer la pagina de archivo.
+$temporal = Join-Path $Raiz '.tmp'
+New-Item -ItemType Directory -Path $temporal -Force -ErrorAction SilentlyContinue | Out-Null
+$env:TEMP = $temporal
+$env:TMP = $temporal
+
 Write-Host ("  datos  : {0}" -f $efectivo.datos)
 Write-Host ("  cache  : {0}" -f $efectivo.media)
+Write-Host ("  temp   : {0}" -f $temporal)
 Write-Host ("  nisar  : {0}" -f $efectivo.nisar)
 Write-Host ''
 Write-Host ("  Abri http://127.0.0.1:{0}  (Ctrl+C para cortar)" -f $Port) -ForegroundColor Green

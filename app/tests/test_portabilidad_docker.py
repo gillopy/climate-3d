@@ -16,6 +16,8 @@ from pathlib import Path
 from unittest import mock
 
 RAIZ = Path(__file__).resolve().parents[2]
+# Todo lo de Docker y los lanzadores vive en despliegue/, no en la raíz del repo.
+DESPLIEGUE = RAIZ / "despliegue"
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
@@ -31,14 +33,14 @@ except ImportError:  # pragma: no cover - faltan dependencias del venv de la app
 class ArtefactosDelContenedor(unittest.TestCase):
     def test_los_scripts_de_linux_van_con_lf(self) -> None:
         # Un CRLF en el shebang rompe el arranque: "bad interpreter".
-        for relativo in ("docker/entrypoint.sh", "setup.sh"):
+        for relativo in ("despliegue/entrypoint.sh", "despliegue/setup.sh"):
             datos = (RAIZ / relativo).read_bytes()
             self.assertNotIn(b"\r\n", datos, f"{relativo} tiene CRLF")
             self.assertTrue(datos.startswith(b"#!"), f"{relativo} no tiene shebang")
 
     def test_el_dist_se_copia_despues_de_la_app(self) -> None:
         # Al revés, `COPY app/` pisaría el build del frontend con el dist local.
-        lineas = (RAIZ / "Dockerfile").read_text(encoding="utf-8").splitlines()
+        lineas = (DESPLIEGUE / "Dockerfile").read_text(encoding="utf-8").splitlines()
         app = next(i for i, l in enumerate(lineas) if l.startswith("COPY app/ "))
         dist = next(i for i, l in enumerate(lineas) if l.startswith("COPY --from=web"))
         self.assertLess(app, dist)
@@ -46,15 +48,15 @@ class ArtefactosDelContenedor(unittest.TestCase):
     def test_el_runtime_escribe_los_artefactos_en_el_volumen(self) -> None:
         # S1: la raíz de artefactos no vive dentro de la imagen; el entrypoint la crea
         # en /data/.media, que es el volumen montado desde el host.
-        texto = (RAIZ / "Dockerfile").read_text(encoding="utf-8")
+        texto = (DESPLIEGUE / "Dockerfile").read_text(encoding="utf-8")
         for esperado in ("CLIMATE3D_MEDIA=/data/.media", "USER appuser"):
             self.assertIn(esperado, texto)
-        entrypoint = (RAIZ / "docker" / "entrypoint.sh").read_text(encoding="utf-8")
+        entrypoint = (DESPLIEGUE / "entrypoint.sh").read_text(encoding="utf-8")
         self.assertIn('mkdir -p "$MEDIA"', entrypoint)
         self.assertNotIn("/app/app/var/media", entrypoint)
 
     def test_compose_publica_solo_en_loopback(self) -> None:
-        texto = (RAIZ / "docker-compose.yml").read_text(encoding="utf-8")
+        texto = (DESPLIEGUE / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn('"127.0.0.1:${PORT:-8080}:8000"', texto)
         self.assertIn("${DATA_DIR:?", texto)
         self.assertNotIn("0.0.0.0:${PORT", texto)

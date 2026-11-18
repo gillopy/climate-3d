@@ -66,7 +66,7 @@ COPY app/ ./app/
 COPY datos/README.md datos/paraguay_gadm.json ./datos/
 COPY --from=web /build/dist ./app/web/dist
 
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY despliegue/entrypoint.sh /usr/local/bin/entrypoint.sh
 # La raiz de artefactos vive en el volumen (/data/.media): la crea el entrypoint como
 # appuser, no el build. Dentro de la imagen no queda nada que escribir en /app/app/var.
 RUN chmod 0755 /usr/local/bin/entrypoint.sh \

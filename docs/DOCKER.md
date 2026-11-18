@@ -11,19 +11,19 @@ MP4/GIF con los mismos scripts del repo. No es una demo congelada.
 ### Windows (PowerShell)
 
 ```powershell
-.\setup.ps1
+.\despliegue\setup.ps1
 ```
 
 Si PowerShell bloquea el script:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\setup.ps1
+powershell -ExecutionPolicy Bypass -File .\despliegue\setup.ps1
 ```
 
 ### Linux / macOS
 
 ```bash
-./setup.sh
+./despliegue/setup.sh
 ```
 
 ### Qué hace el asistente
@@ -33,8 +33,8 @@ powershell -ExecutionPolicy Bypass -File .\setup.ps1
 3. Valida esa carpeta de verdad: la crea si falta, comprueba que se pueda escribir, avisa
    si quedan menos de 20 GB libres y rechaza rutas de red y carpetas de OneDrive.
 4. Pregunta las **credenciales opcionales** y explica qué desbloquea cada una.
-5. Escribe `.env` (UTF-8 sin BOM).
-6. Valida `docker-compose.yml` con `docker compose config`.
+5. Escribe `.env` (UTF-8 sin BOM) en `despliegue/`.
+6. Valida `despliegue/docker-compose.yml` con `docker compose config`.
 7. Levanta el contenedor y espera a que `/api/health` responda con el pipeline listo.
 
 Al final imprime la dirección: **http://127.0.0.1:8080**.
@@ -79,6 +79,9 @@ que no hay que preparar archivos a mano. El `.env` generado incluye credenciales
 
 ## Comandos del día a día
 
+Todos se corren **desde `despliegue/`**, que es donde viven el `docker-compose.yml` y el
+`.env`:
+
 | Quiero… | Comando |
 | --- | --- |
 | levantarla | `docker compose up -d` |
@@ -91,14 +94,14 @@ que no hay que preparar archivos a mano. El `.env` generado incluye credenciales
 ## Por qué el puerto va en 127.0.0.1
 
 La API **no tiene autenticación** y ejecuta subprocesos que escriben en tu disco. Por eso
-`docker-compose.yml` publica `127.0.0.1:8080`, no `0.0.0.0`. No la abras a la red sin poner
+`despliegue/docker-compose.yml` publica `127.0.0.1:8080`, no `0.0.0.0`. No la abras a la red sin poner
 algo adelante que autentique.
 
 ## Problemas comunes
 
 | Síntoma | Causa | Arreglo |
 | --- | --- | --- |
-| `falta DATA_DIR` | no hay `.env` | corré `setup.ps1` / `setup.sh` |
+| `falta DATA_DIR` | no hay `.env` | corré `despliegue/setup.ps1` / `despliegue/setup.sh` |
 | `repo_ready: false` en `/api/health` | el venv no quedó en `/app/.venv` | `docker compose up -d --build` y mirá el log del build |
 | `data_root_exists: false` | la ruta del host no existe o está mal escrita | revisá `DATA_DIR` en `.env` |
 | `la raíz de datos … no es escribible` | en Linux, el UID 1000 del contenedor no es dueño de la carpeta | `sudo chown -R 1000:1000 "$DATA_DIR"` |
@@ -114,11 +117,11 @@ registry, el otro solo baja la imagen:
 
 ```bash
 # una vez, en la máquina que la publica
-docker build -t ghcr.io/USUARIO/climate3d:latest .
+docker build -f despliegue/Dockerfile -t ghcr.io/USUARIO/climate3d:latest .
 docker push ghcr.io/USUARIO/climate3d:latest
 ```
 
-Después, en `docker-compose.yml` de la otra persona:
+Después, en el `docker-compose.yml` de la otra persona (paquete `entrega/`):
 
 ```yaml
     image: ghcr.io/USUARIO/climate3d:latest

@@ -17,8 +17,8 @@ Dos decisiones que definen el resultado:
 
 ## Cómo correrlo
 
-> ¿Solo querés usarla? Con Docker no hace falta nada de lo que sigue: corré `.\setup.ps1`
-> desde la raíz del repo y listo. Ver [`../docs/DOCKER.md`](../docs/DOCKER.md).
+> ¿Solo querés usarla? Con Docker no hace falta nada de lo que sigue: corré
+> `.\despliegue\setup.ps1` y listo. Ver [`../docs/DOCKER.md`](../docs/DOCKER.md).
 
 Todo se corre en PowerShell **desde la raíz del repo** (`climate 3d\`), salvo
 donde se aclare otra carpeta. No hace falta activar ningún entorno virtual: se
@@ -69,9 +69,9 @@ equivocado vas a ver `No module named uvicorn`.
 
 ### 3. Arrancar
 
-Doble clic en `ARRANCAR.bat` (o `.\ARRANCAR.ps1` desde PowerShell, en la raíz del repo).
-Pregunta **dónde guardar todo** — datos, salidas y caché —, valida la carpeta, la recuerda
-para la próxima y levanta el servidor. Enter acepta la que ya está configurada.
+Doble clic en `despliegue\ARRANCAR.bat` (o `.\despliegue\ARRANCAR.ps1` desde la raíz del
+repo). Pregunta **dónde guardar todo** — datos, salidas y caché —, valida la carpeta, la
+recuerda para la próxima y levanta el servidor. Enter acepta la que ya está configurada.
 
 Esa terminal queda ocupada: **es el servidor**. Dejala abierta y abrí:
 
@@ -133,13 +133,13 @@ npm run build
 Otro puerto (la UI va con el mismo, no hay nada más que tocar):
 
 ```powershell
-.\ARRANCAR.ps1 -Port 8001
+.\despliegue\ARRANCAR.ps1 -Port 8001
 ```
 
 Otra raíz de trabajo:
 
 ```powershell
-.\ARRANCAR.ps1 -Raiz "D:\climate3d"
+.\despliegue\ARRANCAR.ps1 -Raiz "D:\climate3d"
 ```
 
 La raíz elegida queda guardada en `%LOCALAPPDATA%\climate3d\config.json` (no en el repo:
@@ -161,6 +161,10 @@ Para ver o cambiar las raíces sin levantar el server:
 
 Las variables viven en la terminal actual: al cerrarla se pierde. Lo que se guarda con el
 asistente, no.
+
+El asistente además apunta `TEMP`/`TMP` a `<raíz>\.tmp`: los temporales de los renders
+(h5py, matplotlib, PIL) pesan cientos de MB y en un disco lleno hacen fallar el job con un
+`MemoryError` que no tiene nada que ver con la RAM.
 
 ### 7. Problemas comunes
 
