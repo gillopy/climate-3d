@@ -251,6 +251,37 @@ def _re_descargar(nc: Path) -> Path:
     return nc
 
 
+def _caja_nativa(args):
+    """Caja lon/lat de la grilla nativa que cubre el cuadro visible, o None.
+
+    Con `--radio` menor al hemisferio, leer el disco entero es tirar el 99 % de
+    los datos: C13 es de 2 km (5424 px de lado) y una cúpula de 5,4° tiene ~550
+    celdas de lado. Recortando antes de convertir se conserva esa resolución sin
+    pedirle a `pcolormesh` los 29 M vértices del disco (que es lo que revienta la
+    RAM y por lo que el `--tope` submuestreaba). La caja cubre el círculo
+    circunscripto al marco: el radio llega a la esquina, no al borde.
+    """
+    if args.radio >= 90.0:
+        return None
+    import cartopy.crs as ccrs
+
+    lon0, lat0 = args.centro
+    proj = ccrs.Orthographic(central_longitude=lon0, central_latitude=lat0)
+    r = float(proj.x_limits[1]) * math.sin(math.radians(args.radio)) * math.sqrt(2.0)
+    angulo = np.linspace(0.0, 2.0 * math.pi, 180)
+    pts = ccrs.PlateCarree().transform_points(
+        proj, r * np.cos(angulo), r * np.sin(angulo))
+    pts = pts[np.isfinite(pts).all(axis=1)]
+    if not pts.size:
+        return None
+    oeste, este = float(pts[:, 0].min()), float(pts[:, 0].max())
+    sur, norte = float(pts[:, 1].min()), float(pts[:, 1].max())
+    # Margen: sin él, el redondeo del índice deja un filo negro en un borde.
+    margen_o = 0.05 * (este - oeste)
+    margen_n = 0.05 * (norte - sur)
+    return (oeste - margen_o, este + margen_o, sur - margen_n, norte + margen_n)
+
+
 def _render_cuadro(nc: Path, destino: Path, args) -> None:
     """Renderiza un cuadro, degradando la resolución sólo si no hay otra forma.
 
@@ -260,15 +291,26 @@ def _render_cuadro(nc: Path, destino: Path, args) -> None:
     oscila: cuando otra app la suelta, entra) y sólo si no hay forma se pasa a una
     malla más fina. El `--tope` sólo cambia cuántas filas del `.nc` se leen, no el
     tamaño del PNG de salida.
+
+    Con encuadre regional (`--radio`) la malla se recorta antes de convertir:
+    así entra la resolución nativa completa con una fracción de la memoria, y el
+    `--tope` deja de aplicarse (recortar ya achica el problema).
     """
-    topes = [args.tope]
-    for t in (2034, 1356, 900):
-        if t < args.tope:
-            topes.append(t)
+    caja = _caja_nativa(args)
+    if caja is not None:
+        # El recorte ya acota la malla: se pide la nativa (tope 0 = sin paso) y,
+        # si igual falta RAM, se vuelve al submuestreo de siempre.
+        topes = [0, 2712, 2034, 1356, 900]
+    else:
+        topes = [args.tope]
+        for t in (2034, 1356, 900):
+            if t < args.tope:
+                topes.append(t)
     for intento, tope in enumerate(topes):
+        malla = "nativa" if not tope else f"{tope} px"
         for reintento in range(3):
             try:
-                campo, x, y, proj, unidad, rot = cargar(nc, tope_px=tope,
+                campo, x, y, proj, unidad, rot = cargar(nc, tope_px=tope, caja=caja,
                                                         escena="FULL DISK")
                 render_globo(campo, x, y, proj, rot, args.vmin, args.vmax, args, destino)
                 del campo
@@ -277,13 +319,13 @@ def _render_cuadro(nc: Path, destino: Path, args) -> None:
             except MemoryError:
                 gc.collect()
                 if reintento < 2:
-                    print(f"  {nc.name[-40:]}: sin RAM para tope {tope}, "
+                    print(f"  {nc.name[-40:]}: sin RAM para malla {malla}, "
                           f"se reintenta en 25 s", flush=True)
                     time.sleep(25)
                     continue
                 siguiente = topes[min(intento + 1, len(topes) - 1)]
-                print(f"  {nc.name[-40:]}: sin RAM para tope {tope}, se prueba con "
-                      f"{siguiente}", flush=True)
+                print(f"  {nc.name[-40:]}: sin RAM para malla {malla}, se prueba con "
+                      f"{'nativa' if not siguiente else f'{siguiente} px'}", flush=True)
                 break
             except Exception as exc:
                 # `.nc` truncado o ilegible: se re-baja de S3 y se reintenta.
@@ -306,6 +348,8 @@ def _sello_render(args) -> str:
         "radio": args.radio, "credito": args.credito, "sat": args.sat,
         "vmin": args.vmin, "vmax": args.vmax, "borde": args.geojson,
         "paleta": args.paleta,
+        # v2: el encuadre regional recorta la grilla nativa en vez de submuestrearla.
+        "malla": 2,
     }
     return hashlib.sha256(json.dumps(datos, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -357,7 +401,8 @@ def main(argv=None) -> int:
     ap.add_argument("--limpio", action="store_true",
                     help="captura limpia: sin titulos, leyenda, creditos ni costas")
     ap.add_argument("--tope", type=int, default=2712,
-                    help="resolución del campo leído del .nc (default: igual a --px)")
+                    help="resolución del campo leído del .nc (default: igual a --px). "
+                         "Con --radio < 90 se ignora: se recorta la grilla nativa")
     ap.add_argument("--datos", help="carpeta de los .nc (default: la del satélite/banda)")
     ap.add_argument("--out", help="carpeta de salida (default: comun.rutas.SALIDAS)")
     ap.add_argument("--frames", help="carpeta de cuadros (default: frames_<etiqueta>)")
@@ -429,7 +474,8 @@ def main(argv=None) -> int:
     if args.solo_poster:
         t = slots[-1]
         campo, x, y, proj, unidad, rot = cargar(sl_map[(t.date(), t.hour, t.minute)],
-                                                tope_px=args.tope, escena="FULL DISK")
+                                                tope_px=args.tope, caja=_caja_nativa(args),
+                                                escena="FULL DISK")
         poster = salida / f"poster_{args.sat}_C13_{t:%Y-%m-%dT%H%M}.png"
         render_globo(campo, x, y, proj, rot, args.vmin, args.vmax, args, poster)
         print(f"Póster: {poster}")
