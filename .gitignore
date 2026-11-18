@@ -31,6 +31,10 @@ frames_*/
 
 # Configuración local del contenedor (genera setup.ps1/setup.sh: incluye credenciales)
 /.env
+/despliegue/.env
+
+# Demo web del caso Chaco: es un sitio aparte, no forma parte de la app
+/demo/
 
 # OS
 Thumbs.db
