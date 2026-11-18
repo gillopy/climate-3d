@@ -5,7 +5,7 @@ el default de Windows no cambia y el intérprete se puede apuntar con `CLIMATE3D
 El archivo de configuración sólo se lee cuando no se pasa un entorno explícito, así que
 la resolución con un mapping es pura y estas pruebas no dependen de la máquina.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

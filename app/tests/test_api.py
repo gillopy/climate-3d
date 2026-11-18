@@ -3,7 +3,7 @@
 No crea jobs reales: toca los endpoints que no escriben ni lanzan scripts, y
 los errores de pedido inválido. Asi la suite corre en segundos y sin red.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

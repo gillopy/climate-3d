@@ -5,7 +5,7 @@ y `prototipos/poster_goes_truecolor.py` dejó de importarse (`SyntaxError: Non-U
 code`). Ningún test lo vio porque nada importaba ese póster: la suite corre los
 módulos de la app, no los prototipos.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

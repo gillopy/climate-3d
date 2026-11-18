@@ -1,6 +1,6 @@
 """`/reveal` en contenedor: no hay escritorio, así que se avisa en vez de fallar.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

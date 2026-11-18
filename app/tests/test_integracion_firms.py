@@ -12,7 +12,7 @@ Se verifica, para cada producto que dibuja focos:
     `add_argument`) y que su valor esté dentro de `choices`;
   * que ningún renderer quede "a medias" (con `--firms` y sin sus compañeras).
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

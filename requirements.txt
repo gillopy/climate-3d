@@ -34,3 +34,7 @@ tifffile==2026.11.*
 rasterio==1.5.*
 pystac-client==0.9.*
 planetary-computer==1.*
+
+# Consola web (FastAPI + uvicorn) y corte del arbol de procesos al cancelar un job.
+# Un solo entorno: el mismo .venv corre el pipeline y la consola. Ver app/requirements.txt.
+-r app/requirements.txt

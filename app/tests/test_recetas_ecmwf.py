@@ -10,7 +10,7 @@ portal el 2026-11-01):
 Pedir pasos de 3 h por encima de 144 h (147, 153, ...) devuelve 404 y el job
 muere con "faltan los pasos". Estas pruebas fijan la regla sin tocar la red.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

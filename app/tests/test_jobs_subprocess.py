@@ -5,7 +5,7 @@ En Windows, uvicorn arrancado con ``--reload`` usa un loop Selector, y ahi
 job moria al instante con progreso 0 y el log vacio. ``_lanzar`` usa
 ``subprocess.Popen`` + un hilo lector para no depender del loop.
 
-    app\\.venv\\Scripts\\python.exe -m unittest app.tests.test_jobs_subprocess
+    .venv\\Scripts\\python.exe -m unittest app.tests.test_jobs_subprocess
 """
 from __future__ import annotations
 

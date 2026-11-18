@@ -8,7 +8,7 @@ Fijan lo que la app promete:
     con N=1, para todos los productos que ya saben resolver los últimos;
   * el Snapshot de Paraguay conserva su propio switch (`ultima`).
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

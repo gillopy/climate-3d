@@ -4,7 +4,7 @@ El dataset real pesa ~1.9 GB y exige Earthdata, asi que la suite arma un HDF5
 chico con los mismos grupos, coordenadas, proyeccion y polarizaciones. Asi se
 prueba el recorte, la conversion a dB y el PNG sin red ni credenciales.
 
-    app\\.venv\\Scripts\\python.exe -m unittest app.tests.test_nisar_render -q
+    .venv\\Scripts\\python.exe -m unittest app.tests.test_nisar_render -q
 """
 from __future__ import annotations
 

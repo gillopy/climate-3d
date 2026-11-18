@@ -8,7 +8,7 @@ Fijan lo que la app promete:
     `--recorte` o `--bbox`);
   * GeoColor, color real e Himawari resuelven "últimos N" sin mirar la ventana.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

@@ -8,7 +8,7 @@ These fix the public contract of the product, never the network:
     download script and the render script with the hourly `--paso 60`;
   * snapshot uses a whole UTC hour (the LST cadence has no minutes).
 
-    app\\.venv\\Scripts\\python.exe -m unittest app.tests.test_goes_lst_catalogo -v
+    .venv\\Scripts\\python.exe -m unittest app.tests.test_goes_lst_catalogo -v
 """
 from __future__ import annotations
 

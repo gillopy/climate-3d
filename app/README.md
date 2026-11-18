@@ -31,7 +31,7 @@ PowerShell no molesta.
 | --- | --- | --- |
 | Python | 3.11 o superior (probado con 3.14.2) | el backend |
 | Node.js + npm | Node 20.19 o superior (probado con 24.15.0) | compilar el frontend |
-| `.venv` de la raíz | — | los renders: los scripts del pipeline corren ahí |
+| `.venv` de la raíz | — | un solo entorno: pipeline y consola |
 | carpeta de datos | — | los `.nc` / `.npz` ya descargados |
 
 Comprobalo en dos segundos:
@@ -50,10 +50,10 @@ comunes".
 ### 2. Instalación (una sola vez)
 
 ```powershell
-# backend: entorno propio de la app, separado del pipeline
-python -m venv app\.venv
-app\.venv\Scripts\python.exe -m pip install --upgrade pip
-app\.venv\Scripts\python.exe -m pip install -r app\requirements.txt
+# entorno unico: pipeline y consola juntos
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install --upgrade pip
+.venv\Scripts\python.exe -m pip install -r requirements.txt
 
 # frontend: se compila una vez y el backend lo sirve
 cd app\web
@@ -62,10 +62,9 @@ npm run build
 cd ..\..
 ```
 
-Son **dos entornos separados y no se mezclan**: `app\.venv` es de la app
-(`fastapi`, `uvicorn`, `numpy`, `pillow`, `psutil`) y `.venv` (raíz) es el del
-pipeline (`cartopy`, `xarray`, etc.). Si arrancás el servidor con el Python
-equivocado vas a ver `No module named uvicorn`.
+Son **un solo entorno**: `requirements.txt` de la raíz incluye `app/requirements.txt`,
+así que el mismo `.venv` corre el pipeline (`cartopy`, `xarray`, etc.) y la consola
+(`fastapi`, `uvicorn`, `psutil`). No hay un segundo venv que instalar ni que elegir.
 
 ### 3. Arrancar
 
@@ -82,7 +81,7 @@ Un solo puerto sirve la API y la UI. Para cortarlo: `Ctrl+C` en esa terminal.
 El comando largo, si preferís no usar el asistente (usa lo ya configurado):
 
 ```powershell
-app\.venv\Scripts\python.exe -m uvicorn api.main:app --app-dir app --port 8000
+.venv\Scripts\python.exe -m uvicorn api.main:app --app-dir app --port 8000
 ```
 
 ### 4. Confirmar que arrancó bien
@@ -110,7 +109,7 @@ Dos terminales:
 
 ```powershell
 # terminal 1 - backend
-app\.venv\Scripts\python.exe -m uvicorn api.main:app --app-dir app --port 8000
+.venv\Scripts\python.exe -m uvicorn api.main:app --app-dir app --port 8000
 
 # terminal 2 - frontend con recarga en caliente
 cd app\web
@@ -170,7 +169,7 @@ El asistente además apunta `TEMP`/`TMP` a `<raíz>\.tmp`: los temporales de los
 
 | Síntoma | Causa | Solución |
 | --- | --- | --- |
-| `No module named uvicorn` | arrancaste con el Python de la raíz (`.venv\...`) en vez del de la app | usá `app\.venv\Scripts\python.exe` |
+| `No module named uvicorn` | el `.venv` se creó sin la parte web | `.venv\Scripts\python.exe -m pip install -r requirements.txt` |
 | `[Errno 10048] error while attempting to bind ... :8000` | el puerto ya está ocupado por otra instancia | cerrá la otra terminal o usá `--port 8001` |
 | La página dice "Falta el build del frontend" | no corriste `npm run build` | `cd app\web; npm run build` |
 | Indicador `pipeline listo` apagado / `repo_ready: false` | falta el `.venv` de la raíz | `python -m venv .venv` y `.venv\Scripts\python.exe -m pip install -r requirements.txt` (es pesado) |
@@ -302,7 +301,7 @@ deja en `app/web/public/previews/<producto>.webp`. La API lo expone como
 estilo, se vuelve a correr:
 
 ```powershell
-app\.venv\Scripts\python.exe app\tools\previews.py
+.venv\Scripts\python.exe app\tools\previews.py
 ```
 
 ### Productos de color
@@ -718,15 +717,15 @@ hijo renderizando y el pipe abierto. Verificado: cancelar en 79 % deja el job en
   fuente — NOAA S3 para GOES/MUR, NASA Earthdata para LACE/PACE, CDS para ERA5.
   Si la descarga falla, el job muestra el error real del script.
 
-## Entornos separados
+## Un solo entorno
 
-- `app\.venv` — la app: `fastapi`, `uvicorn`, `numpy`, `pillow`, `psutil`.
-- `.venv` (raíz) — el pipeline de siempre, sin una dependencia nueva.
+- `.venv` (raíz) — todo: el pipeline (`cartopy`, `xarray`, `h5py`…) y la consola
+  (`fastapi`, `uvicorn`, `psutil`). `requirements.txt` incluye `app/requirements.txt`.
 
-Nunca se mezclan: la capa web no necesita `cartopy`, y el pipeline no necesita
-`fastapi`.
+No hay un segundo venv: la consola y los renders comparten intérprete. Es el mismo
+acuerdo que usa la imagen de Docker, que ya instalaba los dos archivos juntos.
 
-Para correr las pruebas, el entorno de la app suma las dependencias de
+Para correr las pruebas, el entorno suma las dependencias de
 `app/requirements-dev.txt` (`requests` para los descargadores y `httpx2` para
 `TestClient`). No son dependencias de runtime: la API arranca sin ellas.
 
@@ -735,13 +734,13 @@ Para correr las pruebas, el entorno de la app suma las dependencias de
 Una sola vez:
 
 ```powershell
-app\.venv\Scripts\python.exe -m pip install -r app\requirements-dev.txt
+.venv\Scripts\python.exe -m pip install -r app\requirements-dev.txt
 ```
 
 Toda la suite (unos 3 s, sin red):
 
 ```powershell
-app\.venv\Scripts\python.exe -m unittest discover -s app\tests
+.venv\Scripts\python.exe -m unittest discover -s app\tests
 ```
 
 Qué cubre:

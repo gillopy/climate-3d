@@ -1,7 +1,7 @@
 """Resolución de los slots GOES más nuevos publicados en NOAA S3.
 
-Solo stdlib a propósito: lo usan tanto los scripts de descarga (`.venv` del repo,
-con xarray/cartopy) como la API de la app (`app\\.venv`, que no los tiene).
+Solo stdlib a propósito: lo usan tanto los scripts de descarga como la API de la app,
+que comparten el mismo `.venv`.
 
 El ABI publica cada 10 minutos con ~20 minutos de retraso, y a veces se saltea un
 slot. Por eso "el más nuevo" no se calcula con `ahora`: se camina hacia atrás

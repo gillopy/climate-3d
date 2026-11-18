@@ -1,5 +1,4 @@
-﻿# Dependencias de la app interactiva (entorno propio: app\.venv).
-# El .venv de la raiz no se toca: sigue teniendo solo lo que pide requirements.txt.
+# Dependencias de la app interactiva (se instalan en el .venv de la raiz).
 fastapi==0.162.*
 uvicorn==0.54.*
 # Render de demostracion (el camino real usa los scripts de cuadros/ en su env).

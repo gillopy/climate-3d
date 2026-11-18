@@ -10,7 +10,7 @@ Fijan lo que la app promete:
   * sin focos la captura sale **idéntica** a la de sin `--firms`;
   * la receta mete el paso de FIRMS entre GIBS y el render.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

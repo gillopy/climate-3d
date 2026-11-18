@@ -4,7 +4,7 @@ Los artefactos del contenedor no se pueden ejecutar en esta máquina (no hay Doc
 así que estas pruebas fijan las invariantes que sí se pueden leer del repo: finales de
 línea, orden de copia del Dockerfile, puerto en loopback y el intérprete aislado.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

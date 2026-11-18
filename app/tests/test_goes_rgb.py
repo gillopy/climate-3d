@@ -7,7 +7,7 @@ Fijan lo que el quick guide manda y lo que la app promete:
   * que el catálogo no ofrezca `paleta` en estos productos;
   * que la receta baje TODAS las bandas y renderice el slot pedido.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

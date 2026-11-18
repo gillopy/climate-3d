@@ -5,7 +5,7 @@ ni los datos reales del repo. Lo que se fija aca es el contrato que ve la UI:
 un job termina en `done` con artefactos, falla con un mensaje legible, y el
 historial sobrevive al reinicio sin romperse por una linea corrupta.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

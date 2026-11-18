@@ -1,7 +1,7 @@
 """Slot resolution for the GOES-R ABI L2 LST 2 km full disk product.
 
-Standard library only on purpose: the app API (`app\\.venv`, no xarray) imports
-this module, while the download scripts run with the project `.venv`.
+Standard library only on purpose: the app API and the download scripts share the
+same project `.venv`, and neither should pay for xarray just to list a bucket.
 
 The bucket is the public NOAA S3 one (`noaa-goes19`, no credentials):
 `ABI-L2-LST2KMF/{YYYY}/{DDD}/{HH}/` with one granule per hour, published with a

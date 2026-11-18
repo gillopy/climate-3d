@@ -8,7 +8,7 @@ Fijan las reglas nuevas:
   * la app planea "últimos" sin mirar la ventana de fechas y siempre anima;
   * las horas de la UI son UTC: la ventana no suma el desfase local.
 
-    app\\.venv\\Scripts\\python.exe -m unittest discover -s app\\tests
+    .venv\\Scripts\\python.exe -m unittest discover -s app\\tests
 """
 from __future__ import annotations
 

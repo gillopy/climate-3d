@@ -55,12 +55,13 @@ function Preguntar {
 }
 
 $python = Join-Path $raizRepo '.venv\Scripts\python.exe'
-$pythonApp = Join-Path $raizRepo 'app\.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python)) {
-    Fallar 'falta .venv en la raiz del repo (es el entorno del pipeline). Ver app\README.md.'
+    Fallar 'falta .venv en la raiz del repo. Es el unico entorno: pipeline y consola. Ver app\README.md.'
 }
-if (-not (Test-Path -LiteralPath $pythonApp)) {
-    Fallar 'falta app\.venv (es el entorno de la consola). Ver app\README.md.'
+# Un solo entorno: si falta la parte web, el mensaje dice que instalar.
+& $python -c "import fastapi, uvicorn" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Fallar 'al .venv le faltan las dependencias de la consola. Corre: .venv\Scripts\python.exe -m pip install -r requirements.txt'
 }
 
 # --- configuracion actual ---------------------------------------------------
@@ -239,5 +240,5 @@ Write-Host ''
 Write-Host ("  Abri http://127.0.0.1:{0}  (Ctrl+C para cortar)" -f $Port) -ForegroundColor Green
 Write-Host ''
 
-& $pythonApp -m uvicorn api.main:app --app-dir app --port $Port
+& $python -m uvicorn api.main:app --app-dir app --port $Port
 exit $LASTEXITCODE

@@ -3,7 +3,7 @@
 Las muestras salen de renders reales, no de dibujos: lo que ves en la tarjeta es
 lo que el producto produce. Si cambia un estilo, se vuelve a correr este script.
 
-    app\\.venv\\Scripts\\python.exe app\\tools\\previews.py
+    .venv\\Scripts\\python.exe app\\tools\\previews.py
 """
 from __future__ import annotations
 

@@ -2,7 +2,7 @@
 # La API en runtime no las necesita: se instalan aparte para no engordar
 # `app/requirements.txt`.
 #
-#   app\.venv\Scripts\python.exe -m pip install -r app\requirements-dev.txt
+#   .venv\Scripts\python.exe -m pip install -r app\requirements-dev.txt
 
 -r requirements.txt
 
