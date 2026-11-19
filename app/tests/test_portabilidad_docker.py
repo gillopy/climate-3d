@@ -125,6 +125,39 @@ class ElSelloDeCommitDeLaImagen(unittest.TestCase):
         self.assertIn('if /i "%IMAGEN_COMMIT%"=="%COMMIT%"', self.bat)
         self.assertIn("docker compose build", self.bat)
 
+    def test_una_imagen_sin_sello_no_se_confunde_con_vieja(self) -> None:
+        # `docker inspect --format` imprime `<no value>` cuando la imagen no tiene
+        # labels (una cargada de un .tar viejo). Sin el control, el mensaje dice
+        # "se compilo con <no value>" y cmd lee el `<` como redirección: se rompe
+        # con "no se puede encontrar el archivo" en vez de avisar.
+        self.assertIn("SIN_SELLO", self.bat)
+        self.assertIn("findstr", self.bat)
+        self.assertLess(self.bat.index("findstr"), self.bat.index('if /i "%IMAGEN_COMMIT%"'))
+
+    def test_exporta_el_commit_antes_de_compilar(self) -> None:
+        # Sin exportarlo antes, el build sella "desconocido" y el aviso nunca más
+        # detecta nada.
+        self.assertLess(
+            self.bat.index('set "CLIMATE3D_COMMIT=%COMMIT%"'),
+            self.bat.index("docker compose build"),
+        )
+        self.assertLess(
+            self.bat.index('set "CLIMATE3D_COMMIT=%COMMIT%"'),
+            self.bat.index("setup.ps1"),
+        )
+
+    def test_los_goto_apuntan_a_etiquetas_existentes(self) -> None:
+        # Un goto a una etiqueta que no existe mata el .bat en silencio.
+        import re
+
+        etiquetas = {
+            linea.strip()[1:]
+            for linea in self.bat.splitlines()
+            if linea.strip().startswith(":") and not linea.strip().startswith("::")
+        }
+        destinos = set(re.findall(r"goto\s+(\w+)", self.bat))
+        self.assertEqual(destinos - etiquetas, set())
+
 
 class InterpreteAisladoDelEntorno(unittest.TestCase):
     def test_un_mapa_vacio_no_hereda_os_environ(self) -> None:

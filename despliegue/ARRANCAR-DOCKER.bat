@@ -79,10 +79,17 @@ if not defined YA_EXISTIA goto imagen_lista
 if not defined COMMIT goto imagen_lista
 
 set "IMAGEN_COMMIT="
+set "SIN_SELLO="
 docker image inspect climate3d:local --format "{{.Config.Labels.climate3d_commit}}" > "%TEMP%\climate3d_commit.txt" 2>nul
+rem Una imagen sin labels imprime literalmente "<no value>". Sin este control el
+rem mensaje de abajo se rompe: cmd lee el "<" como redireccion y tira "no se
+rem puede encontrar el archivo". Se acepta solo un hash corto en hexadecimal.
+findstr /r /c:"^[0-9a-f][0-9a-f]*$" "%TEMP%\climate3d_commit.txt" >nul 2>&1
+if errorlevel 1 set "SIN_SELLO=1"
 if exist "%TEMP%\climate3d_commit.txt" set /p IMAGEN_COMMIT=<"%TEMP%\climate3d_commit.txt"
 del "%TEMP%\climate3d_commit.txt" >nul 2>&1
 
+if defined SIN_SELLO goto imagen_sin_sello
 if not defined IMAGEN_COMMIT goto imagen_sin_sello
 if /i "%IMAGEN_COMMIT%"=="%COMMIT%" goto imagen_lista
 
