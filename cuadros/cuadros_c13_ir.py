@@ -198,13 +198,13 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
     # ticks se lean limpios sobre el borde del globo. Va centrada y angosta: la escala
     # es la misma, pero no tiene que cruzar el cuadro de lado a lado.
     fondo_cbar = mpatches.FancyBboxPatch(
-        (0.225, 0.030), 0.540, 0.055,
+        (0.225, 0.040), 0.540, 0.040,
         boxstyle="round,pad=0.006,rounding_size=0.010",
         transform=fig.transFigure, facecolor=(0.047, 0.063, 0.078, 0.86),
         edgecolor="#2a3442", linewidth=0.8, zorder=9,
     )
     fig.add_artist(fondo_cbar)
-    cax = fig.add_axes([0.241, 0.055, 0.470, 0.017], zorder=10)
+    cax = fig.add_axes([0.241, 0.0585, 0.470, 0.010], zorder=10)
     cbar = fig.colorbar(mesh, cax=cax, orientation="horizontal")
     cbar.outline.set_visible(False)
     ticks = list(range(math.ceil(vmin / 10) * 10, int(vmax), 10))
@@ -358,9 +358,8 @@ def _sello_render(args) -> str:
         "paleta": args.paleta,
         # v2: el encuadre regional recorta la grilla nativa en vez de submuestrearla.
         "malla": 2,
-        # v3: fondo negro puro y escala centrada más angosta. Sin esta clave, un
-        # cuadro viejo con otro vestuario se reusa tal cual y el job mezcla diseños.
-        "diseno": 3,
+        # v4: la escala del póster es más fina (barra y pastilla más bajas).
+        "diseno": 4,
     }
     return hashlib.sha256(json.dumps(datos, sort_keys=True).encode()).hexdigest()[:16]
 
