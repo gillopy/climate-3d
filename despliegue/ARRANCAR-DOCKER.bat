@@ -81,16 +81,18 @@ if not defined COMMIT goto imagen_lista
 set "IMAGEN_COMMIT="
 set "SIN_SELLO="
 docker image inspect climate3d:local --format "{{.Config.Labels.climate3d_commit}}" > "%TEMP%\climate3d_commit.txt" 2>nul
-rem Una imagen sin labels imprime literalmente "<no value>". Sin este control el
-rem mensaje de abajo se rompe: cmd lee el "<" como redireccion y tira "no se
-rem puede encontrar el archivo". Se acepta solo un hash corto en hexadecimal.
-findstr /r /c:"^[0-9a-f][0-9a-f]*$" "%TEMP%\climate3d_commit.txt" >nul 2>&1
-if errorlevel 1 set "SIN_SELLO=1"
-if exist "%TEMP%\climate3d_commit.txt" set /p IMAGEN_COMMIT=<"%TEMP%\climate3d_commit.txt"
+rem Ojo con dos cosas que ya rompieron esto: docker escribe el label con LF
+rem suelto (un findstr con "$" no lo matchea) y, si la imagen no tiene labels,
+rem imprime literalmente "<no value>" (cmd lee el "<" como redireccion). Se lee
+rem con for /f, que come el salto, y se acepta solo un hash en hexadecimal.
+set "LEIDO="
+for /f "usebackq delims=" %%i in ("%TEMP%\climate3d_commit.txt") do set "LEIDO=%%i"
 del "%TEMP%\climate3d_commit.txt" >nul 2>&1
+if not defined LEIDO set "SIN_SELLO=1"
+if defined LEIDO for /f "delims=0123456789abcdefABCDEF" %%i in ("!LEIDO!") do set "SIN_SELLO=1"
 
 if defined SIN_SELLO goto imagen_sin_sello
-if not defined IMAGEN_COMMIT goto imagen_sin_sello
+set "IMAGEN_COMMIT=%LEIDO%"
 if /i "%IMAGEN_COMMIT%"=="%COMMIT%" goto imagen_lista
 
 echo.

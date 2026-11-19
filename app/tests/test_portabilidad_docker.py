@@ -30,6 +30,19 @@ except ImportError:  # pragma: no cover - faltan dependencias del venv de la app
     TestClient = None
 
 
+def _sin_comentarios(texto: str) -> str:
+    """Líneas reales de un .bat: los `rem` no ejecutan nada.
+
+    Sin esto una aserción sobre el texto matchea la explicación en vez del
+    comando (ya pasó tres veces: `pause`, `compose down` y `findstr`).
+    """
+    return "\n".join(
+        linea.strip()
+        for linea in texto.splitlines()
+        if linea.strip() and not linea.strip().lower().startswith("rem")
+    )
+
+
 class ArtefactosDelContenedor(unittest.TestCase):
     def test_los_scripts_de_linux_van_con_lf(self) -> None:
         # Un CRLF en el shebang rompe el arranque: "bad interpreter".
@@ -130,9 +143,48 @@ class ElSelloDeCommitDeLaImagen(unittest.TestCase):
         # labels (una cargada de un .tar viejo). Sin el control, el mensaje dice
         # "se compilo con <no value>" y cmd lee el `<` como redirección: se rompe
         # con "no se puede encontrar el archivo" en vez de avisar.
-        self.assertIn("SIN_SELLO", self.bat)
-        self.assertIn("findstr", self.bat)
-        self.assertLess(self.bat.index("findstr"), self.bat.index('if /i "%IMAGEN_COMMIT%"'))
+        cuerpo = _sin_comentarios(self.bat)
+        self.assertIn("SIN_SELLO", cuerpo)
+        self.assertNotIn("findstr", cuerpo)
+
+    @unittest.skipUnless(sys.platform == "win32", "cmd y for /f son de Windows")
+    def test_el_guard_acepta_el_sello_que_escribe_docker(self) -> None:
+        # docker escribe el label con LF suelto. Un `findstr /r ...$` no matchea
+        # líneas LF-only, así que la versión anterior mandaba TODA imagen sellada
+        # a "no se puede verificar" y la comparación quedaba muerta. Este test
+        # corre cmd de verdad sobre las dos formas de salto y sobre el centinela.
+        import subprocess
+        import tempfile
+
+        script = (
+            "@echo off\r\n"
+            "setlocal enabledelayedexpansion\r\n"
+            'set "V="\r\n'
+            'for /f "usebackq delims=" %%i in ("%~1") do set "V=%%i"\r\n'
+            'set "NO=0"\r\n'
+            "if not defined V set \"NO=1\"\r\n"
+            'if defined V for /f "delims=0123456789abcdefABCDEF" %%i in ("!V!") do set "NO=1"\r\n'
+            "echo !NO!\r\n"
+        )
+        casos = [
+            (b"3fe0110\n", "0"),        # así lo escribe docker: LF suelto
+            (b"3fe0110\r\n", "0"),
+            (b"<no value>\n", "1"),     # imagen sin labels
+            (b"desconocido\n", "1"),    # compilada sin CLIMATE3D_COMMIT
+            (b"", "1"),
+        ]
+        with tempfile.TemporaryDirectory() as carpeta:
+            guardia = Path(carpeta) / "guardia.bat"
+            guardia.write_text(script, encoding="ascii", newline="")
+            for crudo, esperado in casos:
+                sello = Path(carpeta) / "sello.txt"
+                sello.write_bytes(crudo)
+                corrida = subprocess.run(
+                    ["cmd", "/c", str(guardia), str(sello)],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(corrida.stdout.strip(), esperado, f"con {crudo!r}")
 
     def test_exporta_el_commit_antes_de_compilar(self) -> None:
         # Sin exportarlo antes, el build sella "desconocido" y el aviso nunca más
