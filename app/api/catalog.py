@@ -1309,6 +1309,8 @@ _VARIANTES = {
     "goes_dust": ("satelite", "paraguay"),
     "goes_airmass": ("satelite", "paraguay"),
     "goes_firetemp": ("satelite", "paraguay"),
+    # Sandwich no tiene "Solo Paraguay": la placa cambia solo con el satelite.
+    "goes_sandwich": ("satelite",),
     "goes_truecolor": ("satelite", "encuadre", "limbo"),
     "geocolor": ("satelite", "paraguay"),
     "precipitacion_ecmwf": ("modelo", "paraguay"),

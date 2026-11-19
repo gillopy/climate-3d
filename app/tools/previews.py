@@ -57,6 +57,11 @@ RGB = {
         "G16": JOB / "eb6687bceb94" / "G16_firetemp_2025-02-02T1700.png",
     },
 }
+SANDWICH = {
+    "G19": JOB / "ec9b26111db1" / "G19_Sandwich_2026-11-18T1700.png",
+    "G18": JOB / "806ac86bcc3e" / "G18_Sandwich_2026-11-18T2100.png",
+    "G16": JOB / "cb7be29a3eb7" / "G16_Sandwich_2025-02-02T1700.png",
+}
 
 # Placa fija de cada producto. `None` = no hay muestra disponible.
 # Precipitacion y anomalia de 2 m usan el poster de fondo negro.
@@ -67,7 +72,7 @@ FUENTES: dict[str, Path | None] = {
     "goes_dust": RGB["dust"]["G19"],
     "goes_airmass": RGB["airmass"]["G19"],
     "goes_firetemp": RGB["firetemp"]["G19"],
-    "goes_sandwich": JOB / "ec9b26111db1" / "G19_Sandwich_2026-11-18T1700.png",
+    "goes_sandwich": SANDWICH["G19"],
     "geocolor": GOES_G19_1700,
     "goes_truecolor": VAR / "truecolor_limpio.png",
     "truecolor_viirs": GALERIA / "truecolor_noaa20_globo_2024-09-28.png",
@@ -99,6 +104,8 @@ for _sat in ("G19", "G18", "G16"):
     VARIANTES[("goes_airmass", (_sat, "false"))] = RGB["airmass"][_sat]
     VARIANTES[("goes_dust", (_sat, "false"))] = RGB["dust"][_sat]
     VARIANTES[("goes_firetemp", (_sat, "false"))] = RGB["firetemp"][_sat]
+    # Sandwich no lleva "paraguay" en el catalogo: la variante es solo el satelite.
+    VARIANTES[("goes_sandwich", (_sat,))] = SANDWICH[_sat]
 
 
 def _nombre(producto: str, valores: tuple[str, ...]) -> str:
