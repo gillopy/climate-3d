@@ -62,6 +62,45 @@ class ArtefactosDelContenedor(unittest.TestCase):
         self.assertNotIn("0.0.0.0:${PORT", texto)
 
 
+class ElLanzadorNativo(unittest.TestCase):
+    """ARRANCAR.ps1 abre el navegador, pero sin romper Ctrl+C."""
+
+    def setUp(self) -> None:
+        self.texto = (DESPLIEGUE / "ARRANCAR.ps1").read_text(encoding="utf-8")
+
+    def test_abre_el_navegador_solo_cuando_la_api_responde(self) -> None:
+        # Abrirlo antes muestra una pestaña con error de conexión.
+        self.assertIn("/api/health", self.texto)
+        self.assertLess(self.texto.index("/api/health"), self.texto.index("Start-Process $url"))
+
+    def test_el_navegador_se_puede_apagar(self) -> None:
+        # Servidor headless: sin esta salida, un arranque automático abre pestañas.
+        self.assertIn("$SinNavegador", self.texto)
+        self.assertLess(self.texto.index("if (-not $SinNavegador)"), self.texto.index("Start-Process $url"))
+
+    def test_uvicorn_sigue_en_primer_plano(self) -> None:
+        # La espera va en segundo plano: si uvicorn también lo estuviera, Ctrl+C
+        # dejaría de cortar la consola.
+        self.assertLess(self.texto.index("Start-Job"), self.texto.index("-m uvicorn"))
+
+    def test_el_bat_propaga_el_fallo(self) -> None:
+        # `pause` pisa errorlevel: sin guardarlo antes, un fallo del lanzador
+        # devuelve 0 y cualquier script que lo llame cree que salió bien.
+        lineas = [
+            linea.strip()
+            for linea in (DESPLIEGUE / "ARRANCAR.bat").read_text(encoding="utf-8").splitlines()
+            if linea.strip() and not linea.strip().lower().startswith("rem")
+        ]
+        cuerpo = "\n".join(lineas)
+        self.assertIn('set "codigo=%errorlevel%"', cuerpo)
+        self.assertIn("exit /b %codigo%", cuerpo)
+
+    def test_es_crlf(self) -> None:
+        # .gitattributes pide CRLF para *.ps1 y *.bat.
+        self.assertIn(b"\r\n", (DESPLIEGUE / "ARRANCAR.ps1").read_bytes())
+        self.assertIn(b"\r\n", (DESPLIEGUE / "ARRANCAR.bat").read_bytes())
+
+
 class InterpreteAisladoDelEntorno(unittest.TestCase):
     def test_un_mapa_vacio_no_hereda_os_environ(self) -> None:
         # `_python_repo({})` es "sin entorno", no "el entorno real".

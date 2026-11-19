@@ -7,7 +7,7 @@ carpeta de descargas y las claves se configuran desde el asistente.
 | --- | --- |
 | `ARRANCAR.bat` | **el que usás todos los días**: arranca la consola con Python |
 | `ARRANCAR-DOCKER.bat` | la misma app dentro de Docker (no necesita Python ni Node) |
-| `APAGAR.bat` | baja el contenedor de Docker (los datos quedan) |
+| `APAGAR.bat` | apaga lo que esté corriendo: el contenedor de Docker **o** la consola nativa (los datos quedan) |
 | `setup.ps1` / `setup.sh` | el asistente de Docker: carpeta, claves y `docker compose up` |
 | `env.example` | contrato de variables, por si armás el `.env` a mano |
 | `Dockerfile`, `docker-compose.yml`, `entrypoint.sh` | la imagen |
@@ -24,7 +24,9 @@ Doble clic en **`ARRANCAR.bat`**. Pregunta cuatro cosas y arranca en
 2. **Claves** (opcionales): NASA FIRMS (focos de calor), Copernicus CDS (ERA5) y
    Earthdata (NISAR y PACE). Enter en cada una conserva la que ya estaba.
 3. Si quedó trabajo viejo dentro del repo, ofrece moverlo.
-4. Levanta la consola.
+4. Levanta la consola y **abre http://127.0.0.1:8000 en tu navegador por defecto**,
+   en cuanto la API responde. Si la app todavía no levantó, no abre nada: espera.
+   Para no abrirlo (servidor headless): `ARRANCAR.ps1 -SinNavegador`.
 
 Las claves quedan en `%LOCALAPPDATA%\climate3d\credenciales.json`, **fuera del
 repo**, y se exportan al proceso: los scripts del pipeline las heredan.
@@ -37,6 +39,20 @@ vez). Después abre **http://127.0.0.1:8080**.
 
 El asistente (`setup.ps1`) pregunta la carpeta y las claves y escribe
 `despliegue\.env`. Para apagarla: `APAGAR.bat` o `docker compose down`.
+
+---
+
+## Apagar
+
+Doble clic en **`APAGAR.bat`**, sin importar cómo la arrancaste. Mira las dos
+formas y apaga la que esté viva:
+
+- si Docker responde, baja el contenedor (`docker compose down`);
+- si hay un `uvicorn` del `.venv` de este repo, lo detiene (Opción 1).
+
+Si no encuentra nada, lo dice en vez de inventar un "listo". No borra datos: los
+`.nc`, las salidas y la caché quedan donde están. Para ver qué apagaría sin tocar
+nada: `powershell -File despliegue\apagar.ps1 -SoloMirar`.
 
 ---
 

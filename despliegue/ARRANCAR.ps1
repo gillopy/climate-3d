@@ -7,7 +7,8 @@
       1. Carpeta de descargas y salidas (la recuerda en %LOCALAPPDATA%\climate3d).
       2. Claves de las fuentes (FIRMS, Copernicus CDS, Earthdata), tambien recordadas.
       3. Migra lo que hubiera quedado dentro del repo (app\var).
-      4. Levanta la consola y abre http://127.0.0.1:8000.
+      4. Levanta la consola y abre http://127.0.0.1:8000 en el navegador por defecto,
+         en cuanto la API responde.
 
     Las claves quedan en %LOCALAPPDATA%\climate3d\credenciales.json, fuera del repo, y
     se exportan al proceso: los scripts del pipeline las heredan.
@@ -20,6 +21,9 @@
 
 .EXAMPLE
     .\ARRANCAR.ps1 -SinPreguntar      # usa lo ya configurado, sin consola
+
+.EXAMPLE
+    .\ARRANCAR.ps1 -SinNavegador      # no abre el navegador (servidor headless)
 #>
 [CmdletBinding()]
 param(
@@ -27,7 +31,8 @@ param(
     [int]$Port = 8000,
     [switch]$SinPreguntar,
     [switch]$SinMigrar,
-    [switch]$SoloConfigurar
+    [switch]$SoloConfigurar,
+    [switch]$SinNavegador
 )
 
 $ErrorActionPreference = 'Continue'
@@ -350,6 +355,28 @@ Write-Host ''
 Write-Host ("  Abri http://127.0.0.1:{0}  (Ctrl+C para cortar)" -f $Port) -ForegroundColor Green
 Write-Host '  Con Docker en su lugar: .\despliegue\ARRANCAR-DOCKER.bat' -ForegroundColor DarkGray
 Write-Host ''
+
+# El navegador se abre solo cuando la API responde: abrirlo antes muestra una
+# pestana con error. El que espera va en segundo plano para que uvicorn se quede
+# en primer plano y Ctrl+C corte como siempre.
+if (-not $SinNavegador) {
+    $url = "http://127.0.0.1:$Port"
+    Start-Job -ScriptBlock {
+        param($url)
+        for ($i = 0; $i -lt 120; $i++) {
+            try {
+                $r = Invoke-WebRequest -Uri "$url/api/health" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+                if ($r.StatusCode -eq 200) {
+                    Start-Process $url
+                    return
+                }
+            } catch {
+                # Todavia no levanto: se reintenta.
+            }
+            Start-Sleep -Milliseconds 500
+        }
+    } -ArgumentList $url | Out-Null
+}
 
 & $python -m uvicorn api.main:app --app-dir app --port $Port
 exit $LASTEXITCODE

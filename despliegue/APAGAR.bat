@@ -4,8 +4,9 @@ title Climate 3D - apagar
 
 echo Apagando Climate 3D...
 echo.
-docker compose down
-echo.
-echo Listo. Tus datos y tus salidas no se borraron.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0apagar.ps1" %*
+rem pause pisa errorlevel: hay que guardarlo antes de mostrarlo.
+set "codigo=%errorlevel%"
 echo.
 pause
+exit /b %codigo%
