@@ -169,7 +169,12 @@ if ($unidad) {
 # Todo adentro de la misma carpeta: si la raiz no cambia se conserva la carpeta de
 # los .h5 que ya estaba configurada (puede tener cientos de GB); si cambia, los .h5
 # pasan a <raiz>\nisar.
-$nisarSugerido = Join-Path $Raiz 'nisar'
+# Si la carpeta elegida YA es una raiz NISAR (tiene subcarpetas NISAR_*), se usa tal
+# cual: anidar un `nisar` mas adentro escondería los .h5 que ya estan.
+$pareceNisar = Get-ChildItem $Raiz -Directory -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -like 'NISAR_*' } |
+    Select-Object -First 1
+$nisarSugerido = if ($pareceNisar) { $Raiz } else { Join-Path $Raiz 'nisar' }
 if (-not [string]::IsNullOrWhiteSpace($config.nisar) -and (Test-Path -LiteralPath $config.nisar)) {
     $mismaRaiz = ($config.datos -replace '[\\/]+$', '').ToLowerInvariant() -eq ($Raiz -replace '[\\/]+$', '').ToLowerInvariant()
     if ($mismaRaiz) { $nisarSugerido = $config.nisar }
