@@ -61,9 +61,11 @@ class RaizDeDatos(unittest.TestCase):
 
 
 class RaizDeNisar(unittest.TestCase):
-    def test_windows_usa_e_nisar_por_defecto(self) -> None:
-        # S1: los .h5 pesan ~1.9 GB y no pueden convivir con el resto de los datos.
-        self.assertEqual(rutas.raiz_nisar({}, "nt"), Path(r"E:\nisar"))
+    def test_sin_configuracion_cuelga_de_los_datos(self) -> None:
+        # Una sola carpeta: los .h5 van adentro de la raiz de datos.
+        self.assertEqual(
+            rutas.raiz_nisar({}, "nt"), Path(rutas.RUTA_LEGADA) / "nisar"
+        )
 
     def test_la_variable_de_nisar_manda(self) -> None:
         for plataforma in ("nt", "posix"):
@@ -80,7 +82,8 @@ class RaizDeNisar(unittest.TestCase):
 
     def test_una_variable_vacia_no_pisa_el_default(self) -> None:
         self.assertEqual(
-            rutas.raiz_nisar({"CLIMATE3D_NISAR": "   "}, "nt"), Path(r"E:\nisar")
+            rutas.raiz_nisar({"CLIMATE3D_NISAR": "   "}, "nt"),
+            Path(rutas.RUTA_LEGADA) / "nisar",
         )
 
 

@@ -15,8 +15,8 @@ configuración → default de la plataforma**.
   que el usuario elige. ``CLIMATE3D_CONFIG`` lo puede mover. Sin archivo, todo sigue
   funcionando como siempre.
 - En Windows el default es el histórico: ``D:\\Users\\guill\\dataset era5``, con
-  ``<DATOS>\\.media`` para los artefactos y ``E:\\nisar`` para los .h5. En el resto,
-  donde corre el contenedor, ``/data`` y ``/data/.media``.
+  ``<DATOS>\\.media`` para los artefactos y ``<DATOS>\\nisar`` para los ``.h5``: una sola
+  carpeta para todo. En el contenedor, ``/data`` y ``/data/.media``.
 
 ``CLIMATE3D_EXTRA_DIRS`` agrega ubicaciones alternativas separadas por ``os.pathsep``.
 
@@ -41,9 +41,6 @@ RUTA_LEGADA = r"D:\Users\guill\dataset era5"
 
 #: Punto de montaje del volumen en el contenedor (y default fuera de Windows).
 RUTA_CONTENEDOR = "/data"
-
-#: Raíz propia de los .h5 NISAR en Windows: pesan ~1.9 GB cada uno.
-RUTA_NISAR_WINDOWS = r"E:\nisar"
 
 #: Ubicaciones históricas donde se buscaba el NetCDF de ERA5.
 _EXTRA_LEGADAS = (Path(r"D:\Users\guill\Desktop"), RAIZ)
@@ -187,8 +184,10 @@ def raiz_nisar(
 ) -> Path:
     """Raíz de los ``.h5`` de NISAR: ``CLIMATE3D_NISAR`` manda.
 
-    Sin variable, en Windows es ``E:\\nisar`` (el disco de datos se llena con los
-    ~1.9 GB por escena) y fuera de Windows queda junto al resto de los datos.
+    Sin variable ni configuración queda adentro de la raíz de datos
+    (``<datos>/nisar``): una sola carpeta para descargas, salidas y los ~1.9 GB de
+    cada escena. ``CLIMATE3D_NISAR`` existe para quien quiera los ``.h5`` en otro
+    disco, que es lo que hacía el default viejo.
     """
     valor = (_entorno(entorno).get("CLIMATE3D_NISAR") or "").strip()
     if valor:
@@ -196,8 +195,6 @@ def raiz_nisar(
     guardado = _config(entorno, config)
     if guardado.get("nisar"):
         return Path(guardado["nisar"]).expanduser()
-    if _plataforma(plataforma) == "nt":
-        return Path(RUTA_NISAR_WINDOWS)
     return raiz_datos(entorno, plataforma, guardado) / "nisar"
 
 

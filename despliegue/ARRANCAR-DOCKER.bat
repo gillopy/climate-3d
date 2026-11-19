@@ -16,8 +16,23 @@ docker info >nul 2>&1
 if not errorlevel 1 goto docker_ok
 
 echo       Docker esta apagado. Arrancandolo...
-start "" "Docker Desktop"
-set /a n=0
+docker desktop start -d >nul 2>&1
+if not errorlevel 1 goto esperar
+
+if exist "%ProgramFiles%\Docker\Docker\Docker Desktop.exe" goto lanzar_programfiles
+if exist "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe" goto lanzar_usuario
+
+echo       No encontre Docker Desktop instalado: abrilo a mano.
+goto esperar
+
+:lanzar_programfiles
+start "" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
+goto esperar
+
+:lanzar_usuario
+start "" "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe"
+goto esperar
+
 :esperar
 timeout /t 5 /nobreak >nul
 docker info >nul 2>&1

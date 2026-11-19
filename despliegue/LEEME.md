@@ -60,6 +60,7 @@ El asistente (`setup.ps1`) pregunta la carpeta y las claves y escribe
   salidas/            productos y animaciones
   .media/             artefactos de los jobs, historial y cachés
   .tmp/               temporales de los renders
+  nisar/              escenas .h5 de NISAR (opcional, 1.9 GB cada una)
 ```
 
-Los `.h5` de NISAR van aparte (`E:\nisar` por defecto): pesan ~1.9 GB cada uno.
+Los `.h5` de NISAR van en `nisar\` adentro de la misma carpeta (pesan ~1.9 GB cada uno). Si querés tenerlos en otro disco, el asistente te deja cambiar esa subcarpeta.

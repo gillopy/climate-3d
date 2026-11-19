@@ -154,7 +154,7 @@ Para ver o cambiar las raíces sin levantar el server:
 | --- | --- | --- |
 | `CLIMATE3D_DATOS` | datos crudos y `salidas\` | el del archivo, o `D:\Users\guill\dataset era5` |
 | `CLIMATE3D_MEDIA` | artefactos, historial y cachés | `<datos>\.media` |
-| `CLIMATE3D_NISAR` | los `.h5` de NISAR (~1.9 GB cada uno) | `E:\nisar` |
+| `CLIMATE3D_NISAR` | los `.h5` de NISAR (~1.9 GB cada uno) | `<datos>\nisar` |
 | `CLIMATE3D_CONFIG` | el archivo de configuración | `%LOCALAPPDATA%\climate3d\config.json` |
 
 Las variables viven en la terminal actual: al cerrarla se pierde. Lo que se guarda con el

@@ -13,7 +13,7 @@ baja el dato        imagen fija             render cuadro a cuadro     MP4 / GIF
 
 > Todo va a `D:\Users\guill\dataset era5` salvo que configures otra raíz. Los `.nc`
 > (varios GB) y las salidas (PNG/MP4) **nunca** van dentro del repositorio. Los `.h5` de
-> NISAR van aparte (`E:\nisar` en Windows, o lo que diga `CLIMATE3D_NISAR`).
+> NISAR van adentro de esa misma carpeta (`nisar\`, o lo que diga `CLIMATE3D_NISAR`).
 >
 > La consola pregunta la raíz al arrancar (`despliegue\ARRANCAR.bat`) y la guarda en
 > `%LOCALAPPDATA%\climate3d\config.json`: de ahí cuelgan las descargas, `salidas\` y

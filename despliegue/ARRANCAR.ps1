@@ -136,15 +136,6 @@ if ($destinoPosix -eq $repoPosix -or $destinoPosix.StartsWith($repoPosix + '/'))
     Fallar 'esa carpeta esta dentro del repo. Elegi una carpeta fuera (por ejemplo D:\climate3d-data).'
 }
 
-# La raiz de los .h5 de NISAR no puede ser la raiz de datos: se mezclarian 1.9 GB
-# por escena con las descargas y las salidas.
-if (-not [string]::IsNullOrWhiteSpace($config.nisar)) {
-    $nisarPosix = ($config.nisar -replace '\\', '/').TrimEnd('/').ToLowerInvariant()
-    if ($destinoPosix -eq $nisarPosix -or $destinoPosix.StartsWith($nisarPosix + '/')) {
-        Fallar ("esa carpeta es la de los .h5 de NISAR ({0}). Elegi otra para descargas y salidas." -f $config.nisar)
-    }
-}
-
 if (-not (Test-Path -LiteralPath $Raiz)) {
     New-Item -ItemType Directory -Path $Raiz -Force -ErrorAction SilentlyContinue | Out-Null
     if (-not (Test-Path -LiteralPath $Raiz)) { Fallar "no pude crear '$Raiz'. Revisa los permisos." }
@@ -175,8 +166,35 @@ if ($unidad) {
     }
 }
 
+# Todo adentro de la misma carpeta: si la raiz no cambia se conserva la carpeta de
+# los .h5 que ya estaba configurada (puede tener cientos de GB); si cambia, los .h5
+# pasan a <raiz>\nisar.
+$nisarSugerido = Join-Path $Raiz 'nisar'
+if (-not [string]::IsNullOrWhiteSpace($config.nisar) -and (Test-Path -LiteralPath $config.nisar)) {
+    $mismaRaiz = ($config.datos -replace '[\\/]+$', '').ToLowerInvariant() -eq ($Raiz -replace '[\\/]+$', '').ToLowerInvariant()
+    if ($mismaRaiz) { $nisarSugerido = $config.nisar }
+}
+
+Write-Host ''
+Write-Host '  Los .h5 de NISAR (1.9 GB cada uno) van en una subcarpeta propia.'
+if (-not $SinPreguntar) {
+    $entrada = Preguntar "  Donde guardamos los .h5? [Enter = $nisarSugerido]"
+    if (-not [string]::IsNullOrWhiteSpace($entrada)) { $nisarSugerido = $entrada.Trim().Trim('"').Trim("'") }
+}
+$nisarSugerido = $nisarSugerido.TrimEnd('\').TrimEnd('/')
+if ($nisarSugerido.StartsWith('\\')) {
+    Fallar 'la carpeta de los .h5 no puede ser una ruta de red.'
+}
+if (-not (Test-Path -LiteralPath $nisarSugerido)) {
+    New-Item -ItemType Directory -Path $nisarSugerido -Force -ErrorAction SilentlyContinue | Out-Null
+    if (-not (Test-Path -LiteralPath $nisarSugerido)) {
+        Fallar "no pude crear '$nisarSugerido'. Revisa los permisos."
+    }
+}
+Ok ("nisar: {0}" -f $nisarSugerido)
+
 $media = Join-Path $Raiz '.media'
-$json = & $python (Join-Path $raizRepo 'comun\rutas.py') --datos $Raiz --media $media 2>$null | Out-String
+$json = & $python (Join-Path $raizRepo 'comun\rutas.py') --datos $Raiz --media $media --nisar $nisarSugerido 2>$null | Out-String
 if ($LASTEXITCODE -ne 0) { Fallar 'no pude guardar la configuracion (comun\rutas.py).' }
 $efectivo = $json | ConvertFrom-Json
 Ok ("configuracion guardada en {0}" -f $efectivo.config)

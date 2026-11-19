@@ -58,12 +58,14 @@ Si tus datos están en otro lado, no toques código:
 $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 ```
 
-Los `.h5` de NISAR tienen su propia raíz: cada GCOV pesa ~1.9 GB y llenaría el disco de
-datos. Por defecto en Windows va a `E:\nisar` (y fuera de Windows a `<DATOS>/nisar`):
+Los `.h5` de NISAR viven adentro de la misma carpeta de datos (`<DATOS>/nisar`): cada GCOV
+pesa ~1.9 GB. Si querés tenerlos en otro disco, hay dos formas:
 
 ```powershell
-$env:CLIMATE3D_NISAR = "E:\nisar"
+$env:CLIMATE3D_NISAR = "E:\nisar"     # solo para esta terminal
 ```
+
+o dejarlo fijo con el asistente: `.\despliegue\ARRANCAR.ps1` pregunta la subcarpeta.
 
 Los archivos ya bajados en otra ruta no se mueven solos: copiá la carpeta `nisar` completa
 al disco nuevo (o apuntá `CLIMATE3D_NISAR` a la vieja). El visor muestra la ruta vigente y
