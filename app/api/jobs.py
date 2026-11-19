@@ -15,6 +15,7 @@ import asyncio
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -58,6 +59,127 @@ _GRACIA_CANCEL = 6.0
 # que usa `descargar/snapshot_paraguay.py` al atrapar KeyboardInterrupt) y el que
 # deja Windows (0xC000013A). Un corte del usuario no es un error del pipeline.
 _CORTES = {130, -2, 0xC000013A, -1073741510}
+
+# Firmas de que el hijo murio por falta de memoria y no por datos. Pasa cuando el
+# archivo de paginacion no puede crecer (disco del sistema lleno): el commit se
+# agota y hasta un `malloc` de 8 MB falla. `eccodes` lo disfraza de error de
+# decodificacion, porque tampoco puede montar sus definiciones en `/MEMFS`.
+_FIRMAS_SIN_MEMORIA = (
+    "/memfs/definitions",
+    "unable to allocate",
+    "memoryerror",
+    "default_long_lasting_malloc",
+    "memory allocation still failed",
+    "eccodes assertion failed",
+    "paging file is too small",
+    "archivo de paginaci",
+    "dll load failed while importing _eccodes",
+)
+
+# Cuantas lineas finales del log se miran para diagnosticar un paso fallido. Un
+# traceback de Python ocupa menos; la salida del paso esta al final del log.
+_COLA_PARA_DIAGNOSTICO = 80
+
+# Commit (RAM + paginacion) que se le pide a la maquina antes de largar un paso.
+# No es un limite duro: el consumo depende del recorte y de los px del render.
+_MEMORIA_MINIMA_MB = 400
+# Cuanto se espera a que se libere memoria antes de largar el paso igual.
+_ESPERA_MEMORIA_S = 45.0
+# Cada cuanto se vuelve a mirar la memoria mientras se espera.
+_SONDEO_MEMORIA_S = 2.0
+# Con menos espacio que esto en el disco del sistema, Windows no puede agrandar
+# el archivo de paginacion y el commit queda clavado donde este.
+_DISCO_SISTEMA_MINIMO_GB = 2.0
+
+
+def _commit_libre_mb() -> int | None:
+    """Memoria que el sistema todavia puede comprometer, en MB.
+
+    En Windows el numero util es `ullAvailPageFile` (RAM mas paginacion que aun
+    se puede reservar). `psutil.virtual_memory().available` mide RAM fisica y da
+    por sano un sistema que ya no puede reservar ni 8 MB.
+    """
+    if os.name != "nt":
+        return int(psutil.virtual_memory().available // (1024 * 1024))
+
+    import ctypes
+    from ctypes import wintypes
+
+    class _MEMORYSTATUSEX(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", wintypes.DWORD),
+            ("dwMemoryLoad", wintypes.DWORD),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    estado = _MEMORYSTATUSEX()
+    estado.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
+    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(estado)):
+        return None
+    return int(estado.ullAvailPageFile // (1024 * 1024))
+
+
+def _disco_sistema_libre_gb() -> float | None:
+    """Espacio libre en el disco del sistema (donde vive el archivo de paginacion)."""
+    raiz = (os.environ.get("SystemDrive") or "C:") + os.sep
+    try:
+        return shutil.disk_usage(raiz).free / (1024**3)
+    except OSError:
+        return None
+
+
+def _sin_memoria(textos: list[str]) -> bool:
+    """True si la salida del paso tiene firmas de que se quedo sin memoria."""
+    junto = "\n".join(textos).lower()
+    return any(firma in junto for firma in _FIRMAS_SIN_MEMORIA)
+
+
+def _diagnostico_memoria() -> str:
+    """Que paso con la memoria y que puede hacer el usuario.
+
+    Esta maquina tiene 8 GB de RAM y el archivo de paginacion en `C:`, que suele
+    estar lleno: Windows no lo puede agrandar, el commit se agota y cualquier
+    paso muere con un error que no tiene nada que ver con los datos pedidos.
+    """
+    partes = ["La maquina se quedo sin memoria mientras corria el paso"]
+    libre = _commit_libre_mb()
+    if libre is not None:
+        partes.append(f"(ahora quedan {libre} MB para comprometer)")
+    texto = " ".join(partes) + "."
+    disco = _disco_sistema_libre_gb()
+    if disco is not None and disco < _DISCO_SISTEMA_MINIMO_GB:
+        texto += (
+            f" El disco del sistema tiene {disco:.1f} GB libres: con menos de "
+            f"{_DISCO_SISTEMA_MINIMO_GB:.0f} GB Windows no puede agrandar el archivo "
+            "de paginacion."
+        )
+    return (
+        texto
+        + " Cerra las aplicaciones pesadas (navegador, editores) y volve a correr:"
+        " lo ya descargado y los cuadros hechos se reusan."
+    )
+
+
+def _mensaje_de_fallo(job: "Job", paso: Any, codigo: int, descargado: bool) -> str:
+    """Error del paso. Si murio por memoria lo dice en vez de culpar a la fecha."""
+    cola = [linea.text for linea in job.logs[-_COLA_PARA_DIAGNOSTICO:]]
+    if _sin_memoria(cola):
+        return (
+            f"`{paso.script}` salio con codigo {codigo} por falta de memoria: "
+            f"los datos no tienen nada que ver.\n{_diagnostico_memoria()}"
+        )
+    pista = (
+        " Puede que esa fecha no exista en el archivo de la fuente."
+        if descargado and job.product_id != "nisar_render"
+        else ""
+    )
+    return f"`{paso.script}` salio con codigo {codigo}. Mira el log de arriba.{pista}"
 
 
 def _matar_arbol(proc: subprocess.Popen[bytes]) -> None:
@@ -638,18 +760,35 @@ class JobManager:
                     codigo = await self._lanzar(job, paso, args, base, span, etiqueta)
 
                 if codigo != 0:
-                    pista = (
-                        " Puede que esa fecha no exista en el archivo de la fuente."
-                        if descargado and job.product_id != "nisar_render"
-                        else ""
-                    )
-                    raise RuntimeError(
-                        f"`{paso.script}` salio con codigo {codigo}. "
-                        f"Mira el log de arriba.{pista}"
-                    )
+                    raise RuntimeError(_mensaje_de_fallo(job, paso, codigo, descargado))
 
             base += span
             self._progreso(job, base, f"{paso.label}: ok")
+
+    async def _esperar_memoria(self, job: Job, etiqueta: str) -> None:
+        """Espera a que la maquina tenga con que reservar memoria para el paso.
+
+        No es un limite duro: el consumo real depende del recorte y de los px del
+        render. Si no se libera nada en `_ESPERA_MEMORIA_S` se larga igual; si el
+        paso muere, `_mensaje_de_fallo` lo explica con `_diagnostico_memoria`.
+        """
+        libre = _commit_libre_mb()
+        if libre is None or libre >= _MEMORIA_MINIMA_MB:
+            return
+        self._log(
+            job,
+            f"queda poca memoria ({libre} MB para comprometer): "
+            f"espero hasta {_ESPERA_MEMORIA_S:.0f} s a que se libere",
+            "warn",
+        )
+        limite = time.monotonic() + _ESPERA_MEMORIA_S
+        while time.monotonic() < limite:
+            await asyncio.sleep(_SONDEO_MEMORIA_S)
+            libre = _commit_libre_mb()
+            if libre is None or libre >= _MEMORIA_MINIMA_MB:
+                self._log(job, f"hay {libre} MB otra vez: sigo con {etiqueta}")
+                return
+        self._log(job, f"sigue con {libre} MB: largo {etiqueta} igual", "warn")
 
     async def _lanzar(
         self,
@@ -675,6 +814,11 @@ class JobManager:
         self._log(job, etiqueta)
         self._log(job, "  " + " ".join([Path(cmd[0]).name, *cmd[1:]]))
         self._progreso(job, base, etiqueta)
+
+        # Antes de largar: si la maquina no tiene con que reservar memoria, se le
+        # da una chance de liberarla (una pestaña del navegador de menos alcanza)
+        # en vez de matar el paso a mitad de camino.
+        await self._esperar_memoria(job, etiqueta)
 
         # `subprocess.Popen` + un hilo lector, no `asyncio.create_subprocess_exec`:
         # en Windows el loop Selector (el que arma uvicorn con ``--reload``) no

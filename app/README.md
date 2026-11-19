@@ -177,6 +177,7 @@ El asistente además apunta `TEMP`/`TMP` a `<raíz>\.tmp`: los temporales de los
 | `npm` no se reconoce | falta Node.js | instalá Node.js LTS y abrí una terminal nueva |
 | En modo dev, `127.0.0.1:5173` no abre | Vite escucha en `localhost` | usá `http://localhost:5173` |
 | Un job falla con 404/403 al descargar | sin red o sin credenciales (NOAA S3, NASA Earthdata, CDS) | pedí fechas que ya estén en disco, o configurá las credenciales |
+| Un job muere con `cannot open '/MEMFS/definitions/boot.def'`, `MemoryError` o `Unable to allocate` | el disco del sistema está lleno y Windows no puede agrandar el archivo de paginación: el commit se agota y hasta un `malloc` de 8 MB falla (no es la fecha ni los datos) | liberá espacio en `C:`, cerrá el navegador y reintentá; lo descargado y los cuadros hechos se reusan. La app avisa y espera hasta 45 s a que se libere memoria antes de largar cada paso |
 
 Para ver qué proceso tiene tomado el puerto:
 
