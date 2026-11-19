@@ -54,12 +54,16 @@ echo.
 
 echo [2/3] Verificando la aplicacion...
 docker image inspect climate3d:local >nul 2>&1
-if not errorlevel 1 goto imagen_ok
+if errorlevel 1 goto sin_imagen
+set "YA_EXISTIA=1"
+goto imagen_ok
 
+:sin_imagen
 if not exist "%~dp0climate3d-image.tar" goto compilar
 echo       Primera vez: cargando la imagen (tarda un minuto)...
 docker load -i "%~dp0climate3d-image.tar"
 if errorlevel 1 goto fallo
+set "YA_EXISTIA=1"
 echo       ok.
 goto imagen_ok
 
@@ -67,6 +71,38 @@ goto imagen_ok
 echo       No hay imagen local: se compila ahora (10-20 minutos la primera vez).
 
 :imagen_ok
+rem --- sello del commit: que Docker no sirva codigo viejo sin avisar ----------
+set "COMMIT="
+for /f "delims=" %%i in ('git -C "%~dp0.." rev-parse --short HEAD 2^>nul') do set "COMMIT=%%i"
+if defined COMMIT set "CLIMATE3D_COMMIT=%COMMIT%"
+if not defined YA_EXISTIA goto imagen_lista
+if not defined COMMIT goto imagen_lista
+
+set "IMAGEN_COMMIT="
+docker image inspect climate3d:local --format "{{.Config.Labels.climate3d_commit}}" > "%TEMP%\climate3d_commit.txt" 2>nul
+if exist "%TEMP%\climate3d_commit.txt" set /p IMAGEN_COMMIT=<"%TEMP%\climate3d_commit.txt"
+del "%TEMP%\climate3d_commit.txt" >nul 2>&1
+
+if not defined IMAGEN_COMMIT goto imagen_sin_sello
+if /i "%IMAGEN_COMMIT%"=="%COMMIT%" goto imagen_lista
+
+echo.
+echo       ! La imagen se compilo con el commit %IMAGEN_COMMIT% y el repo esta en %COMMIT%.
+echo         En Docker quedaria la app vieja y no te vas a enterar.
+choice /c SN /n /m "  La recompilo ahora? Tarda 10-20 minutos [S/N] "
+if errorlevel 2 goto imagen_lista
+echo       Compilando...
+docker compose build
+if errorlevel 1 goto fallo
+goto imagen_lista
+
+:imagen_sin_sello
+echo.
+echo       ! La imagen no dice con que commit se compilo (vino de un .tar o es vieja).
+echo         No puedo verificar si esta al dia.
+goto imagen_lista
+
+:imagen_lista
 echo.
 echo [3/3] Configurando la carpeta de datos y las claves...
 echo.

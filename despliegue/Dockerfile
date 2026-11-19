@@ -84,3 +84,9 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=5 \
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/app/.venv/bin/python", "-m", "uvicorn", "api.main:app", \
      "--app-dir", "app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Sello del commit con el que se construyo. ARRANCAR-DOCKER.bat lo compara con
+# HEAD para no servir codigo viejo sin avisar; va al final para no invalidar la
+# cache de las capas de arriba.
+ARG CLIMATE3D_COMMIT=desconocido
+LABEL climate3d_commit="${CLIMATE3D_COMMIT}"

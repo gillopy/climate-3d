@@ -10,6 +10,9 @@ services:
       # El contexto es la raíz del repo: la imagen copia el pipeline y la web.
       context: ..
       dockerfile: despliegue/Dockerfile
+      # Sella el commit en la imagen; ARRANCAR-DOCKER.bat lo compara con HEAD.
+      args:
+        CLIMATE3D_COMMIT: ${CLIMATE3D_COMMIT:-desconocido}
     # Si ya hay una imagen (compilada acá, cargada de un .tar o publicada en un
     # registry), se usa esa y no se compila. `IMAGE=ghcr.io/usuario/climate3d:1.0`.
     image: ${IMAGE:-climate3d:local}

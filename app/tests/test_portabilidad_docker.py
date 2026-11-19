@@ -101,6 +101,31 @@ class ElLanzadorNativo(unittest.TestCase):
         self.assertIn(b"\r\n", (DESPLIEGUE / "ARRANCAR.bat").read_bytes())
 
 
+class ElSelloDeCommitDeLaImagen(unittest.TestCase):
+    """Docker no puede servir código viejo sin avisar."""
+
+    def setUp(self) -> None:
+        self.dockerfile = (DESPLIEGUE / "Dockerfile").read_text(encoding="utf-8")
+        self.compose = (DESPLIEGUE / "docker-compose.yml").read_text(encoding="utf-8")
+        self.bat = (DESPLIEGUE / "ARRANCAR-DOCKER.bat").read_text(encoding="utf-8")
+
+    def test_la_imagen_lleva_el_commit(self) -> None:
+        self.assertIn("ARG CLIMATE3D_COMMIT", self.dockerfile)
+        self.assertIn("LABEL climate3d_commit=", self.dockerfile)
+
+    def test_el_compose_pasa_el_commit_al_build(self) -> None:
+        # Sin esto el ARG llega vacío y la imagen siempre dice "desconocido".
+        self.assertIn("CLIMATE3D_COMMIT:", self.compose)
+
+    def test_el_lanzador_compara_contra_head_y_ofrece_recompilar(self) -> None:
+        # La imagen se queda para siempre unless alguien la vuelve a compilar:
+        # comparar el sello es lo único que detecta código viejo.
+        self.assertIn("climate3d_commit", self.bat)
+        self.assertIn("rev-parse --short HEAD", self.bat)
+        self.assertIn('if /i "%IMAGEN_COMMIT%"=="%COMMIT%"', self.bat)
+        self.assertIn("docker compose build", self.bat)
+
+
 class InterpreteAisladoDelEntorno(unittest.TestCase):
     def test_un_mapa_vacio_no_hereda_os_environ(self) -> None:
         # `_python_repo({})` es "sin entorno", no "el entorno real".
