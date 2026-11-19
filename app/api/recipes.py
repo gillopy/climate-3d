@@ -2463,6 +2463,9 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             except (TypeError, ValueError):
                 umbral = 2.0
             verificar = bool(params.get("verificar_s2"))
+            optico = str(params.get("optico") or "sentinel2").lower()
+            if optico not in ("sentinel2", "hls", "auto"):
+                optico = "sentinel2"
             try:
                 # Confirmacion temporal con los .h5 que ya estan en disco: no
                 # agrega descargas. 0 apaga la persistencia.
@@ -2488,6 +2491,7 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                     "--modo", modo_cambio,
                     "--umbral", f"{umbral:g}",
                     "--hv-min", f"{hv_min:g}",
+                    *(["--optico", optico] if verificar and optico != "sentinel2" else []),
                     *(["--verificar-s2"] if verificar else []),
                     *(["--confirmar-temporal", str(confirmar_temporal)]
                       if confirmar_temporal > 0 else []),

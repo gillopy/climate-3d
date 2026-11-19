@@ -53,11 +53,23 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 
 import nisar  # noqa: E402
+import hls  # noqa: E402
 import sentinel2  # noqa: E402
 
 ROJO = np.array([205, 35, 35], dtype=np.uint8)
 NARANJA = np.array([222, 138, 58], dtype=np.uint8)
 AZUL = np.array([45, 95, 205], dtype=np.uint8)
+
+
+def nivel_evidencia(optico_confirmado: bool, persistente: bool) -> tuple[str, str]:
+    """Return an evidence label without presenting it as ground truth."""
+    if optico_confirmado and persistente:
+        return "high_confidence_candidate", "radar persistent + optical-supported; not field truth"
+    if optico_confirmado:
+        return "optical_supported", "radar change supported by optical vegetation loss; not field truth"
+    if persistente:
+        return "persistent_radar_candidate", "radar change persists in later local observations"
+    return "radar_candidate", "single radar pair; no persistence or optical support"
 
 
 def _guardar_panel(ruta: Path, rgb: np.ndarray, px: int) -> Path:
@@ -121,6 +133,12 @@ def main() -> int:
         "--verificar-s2",
         action="store_true",
         help="confirmar la caida de HV con NDVI de Sentinel-2 (pre y post)",
+    )
+    ap.add_argument(
+        "--optico",
+        choices=("sentinel2", "hls", "auto"),
+        default="sentinel2",
+        help="proveedor óptico para NDVI: Sentinel-2, HLS L30/S30 o auto",
     )
     ap.add_argument(
         "--indices",
@@ -252,40 +270,64 @@ def main() -> int:
         ndvi_post = None
         optico_meta: dict = {
             "disponible": False,
+            "fuente": None,
+            "proveedor_solicitado": args.optico,
             "motivo": "",
             "dndvi_umbral": float(args.dndvi),
             "items_post": [],
         }
-        transform, crs = sentinel2.grilla(xs, ys, rec_antes.epsg)
+        modulo_grilla = hls if hls.DISPONIBLE else sentinel2
+        transform, crs = modulo_grilla.grilla(xs, ys, rec_antes.epsg)
+
+        def _proveedores_opticos():
+            if args.optico == "sentinel2":
+                return [("sentinel2", sentinel2, None)]
+            if args.optico == "hls":
+                return [("hls_l30", hls, "l30"), ("hls_s30", hls, "s30")]
+            return [
+                ("hls_l30", hls, "l30"),
+                ("hls_s30", hls, "s30"),
+                ("sentinel2", sentinel2, None),
+            ]
 
         def _ndvi(fecha_texto: str) -> tuple[np.ndarray | None, list[dict], str]:
             """NDVI compuesto alrededor de una fecha; (None, [], motivo) si falla."""
-            if not sentinel2.DISPONIBLE:
-                return None, [], "faltan rasterio/pystac-client"
-            try:
-                fecha = datetime.strptime(fecha_texto[:10], "%Y-%m-%d").date()
-                items = sentinel2.buscar_items(
-                    (oeste, sur, este, norte),
-                    fecha,
-                    int(args.dias),
-                    float(args.nubes),
-                    int(args.max_items),
-                )
-                if not items:
-                    return None, [], f"sin Sentinel-2 cerca de {fecha_texto[:10]}"
-                ndvi, usados = sentinel2.componer_ndvi(
-                    items,
-                    (oeste, sur, este, norte),
-                    db_antes.shape,
-                    transform,
-                    crs,
-                    px,
-                )
-                if ndvi is None or not np.isfinite(ndvi).any():
-                    return None, usados, "el compuesto NDVI quedo vacio"
-                return ndvi, usados, ""
-            except Exception as exc:  # noqa: BLE001 - sin optico se sigue con HV
-                return None, [], f"{type(exc).__name__}: {exc}"
+            motivos = []
+            for nombre, modulo, sensor in _proveedores_opticos():
+                if not modulo.DISPONIBLE:
+                    motivos.append(f"{nombre}: faltan dependencias")
+                    continue
+                try:
+                    fecha = datetime.strptime(fecha_texto[:10], "%Y-%m-%d").date()
+                    kwargs = {"sensor": sensor} if sensor else {}
+                    items = modulo.buscar_items(
+                        (oeste, sur, este, norte),
+                        fecha,
+                        int(args.dias),
+                        float(args.nubes),
+                        int(args.max_items),
+                        **kwargs,
+                    )
+                    if not items:
+                        motivos.append(f"sin {nombre} cerca de {fecha_texto[:10]}")
+                        continue
+                    ndvi, usados = modulo.componer_ndvi(
+                        items,
+                        (oeste, sur, este, norte),
+                        db_antes.shape,
+                        transform,
+                        crs,
+                        px,
+                        **kwargs,
+                    )
+                    if ndvi is None or not np.isfinite(ndvi).any():
+                        motivos.append(f"{nombre}: compuesto NDVI vacio")
+                        continue
+                    optico_meta["fuente"] = nombre
+                    return ndvi, usados, ""
+                except Exception as exc:  # noqa: BLE001 - provider optional
+                    motivos.append(f"{nombre}: {type(exc).__name__}: {exc}")
+            return None, [], "; ".join(motivos) or "sin proveedor óptico disponible"
 
         def _indices(fecha_texto: str):
             """NDVI, NDBI, NDWI y NBR compuestos; (None, [], motivo) si falla."""
@@ -469,6 +511,10 @@ def main() -> int:
         if not args.verificar_s2 or not optico_meta["disponible"]:
             optico_meta["motivo"] = optico_meta["motivo"] or "sin verificar"
 
+        confirmado = args.verificar_s2 and optico_meta["disponible"]
+        persistente = bool(temporal_meta["disponible"])
+        nivel, nivel_explicacion = nivel_evidencia(confirmado, persistente)
+
         if args.indices:
             capas_antes, usados_a, motivo_a = _indices(antes.fecha)
             capas_despues, usados_d, motivo_d = _indices(despues.fecha)
@@ -610,8 +656,6 @@ def main() -> int:
             rgb = np.where(perdida[..., None], ROJO, rgb)
             rgb = np.where(ganancia[..., None], AZUL, rgb)
 
-        confirmado = args.verificar_s2 and optico_meta["disponible"]
-        persistente = bool(temporal_meta["disponible"])
         if confirmado and persistente:
             leyenda_mascara = (
                 "rojo = pérdida confirmada y persistente · naranja = candidata"
@@ -691,6 +735,11 @@ def main() -> int:
                 **optico_meta,
                 "verificado": bool(confirmado),
             },
+            "evidencia": {
+                "nivel": nivel,
+                "explicacion": nivel_explicacion,
+                "es_verdad_de_campo": False,
+            },
             "temporal": temporal_meta,
             "mmu_ha": float(args.mmu_ha),
             "mmu_px": minimo_px,
@@ -702,6 +751,7 @@ def main() -> int:
         f"perdida {perdida_ha:.0f} ha ({perdida_pct:.1f}% del area, "
         f"{perdida_bosque_pct:.1f}% del bosque) | ganancia {ganancia_ha:.0f} ha"
     )
+    print(f"evidencia: {nivel} (no es verdad de campo)")
     if confirmado:
         print(
             f"optico: {perdida_ha:.0f} ha confirmadas + {candidato_ha:.0f} ha "

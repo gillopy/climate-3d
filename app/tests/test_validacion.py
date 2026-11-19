@@ -12,6 +12,7 @@ if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
 from comun import validacion  # noqa: E402
+from comun import hls  # noqa: E402
 
 
 class MetricasDeValidacion(unittest.TestCase):
@@ -117,6 +118,21 @@ class ValidacionPorBloques(unittest.TestCase):
         self.assertEqual(set(primero), {"precision", "recall", "f1"})
         for intervalo in primero.values():
             self.assertLessEqual(intervalo["p2_5"], intervalo["p97_5"])
+
+
+class HlsCalidad(unittest.TestCase):
+    def test_fmask_rechaza_nubes_sombras_agua_y_aerosol_alto(self):
+        valores = np.array([0, 1 << 1, 1 << 3, 1 << 5, 3 << 6, 255], dtype=np.uint16)
+
+        resultado = hls.mascara_fmask(valores)
+
+        np.testing.assert_array_equal(resultado, [True, False, False, False, False, False])
+
+    def test_colecciones_hls_distingue_landsat_y_sentinel(self):
+        self.assertEqual(hls.COLECCIONES["l30"], "hls2-l30")
+        self.assertEqual(hls.COLECCIONES["s30"], "hls2-s30")
+        self.assertEqual(hls.BANDAS["l30"][:2], ("B04", "B05"))
+        self.assertEqual(hls.BANDAS["s30"][:2], ("B04", "B08"))
 
 
 if __name__ == "__main__":

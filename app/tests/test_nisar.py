@@ -525,6 +525,28 @@ class VisorNisar(unittest.TestCase):
         self.assertEqual(args_sin[args_sin.index("--mmu-ha") + 1], "0.5")
         self.assertEqual(args_sin[args_sin.index("--umbral") + 1], "3")
 
+    def test_receta_cambio_puede_usar_hls(self):
+        base = {
+            "producto": "cambio",
+            "granulo": GRANULO,
+            "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+            "coleccion": "NISAR_L2_GCOV_V1",
+            "antes_granulo": "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_20261017T214920_20261017T214955_P05023_N_F_J_001",
+            "antes_url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/ANTES/ANTES.h5",
+            "antes_coleccion": "NISAR_L2_GCOV_V1",
+            "bbox": "-55.6,-24.5,-55.2,-23.9",
+            "px": 1600,
+            "verificar_s2": True,
+            "optico": "hls",
+        }
+        with tempfile.TemporaryDirectory() as carpeta:
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                plan = planear("nisar_render", base, Path(carpeta))
+
+        args = plan.pasos[-1].args
+        self.assertIn("--optico", args)
+        self.assertEqual(args[args.index("--optico") + 1], "hls")
+
     def test_receta_cambio_rechaza_la_misma_fecha(self):
         with self.assertRaises(ValueError):
             planear(

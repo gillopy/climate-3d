@@ -115,6 +115,7 @@ export function NisarView() {
   // Confirmar la caida de HV con NDVI de Sentinel-2 y descartar parches chicos:
   // sin esto el "rojo" incluye cosechas, anegamientos y estacionalidad.
   const [verificarS2, setVerificarS2] = useState(true);
+  const [optico, setOptico] = useState("sentinel2");
   // Persistencia: un cambio tiene que seguir ahi en la fecha siguiente. Usa los
   // .h5 que ya estan en disco; si no hay fecha posterior, el producto avisa.
   // Por defecto no se exige persistencia: la corrida compara solo el par.
@@ -582,6 +583,7 @@ export function NisarView() {
       if (producto === "cambio") {
         params.modo_cambio = modoCambio;
         params.verificar_s2 = verificarS2;
+        params.optico = optico;
         params.confirmar_temporal = Number(persistencia);
         // La MMU no depende de la confirmacion: un desmonte es un bloque.
         params.mmu_ha = 0.5;
@@ -1265,6 +1267,18 @@ export function NisarView() {
                                   Sí · pérdida en rojo, candidata en naranja, parches ≥ 0.5 ha
                                 </option>
                                 <option value="no">No · solo radar (cambio candidato, sin red)</option>
+                              </select>
+                            </label>
+                            <label className="nisar__ancho">
+                              Fuente óptica
+                              <select
+                                value={optico}
+                                onChange={(evento) => setOptico(evento.target.value)}
+                                disabled={!verificarS2}
+                              >
+                                <option value="sentinel2">Sentinel-2 L2A</option>
+                                <option value="hls">HLS L30/S30 (Landsat 8/9 + Sentinel-2)</option>
+                                <option value="auto">Auto: HLS y fallback Sentinel-2</option>
                               </select>
                             </label>
                             <label className="nisar__ancho">
