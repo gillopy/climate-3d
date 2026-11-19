@@ -121,7 +121,7 @@ docker build -f despliegue/Dockerfile -t ghcr.io/USUARIO/climate3d:latest .
 docker push ghcr.io/USUARIO/climate3d:latest
 ```
 
-Después, en el `docker-compose.yml` de la otra persona (paquete `entrega/`):
+Después, en el `docker-compose.yml` de la otra persona (paquete `despliegue/`):
 
 ```yaml
     image: ghcr.io/USUARIO/climate3d:latest

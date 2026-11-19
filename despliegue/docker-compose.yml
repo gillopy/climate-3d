@@ -10,7 +10,9 @@ services:
       # El contexto es la raíz del repo: la imagen copia el pipeline y la web.
       context: ..
       dockerfile: despliegue/Dockerfile
-    image: climate3d:local
+    # Si ya hay una imagen (compilada acá, cargada de un .tar o publicada en un
+    # registry), se usa esa y no se compila. `IMAGE=ghcr.io/usuario/climate3d:1.0`.
+    image: ${IMAGE:-climate3d:local}
     env_file:
       - .env
     ports:

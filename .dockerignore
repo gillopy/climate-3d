@@ -55,5 +55,3 @@ frames_*/
 env.example
 **/env.example
 
-# Paquete de entrega: no lo necesita el build
-entrega

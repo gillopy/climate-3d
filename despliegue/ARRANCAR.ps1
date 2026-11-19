@@ -1,14 +1,16 @@
 <#
 .SYNOPSIS
-    Arranca la consola de Climate 3D preguntando donde guardar todo.
+    Arranca la consola de Climate 3D: pregunta donde descargar y las claves.
 
 .DESCRIPTION
-    Pregunta la carpeta donde viven los datos, las salidas y la cache (por defecto, la
-    que ya esta configurada), la valida, la guarda en el archivo de configuracion del
-    usuario, migra lo que hubiera quedado en `app\var` y levanta el servidor.
+    Cuatro pasos, todos con Enter para aceptar lo que ya esta:
+      1. Carpeta de descargas y salidas (la recuerda en %LOCALAPPDATA%\climate3d).
+      2. Claves de las fuentes (FIRMS, Copernicus CDS, Earthdata), tambien recordadas.
+      3. Migra lo que hubiera quedado dentro del repo (app\var).
+      4. Levanta la consola y abre http://127.0.0.1:8000.
 
-    El archivo de configuracion lo escribe `comun\rutas.py`: es la unica fuente de las
-    raices, tambien para el pipeline.
+    Las claves quedan en %LOCALAPPDATA%\climate3d\credenciales.json, fuera del repo, y
+    se exportan al proceso: los scripts del pipeline las heredan.
 
 .EXAMPLE
     .\ARRANCAR.ps1
@@ -54,6 +56,12 @@ function Preguntar {
     try { return Read-Host $Texto } catch { return '' }
 }
 
+function Estado {
+    param([string]$Valor)
+    if ([string]::IsNullOrWhiteSpace($Valor)) { return 'no' }
+    return 'si'
+}
+
 $python = Join-Path $raizRepo '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python)) {
     Fallar 'falta .venv en la raiz del repo. Es el unico entorno: pipeline y consola. Ver app\README.md.'
@@ -82,10 +90,13 @@ if (-not $config) {
     }
 }
 
-Paso '[1/3] Donde guardar todo'
-Write-Host '  Datos crudos, productos, salidas y cache van a una sola carpeta.'
+
+# --- [1/4] carpeta de descargas ---------------------------------------------
+
+Paso '[1/4] Carpeta de descargas y salidas'
+Write-Host '  Ahi van los datos crudos, los productos, las salidas y la cache.'
 Write-Host '  Elegi un disco con espacio: una animacion de GOES son varios GB.'
-Write-Host ("  hoy: datos={0}" -f $config.datos)
+Write-Host ("  hoy: descargas={0}" -f $config.datos)
 if ($config.media) { Write-Host ("       cache={0}" -f $config.media) }
 if ($config.nisar) { Write-Host ("       nisar={0}  (.h5, quedan donde estan)" -f $config.nisar) }
 
@@ -94,7 +105,7 @@ if ([string]::IsNullOrWhiteSpace($sugerida)) { $sugerida = $config.datos }
 if ([string]::IsNullOrWhiteSpace($sugerida)) { $sugerida = 'D:\climate3d-data' }
 
 if (-not $SinPreguntar) {
-    $entrada = Preguntar "  Carpeta base [Enter = $sugerida]"
+    $entrada = Preguntar "  Donde descargamos? [Enter = $sugerida]"
     if ([string]::IsNullOrWhiteSpace($entrada)) { $Raiz = $sugerida } else { $Raiz = $entrada }
 } else {
     $Raiz = $sugerida
@@ -123,6 +134,15 @@ $repoPosix = ($raizRepo -replace '\\', '/').TrimEnd('/').ToLowerInvariant()
 $destinoPosix = ($Raiz -replace '\\', '/').TrimEnd('/').ToLowerInvariant()
 if ($destinoPosix -eq $repoPosix -or $destinoPosix.StartsWith($repoPosix + '/')) {
     Fallar 'esa carpeta esta dentro del repo. Elegi una carpeta fuera (por ejemplo D:\climate3d-data).'
+}
+
+# La raiz de los .h5 de NISAR no puede ser la raiz de datos: se mezclarian 1.9 GB
+# por escena con las descargas y las salidas.
+if (-not [string]::IsNullOrWhiteSpace($config.nisar)) {
+    $nisarPosix = ($config.nisar -replace '\\', '/').TrimEnd('/').ToLowerInvariant()
+    if ($destinoPosix -eq $nisarPosix -or $destinoPosix.StartsWith($nisarPosix + '/')) {
+        Fallar ("esa carpeta es la de los .h5 de NISAR ({0}). Elegi otra para descargas y salidas." -f $config.nisar)
+    }
 }
 
 if (-not (Test-Path -LiteralPath $Raiz)) {
@@ -161,18 +181,84 @@ if ($LASTEXITCODE -ne 0) { Fallar 'no pude guardar la configuracion (comun\rutas
 $efectivo = $json | ConvertFrom-Json
 Ok ("configuracion guardada en {0}" -f $efectivo.config)
 
+
+# --- [2/4] claves ------------------------------------------------------------
+
+$carpetaClaves = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'climate3d'
+$archivoClaves = Join-Path $carpetaClaves 'credenciales.json'
+if ([string]::IsNullOrWhiteSpace([Environment]::GetFolderPath('LocalApplicationData'))) {
+    $archivoClaves = Join-Path $env:USERPROFILE '.config\climate3d\credenciales.json'
+}
+
+$claves = [ordered]@{ firms = ''; cds = ''; earthdata_user = ''; earthdata_password = '' }
+if (Test-Path -LiteralPath $archivoClaves) {
+    try {
+        $leido = Get-Content -LiteralPath $archivoClaves -Raw | ConvertFrom-Json
+        foreach ($clave in @('firms', 'cds', 'earthdata_user', 'earthdata_password')) {
+            if ($leido.PSObject.Properties.Name -contains $clave) {
+                $claves[$clave] = [string]$leido.$clave
+            }
+        }
+    } catch {
+        Write-Host '  !  el archivo de claves no se pudo leer; se piden de nuevo.' -ForegroundColor Yellow
+    }
+}
+
+Paso '[2/4] Claves de las fuentes (opcionales, Enter para conservar)'
+Write-Host '  FIRMS      focos de calor   https://firms.modaps.eosdis.nasa.gov/api/map_key/'
+Write-Host '  CDS        ERA5             https://cds.climate.copernicus.eu/'
+Write-Host '  Earthdata  NISAR y PACE     https://urs.earthdata.nasa.gov/'
+Write-Host ("  hoy: FIRMS={0} | CDS={1} | Earthdata={2}" -f (Estado $claves.firms), (Estado $claves.cds), (Estado $claves.earthdata_user))
+
+$tocar = $false
+if (-not $SinPreguntar) {
+    $respuesta = Preguntar '  Cargamos o cambiamos las claves? (s/N)'
+    $tocar = $respuesta -match '^(s|si|y|yes)$'
+}
+
+if ($tocar) {
+    $valor = Preguntar '  FIRMS MAP_KEY [Enter = conservar]'
+    if (-not [string]::IsNullOrWhiteSpace($valor)) { $claves.firms = $valor.Trim() }
+
+    $valor = Preguntar '  Copernicus CDS key [Enter = conservar]'
+    if (-not [string]::IsNullOrWhiteSpace($valor)) { $claves.cds = $valor.Trim() }
+
+    $valor = Preguntar '  Earthdata usuario [Enter = conservar]'
+    if (-not [string]::IsNullOrWhiteSpace($valor)) { $claves.earthdata_user = $valor.Trim() }
+
+    $valor = Preguntar '  Earthdata clave [Enter = conservar]'
+    if (-not [string]::IsNullOrWhiteSpace($valor)) { $claves.earthdata_password = $valor.Trim() }
+
+    $carpetaClaves | ForEach-Object { if ($_ -and -not (Test-Path -LiteralPath $_)) { New-Item -ItemType Directory -Path $_ -Force | Out-Null } }
+    [ordered]@{
+        firms = $claves.firms
+        cds = $claves.cds
+        earthdata_user = $claves.earthdata_user
+        earthdata_password = $claves.earthdata_password
+    } | ConvertTo-Json | Set-Content -LiteralPath $archivoClaves -Encoding UTF8
+    Ok ("claves guardadas en {0} (fuera del repo)" -f $archivoClaves)
+}
+
+# Al proceso: los scripts del pipeline las heredan.
+if ($claves.firms) { $env:FIRMS_MAP_KEY = $claves.firms }
+if ($claves.cds) { $env:CDSAPI_KEY = $claves.cds }
+if ($claves.earthdata_user) { $env:EARTHDATA_USER = $claves.earthdata_user }
+if ($claves.earthdata_password) { $env:EARTHDATA_PASSWORD = $claves.earthdata_password }
+
 if ($SoloConfigurar) {
     Write-Host ''
-    Write-Host ("  datos: {0}" -f $efectivo.datos)
-    Write-Host ("  cache: {0}" -f $efectivo.media)
-    Write-Host ("  nisar: {0}" -f $efectivo.nisar)
+    Write-Host ("  descargas : {0}" -f $efectivo.datos)
+    Write-Host ("  cache     : {0}" -f $efectivo.media)
+    Write-Host ("  nisar     : {0}" -f $efectivo.nisar)
+    Write-Host ("  claves    : FIRMS={0} | CDS={1} | Earthdata={2}" -f (Estado $claves.firms), (Estado $claves.cds), (Estado $claves.earthdata_user))
+    Write-Host ("  archivo   : {0}" -f $archivoClaves)
     Write-Host ''
     Write-Host '  Listo. Para levantar la consola: .\despliegue\ARRANCAR.ps1' -ForegroundColor Green
     exit 0
 }
 
 
-# --- migracion de lo que quedo en C: ---------------------------------------
+# --- [3/4] migracion de lo que quedo en C: -----------------------------------
 
 $origenMedia = Join-Path $raizRepo 'app\var\media'
 $origenNisar = Join-Path $raizRepo 'app\var\nisar\cache'
@@ -188,7 +274,7 @@ foreach ($par in @(@($origenMedia, $media), @($origenNisar, (Join-Path $media 'n
 }
 
 if ($pendientes.Count -gt 0) {
-    Paso '[2/3] Quedo trabajo viejo dentro del repo'
+    Paso '[3/4] Quedo trabajo viejo dentro del repo'
     foreach ($p in $pendientes) {
         Write-Host ("  {0} MB en {1}" -f $p.MB, $p.Desde)
     }
@@ -213,14 +299,14 @@ if ($pendientes.Count -gt 0) {
         Write-Host '  quedan donde estan; se pueden mover a mano cuando quieras.'
     }
 } else {
-    Paso '[2/3] Nada viejo que migrar'
+    Paso '[3/4] Nada viejo que migrar'
     Ok 'el trabajo ya vive en la carpeta configurada.'
 }
 
 
-# --- arranque ---------------------------------------------------------------
+# --- [4/4] arranque ----------------------------------------------------------
 
-Paso '[3/3] Levantando la consola'
+Paso '[4/4] Levantando la consola'
 $env:CLIMATE3D_DATOS = $efectivo.datos
 $env:CLIMATE3D_MEDIA = $efectivo.media
 if ($efectivo.nisar) { $env:CLIMATE3D_NISAR = $efectivo.nisar }
@@ -232,12 +318,14 @@ New-Item -ItemType Directory -Path $temporal -Force -ErrorAction SilentlyContinu
 $env:TEMP = $temporal
 $env:TMP = $temporal
 
-Write-Host ("  datos  : {0}" -f $efectivo.datos)
-Write-Host ("  cache  : {0}" -f $efectivo.media)
-Write-Host ("  temp   : {0}" -f $temporal)
-Write-Host ("  nisar  : {0}" -f $efectivo.nisar)
+Write-Host ("  descargas : {0}" -f $efectivo.datos)
+Write-Host ("  cache     : {0}" -f $efectivo.media)
+Write-Host ("  temp      : {0}" -f $temporal)
+Write-Host ("  nisar     : {0}" -f $efectivo.nisar)
+Write-Host ("  claves    : FIRMS={0} | CDS={1} | Earthdata={2}" -f (Estado $claves.firms), (Estado $claves.cds), (Estado $claves.earthdata_user))
 Write-Host ''
 Write-Host ("  Abri http://127.0.0.1:{0}  (Ctrl+C para cortar)" -f $Port) -ForegroundColor Green
+Write-Host '  Con Docker en su lugar: .\despliegue\ARRANCAR-DOCKER.bat' -ForegroundColor DarkGray
 Write-Host ''
 
 & $python -m uvicorn api.main:app --app-dir app --port $Port

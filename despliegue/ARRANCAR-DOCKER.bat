@@ -1,24 +1,22 @@
 @echo off
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
-title Climate 3D
+title Climate 3D - Docker
 
 echo ==========================================
-echo    Climate 3D - instalar y arrancar
+echo    Climate 3D en Docker
 echo ==========================================
 echo.
 
 where docker >nul 2>&1
 if errorlevel 1 goto sin_docker
 
-echo [1/4] Verificando Docker...
+echo [1/3] Verificando Docker...
 docker info >nul 2>&1
 if not errorlevel 1 goto docker_ok
 
 echo       Docker esta apagado. Arrancandolo...
-docker desktop start >nul 2>&1
-if errorlevel 1 start "" "Docker Desktop"
-
+start "" "Docker Desktop"
 set /a n=0
 :esperar
 timeout /t 5 /nobreak >nul
@@ -39,32 +37,34 @@ exit /b 1
 echo       ok, Docker responde.
 echo.
 
-echo [2/4] Verificando la aplicacion...
+echo [2/3] Verificando la aplicacion...
 docker image inspect climate3d:local >nul 2>&1
 if not errorlevel 1 goto imagen_ok
 
-if not exist "%~dp0climate3d-image.tar" goto sin_imagen
-
-echo       Primera vez: cargando la aplicacion (tarda un minuto)...
+if not exist "%~dp0climate3d-image.tar" goto compilar
+echo       Primera vez: cargando la imagen (tarda un minuto)...
 docker load -i "%~dp0climate3d-image.tar"
 if errorlevel 1 goto fallo
 echo       ok.
+goto imagen_ok
+
+:compilar
+echo       No hay imagen local: se compila ahora (10-20 minutos la primera vez).
 
 :imagen_ok
 echo.
-
-echo [3/4] Configurando la carpeta de datos y las claves...
+echo [3/3] Configurando la carpeta de datos y las claves...
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1"
 if errorlevel 1 goto fallo
 
 echo.
-echo [4/4] Abriendo el navegador...
+echo Abriendo el navegador...
 start "" "http://127.0.0.1:8080"
 
 echo.
 echo ==========================================
-echo    Listo. La app queda corriendo.
+echo    Listo. La app queda corriendo en Docker.
 echo.
 echo    Para apagarla: doble clic en APAGAR.bat
 echo ==========================================
@@ -82,14 +82,6 @@ echo     4. Volve a ejecutar este archivo.
 echo.
 pause
 start "" "https://www.docker.com/products/docker-desktop/"
-exit /b 1
-
-:sin_imagen
-echo.
-echo [x] Falta el archivo climate3d-image.tar en esta carpeta.
-echo     Volve a copiar la carpeta completa, no solo algunos archivos.
-echo.
-pause
 exit /b 1
 
 :fallo
