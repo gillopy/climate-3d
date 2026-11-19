@@ -491,7 +491,9 @@ def main(argv=None) -> int:
         print(f"Póster: {poster}")
         return 0
 
-    # El sello invalida los cuadros viejos si cambió el aspecto.
+    # El sello invalida los cuadros viejos si cambió el aspecto. Se escribe recién
+    # cuando el render terminó: si se escribiera antes, un lote salteado dejaría el
+    # sello nuevo apuntando a cuadros con el diseño viejo y no se reharían nunca.
     sello = _sello_render(args)
     archivo_sello = frames_dir / ".sello_render"
     previo = (archivo_sello.read_text(encoding="utf-8").strip()
@@ -499,7 +501,6 @@ def main(argv=None) -> int:
     if previo is not None and previo != sello and not args.forzar:
         print("Cambiaron los parámetros de render -> se rehacen los cuadros")
         args.forzar = True
-    archivo_sello.write_text(sello, encoding="utf-8")
 
     print(f"{args.sat} C13 | {len(slots)} cuadros desde {slots[0]:%Y-%m-%d %H:%M} UTC | "
           f"{args.px}x{args.px} px | radio {args.radio:g}° | frames en {frames_dir}",
@@ -514,8 +515,14 @@ def main(argv=None) -> int:
         cmd = [sys.executable, str(Path(__file__).resolve()),
                *sys.argv[1:], "--rango", str(s), str(e),
                "--vmin", str(args.vmin), "--vmax", str(args.vmax)]
+        # El `--forzar` que decide el sello no viene en argv: hay que pasarlo, o el
+        # hijo saltea los cuadros existentes y el lote "termina" sin renderizar.
+        if args.forzar and "--forzar" not in sys.argv:
+            cmd.append("--forzar")
         subprocess.run(cmd, check=True)
         print(f"  lote {s}-{e} ok ({time.time() - t_inicio:.0f}s)", flush=True)
+
+    archivo_sello.write_text(sello, encoding="utf-8")
 
     print(f"Cuadros en {frames_dir}")
     print(f"Armá el video con: .venv\\Scripts\\python.exe animar\\armar.py "
