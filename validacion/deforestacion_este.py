@@ -118,6 +118,12 @@ def main() -> int:
     )
     ap.add_argument("--muestras", type=int, default=250)
     ap.add_argument("--separacion", type=int, default=2)
+    ap.add_argument(
+        "--bloque-validacion",
+        type=int,
+        default=8,
+        help="tamano de bloque en pixeles para IC y metricas espaciales",
+    )
     ap.add_argument("--out", default=str(RAIZ / "validacion" / "este_2026"))
     ap.add_argument("--refrescar", action="store_true", help="ignora la cachÃ© de NDVI")
     args = ap.parse_args()
@@ -251,6 +257,13 @@ def main() -> int:
         ),
     ]
     ic = validacion.bootstrap_ic(ref_m, pred_m, n=500)
+    bloque_validacion = max(1, int(args.bloque_validacion))
+    metricas_bloques = validacion.metricas_por_bloques(
+        perdida_ref, pred, bloque=bloque_validacion
+    )
+    ic_bloques = validacion.bootstrap_bloques_ic(
+        perdida_ref, pred, bloque=bloque_validacion, n=500
+    )
     area_ref = float(perdida_ref.sum()) * mpp_x * mpp_y / 10000.0
     area_pred = float(pred.sum()) * mpp_x * mpp_y / 10000.0
     area_valida = float(valido.sum()) * mpp_x * mpp_y / 10000.0
@@ -325,6 +338,8 @@ def main() -> int:
             "nubes_max": args.nubes,
         },
         "referencia": {
+            "tipo": "NDVI optico pre/post; no es verdad de campo",
+            "es_verdad_de_campo": False,
             "ndvi_bosque": args.ndvi_bosque,
             "ndvi_perdida": args.ndvi_perdida,
             "dndvi_perdida": args.dndvi_perdida,
@@ -351,9 +366,16 @@ def main() -> int:
         },
         "metricas": {
             "denso": tabla[2],
+            "bloques_espaciales": metricas_bloques,
             "muestra_balanceada": tabla[0],
             "muestra_ponderada": tabla[1],
             "bootstrap_muestra": ic,
+            "bootstrap_bloques": ic_bloques,
+        },
+        "incertidumbre": {
+            "unidad": "bloques espaciales",
+            "tamano_bloque_pixeles": bloque_validacion,
+            "nota": "El IC por bloques reduce la independencia ficticia de pixeles vecinos.",
         },
         "split_espacial": split,
         "curva_umbral": curva,
@@ -493,6 +515,7 @@ def _informe(ruta, meta, tabla, ic, split, curva):
         f"posterior â‰¤ {meta['referencia']['ndvi_perdida']:.2f}, "
         f"Î”NDVI â‰¤ -{meta['referencia']['dndvi_perdida']:.2f}; "
         f"estable: |Î”NDVI| â‰¤ {meta['referencia']['estable']:.2f}",
+        f"- Tipo de referencia: {meta['referencia']['tipo']}.",
         f"- Producto: HV antes > {meta['producto']['hv_min_db']:g} dB y "
         f"Î”HV < -{meta['producto']['umbral_db']:g} dB, mayorÃ­a 3Ã—3, "
         f"multilook {meta['producto']['multilook']}, "
@@ -515,6 +538,15 @@ def _informe(ruta, meta, tabla, ic, split, curva):
         f"[{ic['recall']['p2_5']:.2f}, {ic['recall']['p97_5']:.2f}]",
         f"- F1: {ic['f1']['mean']:.2f} "
         f"[{ic['f1']['p2_5']:.2f}, {ic['f1']['p97_5']:.2f}]",
+        "",
+        "## MÃ©tricas e IC por bloques espaciales",
+        "",
+        f"- TamaÃ±o de bloque: {meta['incertidumbre']['tamano_bloque_pixeles']} pÃ­xeles",
+        f"- Bloques: {int(meta['metricas']['bloques_espaciales']['bloques'])}",
+        f"- F1 por bloques: {meta['metricas']['bloques_espaciales']['f1']:.2f}",
+        f"- IC F1 por bloques: {meta['metricas']['bootstrap_bloques']['f1']['mean']:.2f} "
+        f"[{meta['metricas']['bootstrap_bloques']['f1']['p2_5']:.2f}, "
+        f"{meta['metricas']['bootstrap_bloques']['f1']['p97_5']:.2f}]",
         "",
         "## Ãrea",
         "",
