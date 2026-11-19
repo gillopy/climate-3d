@@ -44,7 +44,11 @@ from goes_descarga import clave_de  # noqa: E402
 from goes_reciente import ultimos_de  # noqa: E402
 from poster_goes import PALETTES  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
-from estilo import BG, FUENTE, TXT, TXT_DIM  # noqa: E402
+from estilo import FUENTE, TXT, TXT_DIM  # noqa: E402
+
+# Fondo negro puro, como GeoColor: el vestuario del póster es el mismo y el marco no
+# debe verse gris al lado del disco.
+BG = "#000000"
 
 SAT, BANDA = "G19", "C13"
 TITULO = "G19 GOES-EAST · BRIGHTNESS TEMPERATURE · BAND 13 (10.3 µm)"
@@ -191,22 +195,24 @@ def render_globo(campo, x, y, proj, rot, vmin: float, vmax: float,
              path_effects=halo, zorder=11)
 
     # Barra de color horizontal sobre una pastilla oscura traslúcida, para que los
-    # ticks se lean limpios sobre el borde del globo.
+    # ticks se lean limpios sobre el borde del globo. Va centrada y angosta: la escala
+    # es la misma, pero no tiene que cruzar el cuadro de lado a lado.
     fondo_cbar = mpatches.FancyBboxPatch(
-        (0.050, 0.030), 0.900, 0.055,
+        (0.225, 0.030), 0.540, 0.055,
         boxstyle="round,pad=0.006,rounding_size=0.010",
         transform=fig.transFigure, facecolor=(0.047, 0.063, 0.078, 0.86),
         edgecolor="#2a3442", linewidth=0.8, zorder=9,
     )
     fig.add_artist(fondo_cbar)
-    cax = fig.add_axes([0.066, 0.055, 0.822, 0.017], zorder=10)
+    cax = fig.add_axes([0.241, 0.055, 0.470, 0.017], zorder=10)
     cbar = fig.colorbar(mesh, cax=cax, orientation="horizontal")
     cbar.outline.set_visible(False)
     ticks = list(range(math.ceil(vmin / 10) * 10, int(vmax), 10))
     cbar.set_ticks(ticks)
     cbar.ax.tick_params(colors=TXT, length=3, width=0.8,
                         labelsize=max(6.5, 8.8 * esc), pad=2)
-    fig.text(0.916, 0.0635, "°C", color=TXT,
+    # La unidad va fuera de la pastilla: adentro se pisaba con el último tick.
+    fig.text(0.773, 0.0635, "°C", color=TXT,
              fontsize=max(7.0, 9.8 * esc),
              ha="left", va="center", zorder=11)
 
@@ -352,6 +358,9 @@ def _sello_render(args) -> str:
         "paleta": args.paleta,
         # v2: el encuadre regional recorta la grilla nativa en vez de submuestrearla.
         "malla": 2,
+        # v3: fondo negro puro y escala centrada más angosta. Sin esta clave, un
+        # cuadro viejo con otro vestuario se reusa tal cual y el job mezcla diseños.
+        "diseno": 3,
     }
     return hashlib.sha256(json.dumps(datos, sort_keys=True).encode()).hexdigest()[:16]
 
