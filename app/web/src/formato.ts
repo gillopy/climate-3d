@@ -77,7 +77,15 @@ export function resumenStats(meta: Record<string, unknown>): StatsRow[] {
   agregar("Correlación HV/NDVI", "correlacion", num);
   agregar("Cambio CUSUM", "cusum.cambio_ha", ha);
   agregar("Área CUSUM", "cusum.area_ha", ha);
-  agregar("Sentinel-2", "optico.items", (valor) => `${valor} ítem(s)`);
+  // Sentinel-2: si no hay compuesto, el motivo tiene que verse. Antes el panel
+  // quedaba mudo y parecia que el NDVI no se habia intentado.
+  agregar("Sentinel-2", "optico.disponible", (valor) =>
+    valor ? "sí" : "sin compuesto",
+  );
+  agregar("Motivo Sentinel-2", "optico.motivo", texto);
+  agregar("Ítems Sentinel-2", "optico.items_post", (valor) =>
+    `${Array.isArray(valor) ? valor.length : "?"} ítem(s)`,
+  );
   agregar("NDVI confirma", "optico.verificado", (valor) =>
     valor ? "sí" : "no",
   );

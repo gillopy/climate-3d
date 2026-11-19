@@ -19,6 +19,7 @@ import json
 import math
 import os
 import tempfile
+from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
 
@@ -138,8 +139,13 @@ def _guardar_cache(clave, salida, usados) -> None:
 
 
 def _leer_bandas(item, bbox, bandas, px):
-    """Lee las bandas pedidas sobre `bbox`. Devuelve (dict, transform, crs, nubes)."""
-    item = pc.sign(item)
+    """Lee las bandas pedidas sobre `bbox`. Devuelve (dict, transform, crs, nubes).
+
+    Firma sobre una **copia**: `pc.sign` muta el item y re-firmar uno ya firmado
+    arrastra el token viejo. Con la copia cada reintento sale con un token nuevo,
+    que es lo que arregla los 403 intermitentes de Planetary Computer.
+    """
+    item = pc.sign(deepcopy(item))
     faltan = [banda for banda in bandas if banda not in item.assets]
     if faltan:
         print(f"aviso: {item.id} sin assets {faltan}; se omite")
@@ -150,33 +156,43 @@ def _leer_bandas(item, bbox, bandas, px):
     crs_origen = None
     alto = ancho = 0
 
-    for banda in bandas:
-        with rasterio.open(item.assets[banda].href) as src:
-            ventana = _ventana(src, bbox)
-            if transform_origen is None:
-                # La resolucion de trabajo sale de la primera banda: las demas se
-                # leen con la misma forma, aunque tengan otro tamano de pixel.
-                escala = max(
+    # Lectura de COG remoto: sin esto GDAL intenta listar el "directorio" del blob,
+    # no reintenta los cortes de red y falla con "Read failed" / "not recognized as
+    # being in a supported file format" en medio de un item que ya venia bien.
+    with rasterio.Env(
+        GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
+        CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif,.TIF",
+        GDAL_HTTP_MULTIPLEX="YES",
+        GDAL_HTTP_MAX_RETRY="4",
+        GDAL_HTTP_RETRY_DELAY="2",
+    ):
+        for banda in bandas:
+            with rasterio.open(item.assets[banda].href) as src:
+                ventana = _ventana(src, bbox)
+                if transform_origen is None:
+                    # La resolucion de trabajo sale de la primera banda: las demas se
+                    # leen con la misma forma, aunque tengan otro tamano de pixel.
+                    escala = max(
+                        1,
+                        int(
+                            math.ceil(
+                                max(ventana.width, ventana.height) / max(1, int(px * 1.5))
+                            )
+                        ),
+                    )
+                    alto = max(1, int(round(ventana.height / escala)))
+                    ancho = max(1, int(round(ventana.width / escala)))
+                    transform_origen = src.window_transform(ventana) * Affine.scale(
+                        ventana.width / ancho, ventana.height / alto
+                    )
+                    crs_origen = src.crs
+                remuestreo = Resampling.nearest if banda == "SCL" else Resampling.bilinear
+                datos[banda] = src.read(
                     1,
-                    int(
-                        math.ceil(
-                            max(ventana.width, ventana.height) / max(1, int(px * 1.5))
-                        )
-                    ),
-                )
-                alto = max(1, int(round(ventana.height / escala)))
-                ancho = max(1, int(round(ventana.width / escala)))
-                transform_origen = src.window_transform(ventana) * Affine.scale(
-                    ventana.width / ancho, ventana.height / alto
-                )
-                crs_origen = src.crs
-            remuestreo = Resampling.nearest if banda == "SCL" else Resampling.bilinear
-            datos[banda] = src.read(
-                1,
-                window=ventana,
-                out_shape=(alto, ancho),
-                resampling=remuestreo,
-            ).astype(np.float32)
+                    window=ventana,
+                    out_shape=(alto, ancho),
+                    resampling=remuestreo,
+                ).astype(np.float32)
 
     nubes = float(item.properties.get("eo:cloud_cover", 100.0))
     return datos, transform_origen, crs_origen, nubes
@@ -243,14 +259,21 @@ def _componer(
     usados: list[dict] = []
 
     for item in items:
-        try:
-            leido = _leer_bandas(item, bbox, bandas, px)
-        except Exception as exc:  # noqa: BLE001 - un item roto no mata el producto
-            print(
-                f"aviso: {item.id} fallo al leer/reproyectar "
-                f"({type(exc).__name__}: {exc}); se omite"
-            )
-            continue
+        leido = None
+        for intento in range(2):
+            try:
+                leido = _leer_bandas(item, bbox, bandas, px)
+                break
+            except Exception as exc:  # noqa: BLE001 - un item roto no mata el producto
+                if intento == 0:
+                    # Los assets remotos fallan con 403/Read failed cuando el token
+                    # de un item viejo ya no sirve: se reintenta con firma nueva.
+                    print(f"  {item.id}: {type(exc).__name__}; se reintenta con firma nueva")
+                    continue
+                print(
+                    f"aviso: {item.id} fallo al leer/reproyectar "
+                    f"({type(exc).__name__}: {exc}); se omite"
+                )
         if leido is None:
             continue
 
