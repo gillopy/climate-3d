@@ -1308,11 +1308,12 @@ export function NisarView() {
                                 }}
                               >
                                 <option value="radar">
-                                  Radar · la caída de HV detecta, el óptico confirma
+                                  Radar · la caída de HV detecta (bosque seco,
+                                  desmontes grandes o rebrotados)
                                 </option>
                                 <option value="ndvi">
                                   NDVI · la caída óptica detecta, el radar corrobora
-                                  (sub-hectárea, bosque denso)
+                                  (desmonte fresco sub-hectárea en dosel denso)
                                 </option>
                               </select>
                             </label>

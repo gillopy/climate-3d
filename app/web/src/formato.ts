@@ -154,6 +154,28 @@ export function resumenStats(meta: Record<string, unknown>): StatsRow[] {
           : `${multilook}×${multilook}`,
     });
   }
+  const detector = _get(meta, "detector");
+  if (detector && typeof detector === "object" && !Array.isArray(detector)) {
+    const det = detector as Record<string, unknown>;
+    if (String(det.modo ?? "") === "ndvi") {
+      if (typeof det.perdida_optica_ha === "number") {
+        filas.push({ label: "Caída NDVI", value: ha(det.perdida_optica_ha) });
+      }
+      if (typeof det.corroborada_ha === "number") {
+        filas.push({
+          label: "Corroborada por radar",
+          value: ha(det.corroborada_ha),
+        });
+      }
+    }
+    if (det.desacuerdo_optica === true) {
+      filas.push({
+        label: "Aviso",
+        value:
+          "cambio estructural sin caída NDVI (bosque seco o rebrote): probá detector radar",
+      });
+    }
+  }
   agregar("EPSG", "epsg", texto);
   agregar("Polarización", "polarizaciones", (valor) =>
     Array.isArray(valor) ? valor.join(" · ") : String(valor),

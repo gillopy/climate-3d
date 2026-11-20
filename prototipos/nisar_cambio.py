@@ -711,6 +711,9 @@ def main() -> int:
         detector_ndvi = args.detector == "ndvi" and optico_meta["disponible"]
         corroborado_radar = np.zeros(valido.shape, dtype=bool)
         perdida_optica = np.zeros(valido.shape, dtype=bool)
+        desacuerdo_optica = False
+        elegible_radar = 1.0
+        dndvi_en_radar = 0.0
         if args.detector == "ndvi" and not detector_ndvi:
             print(
                 "aviso: sin compuestos NDVI no hay detector ndvi; la perdida "
@@ -732,6 +735,33 @@ def main() -> int:
                 f"{nisar.hectareas(int(corroborado_radar.sum()), mpp_x, mpp_y):.0f} ha corroboradas por radar · "
                 f"{nisar.hectareas(solo_optico_px, mpp_x, mpp_y):.0f} ha solo opticas"
             )
+            # Desacuerdo optica/radar: si el cambio estructural vive en
+            # vegetacion de NDVI baja (bosque seco, NDVI ~0.4) o ya rebroto
+            # (desmonte viejo, NDVI recuperada), el detector ndvi no puede
+            # verlo aunque el desmonte exista. Se mide y se avisa en el
+            # momento de la verdad en vez de entregar un mapa casi vacio.
+            con_pre = (
+                np.isfinite(ndvi_pre) & np.isfinite(ndvi_post) & perdida_radar
+            )
+            if con_pre.any():
+                elegible_radar = float(
+                    (ndvi_pre[con_pre] >= float(args.ndvi_bosque)).mean()
+                )
+                dndvi_en_radar = float(
+                    np.median(ndvi_post[con_pre] - ndvi_pre[con_pre])
+                )
+            desacuerdo_optica = (
+                nisar.hectareas(int(perdida_radar.sum()), mpp_x, mpp_y) >= 25.0
+                and (elegible_radar < 0.2 or dndvi_en_radar > -0.1)
+            )
+            if desacuerdo_optica:
+                print(
+                    "aviso: el cambio estructural esta en vegetacion de NDVI "
+                    f"baja (solo el {100.0 * elegible_radar:.0f}% con NDVI >= "
+                    f"{args.ndvi_bosque:g}) o ya rebrotada (caida media "
+                    f"{dndvi_en_radar:+.2f}): el detector NDVI no puede verlo; "
+                    "proba --detector radar"
+                )
 
         if inundacion.any() and confirmado:
             # Soporte NDWI: que fraccion de la firma radar de inundacion tambien
@@ -998,6 +1028,9 @@ def main() -> int:
                             ),
                             1,
                         ),
+                        "fraccion_elegible": round(elegible_radar, 2),
+                        "dndvi_en_radar": round(dndvi_en_radar, 2),
+                        "desacuerdo_optica": desacuerdo_optica,
                     }
                     if detector_ndvi
                     else {}

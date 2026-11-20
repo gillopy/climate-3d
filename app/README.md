@@ -648,7 +648,11 @@ El job `nisar_render` despacha por `producto`:
   umbral 4 dB · MMU 0,1 ha, compuestos obligatorios) — y junto al tamaño
   máx. muestra los m/px efectivos del render: la calidad se decide en
   caja × px, y una caja grande con px bajo sale gruenta aunque el
-  granulo sea de 10 m.
+  granulo sea de 10 m. El detector NDVI no ve desmontes en bosque seco
+  (NDVI ~0,4, debajo del piso de bosque) ni ya rebrotados (la NDVI se
+  recupera antes que la estructura): cuando el cambio estructural y la
+  caída óptica no coinciden, el producto lo avisa y recomienda el
+  detector radar.
   La ganancia de HV es opcional
   (`--ganancia`) porque a este nivel de ruido es casi toda speckle. Medido contra
   la referencia NDVI del Este, el radar solo queda en F1 denso ≈ 0.27: es un mapa
