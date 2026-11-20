@@ -164,6 +164,46 @@ el visor), recomendados cuando el track tiene 3+ fechas en disco. Prenderlos
 por defecto exige una referencia menos estacional (MapBiomas/GFW anual) —
 sigue siendo el próximo paso pendiente anotado arriba.
 
+## Guard de HH: búsqueda del pulso de inundación (2026-11)
+
+[`buscar_doble_rebote.py`](buscar_doble_rebote.py) escanea un par buscando la
+firma de doble rebote (ΔHH > +3 dB con ΔHV < −3 dB, normalizados, ~100 m/px)
+y localiza la ventana más densa (la caja del centro de masa engaña con
+distribuciones multimodales). Tres pares estación seca → húmeda, buscando un
+evento compacto que dispare el guard a escala:
+
+| Par | Región | Fechas | Firma en escena | Mejor ventana 30×30 km |
+|---|---|---|---:|---:|
+| 161/167 | chiquitano (BO) | 2026-06-13 → 11-16 | 28.497 px (0,48 %) | 761 px (0,85 %) |
+| 161/167 | chiquitano (BO) | 2025-11-21 → 12-03 | — | 425 px (0,47 %) |
+| 132/165 | río Paraguay | 2026-07-05 → 11-02 | 20.521 px (0,60 %) | 1.089 px (1,21 %) |
+
+**Resultado honesto:** no hay un pulso compacto en el archivo actual (la
+crecida pico es dic–mar y el archivo termina el 2026-11-16). En la mejor
+ventana del río Paraguay el guard sí disparó: **50 ha con firma salieron de
+los 13.732 ha** que el par julio→noviembre pinta como pérdida
+(`--guardia-hh 3`); marginal pero real, y costo cero cuando la firma no está.
+Dato operacional de paso: entre estación seca y húmeda el par entero se
+oscurece ~1,5 dB en HH y HV (senescencia/humedad); el corrimiento del par lo
+absorbe — los umbrales absolutos por fecha siguen prohibidos.
+
+## Umbral ROC-derivado (2026-11)
+
+`deforestacion_este.py --umbral auto` barre 0,5–4 dB con el detector completo
+(P1/P2 incluidos) contra la referencia y opera en el umbral de máximo F1
+denso; empates hacia el umbral más bajo (recuerdo antes que precisión: lo que
+sigue confirma con óptica o persistencia). El informe aclara que es selección
+contra la MISMA referencia que mide — punto de operación, no precisión
+independiente.
+
+Caja chica 08-27 → 10-02 con baseline 3 + CoV + guardia: la curva da F1 denso
+≤ 0,002 en todo el barrido (ventana casi sin cambio) y `auto` elige 0,5 dB
+honesto (729 ha, sesgo +967 %), anunciando que no hay señal. Con `--umbral 2`
+fijo la misma corrida sigue dando 134 ha (regresión clavada). **Lectura:**
+`auto` no inventa magia donde no hay cambio; su valor aparece en ventanas con
+cambio real, y la curva (`curva_umbral` en `metricas.json`, `curva.png`) queda
+para leerla antes de elegir a mano.
+
 ## Límites
 
 - Referencia óptica, no campo; una cosecha o el agua también bajan el NDVI.
