@@ -24,6 +24,7 @@ import json
 import netrc
 import os
 import sys
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -139,16 +140,26 @@ def _sesion(usuario: str | None, clave: str | None, cookies: Path | None) -> Ses
         raise SystemExit("Earthdata no devolvio un access_token; revisa la cuenta.")
 
     # El `asf-urs` cookie autoriza los productos que lo piden; el token cubre el resto.
-    s.get(
-        f"{EDL}/oauth/authorize",
-        params={
-            "splash": "false",
-            "client_id": EDL_CLIENT_ID,
-            "response_type": "code",
-            "redirect_uri": ASF_AUTH,
-        },
-        timeout=(30, 60),
-    )
+    # El redirect cae en ASF, que hoy sirve un certificado vencido en ~90% de los
+    # nodos: se reintenta solo el handshake vencido y, si no hay suerte, se sigue
+    # con el Bearer token en vez de abortar la descarga.
+    for intento in range(12):
+        try:
+            s.get(
+                f"{EDL}/oauth/authorize",
+                params={
+                    "splash": "false",
+                    "client_id": EDL_CLIENT_ID,
+                    "response_type": "code",
+                    "redirect_uri": ASF_AUTH,
+                },
+                timeout=(30, 60),
+            )
+            break
+        except requests.exceptions.SSLError as exc:
+            if "certificate has expired" not in str(exc):
+                raise
+            time.sleep(min(0.3 * 2**intento, 2.0))
     s.auth = None
     s.headers["Authorization"] = f"Bearer {token}"
     return s
