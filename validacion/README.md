@@ -129,6 +129,41 @@ parte de la "referencia" es cambio fenológico. Con dos fechas no se puede exigi
 persistencia temporal, que es lo que el método NASA usa para bajar falsos
 positivos.
 
+## Baseline temporal y guard de inundación (2026-11)
+
+`prototipos/nisar_cambio.py` ahora puede medir el cambio contra la mediana de
+varias fechas (`--baseline N`, mediana por píxel en potencia, la de `--antes`
+incluida, fechas ya en disco del mismo par) y apartar la firma de doble
+rebote (`--guardia-hh X`), siguiendo a Flores-Anderson et al. (RSE 333, 2026).
+El harness mide ambos contra la misma referencia NDVI. Par 31/165, caja chica
+del visor, referencia NDVI pre 2026-08-01..26 / post 2026-10-03..31 (68 ha de
+pérdida de referencia):
+
+| Radar | Área predicha | Precisión densa | Recall | Sesgo |
+|---|---:|---:|---:|---:|
+| par 2026-08-27 → 10-02 | 189 ha | 0,00 | 0,01 | +177 % |
+| + baseline 3 fechas (06-28, 07-10, 08-15) + CoV 0,40 | 134 ha | 0,00 | 0,00 | +96 % |
+| + guardia-hh 3 dB | 134 ha | 0,00 | 0,00 | +96 % |
+| par 2026-08-27 → 10-26 | 160 ha | 0,00 | 0,01 | +134 % |
+| + baseline 3 fechas + CoV 0,40 | 181 ha | 0,00 | 0,00 | +165 % |
+
+**Qué se puede afirmar.** En el par corto el baseline reduce el exceso de
+detección (−29 % de área pintada); en el par largo el piso más estable hace
+subir el área (+13 %): el efecto es real pero depende de la ventana. El F1
+denso queda en 0,00 en todas las filas: contra esta referencia — estacional y
+conservadora, NDVI pre ≥ 0,50 en agosto con mediana de caja ~0,45 — ningún
+ΔHV, par o baseline, separa deforestación de humedad/estacionalidad en esta
+ventana. El guard de HH no movió el área en esta caja: la firma de doble
+rebote no domina los falsos positivos acá (su valor quedó probado en el
+escenario sintético del test y apunta a la clase de error que el paper
+admite, no a esta ventana en particular).
+
+**Decisión de defaults.** Los números reales no justifican prender P1/P2 por
+defecto: quedan opt-in (`--baseline`, `--cov-max`, `--guardia-hh`, también en
+el visor), recomendados cuando el track tiene 3+ fechas en disco. Prenderlos
+por defecto exige una referencia menos estacional (MapBiomas/GFW anual) —
+sigue siendo el próximo paso pendiente anotado arriba.
+
 ## Límites
 
 - Referencia óptica, no campo; una cosecha o el agua también bajan el NDVI.

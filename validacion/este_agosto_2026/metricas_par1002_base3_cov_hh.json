@@ -1,0 +1,267 @@
+{
+ "caso": "deforestacion_este",
+ "nisar": {
+  "antes": "2026-08-27 09:31 UTC",
+  "despues": "2026-10-02 09:31 UTC",
+  "track": 31,
+  "frame": 165,
+  "epsg": 32721,
+  "mpp": [
+   10.0,
+   10.0
+  ]
+ },
+ "ventanas": {
+  "pre": [
+   "2026-08-01",
+   "2026-08-26"
+  ],
+  "post": [
+   "2026-10-03",
+   "2026-10-31"
+  ],
+  "nubes_max": 40.0
+ },
+ "referencia": {
+  "tipo": "NDVI optico pre/post; no es verdad de campo",
+  "es_verdad_de_campo": false,
+  "ndvi_bosque": 0.5,
+  "ndvi_perdida": 0.3,
+  "dndvi_perdida": 0.2,
+  "estable": 0.1
+ },
+ "producto": {
+  "hv_min_db": -15.5,
+  "umbral_db": 2.0,
+  "multilook": 5,
+  "normalizado": true,
+  "offset_db": -0.25
+ },
+ "pixeles": {
+  "validos": 1261320,
+  "referencia_perdida": 6833,
+  "referencia_estable": 136690,
+  "prediccion_perdida": 13390
+ },
+ "areas_ha": {
+  "valida": 12613.2,
+  "referencia_perdida": 68.3,
+  "prediccion_perdida": 133.9,
+  "sesgo_pct": 96.0
+ },
+ "metricas": {
+  "denso": {
+   "tp": 13.0,
+   "fp": 13377.0,
+   "fn": 6820.0,
+   "tn": 1241110.0,
+   "precision": 0.000970873786407767,
+   "recall": 0.0019025318308210156,
+   "f1": 0.001285664837066706,
+   "iou": 0.0006432459178624443,
+   "accuracy": 0.983987410014905,
+   "conjunto": "denso (operativo)"
+  },
+  "bloques_espaciales": {
+   "tp": 0.0,
+   "fp": 142.0,
+   "fn": 93.0,
+   "tn": 19660.0,
+   "precision": 0.0,
+   "recall": 0.0,
+   "f1": 0.0,
+   "iou": 0.0,
+   "accuracy": 0.9881879869313898,
+   "bloques": 19895.0,
+   "tamano_bloque": 8.0
+  },
+  "muestra_balanceada": {
+   "tp": 0.0,
+   "fp": 6.0,
+   "fn": 250.0,
+   "tn": 244.0,
+   "precision": 0.0,
+   "recall": 0.0,
+   "f1": 0.0,
+   "iou": 0.0,
+   "accuracy": 0.488,
+   "conjunto": "muestra balanceada"
+  },
+  "muestra_ponderada": {
+   "tp": 0.0,
+   "fp": 3280.56,
+   "fn": 6833.0,
+   "tn": 133409.44,
+   "precision": 0.0,
+   "recall": 0.0,
+   "f1": 0.0,
+   "iou": 0.0,
+   "accuracy": 0.9295335242435011,
+   "conjunto": "muestra ponderada"
+  },
+  "bootstrap_muestra": {
+   "precision": {
+    "mean": 0.0,
+    "p2_5": 0.0,
+    "p97_5": 0.0
+   },
+   "recall": {
+    "mean": 0.0,
+    "p2_5": 0.0,
+    "p97_5": 0.0
+   },
+   "f1": {
+    "mean": 0.0,
+    "p2_5": 0.0,
+    "p97_5": 0.0
+   }
+  },
+  "bootstrap_bloques": {
+   "precision": {
+    "mean": 0.0,
+    "p2_5": 0.0,
+    "p97_5": 0.0
+   },
+   "recall": {
+    "mean": 0.0,
+    "p2_5": 0.0,
+    "p97_5": 0.0
+   },
+   "f1": {
+    "mean": 0.0,
+    "p2_5": 0.0,
+    "p97_5": 0.0
+   }
+  }
+ },
+ "incertidumbre": {
+  "unidad": "bloques espaciales",
+  "tamano_bloque_pixeles": 8,
+  "nota": "El IC por bloques reduce la independencia ficticia de pixeles vecinos."
+ },
+ "split_espacial": {
+  "oeste": {
+   "tp": 0.0,
+   "fp": 1.0,
+   "fn": 216.0,
+   "tn": 157.0,
+   "precision": 0.0,
+   "recall": 0.0,
+   "f1": 0.0,
+   "iou": 0.0,
+   "accuracy": 0.4197860962566845,
+   "n": 374
+  },
+  "este": {
+   "tp": 0.0,
+   "fp": 5.0,
+   "fn": 34.0,
+   "tn": 87.0,
+   "precision": 0.0,
+   "recall": 0.0,
+   "f1": 0.0,
+   "iou": 0.0,
+   "accuracy": 0.6904761904761905,
+   "n": 126
+  }
+ },
+ "curva_umbral": [
+  {
+   "tp": 72.0,
+   "fp": 61947.0,
+   "fn": 6761.0,
+   "tn": 1192540.0,
+   "precision": 0.0011609345523146133,
+   "recall": 0.01053709937070101,
+   "f1": 0.0020914425143786675,
+   "iou": 0.0010468159348647863,
+   "accuracy": 0.9455269083182698,
+   "umbral_db": 0.5
+  },
+  {
+   "tp": 39.0,
+   "fp": 23613.0,
+   "fn": 6794.0,
+   "tn": 1230874.0,
+   "precision": 0.0016489091831557584,
+   "recall": 0.005707595492463047,
+   "f1": 0.00255863539445629,
+   "iou": 0.0012809564474807857,
+   "accuracy": 0.9758927155678179,
+   "umbral_db": 1.0
+  },
+  {
+   "tp": 28.0,
+   "fp": 12114.0,
+   "fn": 6805.0,
+   "tn": 1242373.0,
+   "precision": 0.0023060451325975953,
+   "recall": 0.004097760866383726,
+   "f1": 0.0029512516469038207,
+   "iou": 0.0014778065129044176,
+   "accuracy": 0.9850006342561761,
+   "umbral_db": 1.5
+  },
+  {
+   "tp": 26.0,
+   "fp": 7514.0,
+   "fn": 6807.0,
+   "tn": 1246973.0,
+   "precision": 0.0034482758620689655,
+   "recall": 0.003805063661642031,
+   "f1": 0.003617894663605371,
+   "iou": 0.0018122255523802886,
+   "accuracy": 0.9886460216281356,
+   "umbral_db": 2.0
+  },
+  {
+   "tp": 24.0,
+   "fp": 4689.0,
+   "fn": 6809.0,
+   "tn": 1249798.0,
+   "precision": 0.005092297899427116,
+   "recall": 0.0035123664569003364,
+   "f1": 0.0041572839078468735,
+   "iou": 0.0020829717063009894,
+   "accuracy": 0.9908841531094409,
+   "umbral_db": 2.5
+  },
+  {
+   "tp": 20.0,
+   "fp": 2855.0,
+   "fn": 6813.0,
+   "tn": 1251632.0,
+   "precision": 0.006956521739130435,
+   "recall": 0.002926972047416947,
+   "f1": 0.004120313143798928,
+   "iou": 0.002064409578860446,
+   "accuracy": 0.9923350141121999,
+   "umbral_db": 3.0
+  },
+  {
+   "tp": 16.0,
+   "fp": 1738.0,
+   "fn": 6817.0,
+   "tn": 1252749.0,
+   "precision": 0.009122006841505131,
+   "recall": 0.0023415776379335576,
+   "f1": 0.00372656340980552,
+   "iou": 0.0018667600046669,
+   "accuracy": 0.9932174230171567,
+   "umbral_db": 3.5
+  },
+  {
+   "tp": 9.0,
+   "fp": 1060.0,
+   "fn": 6824.0,
+   "tn": 1253427.0,
+   "precision": 0.00841908325537886,
+   "recall": 0.0013171374213376262,
+   "f1": 0.002277904328018223,
+   "iou": 0.0011402508551881414,
+   "accuracy": 0.9937494053848349,
+   "umbral_db": 4.0
+  }
+ ],
+ "muestras": 500
+}

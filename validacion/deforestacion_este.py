@@ -116,6 +116,24 @@ def main() -> int:
         action="store_true",
         help="no restar el corrimiento global de ΔHV (producto viejo)",
     )
+    ap.add_argument(
+        "--baseline",
+        type=int,
+        default=0,
+        help="fechas del baseline incluyendo --antes (P1); 0 = par actual",
+    )
+    ap.add_argument(
+        "--cov-max",
+        type=float,
+        default=0.0,
+        help="CoV temporal maximo del baseline para contar perdida (P1); 0 = no filtrar",
+    )
+    ap.add_argument(
+        "--guardia-hh",
+        type=float,
+        default=0.0,
+        help="subida de HH en dB que marca doble rebote/inundacion (P2); 0 = no etiquetar",
+    )
     ap.add_argument("--muestras", type=int, default=250)
     ap.add_argument("--separacion", type=int, default=2)
     ap.add_argument(
@@ -152,10 +170,71 @@ def main() -> int:
             hv_despues = nisar.multilook(hv_despues, ml)
         db_antes = nisar.a_db(hv_antes)
         db_despues = nisar.a_db(hv_despues)
+
+        # P1/P2 en espejo del producto: baseline temporal + guard de doble rebote.
+        usa_hh = (
+            abs(float(args.guardia_hh)) > 0
+            and "HH" in antes.pols
+            and "HH" in despues.pols
+        )
+        db_hh_base = None
+        db_hh_despues = None
+        if usa_hh:
+            rec_hh_antes = antes.recortar("HH", args.bbox, px)
+            rec_hh_despues = despues.recortar("HH", args.bbox, px)
+            hh_antes, _, _ = nisar.orientar(rec_hh_antes)
+            hh_despues, _, _ = nisar.orientar(rec_hh_despues)
+            if ml > 1:
+                hh_antes = nisar.multilook(hh_antes, ml)
+                hh_despues = nisar.multilook(hh_despues, ml)
+            db_hh_base = nisar.a_db(hh_antes)
+            db_hh_despues = nisar.a_db(hh_despues)
+
+        db_base = db_antes
+        cov_base = None
+        pila_hv = [hv_antes]
+        pila_hh = [hh_antes] if usa_hh else []
+        if int(args.baseline) >= 2:
+            for ruta_prev in nisar.escenas_anteriores(
+                args.antes, int(args.baseline) - 1
+            ):
+                with nisar.Escena(ruta_prev) as prev:
+                    if "HV" not in prev.pols:
+                        continue
+                    if usa_hh and "HH" not in prev.pols:
+                        continue
+                    rec_prev = prev.recortar("HV", args.bbox, px)
+                    if not nisar.compatibles(rec_antes, rec_prev):
+                        continue
+                    hv_prev, _, _ = nisar.orientar(rec_prev)
+                    if ml > 1:
+                        hv_prev = nisar.multilook(hv_prev, ml)
+                    pila_hv.append(hv_prev)
+                    if usa_hh:
+                        rec_hh_prev = prev.recortar("HH", args.bbox, px)
+                        hh_prev, _, _ = nisar.orientar(rec_hh_prev)
+                        if ml > 1:
+                            hh_prev = nisar.multilook(hh_prev, ml)
+                        pila_hh.append(hh_prev)
+        if len(pila_hv) >= 2:
+            pila = np.stack(pila_hv)
+            db_base = nisar.a_db(nisar.pila_mediana(pila))
+            cov_base = nisar.pila_cov(pila)
+            if usa_hh and len(pila_hh) == len(pila_hv):
+                db_hh_base = nisar.a_db(nisar.pila_mediana(np.stack(pila_hh)))
+            print(f"baseline: mediana de {len(pila_hv)} fechas en potencia")
+        elif int(args.baseline) >= 2:
+            print("aviso: no hay fechas anteriores en disco; se mide contra --antes")
+
+        delta_hh = None
+        if usa_hh:
+            delta_hh = db_hh_despues - db_hh_base
+            delta_hh = delta_hh - nisar.corrimiento_db(delta_hh)
+
         offset_db = 0.0
         if not args.sin_normalizar:
-            offset_db = nisar.corrimiento_db(db_despues - db_antes)
-        dhv = db_despues - db_antes - offset_db
+            offset_db = nisar.corrimiento_db(db_despues - db_base)
+        dhv = db_despues - db_base - offset_db
         track, frame = antes.track, antes.frame
         fecha_antes, fecha_despues = antes.fecha, despues.fecha
         epsg = rec_antes.epsg
@@ -171,6 +250,18 @@ def main() -> int:
         f"offset {offset_db:+.2f} dB"
         + (" (sin normalizar)" if args.sin_normalizar else "")
     )
+    extras = []
+    if int(args.baseline) >= 2:
+        extras.append(f"baseline {len(pila_hv)} fechas")
+    if float(args.cov_max) > 0:
+        extras.append(f"cov-max {args.cov_max:g}")
+    if float(args.guardia_hh) > 0:
+        extras.append(
+            f"guardia-hh {abs(float(args.guardia_hh)):g} dB"
+            + ("" if delta_hh is not None else " (sin HH)")
+        )
+    if extras:
+        print("extras: " + ", ".join(extras))
 
     print(f"NDVI previo {args.pre_desde} a {args.pre_hasta}")
     ndvi_pre = _cache_npy(
@@ -192,7 +283,7 @@ def main() -> int:
     )
 
     valido = (
-        np.isfinite(db_antes) & np.isfinite(db_despues)
+        np.isfinite(db_base) & np.isfinite(db_despues)
         & np.isfinite(ndvi_pre) & np.isfinite(ndvi_post)
     )
     dndvi = ndvi_post - ndvi_pre
@@ -210,7 +301,17 @@ def main() -> int:
     perdida_ref = nisar.mayoria3(perdida_ref) & valido
     estable_ref = nisar.mayoria3(estable_ref) & valido & ~perdida_ref
 
-    pred = nisar.mayoria3(valido & (db_antes > args.hv_min) & (dhv < -args.umbral)) & valido
+    cond = valido & (db_base > args.hv_min) & (dhv < -args.umbral)
+    if cov_base is not None and float(args.cov_max) > 0:
+        # P1: pixeles que ya oscilaban entre fechas no son desmonte.
+        inestable = np.isfinite(cov_base) & (cov_base > float(args.cov_max))
+        cond = cond & ~inestable
+    if delta_hh is not None:
+        # P2: caida de HV con subida de HH es doble rebote, no desmonte.
+        firma_hh = np.isfinite(delta_hh) & (delta_hh > abs(float(args.guardia_hh)))
+        doble = nisar.mayoria3(cond & firma_hh) & valido
+        cond = cond & ~doble
+    pred = nisar.mayoria3(cond) & valido
 
     # Muestreo ciego: puntos de pÃ©rdida y de estabilidad, separados en la grilla.
     muestras = validacion.muestreo_estratificado(
