@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -135,6 +136,33 @@ def escenas_posteriores(despues: str | Path, maximo: int = 1) -> list[Path]:
     ]
     posteriores.sort(key=lambda candidata: fecha_orden(candidata.stem))
     return posteriores[:maximo]
+
+
+def escenas_anteriores(antes: str | Path, maximo: int = 1) -> list[Path]:
+    """Escenas del mismo track/frame anteriores a ``antes``, la mas reciente primero.
+
+    Es el espejo de ``escenas_posteriores`` para armar un baseline temporal: solo
+    mira la carpeta de ``antes`` (la coleccion), porque un baseline tiene que ser
+    de la misma version de procesamiento. Devuelve como mucho ``maximo``; la
+    lista vacia significa que no hay con que extender el par.
+    """
+    ruta = Path(antes)
+    if maximo <= 0:
+        return []
+    par = par_track_frame(ruta.stem)
+    limite = fecha_orden(ruta.stem)
+    if par is None or not limite:
+        return []
+    anteriores = [
+        candidata
+        for candidata in ruta.parent.glob("*.h5")
+        if candidata.is_file()
+        and candidata != ruta
+        and par_track_frame(candidata.stem) == par
+        and fecha_orden(candidata.stem) < limite
+    ]
+    anteriores.sort(key=lambda candidata: fecha_orden(candidata.stem), reverse=True)
+    return anteriores[:maximo]
 
 
 def _epsg(grupo: h5py.Group) -> int:
@@ -473,6 +501,44 @@ def ventana_para(mpp: float, metros: float = 90.0, tope: int = 9) -> int:
     if ventana % 2 == 0:
         ventana = ventana + 1 if ventana < tope else ventana - 1
     return max(1, ventana)
+
+
+def pila_mediana(pila: np.ndarray) -> np.ndarray:
+    """Mediana por pixel sobre el eje 0 de una pila en potencia, NaN-aware.
+
+    El baseline temporal se promedia en potencia (nunca en dB, ASF/CEOS): la
+    mediana descarta a la vez el speckle y una escena anomala en humedad. Un
+    pixel sin dato en ninguna fecha queda NaN.
+    """
+    datos = np.asarray(pila)
+    if datos.ndim != 3 or datos.shape[0] == 0:
+        raise ValueError("la pila tiene que ser (fechas, alto, ancho)")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)  # pixel todo-NaN
+        return np.nanmedian(datos, axis=0).astype(np.float32)
+
+
+def pila_cov(pila: np.ndarray) -> np.ndarray:
+    """CoV temporal por pixel (sigma/mu, fraccion) sobre el eje 0, NaN-aware.
+
+    Un CoV alto marca pixeles inestables entre fechas: pulsos de inundacion,
+    rotacion agricola o speckle sobreviviente al multilook. Con menos de dos
+    fechas, o media <= 0, el CoV no esta definido y queda NaN (quien llama
+    decide; NaN nunca debe excluir un pixel solo).
+    """
+    datos = np.asarray(pila)
+    if datos.ndim != 3:
+        raise ValueError("la pila tiene que ser (fechas, alto, ancho)")
+    if datos.shape[0] < 2:
+        # CoV de una sola fecha no esta definido: NaN, nunca un pixel excluido.
+        return np.full(datos.shape[1:], np.nan, dtype=np.float32)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)  # pixel todo-NaN
+        mu = np.nanmean(datos, axis=0)
+        sigma = np.nanstd(datos, axis=0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        cov = np.where(mu > 0, sigma / np.where(mu > 0, mu, 1.0), np.nan)
+    return cov.astype(np.float32)
 
 
 def limites(datos: np.ndarray, vmin: float | None = None, vmax: float | None = None) -> tuple[float, float]:

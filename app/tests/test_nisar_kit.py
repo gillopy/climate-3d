@@ -68,6 +68,51 @@ filtrada = nisar.filtrar_mmu(m, 10)
 assert filtrada.sum() == 16, filtrada.sum()
 assert filtrada[3, 3] and not filtrada[20, 20], "no descarto el parche chico"
 assert nisar.filtrar_mmu(m, 1).sum() == 20, "con minimo 1 cambio la mascara"
+
+# Baseline temporal: las fechas anteriores al par, del mismo track/frame y carpeta.
+GRANULO_SIN = (
+    "NISAR_L2_PR_GCOV_{}_082_D_101_2005_DHDH_A_{}T120000_{}T120034_"
+    "P05036_N_F_J_001"
+)
+with tempfile.TemporaryDirectory() as carpeta:
+    base = Path(carpeta)
+    for ciclo, dia in (("027", "20260524"), ("028", "20260605"), ("029", "20260617"),
+                       ("030", "20260629"), ("031", "20260711")):
+        (base / (GRANULO_SIN.format(ciclo, dia, dia) + ".h5")).touch()
+    # Otro frame en la misma carpeta: nunca entra al baseline del par.
+    (base / (GRANULO_SIN.replace("_101_", "_102_").format("031", "20260711", "20260711") + ".h5")).touch()
+    antes = base / (GRANULO_SIN.format("029", "20260617", "20260617") + ".h5")
+    nombres = [p.name for p in nisar.escenas_anteriores(antes, 2)]
+    assert nombres == [
+        GRANULO_SIN.format("028", "20260605", "20260605") + ".h5",
+        GRANULO_SIN.format("027", "20260524", "20260524") + ".h5",
+    ], nombres  # mas recientes primero y nada del otro frame
+    assert nisar.escenas_anteriores(antes, 0) == [], "maximo 0 no dio lista vacia"
+    primera = base / (GRANULO_SIN.format("027", "20260524", "20260524") + ".h5")
+    assert nisar.escenas_anteriores(primera, 2) == [], "sin fechas previas no dio vacia"
+
+# Pila: mediana y CoV por pixel, NaN-aware, siempre en potencia.
+plana = np.stack([np.full((4, 4), 0.10), np.full((4, 4), 0.20), np.full((4, 4), 0.30)])
+assert np.allclose(nisar.pila_mediana(plana), 0.20), "la mediana no dio la del medio"
+con_nan = plana.copy()
+con_nan[0, 0, 0] = np.nan
+con_nan[1, 0, 0] = np.nan
+assert np.isclose(nisar.pila_mediana(con_nan)[0, 0], 0.30), "no ignoro el NaN de una fecha"
+todo_nan = plana.copy()
+todo_nan[:, 1, 1] = np.nan
+assert np.isnan(nisar.pila_mediana(todo_nan)[1, 1]), "pixel sin datos no quedo NaN"
+
+estable = np.stack([np.full((3, 3), 0.05), np.full((3, 3), 0.05)])
+assert np.allclose(nisar.pila_cov(estable), 0.0), "pila constante no dio CoV 0"
+variada = np.stack([np.full((3, 3), 0.05), np.full((3, 3), 0.15)])
+assert np.allclose(nisar.pila_cov(variada), 0.5), "CoV de 0.05/0.15 no dio 0.5"
+una_nan = variada.copy()
+una_nan[0, 2, 2] = np.nan
+assert np.isclose(nisar.pila_cov(una_nan)[2, 2], 0.0), "CoV no ignoro el NaN de una fecha"
+ceros = np.stack([np.zeros((2, 2)), np.zeros((2, 2))])
+assert np.isnan(nisar.pila_cov(ceros)).all(), "CoV con media 0 no quedo NaN"
+soltera = np.stack([np.full((2, 2), 0.07)])
+assert np.isnan(nisar.pila_cov(soltera)).all(), "CoV de una sola fecha no quedo NaN"
 '''
 
 
