@@ -52,6 +52,9 @@ BANDAS_NDVI = ("B04", "B08", "SCL")
 #: SWIR2 (B12) entra por NBR: es la banda que separa dosel de suelo desnudo.
 BANDAS_INDICES = ("B03", "B04", "B08", "B11", "B12", "SCL")
 
+#: Color real: azul (B02), verde (B03), rojo (B04) y la mascara de escena.
+BANDAS_COLOR = ("B02", "B03", "B04", "SCL")
+
 #: Subir esto invalida toda la cache en disco (cambia el prefijo de la clave).
 CACHE_VERSION = 1
 
@@ -337,6 +340,20 @@ def _calcular_indices(datos):
     return {"ndvi": ndvi, "ndbi": ndbi, "ndwi": ndwi, "nbr": nbr}
 
 
+def _calcular_color(datos):
+    """Reflectancia R/G/B enmascarada con SCL, todavia sin estirar.
+
+    La mediana entre items va sobre reflectancia cruda: el estirado a 8 bits
+    se hace despues para que dos fechas comparables salgan con la misma escala.
+    """
+    valida = optico.mascara_scl(datos["SCL"])
+    return {
+        "R": np.where(valida, datos["B04"], np.nan).astype(np.float32),
+        "G": np.where(valida, datos["B03"], np.nan).astype(np.float32),
+        "B": np.where(valida, datos["B02"], np.nan).astype(np.float32),
+    }
+
+
 def componer_ndvi(
     items,
     bbox: tuple[float, float, float, float],
@@ -390,3 +407,45 @@ def componer_indices(
         _calcular_indices,
         "indices",
     )
+
+
+def componer_color(
+    items,
+    bbox: tuple[float, float, float, float],
+    destino_forma: tuple[int, int],
+    destino_transform,
+    destino_crs,
+    px: int,
+) -> tuple[np.ndarray | None, list[dict]]:
+    """Color real (mediana de reflectancia R/G/B) alineado a la grilla destino.
+
+    El estirado 2-98% va DESPUES de la mediana y sobre los tres canales juntos
+    (no por canal), para que el balance de color no se tiña y dos fechas
+    comparables salgan con la misma escala. Devuelve RGB uint8 o ``(None,
+    usados)`` si ningun item dejo pixeles.
+    """
+    salida, usados = _componer(
+        items,
+        bbox,
+        destino_forma,
+        destino_transform,
+        destino_crs,
+        px,
+        BANDAS_COLOR,
+        _calcular_color,
+        "color",
+    )
+    if salida is None:
+        return None, usados
+    apilado = np.stack([salida["R"], salida["G"], salida["B"]])  # (3, H, W)
+    con_dato = np.isfinite(apilado).all(axis=0)
+    muestra = apilado[np.isfinite(apilado)]
+    if muestra.size == 0:
+        return None, usados
+    lo, hi = np.percentile(muestra, [2, 98])
+    if hi <= lo:
+        hi = lo + 1.0
+    norm = np.clip((apilado - lo) / (hi - lo), 0.0, 1.0)
+    rgb = (np.moveaxis(np.nan_to_num(norm, nan=0.0), 0, -1) * 255.0).astype(np.uint8)
+    rgb[~con_dato] = (8, 9, 10)
+    return rgb, usados
