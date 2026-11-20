@@ -109,7 +109,11 @@ def main() -> int:
     ap.add_argument("--dndvi-perdida", type=float, default=0.20)
     ap.add_argument("--estable", type=float, default=0.10)
     ap.add_argument("--hv-min", type=float, default=-15.5)
-    ap.add_argument("--umbral", type=float, default=2.0)
+    ap.add_argument(
+        "--umbral",
+        default="2.0",
+        help="umbral de caida en dB, o 'auto' (punto que maximiza el F1 denso contra la referencia)",
+    )
     ap.add_argument("--ml", type=int, default=0, help="0 = multilook automatico (~50 m)")
     ap.add_argument(
         "--sin-normalizar",
@@ -148,6 +152,13 @@ def main() -> int:
 
     salida = Path(args.out)
     salida.mkdir(parents=True, exist_ok=True)
+    umbral_texto = str(args.umbral).strip().lower()
+    umbral_auto = umbral_texto == "auto"
+    if not umbral_auto:
+        try:
+            umbral_fijo = abs(float(umbral_texto))
+        except ValueError:
+            raise SystemExit(f"--umbral no es un numero ni 'auto': {args.umbral!r}")
     px = max(800, min(int(args.px), 2000))
     oeste, sur, este, norte = nisar.caja(args.bbox)
 
@@ -246,8 +257,8 @@ def main() -> int:
     crs = f"EPSG:{epsg}"
     print(f"grilla {forma[0]}x{forma[1]} · {mpp_x:.0f} m/px · track {track} frame {frame}")
     print(
-        f"producto: dHV < -{args.umbral:g} dB - multilook {ml} - "
-        f"offset {offset_db:+.2f} dB"
+        f"producto: dHV < -{('auto' if umbral_auto else f'{umbral_fijo:g}')} dB - "
+        f"multilook {ml} - offset {offset_db:+.2f} dB"
         + (" (sin normalizar)" if args.sin_normalizar else "")
     )
     extras = []
@@ -301,17 +312,47 @@ def main() -> int:
     perdida_ref = nisar.mayoria3(perdida_ref) & valido
     estable_ref = nisar.mayoria3(estable_ref) & valido & ~perdida_ref
 
-    cond = valido & (db_base > args.hv_min) & (dhv < -args.umbral)
-    if cov_base is not None and float(args.cov_max) > 0:
-        # P1: pixeles que ya oscilaban entre fechas no son desmonte.
-        inestable = np.isfinite(cov_base) & (cov_base > float(args.cov_max))
-        cond = cond & ~inestable
-    if delta_hh is not None:
-        # P2: caida de HV con subida de HH es doble rebote, no desmonte.
-        firma_hh = np.isfinite(delta_hh) & (delta_hh > abs(float(args.guardia_hh)))
-        doble = nisar.mayoria3(cond & firma_hh) & valido
-        cond = cond & ~doble
-    pred = nisar.mayoria3(cond) & valido
+    def detector(umbral_db: float) -> np.ndarray:
+        cond = valido & (db_base > args.hv_min) & (dhv < -umbral_db)
+        if cov_base is not None and float(args.cov_max) > 0:
+            # P1: pixeles que ya oscilaban entre fechas no son desmonte.
+            inestable = np.isfinite(cov_base) & (cov_base > float(args.cov_max))
+            cond = cond & ~inestable
+        if delta_hh is not None:
+            # P2: caida de HV con subida de HH es doble rebote, no desmonte.
+            firma_hh = np.isfinite(delta_hh) & (delta_hh > abs(float(args.guardia_hh)))
+            doble = nisar.mayoria3(cond & firma_hh) & valido
+            cond = cond & ~doble
+        return nisar.mayoria3(cond) & valido
+
+    # Curva de umbral sobre el mapa denso (la muestra balanceada no da precision).
+    # Sobre ΔHV ya normalizado y con multilook, el piso de ruido baja a ~1,5 dB.
+    umbrales = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
+    curva = []
+    for umbral_sweep in umbrales:
+        fila = validacion.metricas(
+            *validacion.matriz_confusion(perdida_ref, detector(umbral_sweep))
+        )
+        fila["umbral_db"] = umbral_sweep
+        curva.append(fila)
+
+    # P3: punto de operacion derivado de datos, no de la mano. Con empate de
+    # F1 gana el umbral mas bajo (recuerdo antes que precision: lo que sigue
+    # confirma con optica o persistencia). Es seleccion sobre la MISMA
+    # referencia que mide: punto de operacion, no precision independiente.
+    if umbral_auto:
+        mejor = max(curva, key=lambda fila: (round(fila["f1"], 6), -fila["umbral_db"]))
+        youden = max(curva, key=lambda fila: fila["recall"] + fila["precision"] - 1.0)
+        umbral_operacion = float(mejor["umbral_db"])
+        print(
+            f"umbral auto: {umbral_operacion:g} dB (F1 denso {mejor['f1']:.2f} · "
+            f"Youden {youden['umbral_db']:g} dB) · seleccion contra la misma "
+            "referencia, no precision independiente"
+        )
+    else:
+        umbral_operacion = umbral_fijo
+
+    pred = detector(umbral_operacion)
 
     # Muestreo ciego: puntos de pÃ©rdida y de estabilidad, separados en la grilla.
     muestras = validacion.muestreo_estratificado(
@@ -369,21 +410,6 @@ def main() -> int:
     area_pred = float(pred.sum()) * mpp_x * mpp_y / 10000.0
     area_valida = float(valido.sum()) * mpp_x * mpp_y / 10000.0
     sesgo = (area_pred - area_ref) / area_ref * 100.0 if area_ref else 0.0
-
-    # Curva de umbral sobre el mapa denso (la muestra balanceada no da precisiÃ³n).
-    # Sobre ΔHV ya normalizado y con multilook, el piso de ruido baja a ~1,5 dB.
-    umbrales = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
-    curva = []
-    for umbral in umbrales:
-        mascara = (
-            nisar.mayoria3(valido & (db_antes > args.hv_min) & (dhv < -umbral))
-            & valido
-        )
-        fila = validacion.metricas(
-            *validacion.matriz_confusion(perdida_ref, mascara)
-        )
-        fila["umbral_db"] = umbral
-        curva.append(fila)
 
     # Split espacial: oeste/east de la caja, para ver estabilidad.
     mitad = forma[1] // 2
@@ -448,7 +474,8 @@ def main() -> int:
         },
         "producto": {
             "hv_min_db": args.hv_min,
-            "umbral_db": args.umbral,
+            "umbral_db": round(float(umbral_operacion), 2),
+            "umbral_modo": "auto" if umbral_auto else "fijo",
             "multilook": ml,
             "normalizado": not args.sin_normalizar,
             "offset_db": round(offset_db, 2),
@@ -618,7 +645,9 @@ def _informe(ruta, meta, tabla, ic, split, curva):
         f"estable: |Î”NDVI| â‰¤ {meta['referencia']['estable']:.2f}",
         f"- Tipo de referencia: {meta['referencia']['tipo']}.",
         f"- Producto: HV antes > {meta['producto']['hv_min_db']:g} dB y "
-        f"Î”HV < -{meta['producto']['umbral_db']:g} dB, mayorÃ­a 3Ã—3, "
+        f"Î”HV < -{meta['producto']['umbral_db']:g} dB "
+        f"({'auto: max F1 denso' if meta['producto'].get('umbral_modo') == 'auto' else 'fijo'}), "
+        f"mayorÃ­a 3Ã—3, "
         f"multilook {meta['producto']['multilook']}, "
         f"offset del par {meta['producto']['offset_db']:+.2f} dB"
         f"{' (sin normalizar)' if not meta['producto']['normalizado'] else ''}",
