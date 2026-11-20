@@ -2499,6 +2499,17 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                 mmu_ha = max(0.0, float(params.get("mmu_ha", 0.5)))
             except (TypeError, ValueError):
                 mmu_ha = 0.5
+            # Detector ndvi (regimen sub-hectarea en dosel denso, Mbaracayu): la
+            # caida de NDVI detecta y el radar corrobora a +-20 m. Empareje
+            # verificado: mono-mirada (ml 1) para que el multilook de 50 m no
+            # diluya parches <1 ha, y MMU 0,1 ha para no descartarlos. El
+            # umbral sigue siendo del usuario (4 dB en la receta del visor).
+            detector = str(params.get("detector") or "radar").lower()
+            if detector not in ("radar", "ndvi"):
+                detector = "radar"
+            if detector == "ndvi":
+                verificar = True
+                mmu_ha = min(mmu_ha, 0.1)
             render = Step(
                 kind="render",
                 label=f"comparando fechas a {px} px",
@@ -2518,6 +2529,7 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                     *(["--baseline", str(baseline)] if baseline >= 2 else []),
                     *(["--cov-max", f"{cov_max:g}"] if cov_max > 0 else []),
                     *(["--guardia-hh", f"{guardia_hh:g}"] if guardia_hh > 0 else []),
+                    *(["--detector", "ndvi", "--ml", "1"] if detector == "ndvi" else []),
                     *(["--mmu-ha", f"{mmu_ha:g}"] if mmu_ha > 0 else []),
                     # El panel de indices viaja con la verificacion optica: si
                     # el usuario ya paga Sentinel-2, que se vea NDVI/NDBI/NDWI.

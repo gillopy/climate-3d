@@ -643,7 +643,12 @@ El job `nisar_render` despacha por `producto`:
   de NDVI es la detección y el radar corrobora a ±20 m — rojo = pérdida
   óptica corroborada, naranja = pérdida solo óptica; exige los compuestos
   de Sentinel-2. La guía visual a color real sale con
-  `prototipos/nisar_color_optico.py`.
+  `prototipos/nisar_color_optico.py`. El visor lo expone como selector
+  «Detector» — al elegir NDVI aplica el empareje verificado (ml 1 ·
+  umbral 4 dB · MMU 0,1 ha, compuestos obligatorios) — y junto al tamaño
+  máx. muestra los m/px efectivos del render: la calidad se decide en
+  caja × px, y una caja grande con px bajo sale gruenta aunque el
+  granulo sea de 10 m.
   La ganancia de HV es opcional
   (`--ganancia`) porque a este nivel de ruido es casi toda speckle. Medido contra
   la referencia NDVI del Este, el radar solo queda en F1 denso ≈ 0.27: es un mapa

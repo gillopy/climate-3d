@@ -590,6 +590,54 @@ class VisorNisar(unittest.TestCase):
         self.assertIn("--optico", args)
         self.assertEqual(args[args.index("--optico") + 1], "hls")
 
+    def test_receta_cambio_puede_elegir_detector_ndvi(self):
+        base = {
+            "producto": "cambio",
+            "granulo": GRANULO,
+            "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+            "coleccion": "NISAR_L2_GCOV_V1",
+            "antes_granulo": "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_20261017T214920_20261017T214955_P05023_N_F_J_001",
+            "antes_url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/ANTES/ANTES.h5",
+            "antes_coleccion": "NISAR_L2_GCOV_V1",
+            "bbox": "-55.6,-24.5,-55.2,-23.9",
+            "px": 1600,
+            "modo_cambio": "comparar",
+            "umbral": 4,
+            "hv_min": -15.5,
+        }
+        con_params = {**base, "detector": "ndvi"}
+        with tempfile.TemporaryDirectory() as carpeta:
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                con = planear("nisar_render", con_params, Path(carpeta))
+                sin = planear("nisar_render", base, Path(carpeta))
+                raro = planear(
+                    "nisar_render", {**base, "detector": "lidar"}, Path(carpeta)
+                )
+
+        args_con = con.pasos[-1].args
+        self.assertIn("--detector", args_con)
+        self.assertEqual(args_con[args_con.index("--detector") + 1], "ndvi")
+        # Empareje del regimen sub-hectarea (Mbaracayu): mono-mirada para que
+        # el multilook de 50 m no diluya parches <1 ha, y MMU 0,1 ha para no
+        # descartar el parche mas chico del corrobora radar.
+        self.assertIn("--ml", args_con)
+        self.assertEqual(args_con[args_con.index("--ml") + 1], "1")
+        self.assertEqual(args_con[args_con.index("--mmu-ha") + 1], "0.1")
+        # El detector ndvi vive de los compuestos opticos: el plan los exige.
+        self.assertIn("--verificar-s2", args_con)
+
+        # Sin el param el plan es el de siempre: radar, multilook automatico.
+        args_sin = sin.pasos[-1].args
+        self.assertNotIn("--detector", args_sin)
+        self.assertNotIn("--ml", args_sin)
+        self.assertEqual(args_sin[args_sin.index("--mmu-ha") + 1], "0.5")
+        self.assertEqual(args_sin[args_sin.index("--umbral") + 1], "4")
+
+        # Un detector desconocido degrada a radar; no rompe el plan.
+        args_raro = raro.pasos[-1].args
+        self.assertNotIn("--detector", args_raro)
+        self.assertNotIn("--ml", args_raro)
+
     def test_receta_cambio_rechaza_la_misma_fecha(self):
         with self.assertRaises(ValueError):
             planear(

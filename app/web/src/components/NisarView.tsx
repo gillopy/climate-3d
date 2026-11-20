@@ -129,6 +129,11 @@ export function NisarView() {
   const [guardiaHh, setGuardiaHh] = useState("0");
   const [modoCambio, setModoCambio] = useState("comparar");
   const [umbral, setUmbral] = useState("2.5");
+  // Detector: radar (la caida de HV detecta, el optico confirma) o ndvi (la
+  // caida optica detecta y el radar corrobora: regimen sub-hectarea en dosel
+  // denso, Mbaracayu). El empareje ndvi (ml 1 + umbral 4 dB) viaja solo al
+  // elegirlo; el backend clampa y exige los compuestos opticos.
+  const [detector, setDetector] = useState("radar");
   const [hvMin, setHvMin] = useState("-15.5");
   const [modoGeo, setModoGeo] = useState("db");
   const [hhMax, setHhMax] = useState("-20");
@@ -441,6 +446,23 @@ export function NisarView() {
     .sort((a, b) => b.start.localeCompare(a.start));
   const antes =
     antesExterno ?? candidatos.find((escena) => escena.id === antesId) ?? null;
+  // Resolucion efectiva del render ANTES de correrlo: la calidad se decide en
+  // caja x px (el producto muestrea al multiplo nativo por debajo del pedido,
+  // nunca mas fino que el granulo). Verla en vivo evita la sorpresa del render
+  // gruento en cajas grandes con px bajos.
+  const mppEfectivo = (() => {
+    if (!caja) return null;
+    const latMed = (caja.sur + caja.norte) / 2;
+    const anchoKm =
+      Math.abs(caja.este - caja.oeste) * 111.32 * Math.cos((latMed * Math.PI) / 180);
+    const altoKm = Math.abs(caja.norte - caja.sur) * 110.57;
+    const pedido = (Math.max(anchoKm, altoKm) * 1000) / Number(px);
+    return seleccion?.mpp != null ? Math.max(pedido, seleccion.mpp) : pedido;
+  })();
+  const mppNativo =
+    mppEfectivo !== null &&
+    seleccion?.mpp != null &&
+    mppEfectivo <= seleccion.mpp;
   const coleccionesSerie = [
     ...new Set(
       fechasDelTrack
@@ -598,8 +620,12 @@ export function NisarView() {
         params.baseline = Number(baseline);
         if (Number(baseline) >= 2) params.cov_max = Number(covMax);
         params.guardia_hh = Number(guardiaHh);
+        // Detector elegido: el backend valida radar/ndvi y agrega el empareje
+        // (ml 1, MMU 0,1, compuestos obligatorios) cuando es ndvi.
+        params.detector = detector;
         // La MMU no depende de la confirmacion: un desmonte es un bloque.
-        params.mmu_ha = 0.5;
+        // En ndvi baja a 0,1 ha: el desmonte sub-hectarea ES el objetivo.
+        params.mmu_ha = detector === "ndvi" ? 0.1 : 0.5;
       } else {
         params.firms = firms;
       }
@@ -1208,6 +1234,12 @@ export function NisarView() {
                           <option value="4096">4096 px</option>
                         </select>
                       )}
+                      {mppEfectivo !== null ? (
+                        <small>
+                          ≈ {Math.round(mppEfectivo)} m/px efectivos
+                          {mppNativo ? " · resolución nativa" : ""}
+                        </small>
+                      ) : null}
                     </label>
 
                     {producto === "cambio" || producto === "incendio" ? (
@@ -1229,6 +1261,7 @@ export function NisarView() {
                               <option key={escena.id} value={escena.id}>
                                 {fechaCorta(escena.start)}
                                 {escena.local ? " · local" : " · se descarga"}
+                                {escena.mpp !== null ? ` · ${escena.mpp} m/px` : ""}
                               </option>
                             ))}
                           </select>
@@ -1257,6 +1290,33 @@ export function NisarView() {
                         {producto === "cambio" ? (
                           <>
                             <label className="nisar__ancho">
+                              Detector
+                              <select
+                                value={detector}
+                                onChange={(evento) => {
+                                  setDetector(evento.target.value);
+                                  if (evento.target.value === "ndvi") {
+                                    // Empareje verificado en Mbaracayu: el
+                                    // detector optico exige sus compuestos y el
+                                    // umbral alto que banca el speckle de la
+                                    // mono-mirada (ml 1 lo agrega el backend).
+                                    setVerificarS2(true);
+                                    setUmbral("4");
+                                  } else {
+                                    setUmbral("2.5");
+                                  }
+                                }}
+                              >
+                                <option value="radar">
+                                  Radar · la caída de HV detecta, el óptico confirma
+                                </option>
+                                <option value="ndvi">
+                                  NDVI · la caída óptica detecta, el radar corrobora
+                                  (sub-hectárea, bosque denso)
+                                </option>
+                              </select>
+                            </label>
+                            <label className="nisar__ancho">
                               Modo
                               <select
                                 value={modoCambio}
@@ -1277,7 +1337,8 @@ export function NisarView() {
                                 }
                               >
                                 <option value="si">
-                                  Sí · pérdida en rojo, candidata en naranja, parches ≥ 0.5 ha
+                                  Sí · pérdida en rojo, candidata en naranja, parches ≥{" "}
+                                  {detector === "ndvi" ? "0.1" : "0.5"} ha
                                 </option>
                                 <option value="no">No · solo radar (cambio candidato, sin red)</option>
                               </select>
