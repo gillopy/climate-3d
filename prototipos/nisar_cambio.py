@@ -33,6 +33,11 @@ Dos cosas que el producto anterior no hacia y que dominan el resultado:
    sola pasada deja de definir la referencia, y el piso de bosque se mide
    sobre la mediana. `--cov-max X` aparta de la perdida los pixeles que ya
    oscilaban entre fechas (pulso de inundacion, rotacion agricola).
+5. **Guard de inundacion.** La caida de HV con SUBIDA de HH es la firma del
+   agua bajo el dosel (doble rebote), no un desmonte: es el error #1 que el
+   paper de L-band admite para sus detecciones. `--guardia-hh X` aparta esa
+   firma como clase propia (celeste en el mapa) y nunca la cuenta como
+   deforestacion; sin HH en el par, se apaga con aviso.
 
 El indice de cambio sigue siendo ΔHV: medido contra la referencia NDVI de
 Sentinel-2 en la caja del Este, da AUC 0,71 con multilook 5x5. RFDI (el indice
@@ -65,6 +70,7 @@ import sentinel2  # noqa: E402
 ROJO = np.array([205, 35, 35], dtype=np.uint8)
 NARANJA = np.array([222, 138, 58], dtype=np.uint8)
 AZUL = np.array([45, 95, 205], dtype=np.uint8)
+CELESTE = np.array([36, 178, 187], dtype=np.uint8)
 
 
 def nivel_evidencia(optico_confirmado: bool, persistente: bool) -> tuple[str, str]:
@@ -176,6 +182,15 @@ def main() -> int:
         help="CoV temporal maximo (fraccion) del baseline para contar perdida; 0 = no filtrar",
     )
     ap.add_argument(
+        "--guardia-hh",
+        type=float,
+        default=0.0,
+        help=(
+            "caida de HV con subida de HH mayor a X dB se etiqueta como "
+            "posible inundacion (doble rebote); 0 = no etiquetar"
+        ),
+    )
+    ap.add_argument(
         "--dndvi",
         type=float,
         default=0.20,
@@ -220,6 +235,17 @@ def main() -> int:
         for escena, nombre in ((antes, "antes"), (despues, "despues")):
             if "HV" not in escena.pols:
                 raise SystemExit(f"La escena {nombre} no tiene HV.")
+        guardia_hh_db = abs(float(args.guardia_hh))
+        guardia_meta: dict = {
+            "umbral_db": guardia_hh_db,
+            "disponible": False,
+            "motivo": "",
+            "offset_db": 0.0,
+        }
+        usa_hh = guardia_hh_db > 0 and "HH" in antes.pols and "HH" in despues.pols
+        if guardia_hh_db > 0 and not usa_hh:
+            guardia_meta["motivo"] = "alguna escena del par no tiene HH"
+            print("aviso: sin HH en el par; el guard de inundacion queda apagado")
         if (antes.track, antes.frame) != (despues.track, despues.frame):
             raise SystemExit(
                 f"Las escenas no son del mismo track/frame: "
@@ -246,6 +272,24 @@ def main() -> int:
             hv_despues = nisar.multilook(hv_despues, ml)
             print(f"multilook {ml}x{ml} en potencia (~{ml * mpp:.0f} m de pixel)")
 
+        # El guard de inundacion necesita el par HH con el mismo tratamiento
+        # que el HV: mismo recorte, mismo multilook, misma referencia temporal.
+        db_hh_base = None
+        db_hh_despues = None
+        delta_hh = None
+        hh_para_pila = None
+        if usa_hh:
+            rec_hh_antes = antes.recortar("HH", args.bbox, px)
+            rec_hh_despues = despues.recortar("HH", args.bbox, px)
+            hh_antes, _, _ = nisar.orientar(rec_hh_antes)
+            hh_despues, _, _ = nisar.orientar(rec_hh_despues)
+            if ml > 1:
+                hh_antes = nisar.multilook(hh_antes, ml)
+                hh_despues = nisar.multilook(hh_despues, ml)
+            db_hh_base = nisar.a_db(hh_antes)
+            db_hh_despues = nisar.a_db(hh_despues)
+            hh_para_pila = hh_antes
+
         db_antes = nisar.a_db(hv_antes)
         db_despues = nisar.a_db(hv_despues)
 
@@ -263,12 +307,16 @@ def main() -> int:
         cov_base = None
         if baseline_meta["solicitadas"] >= 2:
             pila_hv = [hv_antes]
+            pila_hh = [hh_para_pila] if usa_hh else []
             for ruta_prev in nisar.escenas_anteriores(
                 antes.ruta, baseline_meta["solicitadas"] - 1
             ):
                 with nisar.Escena(ruta_prev) as prev:
                     if "HV" not in prev.pols:
                         print(f"aviso: {ruta_prev.stem} no tiene HV; fuera del baseline")
+                        continue
+                    if usa_hh and "HH" not in prev.pols:
+                        print(f"aviso: {ruta_prev.stem} no tiene HH; fuera del baseline")
                         continue
                     rec_prev = prev.recortar("HV", args.bbox, px)
                     if not nisar.compatibles(rec_antes, rec_prev):
@@ -281,6 +329,12 @@ def main() -> int:
                     if ml > 1:
                         hv_prev = nisar.multilook(hv_prev, ml)
                     pila_hv.append(hv_prev)
+                    if usa_hh:
+                        rec_hh_prev = prev.recortar("HH", args.bbox, px)
+                        hh_prev, _, _ = nisar.orientar(rec_hh_prev)
+                        if ml > 1:
+                            hh_prev = nisar.multilook(hh_prev, ml)
+                        pila_hh.append(hh_prev)
                     baseline_meta["fechas"].append(prev.fecha or ruta_prev.stem)
             if len(pila_hv) < 2:
                 baseline_meta["motivo"] = (
@@ -295,10 +349,21 @@ def main() -> int:
                 db_base = nisar.a_db(nisar.pila_mediana(pila))
                 cov_base = nisar.pila_cov(pila)
                 baseline_meta["usadas"] = len(pila_hv)
+                if usa_hh and len(pila_hh) == len(pila_hv):
+                    db_hh_base = nisar.a_db(nisar.pila_mediana(np.stack(pila_hh)))
                 print(
                     f"baseline: mediana de {len(pila_hv)} fechas "
                     f"({', '.join(f[:10] for f in baseline_meta['fechas'])})"
                 )
+
+        if usa_hh:
+            # ΔHH con corrimiento propio: el guard no puede medir el nivel
+            # absoluto del par, solo su propio contraste local.
+            delta_hh = db_hh_despues - db_hh_base
+            offset_hh = nisar.corrimiento_db(delta_hh, np.isfinite(delta_hh))
+            delta_hh = delta_hh - offset_hh
+            guardia_meta["disponible"] = True
+            guardia_meta["offset_db"] = round(float(offset_hh), 2)
 
         delta = db_despues - db_base
         valido = np.isfinite(delta)
@@ -459,6 +524,21 @@ def main() -> int:
         # inundacion, rotacion agricola) no gana el derecho a ser desmonte solo
         # porque la ultima escena lo pinta bajo. CoV NaN (sin dato) nunca excluye.
         perdida_cond = valido & pre_bosque & (delta < -umbral)
+
+        # Guard de inundacion (doble rebote): la caida de HV con SUBIDA de HH es
+        # la firma del agua bajo el dosel, no un desmonte (el error #1 que el
+        # paper de L-band admite). Se etiqueta aparte; nunca es deforestacion.
+        inundacion = np.zeros(valido.shape, dtype=bool)
+        if guardia_meta["disponible"]:
+            firma_hh = np.isfinite(delta_hh) & (delta_hh > guardia_hh_db)
+            inundacion = nisar.mayoria3(perdida_cond & firma_hh) & valido
+            if inundacion.any():
+                print(
+                    f"guardia hh: {nisar.hectareas(int(inundacion.sum()), mpp_x, mpp_y):.0f} ha "
+                    "con firma de doble rebote salen de la perdida"
+                )
+            perdida_cond = perdida_cond & ~inundacion
+
         cov_descartados_px = 0
         if float(args.cov_max) > 0:
             if cov_base is None:
@@ -603,6 +683,21 @@ def main() -> int:
 
         confirmado = args.verificar_s2 and optico_meta["disponible"]
         persistente = bool(temporal_meta["disponible"])
+
+        if inundacion.any() and confirmado:
+            # Soporte NDWI: que fraccion de la firma radar de inundacion tambien
+            # ve agua el optico. Corre solo cuando la confirmacion optica ya
+            # bajo sus compuestos; nunca bloquea al guard radar.
+            capas_post, _, motivo_ndwi = _indices(despues.fecha)
+            if capas_post and "ndwi" in capas_post:
+                agua = np.isfinite(capas_post["ndwi"]) & (capas_post["ndwi"] > 0.0)
+                dentro = int((inundacion & agua).sum())
+                guardia_meta["ndwi_corrobora_pct"] = round(
+                    100.0 * dentro / max(1, int(inundacion.sum())), 1
+                )
+            else:
+                guardia_meta["ndwi_motivo"] = motivo_ndwi or "sin compuesto de indices"
+
         nivel, nivel_explicacion = nivel_evidencia(confirmado, persistente)
 
         if args.indices:
@@ -651,6 +746,7 @@ def main() -> int:
         perdida_px = int(perdida.sum())
         candidato_px = int(candidato.sum())
         perdida_radar_ha = nisar.hectareas(int(perdida_radar.sum()), mpp_x, mpp_y)
+        inundacion_ha = nisar.hectareas(int(inundacion.sum()), mpp_x, mpp_y)
         ganancia_px = int(ganancia.sum())
         bosque_px = int(pre_bosque.sum())
         area_ha = nisar.hectareas(pixeles_validos, mpp_x, mpp_y)
@@ -687,6 +783,7 @@ def main() -> int:
                 "gray", nisar.normalizar(db_despues, vmin, vmax)
             )
             gris_despues = np.where(np.isfinite(db_despues)[..., None], gris_despues, 0)
+            gris_despues = np.where(inundacion[..., None], CELESTE, gris_despues)
             gris_despues = np.where(candidato[..., None], NARANJA, gris_despues)
             gris_despues = np.where(perdida[..., None], ROJO, gris_despues)
             gris_despues = np.where(ganancia[..., None], AZUL, gris_despues)
@@ -742,6 +839,7 @@ def main() -> int:
             vmin, vmax = nisar.limites(db_despues)
             base = nisar.paleta("gray", nisar.normalizar(db_despues, vmin, vmax))
             rgb = np.where(valido[..., None], base, 0)
+            rgb = np.where(inundacion[..., None], CELESTE, rgb)
             rgb = np.where(candidato[..., None], NARANJA, rgb)
             rgb = np.where(perdida[..., None], ROJO, rgb)
             rgb = np.where(ganancia[..., None], AZUL, rgb)
@@ -756,6 +854,8 @@ def main() -> int:
             leyenda_mascara = "rojo = cambio persistente (sin confirmar óptico)"
         else:
             leyenda_mascara = "rojo = pérdida (cambio de HV, sin confirmar)"
+        if inundacion.any():
+            leyenda_mascara += " · celeste = posible inundación (doble rebote)"
         base_txt = (
             f" · base {baseline_meta['usadas']} fechas"
             if baseline_meta["usadas"] > 1
@@ -816,6 +916,10 @@ def main() -> int:
                     nisar.hectareas(cov_descartados_px, mpp_x, mpp_y), 1
                 ),
             },
+            "guardia_hh": {
+                **guardia_meta,
+                "inundacion_ha": round(inundacion_ha, 1),
+            },
             "area_ha": round(area_ha, 1),
             "bosque_ha": round(bosque_ha, 1),
             "bosque": {
@@ -854,6 +958,10 @@ def main() -> int:
         f"{perdida_bosque_pct:.1f}% del bosque) | ganancia {ganancia_ha:.0f} ha"
     )
     print(f"evidencia: {nivel} (no es verdad de campo)")
+    if guardia_meta["disponible"]:
+        print(
+            f"guardia hh: {inundacion_ha:.0f} ha de posible inundación (doble rebote)"
+        )
     if confirmado:
         print(
             f"optico: {perdida_ha:.0f} ha confirmadas + {candidato_ha:.0f} ha "

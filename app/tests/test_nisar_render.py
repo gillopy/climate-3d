@@ -62,6 +62,12 @@ if modo == "parpadeo":
     # Parche que solo brilla en una fecha: la escena suelta miente; la
     # mediana de la pila, no.
     hv[150:250, 250:350] *= 9.0
+if modo == "mixto":
+    # Dos procesos distintos en la misma escena: un desmonte (HV cae, HH
+    # igual) y una inundacion bajo dosel (HV cae, HH sube por doble rebote).
+    hv[150:250, 240:300] *= 0.2
+    hh[130:210, 310:370] *= 4.0
+    hv[130:210, 310:370] *= 0.35
 if modo in ("oscuro", "perdida_oscuro"):
     # La escena entera 3 dB mas oscura: corrimiento del par, no cambio de suelo.
     hh *= 0.5
@@ -70,9 +76,11 @@ if modo == "perdida_oscuro":
     hv[150:250, 250:350] *= 0.2
 
 salida.parent.mkdir(parents=True, exist_ok=True)
+escribe_hh = modo != "solo_hv"
 with h5py.File(salida, "w") as f:
     g = f.create_group("/science/LSAR/GCOV/grids/frequencyA")
-    g.create_dataset("HHHH", data=hh, compression="gzip")
+    if escribe_hh:
+        g.create_dataset("HHHH", data=hh, compression="gzip")
     g.create_dataset("HVHV", data=hv, compression="gzip")
     g.create_dataset("xCoordinates", data=x)
     g.create_dataset("yCoordinates", data=y)
@@ -82,8 +90,8 @@ with h5py.File(salida, "w") as f:
     proj.attrs["epsg_code"] = np.int32(epsg)
     proj.attrs["grid_mapping_name"] = "universal_transverse_mercator"
     dt = h5py.special_dtype(vlen=str)
-    pols = g.create_dataset("listOfPolarizations", (2,), dtype=dt)
-    pols[:] = ["HH", "HV"]
+    pols = g.create_dataset("listOfPolarizations", (2 if escribe_hh else 1,), dtype=dt)
+    pols[:] = ["HH", "HV"] if escribe_hh else ["HV"]
 
 inverso = Transformer.from_crs(f"EPSG:{epsg}", "EPSG:4326", always_xy=True)
 oeste, sur = inverso.transform(cx - 2000, cy - 1500)
@@ -499,6 +507,83 @@ class RenderNisar(unittest.TestCase):
             self.assertEqual(con_cov["baseline"]["usadas"], 2)
             self.assertGreater(con_cov["baseline"]["descartados_cov_ha"], 0.0)
             self.assertLess(con_cov["perdida_ha"], sin_baseline["perdida_ha"] * 0.05)
+
+    def test_guardia_hh_aparta_la_inundacion(self):
+        """La caida de HV con subida de HH es doble rebote, no deforestacion.
+
+        El error #1 que el paper de L-band admite: el bosque inundado sube HH
+        por doble rebote y se disfraza de cambio. --guardia-hh aparta esa firma
+        como clase propia (celeste en el mapa); sin HH disponible el producto
+        degrada con aviso y sigue funcionando.
+        """
+        with tempfile.TemporaryDirectory() as carpeta:
+            tmp = Path(carpeta)
+            fixture = tmp / "fixture.py"
+            fixture.write_text(FIXTURE, encoding="utf-8")
+            antes = tmp / (
+                "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+                "20261017T214920_20261017T214955_P05023_N_F_J_001.h5"
+            )
+            despues = tmp / (
+                "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_"
+                "20261029T214921_20261029T214955_P05036_N_F_J_001.h5"
+            )
+            for ruta, modo in ((antes, "base"), (despues, "mixto")):
+                creado = subprocess.run(
+                    [str(python_repo()), str(fixture), str(ruta), modo],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(creado.returncode, 0, creado.stderr)
+                bbox = creado.stdout.strip().splitlines()[-1]
+
+            def correr(nombre: str, antes_arg, despues_arg, extra):
+                salida = tmp / f"{nombre}.png"
+                corrida = subprocess.run(
+                    [
+                        str(python_repo()),
+                        "prototipos/nisar_cambio.py",
+                        "--antes", str(antes_arg),
+                        "--despues", str(despues_arg),
+                        "--bbox", bbox,
+                        "--px", "900",
+                        "--modo", "mascara",
+                        "--umbral", "3",
+                        "--hv-min", "-30",
+                        "--bosque", "hv",
+                        "--mmu-ha", "0.5",
+                        *extra,
+                        "--out", str(salida),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+                return json.loads(salida.with_suffix(".json").read_text(encoding="utf-8"))
+
+            sin_guardia = correr("sin_guardia", antes, despues, [])
+            con_guardia = correr("con_guardia", antes, despues, ["--guardia-hh", "3"])
+            self.assertGreater(con_guardia["guardia_hh"]["inundacion_ha"], 50.0)
+            self.assertLess(con_guardia["perdida_ha"], sin_guardia["perdida_ha"] * 0.7)
+            self.assertGreater(con_guardia["perdida_ha"], 100.0)
+
+            # Sin HH en la escena posterior: el guard se apaga con aviso y no rompe.
+            sin_hh = tmp / (
+                "NISAR_L2_PR_GCOV_035_082_D_101_2005_DHDH_A_"
+                "20261110T214921_20261110T214955_P05036_N_F_J_001.h5"
+            )
+            creado = subprocess.run(
+                [str(python_repo()), str(fixture), str(sin_hh), "solo_hv"],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(creado.returncode, 0, creado.stderr)
+            degradado = correr("degradado", antes, sin_hh, ["--guardia-hh", "3"])
+            self.assertFalse(degradado["guardia_hh"]["disponible"])
+            self.assertIn("HH", degradado["guardia_hh"]["motivo"])
 
     def test_serie_temporal_y_geotiff(self):
         with tempfile.TemporaryDirectory() as carpeta:
