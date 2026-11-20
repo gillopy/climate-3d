@@ -69,6 +69,19 @@ assert filtrada.sum() == 16, filtrada.sum()
 assert filtrada[3, 3] and not filtrada[20, 20], "no descarto el parche chico"
 assert nisar.filtrar_mmu(m, 1).sum() == 20, "con minimo 1 cambio la mascara"
 
+# Dilatacion: conecta detecciones de sensores con geolocalizacion distinta.
+punto = np.zeros((20, 20), dtype=bool)
+punto[10, 10] = True
+d1 = nisar.dilatar(punto, 1)
+assert d1.sum() == 9, f"radio 1 no dio 3x3 ({d1.sum()})"
+d3 = nisar.dilatar(punto, 3)
+assert d3.sum() == 49, f"radio 3 no dio 7x7 ({d3.sum()})"
+assert not nisar.dilatar(punto, 0).sum() == 9, "radio 0 no dejo el punto solo"
+dos = np.zeros((20, 20), dtype=bool)
+dos[5, 5] = True
+dos[6, 8] = True
+assert nisar.dilatar(dos, 1).sum() == 18, "dos puntos separados no dilataron a 9+9"
+
 # Baseline temporal: las fechas anteriores al par, del mismo track/frame y carpeta.
 GRANULO_SIN = (
     "NISAR_L2_PR_GCOV_{}_082_D_101_2005_DHDH_A_{}T120000_{}T120034_"

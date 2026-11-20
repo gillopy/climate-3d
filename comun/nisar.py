@@ -395,6 +395,25 @@ def mayoria3(mascara: np.ndarray) -> np.ndarray:
     return suma >= 5
 
 
+def dilatar(mascara: np.ndarray, radio: int = 1) -> np.ndarray:
+    """True donde hay un pixel True a ``radio`` o menos (dilatacion cuadrada).
+
+    Conecta detecciones de dos sensores cuya geolocalizacion difiere unos
+    pixeles: una corroboracion no debe exigir coincidencia pixel-exacta.
+    """
+    m = np.asarray(mascara).astype(np.uint8)
+    radio = max(0, int(radio))
+    if m.size == 0 or radio == 0:
+        return m > 0
+    ventana = 2 * radio + 1
+    relleno = np.pad(m, radio)
+    suma = np.zeros(m.shape, dtype=np.int32)
+    for dy in range(ventana):
+        for dx in range(ventana):
+            suma += relleno[dy : dy + m.shape[0], dx : dx + m.shape[1]]
+    return suma > 0
+
+
 def filtrar_mmu(mascara: np.ndarray, minimo: int) -> np.ndarray:
     """Deja solo las componentes conexas (8 vecinos) de al menos ``minimo`` px.
 

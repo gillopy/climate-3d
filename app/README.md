@@ -638,7 +638,12 @@ El job `nisar_render` despacha por `producto`:
   HV con subida de HH se pinta celeste como posible inundación por doble
   rebote (el error que el paper de L-band admite) y no cuenta como
   deforestación. Ambos son opt-in y degradan con aviso cuando faltan fechas
-  o HH en disco (números reales en `validacion/README.md`).
+  o HH en disco (números reales en `validacion/README.md`). Con **Detector
+  NDVI**, para desmontes sub-hectárea en bosque denso (Mbaracayú): la caída
+  de NDVI es la detección y el radar corrobora a ±20 m — rojo = pérdida
+  óptica corroborada, naranja = pérdida solo óptica; exige los compuestos
+  de Sentinel-2. La guía visual a color real sale con
+  `prototipos/nisar_color_optico.py`.
   La ganancia de HV es opcional
   (`--ganancia`) porque a este nivel de ruido es casi toda speckle. Medido contra
   la referencia NDVI del Este, el radar solo queda en F1 denso ≈ 0.27: es un mapa

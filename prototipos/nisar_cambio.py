@@ -38,6 +38,11 @@ Dos cosas que el producto anterior no hacia y que dominan el resultado:
    paper de L-band admite para sus detecciones. `--guardia-hh X` aparta esa
    firma como clase propia (celeste en el mapa) y nunca la cuenta como
    deforestacion; sin HH en el par, se apaga con aviso.
+6. **Detector ndvi.** En bosque denso con desmontes sub-hectarea (Mbaracayu)
+   el HV satura y diluye el parche: la caida de NDVI es el detector y el
+   radar CORROBORA a tolerancia de geolocalizacion. `--detector ndvi`
+   pinta rojo la perdida optica con candidato de HV a +-20 m y naranja la
+   perdida solo optica; exige los compuestos de Sentinel-2 (los pide solo).
 
 El indice de cambio sigue siendo ΔHV: medido contra la referencia NDVI de
 Sentinel-2 en la caja del Este, da AUC 0,71 con multilook 5x5. RFDI (el indice
@@ -191,6 +196,16 @@ def main() -> int:
         ),
     )
     ap.add_argument(
+        "--detector",
+        default="radar",
+        choices=("radar", "ndvi"),
+        help=(
+            "radar: la caida de HV detecta y la optica confirma; "
+            "ndvi: la caida de NDVI detecta y el radar corrobora "
+            "(regimen sub-hectarea, bosque denso)"
+        ),
+    )
+    ap.add_argument(
         "--dndvi",
         type=float,
         default=0.20,
@@ -222,6 +237,10 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--geojson", default=None)
     args = ap.parse_args(nisar.argv_bbox(sys.argv[1:]))
+    if args.detector == "ndvi":
+        # El detector ndvi vive de los compuestos opticos: sin ellos no hay
+        # deteccion. Se piden aca y no magicamente mas abajo.
+        args.verificar_s2 = True
 
     px = max(800, min(int(args.px), 4096))
     salida = Path(args.out)
@@ -684,6 +703,36 @@ def main() -> int:
         confirmado = args.verificar_s2 and optico_meta["disponible"]
         persistente = bool(temporal_meta["disponible"])
 
+        # Detector ndvi: la caida optica ES la deteccion y el radar corrobora.
+        # Es el ajuste para el regimen sub-hectarea en dosel denso (Mbaracayu):
+        # el HV satura y diluye parches <1 ha, pero el NDVI los ve limpio; el
+        # radar acompana donde su senal llega, a tolerancia de geolocalizacion
+        # (dos sensores no coinciden pixel-exacto a 10 m).
+        detector_ndvi = args.detector == "ndvi" and optico_meta["disponible"]
+        corroborado_radar = np.zeros(valido.shape, dtype=bool)
+        perdida_optica = np.zeros(valido.shape, dtype=bool)
+        if args.detector == "ndvi" and not detector_ndvi:
+            print(
+                "aviso: sin compuestos NDVI no hay detector ndvi; la perdida "
+                f"queda por radar ({optico_meta['motivo'] or 'sin datos opticos'})"
+            )
+        if detector_ndvi:
+            perdida_optica = nisar.mayoria3(
+                np.isfinite(ndvi_pre)
+                & np.isfinite(ndvi_post)
+                & (ndvi_pre >= float(args.ndvi_bosque))
+                & ((ndvi_post - ndvi_pre) <= -float(args.dndvi))
+            ) & np.isfinite(ndvi_post)
+            cerca_radar = nisar.dilatar(perdida_radar, 2)
+            corroborado_radar = perdida_optica & cerca_radar
+            perdida = corroborado_radar
+            solo_optico_px = int((perdida_optica & ~cerca_radar).sum())
+            print(
+                f"detector ndvi: {nisar.hectareas(int(perdida_optica.sum()), mpp_x, mpp_y):.0f} ha de caida optica · "
+                f"{nisar.hectareas(int(corroborado_radar.sum()), mpp_x, mpp_y):.0f} ha corroboradas por radar · "
+                f"{nisar.hectareas(solo_optico_px, mpp_x, mpp_y):.0f} ha solo opticas"
+            )
+
         if inundacion.any() and confirmado:
             # Soporte NDWI: que fraccion de la firma radar de inundacion tambien
             # ve agua el optico. Corre solo cuando la confirmacion optica ya
@@ -726,7 +775,12 @@ def main() -> int:
                         f"({type(exc).__name__}: {exc})"
                     )
 
-        candidato_mask = perdida_radar & ~perdida
+        if detector_ndvi:
+            # naranja = desmonte optico sin senal de radar (dosel denso satura
+            # el HV en parches chicos); el ruido radar sin caida optica no se pinta.
+            candidato_mask = perdida_optica & ~corroborado_radar
+        else:
+            candidato_mask = perdida_radar & ~perdida
         if args.ganancia:
             ganancia = nisar.mayoria3(valido & (delta > umbral)) & valido
         else:
@@ -854,13 +908,18 @@ def main() -> int:
             leyenda_mascara = "rojo = cambio persistente (sin confirmar óptico)"
         else:
             leyenda_mascara = "rojo = pérdida (cambio de HV, sin confirmar)"
+        if detector_ndvi:
+            leyenda_mascara = (
+                "rojo = pérdida NDVI corroborada por radar · "
+                "naranja = pérdida NDVI sin señal de radar"
+            )
         if inundacion.any():
             leyenda_mascara += " · celeste = posible inundación (doble rebote)"
         base_txt = (
             f" · base {baseline_meta['usadas']} fechas"
             if baseline_meta["usadas"] > 1
             else ""
-        )
+        ) + (" · detector NDVI" if detector_ndvi else "")
         lineas = [
             f"NISAR GCOV · cambio HV · {antes.fecha or antes.ruta.stem} -> "
             f"{despues.fecha or despues.ruta.stem}",
@@ -919,6 +978,30 @@ def main() -> int:
             "guardia_hh": {
                 **guardia_meta,
                 "inundacion_ha": round(inundacion_ha, 1),
+            },
+            "detector": {
+                "modo": "ndvi" if detector_ndvi else "radar",
+                **(
+                    {
+                        "ndvi_bosque": float(args.ndvi_bosque),
+                        "dndvi_umbral": float(args.dndvi),
+                        "tolerancia_radar_px": 2,
+                        "perdida_optica_ha": round(
+                            nisar.hectareas(
+                                int(perdida_optica.sum()), mpp_x, mpp_y
+                            ),
+                            1,
+                        ),
+                        "corroborada_ha": round(
+                            nisar.hectareas(
+                                int(corroborado_radar.sum()), mpp_x, mpp_y
+                            ),
+                            1,
+                        ),
+                    }
+                    if detector_ndvi
+                    else {}
+                ),
             },
             "area_ha": round(area_ha, 1),
             "bosque_ha": round(bosque_ha, 1),
