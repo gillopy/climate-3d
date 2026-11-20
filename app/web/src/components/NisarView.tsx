@@ -120,6 +120,13 @@ export function NisarView() {
   // .h5 que ya estan en disco; si no hay fecha posterior, el producto avisa.
   // Por defecto no se exige persistencia: la corrida compara solo el par.
   const [persistencia, setPersistencia] = useState("0");
+  // Baseline temporal (opt-in): mediana de varias fechas en potencia del mismo
+  // track/frame ya en disco; el CoV aparta los pixeles que ya oscilaban.
+  const [baseline, setBaseline] = useState("0");
+  const [covMax, setCovMax] = useState("0.4");
+  // Guard de doble rebote: la caída de HV con subida de HH es inundación bajo
+  // dosel, no deforestación (el error que el paper de L-band admite).
+  const [guardiaHh, setGuardiaHh] = useState("0");
   const [modoCambio, setModoCambio] = useState("comparar");
   const [umbral, setUmbral] = useState("2.5");
   const [hvMin, setHvMin] = useState("-15.5");
@@ -585,6 +592,12 @@ export function NisarView() {
         params.verificar_s2 = verificarS2;
         params.optico = optico;
         params.confirmar_temporal = Number(persistencia);
+        // Baseline temporal y guard de inundacion (opt-in): usan las fechas
+        // que ya estan en disco; el backend clampa y el producto degrada con
+        // aviso cuando el track no tiene fechas suficientes en la coleccion.
+        params.baseline = Number(baseline);
+        if (Number(baseline) >= 2) params.cov_max = Number(covMax);
+        params.guardia_hh = Number(guardiaHh);
         // La MMU no depende de la confirmacion: un desmonte es un bloque.
         params.mmu_ha = 0.5;
       } else {
@@ -1297,6 +1310,41 @@ export function NisarView() {
                                   Sí · dos fechas siguientes (más estricto)
                                 </option>
                               </select>
+                            </label>
+                            <label className="nisar__ancho">
+                              Baseline temporal
+                              <select
+                                value={baseline}
+                                onChange={(evento) => setBaseline(evento.target.value)}
+                              >
+                                <option value="0">No · medir contra la fecha anterior sola</option>
+                                <option value="3">Sí · mediana de 3 fechas (más estable)</option>
+                                <option value="4">Sí · mediana de 4 fechas</option>
+                                <option value="5">Sí · mediana de 5 fechas</option>
+                              </select>
+                            </label>
+                            <label>
+                              CoV máx.
+                              <input
+                                type="number"
+                                min="0"
+                                max="2"
+                                step="0.05"
+                                value={covMax}
+                                onChange={(evento) => setCovMax(evento.target.value)}
+                                disabled={Number(baseline) < 2}
+                              />
+                            </label>
+                            <label>
+                              Guardia HH (dB)
+                              <input
+                                type="number"
+                                min="0"
+                                max="10"
+                                step="0.5"
+                                value={guardiaHh}
+                                onChange={(evento) => setGuardiaHh(evento.target.value)}
+                              />
                             </label>
                           </>
                         ) : null}

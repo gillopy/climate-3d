@@ -629,6 +629,16 @@ El job `nisar_render` despacha por `producto`:
   caída se vuelve a medir contra la misma escena base en la fecha siguiente: si
   el pixel recuperó, no era pérdida. Usa los `.h5` que ya están en disco (no
   descarga nada) y, si no hay fecha posterior, sigue sin persistencia y avisa.
+  Con **Baseline temporal**, la referencia deja de ser la escena anterior
+  sola y pasa a ser la mediana por píxel de varias fechas en potencia (la de
+  la fecha anterior incluida) que ya están en disco del mismo track/frame: la
+  anomalía de humedad de una sola pasada deja de definir el cambio y el umbral
+  de bosque se mide sobre la mediana; el **CoV máx.** aparta de la pérdida
+  los píxeles que ya oscilaban entre fechas. Con **Guardia HH**, la caída de
+  HV con subida de HH se pinta celeste como posible inundación por doble
+  rebote (el error que el paper de L-band admite) y no cuenta como
+  deforestación. Ambos son opt-in y degradan con aviso cuando faltan fechas
+  o HH en disco (números reales en `validacion/README.md`).
   La ganancia de HV es opcional
   (`--ganancia`) porque a este nivel de ruido es casi toda speckle. Medido contra
   la referencia NDVI del Este, el radar solo queda en F1 denso ≈ 0.27: es un mapa

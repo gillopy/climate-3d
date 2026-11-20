@@ -525,6 +525,49 @@ class VisorNisar(unittest.TestCase):
         self.assertEqual(args_sin[args_sin.index("--mmu-ha") + 1], "0.5")
         self.assertEqual(args_sin[args_sin.index("--umbral") + 1], "3")
 
+    def test_receta_cambio_pasa_el_baseline_y_el_guard_de_inundacion(self):
+        base = {
+            "producto": "cambio",
+            "granulo": GRANULO,
+            "url": f"https://nisar.asf.earthdatacloud.nasa.gov/NISAR/{GRANULO}.h5",
+            "coleccion": "NISAR_L2_GCOV_V1",
+            "antes_granulo": "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_20261017T214920_20261017T214955_P05023_N_F_J_001",
+            "antes_url": "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/ANTES/ANTES.h5",
+            "antes_coleccion": "NISAR_L2_GCOV_V1",
+            "bbox": "-55.6,-24.5,-55.2,-23.9",
+            "px": 1600,
+            "modo_cambio": "mascara",
+            "umbral": 3,
+            "hv_min": -15.5,
+        }
+        con_params = {**base, "baseline": 3, "cov_max": 0.4, "guardia_hh": 3}
+        with tempfile.TemporaryDirectory() as carpeta:
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                con = planear("nisar_render", con_params, Path(carpeta))
+                sin = planear("nisar_render", base, Path(carpeta))
+                exceso = planear(
+                    "nisar_render", {**base, "baseline": 99, "guardia_hh": 99}, Path(carpeta)
+                )
+
+        args_con = con.pasos[-1].args
+        self.assertIn("--baseline", args_con)
+        self.assertEqual(args_con[args_con.index("--baseline") + 1], "3")
+        self.assertIn("--cov-max", args_con)
+        self.assertEqual(args_con[args_con.index("--cov-max") + 1], "0.4")
+        self.assertIn("--guardia-hh", args_con)
+        self.assertEqual(args_con[args_con.index("--guardia-hh") + 1], "3")
+
+        # Sin los params el plan es el de siempre: el par actual, sin flags nuevos.
+        args_sin = sin.pasos[-1].args
+        self.assertNotIn("--baseline", args_sin)
+        self.assertNotIn("--cov-max", args_sin)
+        self.assertNotIn("--guardia-hh", args_sin)
+
+        # Clamps: baseline 0-5 y guardia 0-10 dB.
+        args_exceso = exceso.pasos[-1].args
+        self.assertEqual(args_exceso[args_exceso.index("--baseline") + 1], "5")
+        self.assertEqual(args_exceso[args_exceso.index("--guardia-hh") + 1], "10")
+
     def test_receta_cambio_puede_usar_hls(self):
         base = {
             "producto": "cambio",

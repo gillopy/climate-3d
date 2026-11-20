@@ -2475,6 +2475,26 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             except (TypeError, ValueError):
                 confirmar_temporal = 1
             try:
+                # Baseline temporal (P1): mediana de N fechas en potencia con las
+                # que ya estan en disco del mismo track/frame; sin fechas el
+                # producto degrada al par con aviso. 0 = par actual.
+                baseline = max(0, min(int(params.get("baseline", 0)), 5))
+            except (TypeError, ValueError):
+                baseline = 0
+            try:
+                # CoV temporal maximo del baseline: aparta pixeles inestables.
+                cov_max = max(0.0, min(abs(float(params.get("cov_max", 0.0))), 2.0))
+            except (TypeError, ValueError):
+                cov_max = 0.0
+            try:
+                # Guard de doble rebote (P2): caida de HV con subida de HH se
+                # etiqueta como posible inundacion, no deforestacion. 0 = off.
+                guardia_hh = max(
+                    0.0, min(abs(float(params.get("guardia_hh", 0.0))), 10.0)
+                )
+            except (TypeError, ValueError):
+                guardia_hh = 0.0
+            try:
                 # Un desmonte es un bloque: 0,5 ha descarta el moteado de speckle.
                 mmu_ha = max(0.0, float(params.get("mmu_ha", 0.5)))
             except (TypeError, ValueError):
@@ -2495,6 +2515,9 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                     *(["--verificar-s2"] if verificar else []),
                     *(["--confirmar-temporal", str(confirmar_temporal)]
                       if confirmar_temporal > 0 else []),
+                    *(["--baseline", str(baseline)] if baseline >= 2 else []),
+                    *(["--cov-max", f"{cov_max:g}"] if cov_max > 0 else []),
+                    *(["--guardia-hh", f"{guardia_hh:g}"] if guardia_hh > 0 else []),
                     *(["--mmu-ha", f"{mmu_ha:g}"] if mmu_ha > 0 else []),
                     # El panel de indices viaja con la verificacion optica: si
                     # el usuario ya paga Sentinel-2, que se vea NDVI/NDBI/NDWI.
