@@ -23,10 +23,16 @@ Dos cosas que el producto anterior no hacia y que dominan el resultado:
    potencia (nunca en dB) a ~50 m baja σ a ~1,5 dB y deja el umbral por
    encima del piso de ruido.
 3. **Confirmacion temporal.** Un desmonte no vuelve. `--confirmar-temporal N`
-   vuelve a medir la caida contra la misma escena base en las N fechas
+   vuelve a medir la caida contra el mismo baseline en las N fechas
    posteriores del mismo track/frame que ya estan en disco (no descarga nada):
    el pixel sobrevive solo si sigue `--umbral` dB por debajo. `--recuperacion-db`
    permite aflojar cuanto puede achicarse la caida.
+4. **Baseline temporal.** `--baseline N` reemplaza la escena "antes" por la
+   mediana de N fechas en potencia (la de --antes incluida) del mismo
+   track/frame ya en disco, sin descargar nada: la anomalia de humedad de una
+   sola pasada deja de definir la referencia, y el piso de bosque se mide
+   sobre la mediana. `--cov-max X` aparta de la perdida los pixeles que ya
+   oscilaban entre fechas (pulso de inundacion, rotacion agricola).
 
 El indice de cambio sigue siendo ΔHV: medido contra la referencia NDVI de
 Sentinel-2 en la caja del Este, da AUC 0,71 con multilook 5x5. RFDI (el indice
@@ -158,6 +164,18 @@ def main() -> int:
         help="cuanto puede achicarse la caida original y seguir contando como perdida",
     )
     ap.add_argument(
+        "--baseline",
+        type=int,
+        default=0,
+        help="fechas del baseline incluyendo la escena --antes (0 = solo el par actual)",
+    )
+    ap.add_argument(
+        "--cov-max",
+        type=float,
+        default=0.0,
+        help="CoV temporal maximo (fraccion) del baseline para contar perdida; 0 = no filtrar",
+    )
+    ap.add_argument(
         "--dndvi",
         type=float,
         default=0.20,
@@ -230,7 +248,59 @@ def main() -> int:
 
         db_antes = nisar.a_db(hv_antes)
         db_despues = nisar.a_db(hv_despues)
-        delta = db_despues - db_antes
+
+        # Baseline temporal: la referencia deja de ser una escena suelta. La
+        # mediana de varias fechas en potencia (la de --antes incluida) entierra
+        # la anomalia de humedad de una sola pasada; el CoV de la pila marca los
+        # pixeles que ya oscilaban antes del cambio.
+        baseline_meta: dict = {
+            "solicitadas": max(0, int(args.baseline)),
+            "usadas": 1,
+            "fechas": [antes.fecha or antes.ruta.stem],
+            "motivo": "",
+        }
+        db_base = db_antes
+        cov_base = None
+        if baseline_meta["solicitadas"] >= 2:
+            pila_hv = [hv_antes]
+            for ruta_prev in nisar.escenas_anteriores(
+                antes.ruta, baseline_meta["solicitadas"] - 1
+            ):
+                with nisar.Escena(ruta_prev) as prev:
+                    if "HV" not in prev.pols:
+                        print(f"aviso: {ruta_prev.stem} no tiene HV; fuera del baseline")
+                        continue
+                    rec_prev = prev.recortar("HV", args.bbox, px)
+                    if not nisar.compatibles(rec_antes, rec_prev):
+                        print(
+                            f"aviso: {ruta_prev.stem} no comparte grilla; "
+                            "fuera del baseline"
+                        )
+                        continue
+                    hv_prev, _, _ = nisar.orientar(rec_prev)
+                    if ml > 1:
+                        hv_prev = nisar.multilook(hv_prev, ml)
+                    pila_hv.append(hv_prev)
+                    baseline_meta["fechas"].append(prev.fecha or ruta_prev.stem)
+            if len(pila_hv) < 2:
+                baseline_meta["motivo"] = (
+                    "no hay fechas anteriores del mismo track/frame en la carpeta"
+                )
+                print(
+                    "aviso: sin fechas anteriores para el baseline; se mide "
+                    "contra la escena antes sola"
+                )
+            else:
+                pila = np.stack(pila_hv)
+                db_base = nisar.a_db(nisar.pila_mediana(pila))
+                cov_base = nisar.pila_cov(pila)
+                baseline_meta["usadas"] = len(pila_hv)
+                print(
+                    f"baseline: mediana de {len(pila_hv)} fechas "
+                    f"({', '.join(f[:10] for f in baseline_meta['fechas'])})"
+                )
+
+        delta = db_despues - db_base
         valido = np.isfinite(delta)
         if not valido.any():
             px_antes = int(np.isfinite(db_antes).sum())
@@ -265,7 +335,9 @@ def main() -> int:
                 )
 
         bosque_meta: dict = {"fuente": "hv", "ndvi_umbral": None, "items": []}
-        pre_bosque = valido & (db_antes > float(args.hv_min))
+        # El piso de bosque se aplica sobre el baseline (mediana de la pila), no
+        # sobre una escena suelta: una pasada oscura no borra el bosque.
+        pre_bosque = valido & (db_base > float(args.hv_min))
         ndvi_pre = None
         ndvi_post = None
         optico_meta: dict = {
@@ -383,7 +455,24 @@ def main() -> int:
                 # Verificar no debe cambiar la mascara de bosque: solo confirma.
                 optico_meta["motivo"] = motivo
 
-        perdida_radar = nisar.mayoria3(valido & pre_bosque & (delta < -umbral)) & valido
+        # Guard de estabilidad: un pixel que ya oscilaba entre fechas (pulso de
+        # inundacion, rotacion agricola) no gana el derecho a ser desmonte solo
+        # porque la ultima escena lo pinta bajo. CoV NaN (sin dato) nunca excluye.
+        perdida_cond = valido & pre_bosque & (delta < -umbral)
+        cov_descartados_px = 0
+        if float(args.cov_max) > 0:
+            if cov_base is None:
+                print("aviso: --cov-max necesita --baseline de 2+ fechas; se ignora")
+            else:
+                inestable = np.isfinite(cov_base) & (cov_base > float(args.cov_max))
+                cov_descartados_px = int((perdida_cond & inestable).sum())
+                if cov_descartados_px:
+                    print(
+                        f"cov: {nisar.hectareas(cov_descartados_px, mpp_x, mpp_y):.0f} ha "
+                        f"inestables (CoV > {args.cov_max:g}) fuera de la perdida"
+                    )
+                perdida_cond = perdida_cond & ~inestable
+        perdida_radar = nisar.mayoria3(perdida_cond) & valido
 
         temporal_meta: dict = {
             "solicitadas": max(0, int(args.confirmar_temporal)),
@@ -421,10 +510,11 @@ def main() -> int:
                         if ml > 1:
                             hv_conf = nisar.multilook(hv_conf, ml)
                         db_conf = nisar.a_db(hv_conf)
-                        # La caida se vuelve a medir contra la MISMA escena base.
-                        # Si el pixel recupero, la caida se achica y deja de
-                        # pasar el umbral; si sigue desmontado, sigue igual.
-                        caida_conf = db_antes - db_conf
+                        # La caida se vuelve a medir contra el MISMO baseline (o
+                        # la escena antes, si no hay pila). Si el pixel recupero,
+                        # la caida se achica y deja de pasar el umbral; si sigue
+                        # desmontado, sigue igual.
+                        caida_conf = db_base - db_conf
                         caida_conf = caida_conf - nisar.corrimiento_db(
                             caida_conf, np.isfinite(caida_conf)
                         )
@@ -666,12 +756,17 @@ def main() -> int:
             leyenda_mascara = "rojo = cambio persistente (sin confirmar óptico)"
         else:
             leyenda_mascara = "rojo = pérdida (cambio de HV, sin confirmar)"
+        base_txt = (
+            f" · base {baseline_meta['usadas']} fechas"
+            if baseline_meta["usadas"] > 1
+            else ""
+        )
         lineas = [
             f"NISAR GCOV · cambio HV · {antes.fecha or antes.ruta.stem} -> "
             f"{despues.fecha or despues.ruta.stem}",
             f"perdida {perdida_ha:.0f} ha ({perdida_pct:.1f}%) · "
             f"dHV < -{umbral:g} dB · offset {offset_db:+.1f} dB · "
-            f"{mpp:.0f} m/px · ml {ml}",
+            f"{mpp:.0f} m/px · ml {ml}{base_txt}",
             {
                 "mascara": leyenda_mascara,
                 "delta": "rojo = caída de HV · azul = aumento",
@@ -714,6 +809,13 @@ def main() -> int:
             "multilook": ml,
             "normalizado": not args.sin_normalizar,
             "offset_db": round(offset_db, 2),
+            "baseline": {
+                **baseline_meta,
+                "cov_max": float(args.cov_max),
+                "descartados_cov_ha": round(
+                    nisar.hectareas(cov_descartados_px, mpp_x, mpp_y), 1
+                ),
+            },
             "area_ha": round(area_ha, 1),
             "bosque_ha": round(bosque_ha, 1),
             "bosque": {

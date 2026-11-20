@@ -58,6 +58,10 @@ if modo == "agua":
     # Parche de agua abierta: HH y HV muy bajos en el centro de la caja.
     hh[150:230, 250:330] = 1e-5
     hv[150:230, 250:330] = 1e-6
+if modo == "parpadeo":
+    # Parche que solo brilla en una fecha: la escena suelta miente; la
+    # mediana de la pila, no.
+    hv[150:250, 250:350] *= 9.0
 if modo in ("oscuro", "perdida_oscuro"):
     # La escena entera 3 dB mas oscura: corrimiento del par, no cambio de suelo.
     hh *= 0.5
@@ -418,6 +422,83 @@ class RenderNisar(unittest.TestCase):
             self.assertFalse(huerfana["temporal"]["disponible"])
             self.assertIn("posterior", huerfana["temporal"]["motivo"])
             self.assertGreater(huerfana["perdida_ha"], 300.0)
+
+    def test_baseline_temporal_y_guard_cov(self):
+        """La mediana de varias fechas estabiliza la referencia; el CoV aparta lo inestable.
+
+        El defecto del par: si la escena "antes" trae un parche anomalo, la caida
+        contra esa unica escena pinta un desmonte que no existe. Con --baseline 3
+        la mediana en potencia de tres fechas entierra la anomalia; con --baseline
+        2 la mediana no alcanza, pero --cov-max aparta el parche por inestable.
+        """
+        with tempfile.TemporaryDirectory() as carpeta:
+            tmp = Path(carpeta)
+            coleccion = tmp / "NISAR_L2_GCOV_V1"
+            coleccion.mkdir()
+            fixture = tmp / "fixture.py"
+            fixture.write_text(FIXTURE, encoding="utf-8")
+
+            def crear(orbit: str, fecha: str, modo: str):
+                ruta = coleccion / (
+                    f"NISAR_L2_PR_GCOV_{orbit}_082_D_101_2005_DHDH_A_"
+                    f"{fecha}_P05023_N_F_J_001.h5"
+                )
+                creado = subprocess.run(
+                    [str(python_repo()), str(fixture), str(ruta), modo],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(creado.returncode, 0, creado.stderr)
+                return ruta, creado.stdout.strip().splitlines()[-1]
+
+            # Dos fechas normales, una escena base anomala y un despues igual al bosque.
+            crear("031", "20260913T214921_20260913T214955", "base")
+            crear("032", "20260925T214921_20260925T214955", "base")
+            antes, bbox = crear("033", "20261007T214920_20261007T214955", "parpadeo")
+            despues, _ = crear("034", "20261019T214921_20261019T214955", "base")
+
+            comunes = [
+                str(python_repo()),
+                "prototipos/nisar_cambio.py",
+                "--antes", str(antes),
+                "--despues", str(despues),
+                "--bbox", bbox,
+                "--px", "900",
+                "--modo", "mascara",
+                "--umbral", "3",
+                "--hv-min", "-30",
+                "--bosque", "hv",
+                "--mmu-ha", "0.5",
+            ]
+
+            def correr(nombre: str, extra: list[str]):
+                salida = tmp / f"{nombre}.png"
+                corrida = subprocess.run(
+                    [*comunes, *extra, "--out", str(salida)],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+                return json.loads(salida.with_suffix(".json").read_text(encoding="utf-8"))
+
+            # Par actual: la escena base anomala pinta un desmonte que no existe.
+            sin_baseline = correr("par", [])
+            self.assertGreater(sin_baseline["perdida_ha"], 300.0)
+            self.assertEqual(sin_baseline["baseline"]["usadas"], 1)
+
+            # Baseline de 3 fechas: la mediana entierra la anomalia de la escena base.
+            con_base3 = correr("base3", ["--baseline", "3"])
+            self.assertEqual(con_base3["baseline"]["usadas"], 3)
+            self.assertEqual(len(con_base3["baseline"]["fechas"]), 3)
+            self.assertLess(con_base3["perdida_ha"], sin_baseline["perdida_ha"] * 0.05)
+
+            # Baseline de 2: la mediana no alcanza, pero el CoV aparta el parche.
+            con_cov = correr("cov", ["--baseline", "2", "--cov-max", "0.3"])
+            self.assertEqual(con_cov["baseline"]["usadas"], 2)
+            self.assertGreater(con_cov["baseline"]["descartados_cov_ha"], 0.0)
+            self.assertLess(con_cov["perdida_ha"], sin_baseline["perdida_ha"] * 0.05)
 
     def test_serie_temporal_y_geotiff(self):
         with tempfile.TemporaryDirectory() as carpeta:
