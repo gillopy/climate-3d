@@ -750,6 +750,12 @@ class JobManager:
             codigo = await self._lanzar(job, paso, args, base, span, etiqueta)
 
             if codigo != 0 and paso.kind == "download":
+                if paso.required:
+                    raise RuntimeError(
+                        f"`{paso.script}` salio con codigo {codigo}; "
+                        "no se puede renderizar porque faltan los datos de entrada. "
+                        "Revisa la autenticacion y la fecha solicitada."
+                    )
                 # El descargador devuelve 1 si algun slot no existe (huecos de la
                 # grilla o horas que todavia no se publicaron). No es fatal: el
                 # render trabaja con lo que si bajo.

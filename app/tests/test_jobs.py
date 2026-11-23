@@ -143,6 +143,27 @@ class CorrerUnJob(Base):
         self.assertIn("explotó la descarga", textos)
         self.assertIn(trabajo.error, textos)
 
+    def test_un_paso_de_descarga_requerido_no_deja_arrancar_el_render(self):
+        self.escribir_script("falla_descarga.py", "import sys\nprint('sin autenticacion')\nsys.exit(1)\n")
+        self.escribir_script(
+            "render.py",
+            "from pathlib import Path\n"
+            "Path('render-arranco.txt').write_text('no deberia')\n",
+        )
+        trabajo = _nuevo_job(self.media)
+        plan = Plan(
+            pasos=[
+                Step(kind="download", label="datos", script="falla_descarga.py", args=[], required=True),
+                Step(kind="render", label="render", script="render.py", args=[]),
+            ],
+        )
+        with mock.patch.object(jobs, "planear", return_value=plan):
+            self._correr(trabajo)
+
+        self.assertEqual(trabajo.status, "error")
+        self.assertIn("faltan los datos de entrada", trabajo.error)
+        self.assertFalse((self.raiz / "render-arranco.txt").exists())
+
     def test_avisa_cuando_el_pipeline_no_dejo_ninguna_imagen(self):
         self.escribir_script("silencio.py", "print('nada para publicar')\n")
         trabajo = _nuevo_job(self.media)

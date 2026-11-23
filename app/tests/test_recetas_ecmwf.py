@@ -751,6 +751,8 @@ class SnapshotDeUnCuadro(unittest.TestCase):
         plano = recipes.planear("follaje", {"proyeccion": "plano"}, Path("x"))
         globo = recipes.planear("follaje", {"proyeccion": "globo"}, Path("x"))
 
+        self.assertTrue(plano.pasos[0].required)
+        self.assertEqual(plano.pasos[0].script, "descargar/pace_landvi.py")
         self.assertEqual(plano.pasos[-1].script, "cuadros/cuadros_follaje.py")
         self.assertEqual(globo.pasos[-1].script, "cuadros/cuadros_follaje_globo.py")
 

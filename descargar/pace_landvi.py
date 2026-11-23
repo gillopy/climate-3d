@@ -139,6 +139,7 @@ def main() -> int:
     minimo = MIN_POR_RES[args.res]
     print(f"PACE OCI L3M {PRODUCTO} {VERSION} {args.res}: {len(dias)} día(s) -> {salida}")
     bajados = 0
+    faltantes = 0
     for d in dias:
         ya = [n for n in candidatos(d, args.res)
               if (salida / n).exists() and (salida / n).stat().st_size >= minimo]
@@ -158,7 +159,11 @@ def main() -> int:
             break
         else:
             print(f"  x sin datos para {d}")
+            faltantes += 1
     print(f"Listo: {bajados} gránulo(s) nuevo(s) en {salida}")
+    if faltantes:
+        print(f"Error: faltan {faltantes} día(s) de LANDVI; no hay entrada completa para renderizar.")
+        return 1
     return 0
 
 

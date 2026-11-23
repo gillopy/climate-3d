@@ -85,6 +85,7 @@ class Step:
     script: str  # ruta relativa al repo
     args: list[str]
     expected: int = 0  # lineas de progreso esperadas; 0 = indeterminado
+    required: bool = False  # si falla, los pasos posteriores no tienen sentido
 
 
 @dataclass
@@ -1116,6 +1117,7 @@ def _follaje(params: dict[str, Any], work: Path) -> Plan:
         script="descargar/pace_landvi.py",
         args=["--desde", inicio.isoformat(), "--hasta", fin.isoformat()],
         expected=n,
+        required=True,
     )
     render_step = Step(
         kind="render",
