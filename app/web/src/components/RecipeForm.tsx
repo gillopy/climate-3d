@@ -10,7 +10,7 @@ import type {
 import { Select } from "./controls/Select";
 import { FechaUnica, VentanaTemporal } from "./controls/Window";
 import { formatearFecha, formatearRango } from "./controls/Calendar";
-import { opcionesVisibles, pisoDeSatelite } from "../opciones";
+import { coincideParams, opcionesVisibles, pisoDeSatelite } from "../opciones";
 import { earthdataLogin, earthdataCookiesStatus } from "../api";
 
 // El momento de captura y sus banderas ("snapshot", "ultimo", "ultimos") van
@@ -50,6 +50,7 @@ const SECCIONES: {
       "satelite",
       "banda",
       "capa",
+      "variante",
       "compuesto",
       "modelo",
       "paleta",
@@ -108,6 +109,7 @@ const FAMILIA_META: Record<
 // sub-control acoplado para que el flujo de parametrización sea evidente.
 const SUBORDINADOS: Record<string, string> = {
   margen: "paraguay",
+  variante: "capa",
   firms_fuente: "firms",
   firms_alcance: "firms",
   firms_ventana: "firms",
@@ -122,6 +124,7 @@ const CLAVES: Record<string, string> = {
   satelite: "sat",
   banda: "banda",
   capa: "capa",
+  variante: "variante",
   compuesto: "comp",
   modelo: "modelo",
   paleta: "paleta",
@@ -285,18 +288,23 @@ export function RecipeForm({
       : "sin datos locales: se descargan al generar";
 
   // Cada spec cae en la sección que la nombra y conserva el orden canónico de
-  // `seccion.nombres`.
+  // `seccion.nombres`. Los controles con `visible_when` no se dibujan hasta que
+  // el control padre toma el valor esperado.
   const porNombre = new Map(product.params.map((spec) => [spec.name, spec]));
+  const visible = (spec: ParamSpec) =>
+    coincideParams(spec.visible_when, params);
   const usados = new Set<string>();
   const grupos = SECCIONES.map((seccion) => {
     const specs = seccion.nombres
       .map((nombre) => porNombre.get(nombre))
       .filter((spec): spec is ParamSpec => Boolean(spec));
     for (const spec of specs) usados.add(spec.name);
-    return { ...seccion, specs };
+    return { ...seccion, specs: specs.filter(visible) };
   }).filter((grupo) => grupo.specs.length > 0);
 
-  const otros = product.params.filter((spec) => !usados.has(spec.name));
+  const otros = product.params.filter(
+    (spec) => !usados.has(spec.name) && visible(spec),
+  );
   if (otros.length > 0) {
     grupos.push({
       id: "otros",
@@ -313,7 +321,7 @@ export function RecipeForm({
   };
 
   const hayCambios = product.params.some(
-    (spec) => !igual(params[spec.name], spec.default),
+    (spec) => visible(spec) && !igual(params[spec.name], spec.default),
   );
 
   function restablecerTodo() {
@@ -327,6 +335,7 @@ export function RecipeForm({
   // Resumen de la receta: las opciones visibles + el momento elegido.
   const resumen: { clave: string; valor: string }[] = [];
   for (const spec of product.params) {
+    if (!visible(spec)) continue;
     if (ORDEN_TIEMPO.includes(spec.name)) continue;
     if (spec.kind === "select") {
       resumen.push({
@@ -367,11 +376,7 @@ export function RecipeForm({
   //   (ya anima los últimos N cuadros).
   // - `fps` sólo tiene sentido cuando se va a generar animación (`animar` o `ultimos` sin `snapshot`).
   const estaHabilitado = (spec: ParamSpec): boolean => {
-    const base = spec.enabled_when
-      ? Object.entries(spec.enabled_when).every(
-          ([clave, esperado]) => params[clave] === esperado,
-        )
-      : true;
+    const base = coincideParams(spec.enabled_when, params);
     if (!base) return false;
 
     const esSnapshot = params.snapshot === true;

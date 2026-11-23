@@ -1,6 +1,6 @@
 import type { ParamOption, ParamSpec, Params } from "./types";
 
-function coincide(
+export function coincideParams(
   condicion: Record<string, unknown> | null | undefined,
   params: Params,
 ): boolean {
@@ -19,7 +19,7 @@ export function opcionesVisibles(
   spec: ParamSpec,
   params: Params,
 ): ParamOption[] {
-  return spec.options.filter((opcion) => coincide(opcion.only_when, params));
+  return spec.options.filter((opcion) => coincideParams(opcion.only_when, params));
 }
 
 /**

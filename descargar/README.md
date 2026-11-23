@@ -29,6 +29,11 @@ Composiciones NOAA/VIIRS del snapshot: `noaa20_m11i2i1` / `noaa21_m11i2i1`
 `noaa20_m5m4m3` / `noaa21_m5m4m3` (color natural de superficie). Las que sólo
 usan bandas M se sirven a 500 m; el resto, a 250 m.
 
+Capas nocturnas: `noaa20_dnb` / `noaa21_dnb` (Day/Night Band, 1 km) y
+`noaa20_dnb_marble` / `noaa21_dnb_marble` (Black Marble azul/amarillo, 500 m).
+La DNB puede traer cuñas negras de barrido; Black Marble suele cubrir mejor el
+país. Ambas son diarias: la hora se ignora y se piden por fecha.
+
 **Continuidad del snapshot**: Terra deja de colectar el **2026-12-01** y Aqua se retira
 en **2027**; Suomi NPP cesó la entrega de datos el **2026-11-02**. La capa operativa de
 reemplazo es **NOAA-21** (`--capa noaa21`), con NOAA-20 como secundaria. NASA no tiene

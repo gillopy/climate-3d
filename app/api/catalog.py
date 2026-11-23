@@ -359,7 +359,8 @@ _AYUDA_CAPAS_SNAPSHOT = (
     "- Aqua ~16:00 (deriva; fin 2027)\n"
     "- GOES-19 GeoColor cada 10 min\n\n"
     "El compuesto diario aparece 1-3.5 h despues del paso. Las capas diarias "
-    "ignoran la hora: solo GeoColor usa hora y minuto."
+    "ignoran la hora: solo GeoColor usa hora y minuto. Las nocturnas "
+    "(DNB/Black Marble) usan la noche del dia UTC."
 )
 
 
@@ -1020,82 +1021,84 @@ PRODUCTS: list[Product] = [
         params=[
             ParamSpec(
                 name="capa",
-                label="Capa",
+                label="Satelite / producto",
                 kind="select",
                 default="truecolor",
                 options=[
                     _capa_snapshot(
-                        "truecolor", "NOAA-20 - Color real (250 m)",
-                        "Color real (R=I1, G=M4, B=M3). Lo que ve el ojo; es la "
-                        "capa por defecto y la recomendada para el dia."),
+                        "truecolor", "NOAA-20 / VIIRS",
+                        "NOAA-20, el VIIRS secundario. Elegi la composicion en "
+                        "Variante."),
                     _capa_snapshot(
-                        "noaa20_m11i2i1", "NOAA-20 - Falso color M11-I2-I1",
-                        "Falso color (R=M11, G=I2, B=I1). Resalta cicatrices de "
-                        "incendio y facilita ver inundaciones; separa nieve/hielo "
-                        "de nubes. 250 m."),
+                        "noaa21", "NOAA-21 / VIIRS",
+                        "NOAA-21, el VIIRS primario que continua MODIS. Elegi la "
+                        "composicion en Variante."),
                     _capa_snapshot(
-                        "noaa20_m3i3m11", "NOAA-20 - Falso color M3-I3-M11",
-                        "Falso color (R=M3, G=I3, B=M11). Mapa de nieve y hielo; "
-                        "separa agua liquida de congelada y nubes de hielo de "
-                        "nubes de agua. 250 m."),
+                        "snpp", "Suomi NPP / VIIRS (sin datos)",
+                        "Color real Suomi NPP. Sin datos desde 2026-11-02."),
                     _capa_snapshot(
-                        "noaa20_i1i2i1", "NOAA-20 - Superficie I1-I2-I1",
-                        "Superficie (R=I1, G=I2, B=I1). Cambios de vegetacion, "
-                        "sequia e inundaciones. 250 m."),
-                    _capa_snapshot(
-                        "noaa20_m11m7m5", "NOAA-20 - Superficie M11-M7-M5",
-                        "Superficie (R=M11, G=M7, B=M5). Quemaduras, vegetacion "
-                        "y suelo desnudo. 500 m."),
-                    _capa_snapshot(
-                        "noaa20_m5m4m3", "NOAA-20 - Superficie M5-M4-M3",
-                        "Superficie en color natural (R=M5, G=M4, B=M3); menos "
-                        "velo atmosferico que el color real. 500 m."),
-                    _capa_snapshot(
-                        "noaa21", "NOAA-21 - Color real (250 m)",
-                        "Color real de NOAA-21, el VIIRS primario que continua "
-                        "MODIS. 250 m."),
-                    _capa_snapshot(
-                        "noaa21_m11i2i1", "NOAA-21 - Falso color M11-I2-I1",
-                        "Falso color (R=M11, G=I2, B=I1). Resalta cicatrices de "
-                        "incendio y facilita ver inundaciones; separa nieve/hielo "
-                        "de nubes. 250 m."),
-                    _capa_snapshot(
-                        "noaa21_m3i3m11", "NOAA-21 - Falso color M3-I3-M11",
-                        "Falso color (R=M3, G=I3, B=M11). Mapa de nieve y hielo; "
-                        "separa agua liquida de congelada y nubes de hielo de "
-                        "nubes de agua. 250 m."),
-                    _capa_snapshot(
-                        "noaa21_i1i2i1", "NOAA-21 - Superficie I1-I2-I1",
-                        "Superficie (R=I1, G=I2, B=I1). Cambios de vegetacion, "
-                        "sequia e inundaciones. 250 m."),
-                    _capa_snapshot(
-                        "noaa21_m11m7m5", "NOAA-21 - Superficie M11-M7-M5",
-                        "Superficie (R=M11, G=M7, B=M5). Quemaduras, vegetacion "
-                        "y suelo desnudo. 500 m."),
-                    _capa_snapshot(
-                        "noaa21_m5m4m3", "NOAA-21 - Superficie M5-M4-M3",
-                        "Superficie en color natural (R=M5, G=M4, B=M3); menos "
-                        "velo atmosferico que el color real. 500 m."),
-                    _capa_snapshot(
-                        "snpp", "Suomi NPP - Color real (sin datos)",
-                        "Color real Suomi NPP. Sin datos desde 2026-11-02; no "
-                        "usar para fechas nuevas."),
-                    _capa_snapshot(
-                        "aqua", "Aqua - Color real (hasta 2027)",
+                        "aqua", "Aqua / MODIS (hasta 2027)",
                         "Color real Aqua/MODIS. Paso ~16:00 local por la deriva; "
                         "fin de mision previsto para 2027."),
                     _capa_snapshot(
-                        "terra", "Terra - Color real (hasta 2026-12-01)",
+                        "terra", "Terra / MODIS (hasta 2026-12-01)",
                         "Color real Terra/MODIS. Termina el 2026-12-01; queda "
                         "para archivo historico."),
                     _capa_snapshot(
-                        "geocolor", "GOES-19 GeoColor (dia/noche, ~2 km)",
-                        "GOES-19 ABI GeoColor cada 10 minutos, dia y noche. El "
-                        "unico con dato temprano; ~2 km. Usa hora y minuto."),
+                        "geocolor", "GOES-19 GeoColor (dia/noche)",
+                        "GOES-19 ABI GeoColor cada 10 minutos, dia y noche; "
+                        "~2 km. Usa hora y minuto."),
                 ],
-                help="Elegi satelite y composicion; el '?' explica horarios y "
-                "que resalta cada banda.",
+                help="Elegi el satelite; para NOAA-20/21 la composicion se elige "
+                "en Variante.",
                 tooltip=_AYUDA_CAPAS_SNAPSHOT,
+            ),
+            ParamSpec(
+                name="variante",
+                label="Variante",
+                kind="select",
+                default="truecolor",
+                options=[
+                    _capa_snapshot(
+                        "truecolor", "Color real (250 m)",
+                        "Color real (R=I1, G=M4, B=M3). Lo que ve el ojo; es la "
+                        "opcion por defecto."),
+                    _capa_snapshot(
+                        "m11i2i1", "Falso color M11-I2-I1 (250 m)",
+                        "Falso color (R=M11, G=I2, B=I1). Resalta cicatrices de "
+                        "incendio y facilita ver inundaciones; separa nieve/hielo "
+                        "de nubes."),
+                    _capa_snapshot(
+                        "m3i3m11", "Falso color M3-I3-M11 (250 m)",
+                        "Falso color (R=M3, G=I3, B=M11). Mapa de nieve y hielo; "
+                        "separa agua liquida de congelada y nubes de hielo de "
+                        "nubes de agua."),
+                    _capa_snapshot(
+                        "i1i2i1", "Superficie I1-I2-I1 (250 m)",
+                        "Superficie (R=I1, G=I2, B=I1). Cambios de vegetacion, "
+                        "sequia e inundaciones."),
+                    _capa_snapshot(
+                        "m11m7m5", "Superficie M11-M7-M5 (500 m)",
+                        "Superficie (R=M11, G=M7, B=M5). Quemaduras, vegetacion "
+                        "y suelo desnudo."),
+                    _capa_snapshot(
+                        "m5m4m3", "Superficie M5-M4-M3 (500 m)",
+                        "Superficie en color natural (R=M5, G=M4, B=M3); menos "
+                        "velo atmosferico que el color real."),
+                    _capa_snapshot(
+                        "dnb", "Noche DNB (1 km)",
+                        "Day/Night Band: luces de ciudad, nubes iluminadas por la "
+                        "luna, incendios y auroras. Es nocturna y en blanco y "
+                        "negro; puede traer cuñas negras de barrido."),
+                    _capa_snapshot(
+                        "dnb_marble", "Luces nocturnas Black Marble (500 m)",
+                        "Compuesto nocturno azul/amarillo de luces de ciudad "
+                        "(Black Marble); suele cubrir mejor el pais que la DNB "
+                        "clasica."),
+                ],
+                help="Solo para NOAA-20/21; el resto de los satelites tiene una "
+                "sola composicion.",
+                visible_when={"capa": ["truecolor", "noaa21"]},
             ),
             ParamSpec(
                 name="ultima",
@@ -1366,6 +1369,7 @@ ORDEN_PARAMETROS: tuple[str, ...] = (
     "satelite",
     "banda",
     "capa",
+    "variante",
     "compuesto",
     "modelo",
     "paleta",

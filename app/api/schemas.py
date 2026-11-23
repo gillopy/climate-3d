@@ -53,6 +53,11 @@ class ParamSpec(BaseModel):
         description="El control solo se habilita cuando otro parametro vale esto "
         "(por ejemplo, la fecha cuando 'ultima' esta apagado).",
     )
+    visible_when: dict[str, Any] | None = Field(
+        default=None,
+        description="El control solo se muestra cuando otro parametro vale esto "
+        "(por ejemplo, la variante solo para NOAA-20/21).",
+    )
 
 
 class PreviewVariant(BaseModel):

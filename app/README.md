@@ -476,6 +476,12 @@ la entrega recortada al país, sin rótulos ni barra de color.
 Capas disponibles (el **?** al lado de la capa muestra los horarios de paso y qué
 resalta cada composición):
 
+En la UI, **Satélite / producto** elige el sensor y, solo para NOAA-20/21, aparece
+un segundo control **Variante** con las composiciones (color real, falsos colores,
+superficie y noche). El resto de los satélites tiene una sola composición y no
+muestra Variante. Los scripts siguen recibiendo una única clave combinada
+(`noaa21_dnb_marble`, etc.).
+
 | `capa` | Sensor | Compuesto | Detalle real |
 | --- | --- | --- | --- |
 | `truecolor` (default) | NOAA-20 / VIIRS | Color real | **250 m** |
@@ -494,6 +500,17 @@ Composiciones de bandas NOAA/VIIRS (misma API, mismo flujo):
 | `noaa20_i1i2i1` / `noaa21_i1i2i1` | I1-I2-I1 | Vegetación, sequía, inundaciones | 250 m |
 | `noaa20_m11m7m5` / `noaa21_m11m7m5` | M11-M7-M5 | Quemaduras, vegetación y suelo desnudo | 500 m |
 | `noaa20_m5m4m3` / `noaa21_m5m4m3` | M5-M4-M3 | Color natural de superficie, menos velo | 500 m |
+
+Capas nocturnas:
+
+| `capa` | Producto | Para qué | Detalle |
+| --- | --- | --- | --- |
+| `noaa20_dnb` / `noaa21_dnb` | Day/Night Band | Luces de ciudad, nubes iluminadas por la luna, incendios y auroras | 1 km |
+| `noaa20_dnb_marble` / `noaa21_dnb_marble` | Black Marble | Luces nocturnas en azul/amarillo; suele cubrir mejor el país | 500 m |
+
+La DNB puede traer **cuñas negras de barrido** (swath); para una cobertura más
+completa del país, usá Black Marble. Ambas son diarias: se piden por fecha y la
+hora se ignora; la imagen corresponde a la **noche de ese día UTC**.
 
 **Continuidad de MODIS**: Terra deja de colectar ciencia el **2026-12-01** y Aqua se
 retira en **2027**; Suomi NPP ya cesó la entrega de datos (2026-11-02). NASA no tiene
@@ -580,6 +597,9 @@ expone paleta, así que MUR no tiene selector de paleta.
 mientras otro no valga lo esperado: en Snapshot, encender `ultima` deja en gris `fecha`,
 `hora` y `minuto`, porque la última captura los ignora. Lo mismo con el switch
 `snapshot` de los demás productos: apaga `animar`, `fps` y el horario.
+- **Un control puede depender de la opción elegida.** `visible_when` en el `ParamSpec`
+esconde el campo hasta que otro valga lo esperado: en Snapshot, **Variante** solo
+aparece con NOAA-20/21; los demás satélites tienen una sola composición.
 - **La placa muestra la opci?n elegida.** El cat?logo publica muestras por variante
   (`previews/<producto>--<valores>.webp`) y el formulario elige la que coincide con los
   par?metros: cambiar el sat?lite, la paleta, el modelo o la proyecci?n cambia el render

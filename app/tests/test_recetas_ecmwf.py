@@ -488,6 +488,26 @@ class SnapshotParaguay(unittest.TestCase):
             "noaa21_m5m4m3",
         ):
             self.assertEqual(MPP_NATIVO[clave], 500, clave)
+        self.assertEqual(MPP_NATIVO["noaa20_dnb"], 1000)
+        self.assertEqual(MPP_NATIVO["noaa21_dnb"], 1000)
+        self.assertEqual(MPP_NATIVO["noaa20_dnb_marble"], 500)
+        self.assertEqual(MPP_NATIVO["noaa21_dnb_marble"], 500)
+
+    def test_las_capas_nocturnas_son_diarias(self):
+        """La DNB y Black Marble se piden por fecha: la hora se ignora."""
+        from comun.paraguay import CAPAS, url_snapshot
+        from datetime import datetime
+
+        caja = (-63.0, -28.0, -54.0, -19.0)
+        for clave in (
+            "noaa20_dnb",
+            "noaa21_dnb",
+            "noaa20_dnb_marble",
+            "noaa21_dnb_marble",
+        ):
+            self.assertTrue(CAPAS[clave][1], clave)
+            url = url_snapshot(datetime(2026, 11, 22, 2), caja, 1000, clave)
+            self.assertIn("TIME=2026-11-22&", url, clave)
 
     def test_el_tooltip_de_la_capa_explica_horarios_y_bandas(self):
         producto = catalog.get_product("snapshot_paraguay")
@@ -496,9 +516,11 @@ class SnapshotParaguay(unittest.TestCase):
         self.assertIn("Terra", capa.tooltip)
         self.assertIn("NOAA-21/20", capa.tooltip)
         self.assertIn("GeoColor", capa.tooltip)
-        opciones = {o.value: o for o in capa.options}
-        self.assertIn("cicatrices", opciones["noaa21_m11i2i1"].description)
-        self.assertIn("500 m", opciones["noaa21_m11m7m5"].description)
+        variante = next(p for p in producto.params if p.name == "variante")
+        opciones = {o.value: o for o in variante.options}
+        self.assertIn("cicatrices", opciones["m11i2i1"].description)
+        self.assertIn("500 m", opciones["m11m7m5"].label)
+        self.assertIn("luces de ciudad", opciones["dnb"].description)
 
     def test_esta_en_el_catalogo_con_un_solo_cuadro(self):
         producto = catalog.get_product("snapshot_paraguay")
@@ -506,29 +528,29 @@ class SnapshotParaguay(unittest.TestCase):
         assert producto is not None
         nombres = [p.name for p in producto.params]
         self.assertIn("capa", nombres)
+        self.assertIn("variante", nombres)
         self.assertIn("hora", nombres)
         self.assertIn("margen", nombres)
         self.assertIn("borde", nombres)
         capa = next(p for p in producto.params if p.name == "capa")
         self.assertEqual(
             {o.value for o in capa.options},
+            {"truecolor", "noaa21", "snpp", "aqua", "terra", "geocolor"},
+        )
+        variante = next(p for p in producto.params if p.name == "variante")
+        self.assertEqual(variante.default, "truecolor")
+        self.assertEqual(variante.visible_when, {"capa": ["truecolor", "noaa21"]})
+        self.assertEqual(
+            {o.value for o in variante.options},
             {
                 "truecolor",
-                "noaa20_m11i2i1",
-                "noaa20_m3i3m11",
-                "noaa20_i1i2i1",
-                "noaa20_m11m7m5",
-                "noaa20_m5m4m3",
-                "noaa21",
-                "noaa21_m11i2i1",
-                "noaa21_m3i3m11",
-                "noaa21_i1i2i1",
-                "noaa21_m11m7m5",
-                "noaa21_m5m4m3",
-                "snpp",
-                "aqua",
-                "terra",
-                "geocolor",
+                "m11i2i1",
+                "m3i3m11",
+                "i1i2i1",
+                "m11m7m5",
+                "m5m4m3",
+                "dnb",
+                "dnb_marble",
             },
         )
         detalle = next(p for p in producto.params if p.name == "detalle")
@@ -594,6 +616,30 @@ class SnapshotParaguay(unittest.TestCase):
             self.assertEqual(
                 paso.args[paso.args.index("--capa") + 1], "noaa21_m11i2i1"
             )
+
+    def test_el_plan_combina_satelite_y_variante(self):
+        """La UI manda `capa` (satelite) + `variante` (composicion) por separado."""
+        casos = {
+            ("noaa21", "dnb"): "noaa21_dnb",
+            ("noaa21", "dnb_marble"): "noaa21_dnb_marble",
+            ("truecolor", "m11i2i1"): "noaa20_m11i2i1",
+            ("truecolor", "truecolor"): "truecolor",
+            ("noaa21", "truecolor"): "noaa21",
+            # Satelites con una sola composicion: la variante se ignora.
+            ("snpp", "dnb"): "snpp",
+            ("geocolor", "m11i2i1"): "geocolor",
+        }
+        for (capa, variante), esperado in casos.items():
+            params = {"capa": capa, "variante": variante, "ultima": True,
+                      "fecha": DIA.isoformat(), "hora": 15, "minuto": "00",
+                      "margen": 6, "detalle": "250", "borde": True}
+            with tempfile.TemporaryDirectory() as tmp:
+                plan = recipes.planear("snapshot_paraguay", params, Path(tmp))
+            for paso in plan.pasos:
+                self.assertEqual(
+                    paso.args[paso.args.index("--capa") + 1], esperado,
+                    f"{capa}+{variante}",
+                )
 
     def test_ultima_disponible_se_pide_en_los_dos_pasos(self):
         params = {"capa": "geocolor", "ultima": True, "fecha": DIA.isoformat()}

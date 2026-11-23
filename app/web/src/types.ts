@@ -31,6 +31,8 @@ export interface ParamSpec {
   step: number | null;
   /** Se habilita solo cuando otro parametro tiene este valor. */
   enabled_when: Record<string, unknown> | null;
+  /** Se muestra solo cuando otro parametro tiene este valor. */
+  visible_when?: Record<string, unknown> | null;
 }
 
 export interface PreviewVariant {

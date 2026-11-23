@@ -5,8 +5,9 @@ GeoJSON de Paraguay (`datos/paraguay_gadm.json`) más un margen, así la cobertu
 queda definida por los bordes del país.
 
 La capa por defecto es True Color VIIRS (NOAA-20). `--capa` acepta además NOAA-21
-(el reemplazo operativo de MODIS), Suomi NPP, Aqua, Terra, GeoColor (día/noche) y
-las composiciones de bandas NOAA/VIIRS (`noaa21_m11i2i1`, `noaa20_m3i3m11`, ...).
+(el reemplazo operativo de MODIS), Suomi NPP, Aqua, Terra, GeoColor (día/noche), las
+composiciones de bandas NOAA/VIIRS (`noaa21_m11i2i1`, `noaa20_m3i3m11`, ...) y las
+capas nocturnas (`noaa21_dnb`, `noaa21_dnb_marble`).
 
 Fuente (Worldview Snapshots API — un GET):
 

@@ -942,6 +942,7 @@ except Exception:  # pragma: no cover
         "truecolor", "noaa20_m11i2i1", "noaa20_m3i3m11", "noaa20_i1i2i1",
         "noaa20_m11m7m5", "noaa20_m5m4m3", "noaa21", "noaa21_m11i2i1",
         "noaa21_m3i3m11", "noaa21_i1i2i1", "noaa21_m11m7m5", "noaa21_m5m4m3",
+        "noaa20_dnb", "noaa21_dnb", "noaa20_dnb_marble", "noaa21_dnb_marble",
         "snpp", "aqua", "terra", "geocolor")}
 
 # La lista de sensores y de ventanas de FIRMS manda desde `comun/firms.py`: la UI
@@ -954,6 +955,22 @@ except Exception:  # pragma: no cover
     _VENTANAS_FIRMS = ("dia", "3h", "6h", "12h")
 
 
+def _capa_snapshot_final(capa: str, variante: str) -> str:
+    """Combina satelite + variante en la clave que entienden los scripts.
+
+    La app manda `capa` (satelite) y `variante` (composicion). Las claves
+    completas viejas (`noaa21_m11i2i1`) se siguen aceptando tal cual.
+    """
+    if capa in ("truecolor", "noaa21") and variante != "truecolor":
+        prefijo = "noaa20" if capa == "truecolor" else "noaa21"
+        candidato = f"{prefijo}_{variante}"
+        if candidato in _CAPAS_SNAPSHOT:
+            return candidato
+    if capa in _CAPAS_SNAPSHOT:
+        return capa
+    return "truecolor"
+
+
 def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
     inicio, _ = _rango(params)
     hora = max(0, min(23, int(params.get("hora", 15) or 0)))
@@ -961,9 +978,10 @@ def _snapshot_paraguay(params: dict[str, Any], work: Path) -> Plan:
         minuto = max(0, min(59, int(params.get("minuto", 0) or 0)))
     except (TypeError, ValueError):
         minuto = 0
-    capa = str(params.get("capa", "truecolor"))
-    if capa not in _CAPAS_SNAPSHOT:
-        capa = "truecolor"
+    capa = _capa_snapshot_final(
+        str(params.get("capa", "truecolor")),
+        str(params.get("variante", "truecolor")),
+    )
     px = _px(params, 3600, tope=4000)
     try:
         mpp = float(params.get("detalle")) if params.get("detalle") else 0.0
