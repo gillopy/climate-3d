@@ -24,17 +24,49 @@ import type { Job, Params } from "../types";
 import { JobsPanel } from "./JobsPanel";
 
 const CENTRO_PARAGUAY: L.LatLngTuple = [-23.4, -58.4];
-const COLOR = "#5e6ad2";
-const COLOR_SEL = "#828fff";
-//: La caja de selección va en ámbar: no se confunde con las huellas ASF (iris).
+const COLOR = "#c084fc";
+const COLOR_SEL = "#e9d5ff";
+const COLOR_PARAGUAY = "#38bdf8";
+//: La caja de selección va en ámbar: no se confunde con las huellas ASF.
 const COLOR_CAJA = "#f5a524";
+
+type CapaBase = "satelite" | "terreno" | "mapa";
+
+interface LugarCientifico {
+  nombre: string;
+  region: string;
+  lat: number;
+  lon: number;
+  km: number;
+}
+
+const LUGARES_PARAGUAY: LugarCientifico[] = [
+  { nombre: "Asunción · Gran Asunción", region: "Capital / Central", lat: -25.286, lon: -57.635, km: 25 },
+  { nombre: "Ciudad del Este · Itaipú", region: "Alto Paraná", lat: -25.509, lon: -54.611, km: 25 },
+  { nombre: "Encarnación · Yacyretá", region: "Itapúa", lat: -27.33, lon: -55.866, km: 25 },
+  { nombre: "Reserva Mbaracayú", region: "Canindeyú (Bosque Atlántico)", lat: -24.135, lon: -55.435, km: 15 },
+  { nombre: "Filadelfia · Chaco Central", region: "Boquerón", lat: -22.34, lon: -60.031, km: 35 },
+  { nombre: "Mariscal Estigarribia", region: "Boquerón", lat: -22.028, lon: -60.61, km: 35 },
+  { nombre: "Fuerte Olimpo · Pantanal", region: "Alto Paraguay", lat: -21.041, lon: -57.873, km: 35 },
+  { nombre: "Bahía Negra · Tres Fronteras", region: "Alto Paraguay", lat: -20.228, lon: -58.167, km: 35 },
+  { nombre: "Pilar · Humedales de Ñeembucú", region: "Ñeembucú", lat: -26.868, lon: -58.296, km: 30 },
+  { nombre: "Concepción · Río Paraguay", region: "Concepción", lat: -23.406, lon: -57.434, km: 25 },
+  { nombre: "Pedro Juan Caballero", region: "Amambay", lat: -22.547, lon: -55.733, km: 25 },
+  { nombre: "Salto del Guairá", region: "Canindeyú", lat: -24.062, lon: -54.307, km: 25 },
+  { nombre: "Villarrica · Ybytyruzú", region: "Guairá", lat: -25.78, lon: -56.448, km: 20 },
+  { nombre: "Coronel Oviedo", region: "Caaguazú", lat: -25.444, lon: -56.44, km: 25 },
+  { nombre: "Caacupé · Lago Ypacaraí", region: "Cordillera", lat: -25.32, lon: -57.285, km: 20 },
+  { nombre: "Pozo Colorado · Ruta Transchaco", region: "Presidente Hayes", lat: -23.491, lon: -58.793, km: 35 },
+  { nombre: "Bañado Sur · Pilcomayo", region: "Presidente Hayes / Boquerón", lat: -23.85, lon: -60.95, km: 35 },
+  { nombre: "Cerro León · Defensores del Chaco", region: "Alto Paraguay", lat: -20.42, lon: -60.32, km: 35 },
+];
 
 const ESTILO_CAJA: L.PathOptions = {
   color: COLOR_CAJA,
   weight: 2.5,
   opacity: 1,
   fillColor: COLOR_CAJA,
-  fillOpacity: 0.12,
+  fillOpacity: 0.14,
   className: "nisar__caja",
   interactive: false,
 };
@@ -60,6 +92,41 @@ function cajaDeBounds(bounds: L.LatLngBounds): Caja | null {
   return { oeste: so.lng, sur: so.lat, este: ne.lng, norte: ne.lat };
 }
 
+function cajaAlrededor(lat: number, lon: number, ladoKm: number): Caja {
+  const mitadLat = ladoKm / 2 / 110.57;
+  const cosLat = Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+  const mitadLon = ladoKm / 2 / (111.32 * cosLat);
+  return {
+    oeste: Number((lon - mitadLon).toFixed(4)),
+    sur: Number((lat - mitadLat).toFixed(4)),
+    este: Number((lon + mitadLon).toFixed(4)),
+    norte: Number((lat + mitadLat).toFixed(4)),
+  };
+}
+
+function dimensionesCaja(caja: Caja): {
+  anchoKm: number;
+  altoKm: number;
+  areaKm2: number;
+  latCentro: number;
+  lonCentro: number;
+} {
+  const latCentro = (caja.sur + caja.norte) / 2;
+  const lonCentro = (caja.oeste + caja.este) / 2;
+  const anchoKm =
+    Math.abs(caja.este - caja.oeste) *
+    111.32 *
+    Math.cos((latCentro * Math.PI) / 180);
+  const altoKm = Math.abs(caja.norte - caja.sur) * 110.57;
+  return {
+    anchoKm,
+    altoKm,
+    areaKm2: anchoKm * altoKm,
+    latCentro,
+    lonCentro,
+  };
+}
+
 function bboxTexto(caja: Caja): string {
   return `${caja.oeste.toFixed(3)}, ${caja.sur.toFixed(3)}, ${caja.este.toFixed(3)}, ${caja.norte.toFixed(3)}`;
 }
@@ -81,11 +148,15 @@ function imagenInicial(granulo: NisarGranule | null): string | null {
 export function NisarView() {
   const contenedor = useRef<HTMLDivElement | null>(null);
   const mapaRef = useRef<L.Map | null>(null);
+  const capaBaseRef = useRef<L.LayerGroup | null>(null);
   const huellasRef = useRef<L.LayerGroup | null>(null);
   const cajaLayerRef = useRef<L.Rectangle | null>(null);
+  const esquinasRef = useRef<L.LayerGroup | null>(null);
   const borradorRef = useRef<L.Rectangle | null>(null);
 
   const [catalogo, setCatalogo] = useState<NisarCatalog | null>(null);
+  const [capaBase, setCapaBase] = useState<CapaBase>("satelite");
+  const [etiquetasMapa, setEtiquetasMapa] = useState(true);
   const [nivel, setNivel] = useState("GCOV");
   const [desde, setDesde] = useState(() => hoyISO(29));
   const [hasta, setHasta] = useState(() => hoyISO());
@@ -93,9 +164,18 @@ export function NisarView() {
   const [dibujando, setDibujando] = useState(false);
   const [resultado, setResultado] = useState<NisarSearch | null>(null);
   const [seleccion, setSeleccion] = useState<NisarGranule | null>(null);
+  const [hoverGranuloId, setHoverGranuloId] = useState<string | null>(null);
   const [imagen, setImagen] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Buscador de ciudades y localidades
+  const [ciudadQuery, setCiudadQuery] = useState("");
+  const [buscandoCiudad, setBuscandoCiudad] = useState(false);
+  const [sugerenciasAbiertas, setSugerenciasAbiertas] = useState(false);
+  const [resultadosRemotos, setResultadosRemotos] = useState<LugarCientifico[]>([]);
+  const ultimoFinComposicion = useRef<number | null>(null);
+
   // Render de la caja: descarga del .h5 + recorte de alta calidad.
   const [pol, setPol] = useState("auto");
   const [modo, setModo] = useState("gris");
@@ -112,27 +192,14 @@ export function NisarView() {
   const [fechaNueva, setFechaNueva] = useState("");
   const [resolviendo, setResolviendo] = useState(false);
   const [coordTexto, setCoordTexto] = useState("");
-  // Confirmar la caida de HV con NDVI de Sentinel-2 y descartar parches chicos:
-  // sin esto el "rojo" incluye cosechas, anegamientos y estacionalidad.
   const [verificarS2, setVerificarS2] = useState(true);
   const [optico, setOptico] = useState("sentinel2");
-  // Persistencia: un cambio tiene que seguir ahi en la fecha siguiente. Usa los
-  // .h5 que ya estan en disco; si no hay fecha posterior, el producto avisa.
-  // Por defecto no se exige persistencia: la corrida compara solo el par.
   const [persistencia, setPersistencia] = useState("0");
-  // Baseline temporal (opt-in): mediana de varias fechas en potencia del mismo
-  // track/frame ya en disco; el CoV aparta los pixeles que ya oscilaban.
   const [baseline, setBaseline] = useState("0");
   const [covMax, setCovMax] = useState("0.4");
-  // Guard de doble rebote: la caída de HV con subida de HH es inundación bajo
-  // dosel, no deforestación (el error que el paper de L-band admite).
   const [guardiaHh, setGuardiaHh] = useState("0");
   const [modoCambio, setModoCambio] = useState("comparar");
   const [umbral, setUmbral] = useState("2.5");
-  // Detector: radar (la caida de HV detecta, el optico confirma) o ndvi (la
-  // caida optica detecta y el radar corrobora: regimen sub-hectarea en dosel
-  // denso, Mbaracayu). El empareje ndvi (ml 1 + umbral 4 dB) viaja solo al
-  // elegirlo; el backend clampa y exige los compuestos opticos.
   const [detector, setDetector] = useState("radar");
   const [hvMin, setHvMin] = useState("-15.5");
   const [modoGeo, setModoGeo] = useState("db");
@@ -143,20 +210,18 @@ export function NisarView() {
   const [nubes, setNubes] = useState("40");
   const [algoritmoSme2, setAlgoritmoSme2] = useState("PMI");
   const [soloCalidadSme2, setSoloCalidadSme2] = useState(false);
-  // Panel de trabajos: historial de corridas con logs y resultados.
   const [jobNuevo, setJobNuevo] = useState<string | null>(null);
 
   const elegirGranulo = useCallback((granulo: NisarGranule) => {
     setSeleccion(granulo);
     setImagen(imagenInicial(granulo));
-    // Otra escena principal invalida la fecha anterior elegida a mano.
     setAntesExterno(null);
     const mapa = mapaRef.current;
     if (mapa && granulo.footprint.length >= 3) {
       const puntos = granulo.footprint.map(
         ([lon, lat]) => [lat, lon] as L.LatLngTuple,
       );
-      mapa.fitBounds(L.latLngBounds(puntos), { padding: [24, 24], maxZoom: 11 });
+      mapa.fitBounds(L.latLngBounds(puntos), { padding: [28, 28], maxZoom: 11 });
     }
   }, []);
 
@@ -182,7 +247,7 @@ export function NisarView() {
               [objetivo.sur, objetivo.oeste],
               [objetivo.norte, objetivo.este],
             ],
-            { padding: [24, 24] },
+            { padding: [36, 36], maxZoom: 11 },
           );
         }
       } catch (exc) {
@@ -194,7 +259,7 @@ export function NisarView() {
     [desde, hasta, nivel],
   );
 
-  // Mapa: se crea una vez. StrictMode lo monta, desmonta y vuelve a montar.
+  // Mapa: se crea una vez con capas satelitales realistas.
   useEffect(() => {
     const nodo = contenedor.current;
     if (!nodo || mapaRef.current) return;
@@ -203,29 +268,25 @@ export function NisarView() {
       center: CENTRO_PARAGUAY,
       zoom: 6,
       minZoom: 4,
-      maxZoom: 12,
+      maxZoom: 17,
     });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(mapa);
+    capaBaseRef.current = L.layerGroup().addTo(mapa);
     huellasRef.current = L.layerGroup().addTo(mapa);
+    esquinasRef.current = L.layerGroup().addTo(mapa);
     mapaRef.current = mapa;
 
-    // El contorno del pais es opcional: `datos/paraguay_gadm.json` no se versiona
-    // (licencia GADM) y la imagen Docker no lo trae. Sin el archivo el mapa, las
-    // huellas y las cajas funcionan igual, asi que un 404 no se muestra como error.
     getParaguay()
       .then((datos: FeatureCollection) => {
         if (!mapaRef.current) return;
         L.geoJSON(datos, {
+          interactive: false,
           style: {
-            color: COLOR,
-            weight: 1.4,
-            opacity: 0.9,
-            fillColor: COLOR,
-            fillOpacity: 0.04,
+            color: COLOR_PARAGUAY,
+            weight: 1.6,
+            opacity: 0.85,
+            fillColor: COLOR_PARAGUAY,
+            fillOpacity: 0.03,
+            dashArray: "4 3",
           },
         }).addTo(mapaRef.current);
       })
@@ -234,11 +295,53 @@ export function NisarView() {
     return () => {
       mapa.remove();
       mapaRef.current = null;
+      capaBaseRef.current = null;
       huellasRef.current = null;
+      esquinasRef.current = null;
       cajaLayerRef.current = null;
       borradorRef.current = null;
     };
   }, []);
+
+  // Conmutador de capa base realista (Satélite Esri + etiquetas híbridas, Terreno o Mapa OSM)
+  useEffect(() => {
+    const grupo = capaBaseRef.current;
+    if (!grupo) return;
+    grupo.clearLayers();
+
+    if (capaBase === "satelite") {
+      L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        {
+          maxZoom: 17,
+          attribution: "Tiles &copy; Esri, Maxar, Earthstar Geographics",
+        },
+      ).addTo(grupo);
+      if (etiquetasMapa) {
+        L.tileLayer(
+          "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+          {
+            maxZoom: 17,
+            opacity: 0.88,
+          },
+        ).addTo(grupo);
+      }
+    } else if (capaBase === "terreno") {
+      L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        {
+          maxZoom: 17,
+          attribution: "Tiles &copy; Esri, USGS, NOAA",
+        },
+      ).addTo(grupo);
+    } else {
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(grupo);
+    }
+  }, [capaBase, etiquetasMapa]);
 
   useEffect(() => {
     getNisarCatalog()
@@ -246,7 +349,7 @@ export function NisarView() {
       .catch(() => setError("No se pudo leer el catalogo NISAR."));
   }, []);
 
-  // Dibujo del cuadro: mouse abajo, mover, soltar.
+  // Dibujo del cuadro: mouse abajo, mover, soltar (con recuperacion si suelta fuera del contenedor).
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa) return;
@@ -268,14 +371,17 @@ export function NisarView() {
     mapa.dragging.disable();
     mapa.getContainer().style.cursor = "crosshair";
     let inicio: L.LatLng | null = null;
+    let ultimoLatLng: L.LatLng | null = null;
 
     const alMover = (evento: L.LeafletMouseEvent) => {
       if (!inicio || !borradorRef.current) return;
+      ultimoLatLng = evento.latlng;
       borradorRef.current.setBounds(L.latLngBounds(inicio, evento.latlng));
     };
 
     const alBajar = (evento: L.LeafletMouseEvent) => {
       inicio = evento.latlng;
+      ultimoLatLng = evento.latlng;
       quitarBorrador();
       borradorRef.current = L.rectangle(
         L.latLngBounds(inicio, inicio),
@@ -284,14 +390,38 @@ export function NisarView() {
       mapa.on("mousemove", alMover);
     };
 
-    const alSoltar = (evento: L.LeafletMouseEvent) => {
+    const finalizarTrazo = (puntoFinal: L.LatLng | null) => {
       mapa.off("mousemove", alMover);
-      if (!inicio) return;
-      const bounds = L.latLngBounds(inicio, evento.latlng);
+      if (!inicio || !puntoFinal) {
+        inicio = null;
+        quitarBorrador();
+        setDibujando(false);
+        return;
+      }
+      const bounds = L.latLngBounds(inicio, puntoFinal);
       inicio = null;
+      ultimoLatLng = null;
       quitarBorrador();
       setDibujando(false);
-      setCaja(cajaDeBounds(bounds));
+      const nuevaCaja = cajaDeBounds(bounds);
+      if (!nuevaCaja) {
+        setError(
+          "El cuadro dibujado es muy chico (< 1 km). Arrastrá un área más amplia o usá los botones de tamaño (7 km, 25 km, 50 km).",
+        );
+        return;
+      }
+      setError(null);
+      setCaja(nuevaCaja);
+    };
+
+    const alSoltarMapa = (evento: L.LeafletMouseEvent) => {
+      if (!inicio) return;
+      finalizarTrazo(evento.latlng);
+    };
+
+    const alSoltarVentana = () => {
+      if (!inicio) return;
+      finalizarTrazo(ultimoLatLng);
     };
 
     const alTeclear = (evento: KeyboardEvent) => {
@@ -299,33 +429,101 @@ export function NisarView() {
     };
 
     mapa.on("mousedown", alBajar);
-    mapa.on("mouseup", alSoltar);
+    mapa.on("mouseup", alSoltarMapa);
+    window.addEventListener("mouseup", alSoltarVentana);
     window.addEventListener("keydown", alTeclear);
     return () => {
       mapa.off("mousedown", alBajar);
-      mapa.off("mouseup", alSoltar);
+      mapa.off("mouseup", alSoltarMapa);
       mapa.off("mousemove", alMover);
+      window.removeEventListener("mouseup", alSoltarVentana);
       window.removeEventListener("keydown", alTeclear);
       quitarBorrador();
     };
   }, [dibujando]);
 
-  // La caja vigente se dibuja aunque no se este dibujando.
+  // La caja vigente y sus tiradores interactivos en las 4 esquinas + centro arrastrable.
   useEffect(() => {
     const mapa = mapaRef.current;
-    if (!mapa) return;
+    const capaEsquinas = esquinasRef.current;
+    if (!mapa || !capaEsquinas) return;
 
     if (cajaLayerRef.current) {
       mapa.removeLayer(cajaLayerRef.current);
       cajaLayerRef.current = null;
     }
+    capaEsquinas.clearLayers();
     if (!caja) return;
 
     const bounds = L.latLngBounds(
       [caja.sur, caja.oeste],
       [caja.norte, caja.este],
     );
-    cajaLayerRef.current = L.rectangle(bounds, ESTILO_CAJA).addTo(mapa);
+    const rect = L.rectangle(bounds, ESTILO_CAJA).addTo(mapa);
+    cajaLayerRef.current = rect;
+
+    const iconoEsquina = L.divIcon({
+      className: "nisar__handle-icon",
+      iconSize: [12, 12],
+      iconAnchor: [6, 6],
+    });
+
+    const esquinas: {
+      pos: L.LatLngTuple;
+      aplicar: (lat: number, lng: number) => Caja | null;
+    }[] = [
+      {
+        pos: [caja.norte, caja.oeste],
+        aplicar: (lat, lng) =>
+          cajaDeBounds(L.latLngBounds([caja.sur, lng], [lat, caja.este])),
+      },
+      {
+        pos: [caja.norte, caja.este],
+        aplicar: (lat, lng) =>
+          cajaDeBounds(L.latLngBounds([caja.sur, caja.oeste], [lat, lng])),
+      },
+      {
+        pos: [caja.sur, caja.oeste],
+        aplicar: (lat, lng) =>
+          cajaDeBounds(L.latLngBounds([lat, lng], [caja.norte, caja.este])),
+      },
+      {
+        pos: [caja.sur, caja.este],
+        aplicar: (lat, lng) =>
+          cajaDeBounds(L.latLngBounds([lat, caja.oeste], [caja.norte, lng])),
+      },
+    ];
+
+    for (const esquina of esquinas) {
+      const marcador = L.marker(esquina.pos, {
+        icon: iconoEsquina,
+        draggable: true,
+        title: "Arrastrá la esquina para ajustar la caja ROI",
+      });
+      marcador.on("drag", (evento) => {
+        const pos = (evento.target as L.Marker).getLatLng();
+        const tentativa = esquina.aplicar(pos.lat, pos.lng);
+        if (tentativa && cajaLayerRef.current) {
+          cajaLayerRef.current.setBounds([
+            [tentativa.sur, tentativa.oeste],
+            [tentativa.norte, tentativa.este],
+          ]);
+        }
+      });
+      marcador.on("dragend", (evento) => {
+        const pos = (evento.target as L.Marker).getLatLng();
+        const nueva = esquina.aplicar(pos.lat, pos.lng);
+        if (nueva) {
+          setCaja({
+            oeste: Number(nueva.oeste.toFixed(4)),
+            sur: Number(nueva.sur.toFixed(4)),
+            este: Number(nueva.este.toFixed(4)),
+            norte: Number(nueva.norte.toFixed(4)),
+          });
+        }
+      });
+      marcador.addTo(capaEsquinas);
+    }
   }, [caja]);
 
   // Toda caja nueva (o cambio de filtros) vuelve a consultar ASF.
@@ -333,7 +531,7 @@ export function NisarView() {
     if (caja) void buscar(caja);
   }, [caja, buscar]);
 
-  // Huellas de los granulos encontrados.
+  // Huellas de los granulos encontrados (interactivas salvo mientras se dibuja una caja).
   useEffect(() => {
     const capa = huellasRef.current;
     if (!capa) return;
@@ -343,23 +541,34 @@ export function NisarView() {
     for (const granulo of resultado.granules) {
       if (granulo.footprint.length < 3) continue;
       const activo = seleccion?.id === granulo.id;
+      const resaltado = hoverGranuloId === granulo.id;
       const puntos = granulo.footprint.map(
         ([lon, lat]) => [lat, lon] as L.LatLngTuple,
       );
       const poligono = L.polygon(puntos, {
-        color: activo ? COLOR_SEL : COLOR,
-        weight: activo ? 2 : 1,
-        opacity: 0.9,
+        interactive: !dibujando,
+        color: activo ? COLOR_SEL : resaltado ? "#f0abfc" : COLOR,
+        weight: activo ? 2.6 : resaltado ? 2 : 1.3,
+        opacity: activo || resaltado ? 1 : 0.85,
         fillColor: activo ? COLOR_SEL : COLOR,
-        fillOpacity: activo ? 0.16 : 0.06,
+        fillOpacity: activo ? 0.22 : resaltado ? 0.14 : 0.06,
       });
-      poligono.on("click", () => elegirGranulo(granulo));
-      poligono.bindTooltip(`${granulo.level} · ${fechaCorta(granulo.start)}`, {
-        sticky: true,
-      });
+      if (!dibujando) {
+        poligono.on("click", () => elegirGranulo(granulo));
+      }
+      const trackTxt =
+        granulo.path !== null && granulo.frame !== null
+          ? `T${granulo.path}/F${granulo.frame}`
+          : "SAR";
+      poligono.bindTooltip(
+        `${granulo.level} · ${trackTxt} · ${fechaCorta(granulo.start)}${
+          granulo.local ? " · EN DISCO" : ""
+        }`,
+        { sticky: true },
+      );
       poligono.addTo(capa);
     }
-  }, [resultado, seleccion, elegirGranulo]);
+  }, [resultado, seleccion, hoverGranuloId, dibujando, elegirGranulo]);
 
   // El job de descarga+render se sigue por SSE, igual que la consola.
   const trabajoId = trabajo?.id ?? null;
@@ -396,11 +605,6 @@ export function NisarView() {
     };
   }, [trabajoId]);
 
-  // Fechas del mismo track/frame para comparar.
-  //
-  // Tres fuentes, una sola lista: el timeline de ASF (que ya trae las fechas
-  // fuera de la ventana de busqueda), los .h5 que estan en disco y, como red de
-  // seguridad, lo que devolvio la busqueda actual.
   const localesComoEscenas: NisarTimelineScene[] = locales.map((escena) => ({
     id: escena.id,
     date: instanteDeId(escena.id),
@@ -439,24 +643,24 @@ export function NisarView() {
     }
     return [...mapa.values()].sort((a, b) => a.start.localeCompare(b.start));
   })();
-  const candidatos = fechasDelTrack
+  const candidatosBase = fechasDelTrack
     .filter(
       (escena) => escena.id !== seleccion?.id && escena.start < (seleccion?.start ?? ""),
     )
     .sort((a, b) => b.start.localeCompare(a.start));
+  // Si se resolvió una fecha externa que no estaba en `candidatosBase`, se incluye
+  // en la lista para que el `<select>` siempre tenga su `<option>` sincronizado.
+  const candidatos =
+    antesExterno && !candidatosBase.some((c) => c.id === antesExterno.id)
+      ? [antesExterno, ...candidatosBase]
+      : candidatosBase;
   const antes =
     antesExterno ?? candidatos.find((escena) => escena.id === antesId) ?? null;
-  // Resolucion efectiva del render ANTES de correrlo: la calidad se decide en
-  // caja x px (el producto muestrea al multiplo nativo por debajo del pedido,
-  // nunca mas fino que el granulo). Verla en vivo evita la sorpresa del render
-  // gruento en cajas grandes con px bajos.
+
+  const infoCaja = caja ? dimensionesCaja(caja) : null;
   const mppEfectivo = (() => {
-    if (!caja) return null;
-    const latMed = (caja.sur + caja.norte) / 2;
-    const anchoKm =
-      Math.abs(caja.este - caja.oeste) * 111.32 * Math.cos((latMed * Math.PI) / 180);
-    const altoKm = Math.abs(caja.norte - caja.sur) * 110.57;
-    const pedido = (Math.max(anchoKm, altoKm) * 1000) / Number(px);
+    if (!infoCaja) return null;
+    const pedido = (Math.max(infoCaja.anchoKm, infoCaja.altoKm) * 1000) / Number(px);
     return seleccion?.mpp != null ? Math.max(pedido, seleccion.mpp) : pedido;
   })();
   const mppNativo =
@@ -477,19 +681,16 @@ export function NisarView() {
       return;
     }
     if (antesExterno) return;
-    const lista = candidatos;
+    const lista = candidatosBase;
     if (lista.length === 0) {
       setAntesId("");
       return;
     }
     if (lista.some((escena) => escena.id === antesId)) return;
-    // Solo escenas anteriores: comparar hacia adelante invierte el signo del cambio.
     setAntesId(lista[0].id);
-    // `fechasDelTrack` se rearma en cada render; los disparadores reales son estos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seleccion, antesId, antesExterno, timeline.length, locales.length, resultado]);
 
-  // El timeline se pide solo para los productos que comparan fechas.
   const necesitaFechas =
     producto === "cambio" || producto === "incendio" || producto === "serie";
   const track = seleccion?.path ?? null;
@@ -502,14 +703,11 @@ export function NisarView() {
     }
     let vigente = true;
     setCargandoFechas(true);
-    // Sin filtro de coleccion: NISAR publica las fechas viejas solo como
-    // PROVISIONAL y las nuevas como VALIDATED. Filtrar dejaria una sola fecha.
     getNisarTimeline(track, frame, "", "GCOV")
       .then((datos) => {
         if (vigente) setTimeline(datos.scenes);
       })
       .catch(() => {
-        // Sin timeline queda la busqueda y el disco: no se bloquea nada.
         if (vigente) setTimeline([]);
       })
       .finally(() => {
@@ -520,7 +718,6 @@ export function NisarView() {
     };
   }, [necesitaFechas, track, frame, coleccion]);
 
-  // La serie lee como máximo 1600 px para no apilar 11 escenas gigantes.
   useEffect(() => {
     if (producto === "serie" && px !== "1200" && px !== "1600") {
       setPx("1600");
@@ -561,12 +758,106 @@ export function NisarView() {
   const esSme2 = seleccion?.level === "SME2";
   const esGunw = seleccion?.level === "GUNW";
 
+  const lugaresCoincidentes = LUGARES_PARAGUAY.filter((lugar) => {
+    const q = ciudadQuery.trim().toLowerCase();
+    if (!q) return true;
+    return `${lugar.nombre} ${lugar.region}`.toLowerCase().includes(q);
+  }).slice(0, 7);
+
+  function irALugar(lugar: LugarCientifico, armarCaja = true) {
+    setCiudadQuery(lugar.nombre);
+    setSugerenciasAbiertas(false);
+    setResultadosRemotos([]);
+    setError(null);
+    const nueva = cajaAlrededor(lugar.lat, lugar.lon, lugar.km);
+    if (armarCaja) {
+      setDibujando(false);
+      setCaja(nueva);
+    } else if (mapaRef.current) {
+      mapaRef.current.flyTo([lugar.lat, lugar.lon], 10, { duration: 0.7 });
+    }
+  }
+
+  async function buscarCiudadRemota() {
+    const consulta = ciudadQuery.trim();
+    if (!consulta) return;
+    // Si coincide exacto o como único resultado local, salta directo.
+    const local = LUGARES_PARAGUAY.find((l) =>
+      `${l.nombre} ${l.region}`.toLowerCase().includes(consulta.toLowerCase()),
+    );
+    if (local && lugaresCoincidentes.length === 1) {
+      irALugar(local, true);
+      return;
+    }
+    setBuscandoCiudad(true);
+    setError(null);
+    try {
+      const url = new URL("https://nominatim.openstreetmap.org/search");
+      url.searchParams.set("q", consulta);
+      url.searchParams.set("format", "jsonv2");
+      url.searchParams.set("limit", "5");
+      url.searchParams.set("accept-language", "es");
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error("No se pudo consultar el geocodificador.");
+      const items = (await res.json()) as {
+        display_name: string;
+        lat: string;
+        lon: string;
+      }[];
+      const mapeados: LugarCientifico[] = items
+        .map((it) => {
+          const partes = it.display_name.split(",").map((s) => s.trim());
+          return {
+            nombre: partes.slice(0, 2).join(" · ") || it.display_name,
+            region: partes.slice(2, 4).join(", ") || "Geocodificador",
+            lat: Number(it.lat),
+            lon: Number(it.lon),
+            km: 25,
+          };
+        })
+        .filter((it) => Number.isFinite(it.lat) && Number.isFinite(it.lon));
+
+      if (mapeados.length === 0) {
+        if (local) {
+          irALugar(local, true);
+        } else {
+          setError(`No encontramos la localidad «${consulta}».`);
+        }
+        return;
+      }
+      setResultadosRemotos(mapeados);
+      setSugerenciasAbiertas(true);
+      irALugar(mapeados[0], true);
+    } catch {
+      if (local) {
+        irALugar(local, true);
+      } else {
+        setError("Sin conexión al buscador remoto; elegí una localidad de la lista.");
+      }
+    } finally {
+      setBuscandoCiudad(false);
+    }
+  }
+
+  function redimensionarCajaKm(ladoKm: number) {
+    const mapa = mapaRef.current;
+    const centroLat = infoCaja
+      ? infoCaja.latCentro
+      : (mapa?.getCenter().lat ?? CENTRO_PARAGUAY[0]);
+    const centroLon = infoCaja
+      ? infoCaja.lonCentro
+      : (mapa?.getCenter().lng ?? CENTRO_PARAGUAY[1]);
+    setDibujando(false);
+    setError(null);
+    setCaja(cajaAlrededor(centroLat, centroLon, ladoKm));
+  }
+
   async function renderizar() {
     if (!seleccion || !caja) return;
-    const nivel = seleccion.level;
-    if (nivel !== "GCOV" && nivel !== "SME2" && nivel !== "GUNW") {
+    const nivelEscena = seleccion.level;
+    if (nivelEscena !== "GCOV" && nivelEscena !== "SME2" && nivelEscena !== "GUNW") {
       setError(
-        `La escena es ${nivel}. Los productos disponibles usan GCOV, SME2 o GUNW; ` +
+        `La escena es ${nivelEscena}. Los productos disponibles usan GCOV, SME2 o GUNW; ` +
           "elegí una escena de esos niveles para analizar.",
       );
       return;
@@ -580,18 +871,18 @@ export function NisarView() {
       modo === "color" && seleccion.polarization.length < 2 ? "gris" : modo;
     const params: Params = {
       producto:
-        nivel === "SME2" ? "sme2" : nivel === "GUNW" ? "gunw" : producto,
-      nivel,
+        nivelEscena === "SME2" ? "sme2" : nivelEscena === "GUNW" ? "gunw" : producto,
+      nivel: nivelEscena,
       granulo: seleccion.id,
       url: seleccion.download,
       coleccion: seleccion.collection,
       bbox: `${caja.oeste},${caja.sur},${caja.este},${caja.norte}`,
       px: Number(px),
     };
-    if (nivel === "SME2") {
+    if (nivelEscena === "SME2") {
       params.algoritmo = algoritmoSme2;
       params.solo_calidad = soloCalidadSme2;
-    } else if (nivel === "GUNW") {
+    } else if (nivelEscena === "GUNW") {
       // GUNW no necesita parametros extra: el renderer muestra coherencia y fase.
     } else if (producto === "recorte") {
       params.pol = polFinal;
@@ -605,7 +896,6 @@ export function NisarView() {
       }
       params.antes_granulo = antes.id;
       params.antes_coleccion = antes.collection;
-      // Si no esta en disco hace falta la URL; el backend la exige solo si falta.
       if (antes.download) params.antes_url = antes.download;
       params.umbral = Number(umbral);
       params.hv_min = Number(hvMin);
@@ -614,17 +904,10 @@ export function NisarView() {
         params.verificar_s2 = verificarS2;
         params.optico = optico;
         params.confirmar_temporal = Number(persistencia);
-        // Baseline temporal y guard de inundacion (opt-in): usan las fechas
-        // que ya estan en disco; el backend clampa y el producto degrada con
-        // aviso cuando el track no tiene fechas suficientes en la coleccion.
         params.baseline = Number(baseline);
         if (Number(baseline) >= 2) params.cov_max = Number(covMax);
         params.guardia_hh = Number(guardiaHh);
-        // Detector elegido: el backend valida radar/ndvi y agrega el empareje
-        // (ml 1, MMU 0,1, compuestos obligatorios) cuando es ndvi.
         params.detector = detector;
-        // La MMU no depende de la confirmacion: un desmonte es un bloque.
-        // En ndvi baja a 0,1 ha: el desmonte sub-hectarea ES el objetivo.
         params.mmu_ha = detector === "ndvi" ? 0.1 : 0.5;
       } else {
         params.firms = firms;
@@ -649,8 +932,6 @@ export function NisarView() {
         return;
       }
       params.fechas = fechasSerie.join(",");
-      // Todas las fechas elegidas viajan con su coleccion: si el .h5 no esta se
-      // baja, y si esta en otra carpeta de coleccion la serie la incluye igual.
       const elegidas = fechasDelTrack
         .filter((escena) => fechasSerie.includes(escena.id))
         .map((escena) => ({
@@ -728,6 +1009,7 @@ export function NisarView() {
         );
       } else {
         setAntesExterno(entrada);
+        setAntesId(entrada.id);
       }
       setFechaNueva("");
     } catch (exc) {
@@ -773,19 +1055,23 @@ export function NisarView() {
     setCaja(null);
     setResultado(null);
     setSeleccion(null);
+    setHoverGranuloId(null);
     setImagen(null);
     setDibujando(false);
     setError(null);
     setTrabajo(null);
     setProducto("recorte");
+    setPol("auto");
+    setModo("gris");
     setAntesId("");
     setAntesExterno(null);
     setTimeline([]);
+    setLocales([]);
+    setFechasSerie([]);
     setFechaNueva("");
+    setCoordTexto("");
   }
 
-  // Permite pegar la caja exacta (oeste,sur,este,norte) en vez de dibujarla:
-  // una caja de 7 km a mano en el mapa es casi imposible de acertar.
   function aplicarCoordenadas() {
     const partes = coordTexto
       .split(/[,\s;]+/)
@@ -815,9 +1101,155 @@ export function NisarView() {
   }
 
   return (
-    <section className="nisar" aria-label="Visor NISAR">
+    <section className="nisar" data-group="radar" aria-label="Visor NISAR">
       <div className="nisar__mapa">
         <div ref={contenedor} className="nisar__leaflet" />
+
+        {/* Buscador de ciudades y barra de capa base realista */}
+        <div className="nisar__topbar-mapa">
+          <search className="nisar__buscador" aria-label="Buscar ciudad o reserva">
+            <div className="nisar__buscador-box">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle cx="7" cy="7" r="4.4" stroke="currentColor" strokeWidth="1.3" />
+                <path d="m10.4 10.4 3 3" stroke="currentColor" strokeWidth="1.3" />
+              </svg>
+              <input
+                type="search"
+                value={ciudadQuery}
+                placeholder="Buscar ciudad, Chaco, Mbaracayú, Itaipú…"
+                aria-label="Buscar ciudad o sitio en el mapa"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                onFocus={() => setSugerenciasAbiertas(true)}
+                onChange={(evento) => {
+                  setCiudadQuery(evento.target.value);
+                  setSugerenciasAbiertas(true);
+                }}
+                onCompositionEnd={(evento) => {
+                  ultimoFinComposicion.current = evento.timeStamp;
+                }}
+                onKeyDown={(evento) => {
+                  if (evento.key === "Enter") {
+                    evento.preventDefault();
+                    if (
+                      evento.nativeEvent.isComposing ||
+                      (ultimoFinComposicion.current !== null &&
+                        Math.abs(evento.timeStamp - ultimoFinComposicion.current) < 50)
+                    ) {
+                      return;
+                    }
+                    void buscarCiudadRemota();
+                  } else if (evento.key === "Escape") {
+                    setSugerenciasAbiertas(false);
+                  }
+                }}
+              />
+              {ciudadQuery ? (
+                <button
+                  type="button"
+                  className="nisar__buscador-clear"
+                  aria-label="Limpiar búsqueda de ciudad"
+                  onClick={() => {
+                    setCiudadQuery("");
+                    setResultadosRemotos([]);
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btn nisar__buscador-ir"
+                disabled={buscandoCiudad || !ciudadQuery.trim()}
+                onClick={() => void buscarCiudadRemota()}
+              >
+                {buscandoCiudad ? "…" : "Ir + ROI"}
+              </button>
+            </div>
+
+            {sugerenciasAbiertas &&
+            (lugaresCoincidentes.length > 0 || resultadosRemotos.length > 0) ? (
+              <ul className="nisar__sugerencias" role="listbox" aria-label="Sitios sugeridos">
+                {resultadosRemotos.map((lugar, i) => (
+                  <li key={`rem-${i}`}>
+                    <button
+                      type="button"
+                      className="nisar__sugerencia"
+                      onClick={() => irALugar(lugar, true)}
+                    >
+                      <span className="nisar__sugerencia-nombre">{lugar.nombre}</span>
+                      <span className="nisar__sugerencia-meta">
+                        {lugar.region} · caja {lugar.km} km
+                      </span>
+                    </button>
+                  </li>
+                ))}
+                {lugaresCoincidentes.map((lugar) => (
+                  <li key={lugar.nombre}>
+                    <button
+                      type="button"
+                      className="nisar__sugerencia"
+                      onClick={() => irALugar(lugar, true)}
+                    >
+                      <span className="nisar__sugerencia-nombre">{lugar.nombre}</span>
+                      <span className="nisar__sugerencia-meta">
+                        {lugar.region} · ROI {lugar.km} km
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </search>
+
+          <div className="nisar__capas" role="group" aria-label="Mapa base">
+            <button
+              type="button"
+              className={`nisar__capa-btn${capaBase === "satelite" ? " nisar__capa-btn--on" : ""}`}
+              aria-pressed={capaBase === "satelite"}
+              onClick={() => setCapaBase("satelite")}
+            >
+              Satélite
+            </button>
+            <button
+              type="button"
+              className={`nisar__capa-btn${capaBase === "terreno" ? " nisar__capa-btn--on" : ""}`}
+              aria-pressed={capaBase === "terreno"}
+              onClick={() => setCapaBase("terreno")}
+            >
+              Terreno
+            </button>
+            <button
+              type="button"
+              className={`nisar__capa-btn${capaBase === "mapa" ? " nisar__capa-btn--on" : ""}`}
+              aria-pressed={capaBase === "mapa"}
+              onClick={() => setCapaBase("mapa")}
+            >
+              OSM
+            </button>
+            {capaBase === "satelite" ? (
+              <button
+                type="button"
+                className={`nisar__capa-btn${etiquetasMapa ? " nisar__capa-btn--on" : ""}`}
+                aria-pressed={etiquetasMapa}
+                title="Mostrar u ocultar nombres de ciudades y límites sobre el satélite"
+                onClick={() => setEtiquetasMapa((v) => !v)}
+              >
+                Nombres
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Herramientas interactivas de la caja ROI */}
         <div className="nisar__herramientas">
           <div className="nisar__tools" role="group" aria-label="Herramienta de dibujo">
             <button
@@ -825,7 +1257,10 @@ export function NisarView() {
               className={`nisar__tool${dibujando ? " nisar__tool--on" : ""}`}
               aria-pressed={dibujando}
               title="Cuadro: arrastrá sobre el mapa para dibujar un rectángulo"
-              onClick={() => setDibujando((previo) => !previo)}
+              onClick={() => {
+                setSugerenciasAbiertas(false);
+                setDibujando((previo) => !previo);
+              }}
             >
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <rect
@@ -838,12 +1273,29 @@ export function NisarView() {
                   strokeWidth="1.4"
                 />
               </svg>
-              Cuadro
+              {dibujando ? "Dibujando…" : "Dibujar ROI"}
             </button>
           </div>
+
+          <div className="nisar__presets" role="group" aria-label="Tamaños rápidos de caja ROI">
+            <span className="nisar__presets-lbl">Caja rápida:</span>
+            {[7, 15, 25, 50].map((km) => (
+              <button
+                key={km}
+                type="button"
+                className="nisar__preset-btn"
+                title={`Crear o ajustar caja de ${km} × ${km} km en el centro actual`}
+                onClick={() => redimensionarCajaKm(km)}
+              >
+                {km} km
+              </button>
+            ))}
+          </div>
+
           <button type="button" className="btn" onClick={limpiar}>
             Limpiar
           </button>
+
           <div className="nisar__coords">
             <div className="nisar__coords-field">
               <input
@@ -858,7 +1310,7 @@ export function NisarView() {
                 }}
               />
               <span className="nisar__coords-hint">
-                oeste,sur,este,norte · ej. -61.16,-21.07,-60.83,-20.74
+                oeste,sur,este,norte · o arrastrá las 4 esquinas ámbar
               </span>
             </div>
             <button
@@ -870,28 +1322,38 @@ export function NisarView() {
               Usar caja
             </button>
           </div>
+
           <span
             className="nisar__coord"
             title="Caja de selección (oeste, sur, este, norte)"
           >
             <i className="nisar__coord-dot" aria-hidden="true" />
-            {caja ? bboxTexto(caja) : "Sin caja"}
+            {caja && infoCaja
+              ? `${bboxTexto(caja)} · ${infoCaja.anchoKm.toFixed(1)}×${infoCaja.altoKm.toFixed(1)} km`
+              : "Sin caja ROI"}
           </span>
         </div>
       </div>
 
       <aside className="nisar__panel" aria-label="Escenas NISAR">
         <header className="nisar__head">
-          <h2 className="nisar__title">NISAR · radar de apertura sintetica</h2>
+          <div className="work__eyebrow">
+            <span className="dataset-badge" data-group="radar">
+              <span className="dataset-badge__dot" aria-hidden="true" />
+              Radar L-Band SAR
+            </span>
+            <code className="dataset-code">NASA / ISRO NISAR</code>
+          </div>
+          <h2 className="nisar__title">NISAR · Análisis Científico SAR</h2>
           <p className="nisar__sub">
-            Elegí una caja sobre Paraguay y ASF devuelve las escenas. Las imágenes
-            browse son públicas; los .h5 se descargan con Earthdata.
+            Buscá una ciudad o dibujá una caja ROI sobre la imagen satelital. Podés
+            arrastrar las esquinas ámbar para ajustar el recorte exacto.
           </p>
         </header>
 
         <div className="nisar__filtros">
           <label className="nisar__ancho">
-            Nivel
+            01 · Nivel del producto SAR
             <select value={nivel} onChange={(evento) => setNivel(evento.target.value)}>
               {(catalogo?.levels ?? [{ value: "GCOV", label: "GCOV", detail: "" }]).map(
                 (opcion) => (
@@ -918,7 +1380,7 @@ export function NisarView() {
             disabled={!caja || cargando}
             onClick={() => caja && void buscar(caja)}
           >
-            {cargando ? "Consultando ASF…" : caja ? "Buscar escenas" : "Elegí una caja"}
+            {cargando ? "Consultando ASF…" : caja ? "Buscar escenas SAR" : "Elegí o buscá una caja ROI"}
           </button>
         </div>
 
@@ -930,12 +1392,12 @@ export function NisarView() {
 
         <p className="nisar__estado" aria-live="polite">
           {cargando
-            ? "Consultando ASF…"
+            ? "Consultando catálogo ASF…"
             : resultado
-              ? `${resultado.total} escena(s) · mostrando ${resultado.returned}`
+              ? `${resultado.total} escena(s) encontradas · mostrando ${resultado.returned}`
               : dibujando
-                ? "Arrastrá sobre el mapa para dibujar el cuadro."
-                : "Dibujá una caja sobre el mapa para empezar."}
+                ? "Arrastrá sobre el mapa satelital para trazar la caja ROI."
+                : "Buscá una ciudad arriba o dibujá una caja sobre el mapa."}
         </p>
 
         <ul className="nisar__lista">
@@ -945,6 +1407,8 @@ export function NisarView() {
                 type="button"
                 className="nisar__item"
                 aria-current={seleccion?.id === granulo.id ? "true" : undefined}
+                onMouseEnter={() => setHoverGranuloId(granulo.id)}
+                onMouseLeave={() => setHoverGranuloId(null)}
                 onClick={() => elegirGranulo(granulo)}
               >
                 {granulo.thumbnail ? (
@@ -955,18 +1419,20 @@ export function NisarView() {
                 <span className="nisar__item-txt">
                   <span className="nisar__item-fecha">{fechaCorta(granulo.start)}</span>
                   <span className="nisar__item-meta">
-                    {granulo.direction === "ASCENDING" ? "ascendente" : "descendente"}
-                    {granulo.path !== null ? ` · orbita ${granulo.path}` : ""}
+                    {granulo.direction === "ASCENDING" ? "▲ ascendente" : "▼ descendente"}
+                    {granulo.path !== null ? ` · T${granulo.path}` : ""}
+                    {granulo.frame !== null ? `/F${granulo.frame}` : ""}
                     {granulo.mpp !== null ? ` · ${granulo.mpp} m/px` : ""}
                     {granulo.size_mb !== null ? ` · ${granulo.size_mb} MB` : ""}
                   </span>
                   <span className="nisar__chips">
                     {granulo.local ? (
-                      <span className="nisar__chip nisar__chip--local">local</span>
+                      <span className="nisar__chip nisar__chip--local">en disco</span>
                     ) : null}
-                    {granulo.polarization.map((pol) => (
-                      <span className="nisar__chip" key={pol}>
-                        {pol}
+                    <span className="nisar__chip nisar__chip--level">{granulo.level}</span>
+                    {granulo.polarization.map((polItem) => (
+                      <span className="nisar__chip" key={polItem}>
+                        {polItem}
                       </span>
                     ))}
                   </span>
@@ -986,7 +1452,13 @@ export function NisarView() {
 
         {seleccion ? (
           <div className="nisar__detalle">
-            <h3>Escena seleccionada</h3>
+            <div className="nisar__detalle-head">
+              <h3>Escena activa</h3>
+              <span className="dataset-badge" data-group="radar">
+                <span className="dataset-badge__dot" aria-hidden="true" />
+                {seleccion.level} · T{seleccion.path ?? "–"}/F{seleccion.frame ?? "–"}
+              </span>
+            </div>
             {imagen ? (
               <img className="nisar__imagen" src={imagen} alt={`Browse de ${seleccion.id}`} />
             ) : (
@@ -1057,7 +1529,7 @@ export function NisarView() {
             </div>
 
             <div className="nisar__render">
-              <h3>Análisis de la caja</h3>
+              <h3>Flujo de parametrización SAR</h3>
               {esGcov ? (
                 <>
                   <p className="nisar__sub">
@@ -1084,168 +1556,235 @@ export function NisarView() {
                       ? ` Pesa ~${seleccion.size_mb} MB.`
                       : ""}
                   </p>
-                  <div className="nisar__render-ctrl">
-                    <label className="nisar__ancho">
-                      Producto
-                      <select
-                        value={producto}
-                        disabled={!esGcov}
-                        onChange={(evento) => setProducto(evento.target.value)}
-                      >
-                        <optgroup label="Visualización">
-                          <option value="recorte">Recorte (dB / color)</option>
-                          <option value="rvi">RVI (vegetación)</option>
-                          <option value="geotiff">GeoTIFF (GIS)</option>
-                        </optgroup>
-                        <optgroup label="Cambio">
-                          <option value="cambio">Cambio de cobertura</option>
-                          <option value="serie">Serie temporal + CUSUM</option>
-                          <option value="incendio">Incendio (cicatriz + FIRMS)</option>
-                        </optgroup>
-                        <optgroup label="Agua">
-                          <option value="agua">Agua / inundación</option>
-                        </optgroup>
-                        <optgroup label="Óptico">
-                          <option value="fusion">Fusión óptica (Sentinel-2)</option>
-                        </optgroup>
-                      </select>
-                    </label>
 
-                    {producto === "recorte" ? (
-                      <>
-                        <label>
-                          Polarización
-                          <select
-                            value={pol}
-                            onChange={(evento) => setPol(evento.target.value)}
-                          >
-                            <option value="auto">Auto</option>
-                            {seleccion.polarization.map((valor) => (
-                              <option key={valor} value={valor.toLowerCase()}>
-                                {valor}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Modo
-                          <select
-                            value={modo}
-                            onChange={(evento) => setModo(evento.target.value)}
-                          >
-                            <option value="gris">Gris (dB)</option>
-                            <option value="color" disabled={seleccion.polarization.length < 2}>
-                              Color HH/HV
-                            </option>
-                          </select>
-                        </label>
-                      </>
-                    ) : null}
-
-                    {producto === "geotiff" ? (
-                      <>
-                        <label>
-                          Polarización
-                          <select
-                            value={pol}
-                            onChange={(evento) => setPol(evento.target.value)}
-                          >
-                            <option value="auto">Auto</option>
-                            {seleccion.polarization.map((valor) => (
-                              <option key={valor} value={valor.toLowerCase()}>
-                                {valor}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Modo
-                          <select
-                            value={modoGeo}
-                            onChange={(evento) => setModoGeo(evento.target.value)}
-                          >
-                            <option value="db">dB</option>
-                            <option value="lineal">Potencia lineal</option>
-                          </select>
-                        </label>
-                      </>
-                    ) : null}
-
-                    {producto === "agua" ? (
-                      <>
-                        <label>
-                          HH máx. (dB)
-                          <input
-                            type="number"
-                            min="-40"
-                            max="0"
-                            step="0.5"
-                            value={hhMax}
-                            onChange={(evento) => setHhMax(evento.target.value)}
-                          />
-                        </label>
-                        <label>
-                          HV máx. (dB)
-                          <input
-                            type="number"
-                            min="-40"
-                            max="0"
-                            step="0.5"
-                            value={hvMax}
-                            onChange={(evento) => setHvMax(evento.target.value)}
-                          />
-                        </label>
-                      </>
-                    ) : null}
-
-                    {producto === "fusion" ? (
-                      <>
-                        <label>
-                          Días ópticos
-                          <select value={dias} onChange={(evento) => setDias(evento.target.value)}>
-                            <option value="7">±7 días</option>
-                            <option value="15">±15 días</option>
-                            <option value="30">±30 días</option>
-                          </select>
-                        </label>
-                        <label>
-                          Nubes máx.
-                          <select value={nubes} onChange={(evento) => setNubes(evento.target.value)}>
-                            <option value="20">20 %</option>
-                            <option value="40">40 %</option>
-                            <option value="60">60 %</option>
-                          </select>
-                        </label>
-                      </>
-                    ) : null}
-
-                    <label>
-                      Tamaño máx.
-                      {producto === "serie" ? (
-                        <select value={px} onChange={(evento) => setPx(evento.target.value)}>
-                          <option value="1200">1200 px</option>
-                          <option value="1600">1600 px</option>
+                  {/* Etapa 01: Producto y Escala de Salida */}
+                  <div className="nisar__stage">
+                    <div className="nisar__stage-head">
+                      <span className="fields__num">01</span>
+                      <span className="nisar__stage-title">Producto & resolución</span>
+                    </div>
+                    <div className="nisar__render-ctrl">
+                      <label className="nisar__ancho">
+                        Producto analítico
+                        <select
+                          value={producto}
+                          disabled={!esGcov}
+                          onChange={(evento) => setProducto(evento.target.value)}
+                        >
+                          <optgroup label="Visualización & GIS">
+                            <option value="recorte">Recorte (dB / color)</option>
+                            <option value="rvi">RVI (índice de vegetación)</option>
+                            <option value="geotiff">GeoTIFF (exportación GIS)</option>
+                          </optgroup>
+                          <optgroup label="Detección de cambio">
+                            <option value="cambio">Cambio de cobertura (deforestación)</option>
+                            <option value="serie">Serie temporal + CUSUM</option>
+                            <option value="incendio">Incendio (cicatriz + FIRMS)</option>
+                          </optgroup>
+                          <optgroup label="Hidrología & Fusión">
+                            <option value="agua">Agua / inundación</option>
+                            <option value="fusion">Fusión óptica (Sentinel-2)</option>
+                          </optgroup>
                         </select>
-                      ) : (
-                        <select value={px} onChange={(evento) => setPx(evento.target.value)}>
-                          <option value="1600">1600 px</option>
-                          <option value="2400">2400 px</option>
-                          <option value="3200">3200 px</option>
-                          <option value="4096">4096 px</option>
-                        </select>
-                      )}
-                      {mppEfectivo !== null ? (
-                        <small>
-                          ≈ {Math.round(mppEfectivo)} m/px efectivos
-                          {mppNativo ? " · resolución nativa" : ""}
-                        </small>
-                      ) : null}
-                    </label>
+                      </label>
 
-                    {producto === "cambio" || producto === "incendio" ? (
-                      <>
+                      <label className="nisar__ancho">
+                        Tamaño máx. de salida
+                        {producto === "serie" ? (
+                          <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                            <option value="1200">1200 px</option>
+                            <option value="1600">1600 px</option>
+                          </select>
+                        ) : (
+                          <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                            <option value="1600">1600 px</option>
+                            <option value="2400">2400 px</option>
+                            <option value="3200">3200 px</option>
+                            <option value="4096">4096 px</option>
+                          </select>
+                        )}
+                        {mppEfectivo !== null ? (
+                          <small>
+                            ≈ {Math.round(mppEfectivo)} m/px efectivos
+                            {mppNativo ? " · resolución nativa" : ""}
+                          </small>
+                        ) : null}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Etapa 02: Polarización / Umbrales radiométricos */}
+                  {producto === "recorte" ||
+                  producto === "geotiff" ||
+                  producto === "agua" ||
+                  producto === "fusion" ||
+                  producto === "cambio" ||
+                  producto === "incendio" ||
+                  producto === "serie" ? (
+                    <div className="nisar__stage">
+                      <div className="nisar__stage-head">
+                        <span className="fields__num">02</span>
+                        <span className="nisar__stage-title">
+                          {producto === "recorte" || producto === "geotiff"
+                            ? "Polarización & radiometría"
+                            : producto === "fusion"
+                              ? "Ventana óptica Sentinel-2"
+                              : "Umbrales backscatter (dB)"}
+                        </span>
+                      </div>
+                      <div className="nisar__render-ctrl">
+                        {producto === "recorte" ? (
+                          <>
+                            <label>
+                              Polarización
+                              <select
+                                value={pol}
+                                onChange={(evento) => setPol(evento.target.value)}
+                              >
+                                <option value="auto">Auto</option>
+                                {seleccion.polarization.map((valor) => (
+                                  <option key={valor} value={valor.toLowerCase()}>
+                                    {valor}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              Modo
+                              <select
+                                value={modo}
+                                onChange={(evento) => setModo(evento.target.value)}
+                              >
+                                <option value="gris">Gris (dB)</option>
+                                <option value="color" disabled={seleccion.polarization.length < 2}>
+                                  Color HH/HV
+                                </option>
+                              </select>
+                            </label>
+                          </>
+                        ) : null}
+
+                        {producto === "geotiff" ? (
+                          <>
+                            <label>
+                              Polarización
+                              <select
+                                value={pol}
+                                onChange={(evento) => setPol(evento.target.value)}
+                              >
+                                <option value="auto">Auto</option>
+                                {seleccion.polarization.map((valor) => (
+                                  <option key={valor} value={valor.toLowerCase()}>
+                                    {valor}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              Escala
+                              <select
+                                value={modoGeo}
+                                onChange={(evento) => setModoGeo(evento.target.value)}
+                              >
+                                <option value="db">dB</option>
+                                <option value="lineal">Potencia lineal</option>
+                              </select>
+                            </label>
+                          </>
+                        ) : null}
+
+                        {producto === "agua" ? (
+                          <>
+                            <label>
+                              HH máx. (dB)
+                              <input
+                                type="number"
+                                min="-40"
+                                max="0"
+                                step="0.5"
+                                value={hhMax}
+                                onChange={(evento) => setHhMax(evento.target.value)}
+                              />
+                            </label>
+                            <label>
+                              HV máx. (dB)
+                              <input
+                                type="number"
+                                min="-40"
+                                max="0"
+                                step="0.5"
+                                value={hvMax}
+                                onChange={(evento) => setHvMax(evento.target.value)}
+                              />
+                            </label>
+                          </>
+                        ) : null}
+
+                        {producto === "fusion" ? (
+                          <>
+                            <label>
+                              Días ópticos
+                              <select value={dias} onChange={(evento) => setDias(evento.target.value)}>
+                                <option value="7">±7 días</option>
+                                <option value="15">±15 días</option>
+                                <option value="30">±30 días</option>
+                              </select>
+                            </label>
+                            <label>
+                              Nubes máx.
+                              <select value={nubes} onChange={(evento) => setNubes(evento.target.value)}>
+                                <option value="20">20 %</option>
+                                <option value="40">40 %</option>
+                                <option value="60">60 %</option>
+                              </select>
+                            </label>
+                          </>
+                        ) : null}
+
+                        {producto === "cambio" ||
+                        producto === "incendio" ||
+                        producto === "serie" ? (
+                          <>
+                            <label>
+                              Umbral caída (dB)
+                              <input
+                                type="number"
+                                min="0.5"
+                                max="20"
+                                step="0.5"
+                                value={umbral}
+                                onChange={(evento) => setUmbral(evento.target.value)}
+                              />
+                            </label>
+                            <label>
+                              HV mín. bosque (dB)
+                              <input
+                                type="number"
+                                min="-30"
+                                max="0"
+                                step="0.5"
+                                value={hvMin}
+                                onChange={(evento) => setHvMin(evento.target.value)}
+                              />
+                            </label>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Etapa 03: Referencia temporal & Corroboración óptica */}
+                  {producto === "cambio" || producto === "incendio" ? (
+                    <div className="nisar__stage">
+                      <div className="nisar__stage-head">
+                        <span className="fields__num">03</span>
+                        <span className="nisar__stage-title">
+                          Par temporal & verificación
+                        </span>
+                      </div>
+                      <div className="nisar__render-ctrl">
                         <label className="nisar__ancho">
-                          Fecha anterior
+                          Fecha anterior (mismo track/frame)
                           <select
                             value={antes?.id ?? ""}
                             onChange={(evento) => {
@@ -1287,19 +1826,16 @@ export function NisarView() {
                             </dd>
                           </dl>
                         ) : null}
+
                         {producto === "cambio" ? (
                           <>
                             <label className="nisar__ancho">
-                              Detector
+                              Detector primario
                               <select
                                 value={detector}
                                 onChange={(evento) => {
                                   setDetector(evento.target.value);
                                   if (evento.target.value === "ndvi") {
-                                    // Empareje verificado en Mbaracayu: el
-                                    // detector optico exige sus compuestos y el
-                                    // umbral alto que banca el speckle de la
-                                    // mono-mirada (ml 1 lo agrega el backend).
                                     setVerificarS2(true);
                                     setUmbral("4");
                                   } else {
@@ -1318,7 +1854,7 @@ export function NisarView() {
                               </select>
                             </label>
                             <label className="nisar__ancho">
-                              Modo
+                              Modo de salida
                               <select
                                 value={modoCambio}
                                 onChange={(evento) => setModoCambio(evento.target.value)}
@@ -1330,7 +1866,7 @@ export function NisarView() {
                               </select>
                             </label>
                             <label className="nisar__ancho">
-                              Confirmar con Sentinel-2 (NDVI)
+                              Confirmar con óptico (NDVI)
                               <select
                                 value={verificarS2 ? "si" : "no"}
                                 onChange={(evento) =>
@@ -1410,76 +1946,28 @@ export function NisarView() {
                             </label>
                           </>
                         ) : null}
-                        <label>
-                          Umbral (dB)
-                          <input
-                            type="number"
-                            min="0.5"
-                            max="20"
-                            step="0.5"
-                            value={umbral}
-                            onChange={(evento) => setUmbral(evento.target.value)}
-                          />
-                        </label>
-                        <label>
-                          HV mín. (dB)
-                          <input
-                            type="number"
-                            min="-30"
-                            max="0"
-                            step="0.5"
-                            value={hvMin}
-                            onChange={(evento) => setHvMin(evento.target.value)}
-                          />
-                        </label>
+
                         {producto === "incendio" ? (
-                          <label>
-                            Focos FIRMS
+                          <label className="nisar__ancho">
+                            Focos térmicos FIRMS
                             <select
                               value={firms ? "si" : "no"}
                               onChange={(evento) => setFirms(evento.target.value === "si")}
                             >
-                              <option value="si">Sí</option>
-                              <option value="no">No</option>
+                              <option value="si">Sí · superponer focos VIIRS/MODIS</option>
+                              <option value="no">No · solo cicatriz radar</option>
                             </select>
                           </label>
                         ) : null}
-                      </>
-                    ) : null}
-
-                    {producto === "serie" ? (
-                      <>
-                        <label>
-                          Umbral (dB)
-                          <input
-                            type="number"
-                            min="0.5"
-                            max="20"
-                            step="0.5"
-                            value={umbral}
-                            onChange={(evento) => setUmbral(evento.target.value)}
-                          />
-                        </label>
-                        <label>
-                          HV mín. (dB)
-                          <input
-                            type="number"
-                            min="-30"
-                            max="0"
-                            step="0.5"
-                            value={hvMin}
-                            onChange={(evento) => setHvMin(evento.target.value)}
-                          />
-                        </label>
-                      </>
-                    ) : null}
-                  </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {producto === "serie" ? (
                     <div className="nisar__fechas">
                       <div className="nisar__fechas-head">
                         <span>
-                          Fechas del track/frame ({fechasDelTrack.length})
+                          03 · Fechas del track/frame ({fechasDelTrack.length})
                           {cargandoFechas ? " · consultando ASF…" : ""}
                         </span>
                         <button
@@ -1576,11 +2064,28 @@ export function NisarView() {
 
                   {(producto === "cambio" || producto === "incendio") &&
                   candidatos.length === 0 ? (
-                    <p className="nisar__estado">
-                      {cargandoFechas
-                        ? "Consultando las fechas del track/frame en ASF…"
-                        : "No aparecen otras fechas para este track/frame. Elegí una con el calendario: si existe en ASF se descarga al comparar."}
-                    </p>
+                    <div className="nisar__fechas">
+                      <p className="nisar__estado">
+                        {cargandoFechas
+                          ? "Consultando las fechas del track/frame en ASF…"
+                          : "No aparecen otras fechas para este track/frame. Elegí una con el calendario: si existe en ASF se descarga al comparar."}
+                      </p>
+                      <div className="nisar__fechas-head">
+                        <input
+                          type="date"
+                          value={fechaNueva}
+                          onChange={(evento) => setFechaNueva(evento.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={!fechaNueva || resolviendo}
+                          onClick={() => void agregarFecha()}
+                        >
+                          {resolviendo ? "Buscando…" : "Resolver fecha en ASF"}
+                        </button>
+                      </div>
+                    </div>
                   ) : null}
 
                   {!catalogo?.earthdata_configured ? (
@@ -1636,41 +2141,47 @@ export function NisarView() {
                     PROVISIONAL: la calibración sigue en curso. El análisis usa la
                     caja dibujada.
                   </p>
-                  <div className="nisar__render-ctrl">
-                    <label>
-                      Algoritmo
-                      <select
-                        value={algoritmoSme2}
-                        onChange={(evento) => setAlgoritmoSme2(evento.target.value)}
-                      >
-                        <option value="PMI">PMI - modelo físico (recomendado)</option>
-                        <option value="DSG">DSG - desagregación</option>
-                        <option value="TSR">TSR - serie temporal</option>
-                        <option value="COMPARAR">Comparar (validación)</option>
-                      </select>
-                    </label>
-                    <label>
-                      Calidad
-                      <select
-                        value={soloCalidadSme2 ? "si" : "no"}
-                        disabled={algoritmoSme2 === "COMPARAR"}
-                        onChange={(evento) =>
-                          setSoloCalidadSme2(evento.target.value === "si")
-                        }
-                      >
-                        <option value="no">Todos los píxeles válidos</option>
-                        <option value="si">Solo quality flag = 0</option>
-                      </select>
-                    </label>
-                    <label>
-                      Tamaño máx.
-                      <select value={px} onChange={(evento) => setPx(evento.target.value)}>
-                        <option value="1600">1600 px</option>
-                        <option value="2400">2400 px</option>
-                        <option value="3200">3200 px</option>
-                        <option value="4096">4096 px</option>
-                      </select>
-                    </label>
+                  <div className="nisar__stage">
+                    <div className="nisar__stage-head">
+                      <span className="fields__num">01</span>
+                      <span className="nisar__stage-title">Algoritmo & control de calidad</span>
+                    </div>
+                    <div className="nisar__render-ctrl">
+                      <label>
+                        Algoritmo
+                        <select
+                          value={algoritmoSme2}
+                          onChange={(evento) => setAlgoritmoSme2(evento.target.value)}
+                        >
+                          <option value="PMI">PMI - modelo físico (recomendado)</option>
+                          <option value="DSG">DSG - desagregación</option>
+                          <option value="TSR">TSR - serie temporal</option>
+                          <option value="COMPARAR">Comparar (validación)</option>
+                        </select>
+                      </label>
+                      <label>
+                        Calidad
+                        <select
+                          value={soloCalidadSme2 ? "si" : "no"}
+                          disabled={algoritmoSme2 === "COMPARAR"}
+                          onChange={(evento) =>
+                            setSoloCalidadSme2(evento.target.value === "si")
+                          }
+                        >
+                          <option value="no">Todos los píxeles válidos</option>
+                          <option value="si">Solo quality flag = 0</option>
+                        </select>
+                      </label>
+                      <label>
+                        Tamaño máx.
+                        <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                          <option value="1600">1600 px</option>
+                          <option value="2400">2400 px</option>
+                          <option value="3200">3200 px</option>
+                          <option value="4096">4096 px</option>
+                        </select>
+                      </label>
+                    </div>
                   </div>
                   <p className="nisar__estado">
                     SME2 se publica cada ~12 días y no reemplaza al GCOV: es
@@ -1713,16 +2224,22 @@ export function NisarView() {
                     y fase desenvuelta a 80 m. La fase es la del producto: no trae
                     correcciones atmosféricas ni ionosféricas.
                   </p>
-                  <div className="nisar__render-ctrl">
-                    <label>
-                      Tamaño máx.
-                      <select value={px} onChange={(evento) => setPx(evento.target.value)}>
-                        <option value="1600">1600 px</option>
-                        <option value="2400">2400 px</option>
-                        <option value="3200">3200 px</option>
-                        <option value="4096">4096 px</option>
-                      </select>
-                    </label>
+                  <div className="nisar__stage">
+                    <div className="nisar__stage-head">
+                      <span className="fields__num">01</span>
+                      <span className="nisar__stage-title">Escala interferométrica</span>
+                    </div>
+                    <div className="nisar__render-ctrl">
+                      <label>
+                        Tamaño máx.
+                        <select value={px} onChange={(evento) => setPx(evento.target.value)}>
+                          <option value="1600">1600 px</option>
+                          <option value="2400">2400 px</option>
+                          <option value="3200">3200 px</option>
+                          <option value="4096">4096 px</option>
+                        </select>
+                      </label>
+                    </div>
                   </div>
                   <p className="nisar__estado">
                     Par de 12 días, co-pol (HH o VV). El desplazamiento es relativo:
