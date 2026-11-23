@@ -274,7 +274,8 @@ Es la única rama que **exige Earthdata Login**. El índice es
 `rojez = mari ÷ cire` (antocianina sobre clorofila), escala 1.00–3.00.
 
 ```powershell
-# 1) Gránulos diarios (necesita --cookies o ~/.netrc)
+# 1) Gránulos diarios (usa earthdata_cookies.json del botón 'Login Earthdata',
+#    o --cookies con el JSON exportado del navegador)
 .venv\Scripts\python.exe descargar\pace_landvi.py --desde 2026-09-29 --hasta 2026-10-04 --res 0p1deg
 
 # 2) Póster (una semana, o dos con --doble)
@@ -288,8 +289,9 @@ Es la única rama que **exige Earthdata Login**. El índice es
 .venv\Scripts\python.exe cuadros\cuadros_follaje_globo.py --res 0p1deg
 ```
 
-- Sin autenticación, `pace_landvi.py` corta con un mensaje explícito y **no**
-  guarda credenciales.
+- Sin autenticación, `pace_landvi.py` corta con un mensaje que apunta al botón
+  **Login Earthdata** de la consola y **no** guarda credenciales. Usuario/clave y
+  `~/.netrc` no sirven para `getfile`: el redirect a URS pierde la autenticación básica.
 - `--res 0p1deg` (34 MB/día) alcanza para 1920 px; `4km` (170 MB/día) es el
   insumo nativo del póster.
 - El globo usa la base de relieve de `comun/globo3d.py` (cacheada en
@@ -460,7 +462,8 @@ publicados en `SALIDAS`, así que el render es determinista.
 - **`descargar_era5.py`** necesita `cdsapi` y `~/.cdsapirc`; no se instaló por
   defecto. El `.nc` de ERA5 ya está bajado, así que el póster funciona igual.
 - **`poster_pace.py`** necesita un L3M SFREFL que no tiene descargador propio.
-- **`pace_landvi.py`** exige Earthdata Login (cookies o `~/.netrc`).
+- **`pace_landvi.py`** exige Earthdata Login: cookies del OAuth que guarda el botón
+  **Login Earthdata** de la consola (o `--cookies`). Usuario/clave y `~/.netrc` no alcanzan.
 - **ECMWF** sólo publica las últimas ~4 días de corridas.
 - **Windows**: `--help` de scripts con `μ` griega (U+03BC) puede fallar en consola
   cp1252. Está corregido en `poster_mur_realista.py`.

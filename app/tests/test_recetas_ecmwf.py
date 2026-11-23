@@ -797,6 +797,29 @@ class SnapshotDeUnCuadro(unittest.TestCase):
         animar = next(spec for spec in producto.params if spec.name == "animar")
         self.assertIs(animar.default, True)
 
+    def test_pace_truecolor_por_defecto_compone_ocho_dias(self):
+        producto = catalog.get_product("pace_truecolor")
+        ventana = next(spec for spec in producto.params if spec.name == "ventana")
+        inicio = date.fromisoformat(ventana.default["start"])
+        fin = date.fromisoformat(ventana.default["end"])
+        self.assertEqual((fin - inicio).days + 1, 8)
+
+    def test_pace_truecolor_sin_ventana_usa_el_default_de_ocho_dias(self):
+        plan = recipes.planear("pace_truecolor", {}, Path("x"))
+        paso = plan.pasos[-1]
+        self.assertEqual(paso.args[paso.args.index("--dias") + 1], "8")
+
+    def test_pace_truecolor_pasa_la_ventana_al_compuesto(self):
+        plan = recipes.planear(
+            "pace_truecolor",
+            {"ventana": {"start": "2026-11-01", "end": "2026-11-08"}},
+            Path("x"),
+        )
+        paso = plan.pasos[-1]
+        self.assertEqual(paso.script, "prototipos/poster_pace_gibs.py")
+        self.assertEqual(paso.args[paso.args.index("--hasta") + 1], "2026-11-08")
+        self.assertEqual(paso.args[paso.args.index("--dias") + 1], "8")
+
     def test_follaje_globo_centrado_en_sudamerica(self):
         import importlib.util
 

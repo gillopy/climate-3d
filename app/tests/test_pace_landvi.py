@@ -29,13 +29,14 @@ class AutenticacionPACE(unittest.TestCase):
 
         self.assertEqual(sesion.cookies.get("GETFILE_APP"), "abc")
 
-    def test_sesion_informa_cookies_y_netrc_si_faltan(self):
-        with patch("netrc.netrc", side_effect=FileNotFoundError):
-            with self.assertRaises(SystemExit) as contexto:
-                pace._sesion(None)
+    def test_sesion_exige_cookies_si_faltan(self):
+        with self.assertRaises(SystemExit) as contexto:
+            pace._sesion(None)
 
-        self.assertIn("--cookies", str(contexto.exception))
-        self.assertIn(".netrc", str(contexto.exception))
+        mensaje = str(contexto.exception)
+        self.assertIn("--cookies", mensaje)
+        self.assertIn("Login Earthdata", mensaje)
+        self.assertNotIn(".netrc", mensaje)
 
     def test_ruta_cookies_earthdata_es_independiente_del_repo(self):
         with tempfile.TemporaryDirectory() as carpeta:
@@ -95,6 +96,25 @@ class DescargaTolerante(unittest.TestCase):
                 "--cookies", str(salida / "cookies.json"),
             ]
             with patch("sys.argv", argv), patch.object(pace, "_sesion", return_value=object()):
+                codigo = pace.main()
+
+        self.assertEqual(codigo, 0)
+
+    def test_main_no_pide_autenticacion_si_ya_estan_los_granulos(self):
+        from datetime import date
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            salida = Path(carpeta)
+            self._grano(salida, date(2026, 11, 22))
+            argv = [
+                "pace_landvi.py", "--desde", "2026-11-22", "--hasta", "2026-11-22",
+                "--res", "0p1deg", "--destino", str(salida),
+            ]
+            with patch("sys.argv", argv), \
+                    patch.object(
+                        pace, "_sesion",
+                        side_effect=AssertionError("no debe pedir autenticación"),
+                    ):
                 codigo = pace.main()
 
         self.assertEqual(codigo, 0)

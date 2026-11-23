@@ -10,15 +10,19 @@ Fuente (OB.DAAC, no GIBS: GIBS no publica PACE sobre tierra):
 
     https://oceandata.sci.gsfc.nasa.gov/getfile/PACE_OCI.<YYYYMMDD>.L3m.DAY.LANDVI.V3_1.<res>.NRT.nc
 
-El archivo pesa ~170 MB por día en 4 km y **exige Earthdata Login**: `getfile` responde
-302 a `urs.earthdata.nasa.gov` y sin sesión válida no entrega el NetCDF. Este script
-acepta dos formas de autenticarse, y ninguna guarda la contraseña en el repo:
+El archivo pesa ~170 MB por día en 4 km (~37 MB en 0p1deg) y **exige Earthdata Login**:
+`getfile` responde 302 a `urs.earthdata.nasa.gov` y sin sesión válida no entrega el NetCDF.
+Este script se autentica con cookies del OAuth de Earthdata, y ninguna guarda la
+contraseña en el repo:
 
   * `--cookies <archivo.json>`: lista de cookies exportada de un navegador ya logueado
-    (formato de Playwright: `[{name, value, domain, path, ...}]`).
-  * `EARTHDATA_USER` y `EARTHDATA_PASSWORD` en el entorno o en el `.env` del repo.
-  * `~/.netrc` con `machine urs.earthdata.nasa.gov login <usuario> password <clave>`
-    (el método histórico de OBPG: autenticación básica preventiva).
+    (formato de Playwright: `[{name, value, domain, path, ...}]`). Si se omite, usa
+    automáticamente el archivo que guarda el botón **Login Earthdata** de la consola
+    (`earthdata_cookies.json`, junto a `config.json`).
+
+`EARTHDATA_USER`/`EARTHDATA_PASSWORD` y `~/.netrc` no alcanzan para `getfile`: el redirect
+a URS no conserva la autenticación básica y termina en la página de login. La cookie
+`GETFILE_APP` sólo la deja el OAuth completado en un navegador.
 
 Uso (desde la raíz del proyecto):
 
@@ -29,7 +33,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import netrc
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -74,7 +77,12 @@ def candidatos(fecha: date, res: str) -> list[str]:
 
 
 def _sesion(cookies: Path | None) -> requests.Session:
-    """Sesión autenticada contra URS: cookies de navegador o `.netrc`, en ese orden."""
+    """Sesión autenticada contra OB.DAAC con las cookies del OAuth de Earthdata.
+
+    No hay camino de usuario/clave ni `.netrc`: `getfile` redirige a URS y la
+    autenticación básica no sobrevive ese redirect (termina en la página de login).
+    La cookie `GETFILE_APP` sólo la deja el OAuth completado en un navegador.
+    """
     s = requests.Session()
     s.headers["User-Agent"] = "climate3d/1.0"
     s.trust_env = False                  # que no se cuele un proxy del sistema
@@ -101,15 +109,10 @@ def _sesion(cookies: Path | None) -> requests.Session:
                           domain=c.get("domain", ""), path=c.get("path", "/"))
         return s
 
-    try:
-        host, login, clave = netrc.netrc().authenticators("urs.earthdata.nasa.gov")
-    except (FileNotFoundError, netrc.NetrcParseError, TypeError):
-        raise SystemExit(
-            "Falta autenticación: exportá las cookies del navegador con --cookies, o "
-            "creá ~/.netrc con la entrada de urs.earthdata.nasa.gov."
-        )
-    s.auth = (login, clave)              # básica preventiva, como `wget --auth-no-challenge`
-    return s
+    raise SystemExit(
+        "Falta autenticación: usá el botón 'Login Earthdata' de la consola (guarda "
+        "earthdata_cookies.json) o pasá --cookies con el JSON exportado del navegador."
+    )
 
 
 def bajar(s: requests.Session, url: str, destino: Path, min_bytes: int = MIN_BYTES) -> None:
@@ -169,6 +172,17 @@ def ventana_completa(
     return False
 
 
+def _cookies_para_usar(explicito: str | None) -> Path | None:
+    """Archivo de cookies: el que se pasó o el que guardó el login interactivo."""
+    if explicito:
+        return Path(explicito)
+    auto = ruta_cookies_earthdata()
+    if auto.is_file():
+        print(f"Usando cookies de Earthdata guardadas: {auto}")
+        return auto
+    return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--desde", default=DESDE, help=f"primer día UTC (default {DESDE})")
@@ -182,33 +196,27 @@ def main() -> int:
     args = ap.parse_args()
 
     salida = Path(args.destino)
-    # Si no se pasó --cookies, intentar usar el archivo de login interactivo guardado
-    cookies_path = None
-    if args.cookies:
-        cookies_path = Path(args.cookies)
-    else:
-        auto_cookies = ruta_cookies_earthdata()
-        if auto_cookies.is_file():
-            cookies_path = auto_cookies
-            print(f"Usando cookies de Earthdata guardadas: {auto_cookies}")
-    s = _sesion(cookies_path)
-
     dias = fechas(args.desde, args.hasta)
     minimo = MIN_POR_RES[args.res]
     print(f"PACE OCI L3M {PRODUCTO} {VERSION} {args.res}: {len(dias)} día(s) -> {salida}")
     bajados = 0
     faltantes = 0
+    # La sesión se arma recién cuando hay algo para bajar: si todos los gránulos
+    # están en disco, una cookie vencida no puede bloquear el render.
+    sesion: requests.Session | None = None
     for d in dias:
         ya = [n for n in candidatos(d, args.res)
               if (salida / n).exists() and (salida / n).stat().st_size >= minimo]
         if ya:
             print(f"  = {ya[0]} (ya está)")
             continue
+        if sesion is None:
+            sesion = _sesion(_cookies_para_usar(args.cookies))
         for n in candidatos(d, args.res):
             destino = salida / n
             print(f"  + {n}")
             try:
-                bajar(s, f"{BASE}/{n}", destino, minimo)
+                bajar(sesion, f"{BASE}/{n}", destino, minimo)
             except (requests.HTTPError, SystemExit) as exc:
                 print(f"    ! {exc}")
                 continue

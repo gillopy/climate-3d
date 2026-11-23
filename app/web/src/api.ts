@@ -83,6 +83,7 @@ export interface EarthdataCookiesStatus {
   configured: boolean;
   cookies_count: number;
   getfile?: boolean;
+  verified?: boolean;
   file: string;
   error?: string;
 }

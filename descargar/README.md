@@ -230,16 +230,20 @@ https://oceandata.sci.gsfc.nasa.gov/getfile/
 | Opción | Qué hace |
 |---|---|
 | `--desde` / `--hasta` | Rango UTC inclusive (por defecto, `2026-09-29` a `2026-10-04`) |
-| `--res` | `4km` (por defecto), `2km` u `0p1deg` |
+| `--res` | `4km` (por defecto), `2km` u `0p1deg` (la consola usa `0p1deg`) |
 | `--destino` | Carpeta de salida (por defecto, `DATOS/pace_landvi`) |
-| `--cookies` | JSON con las cookies de un navegador ya logueado en Earthdata |
+| `--cookies` | JSON con las cookies de un navegador ya logueado en Earthdata (si se omite, usa el archivo del login interactivo) |
 
 - **Autenticación**: `--cookies navegador.json` (formato de Playwright:
-  `[{name, value, domain, path}]`), `EARTHDATA_USER` + `EARTHDATA_PASSWORD` en el entorno
-  o `.env`, o `~/.netrc` con `machine urs.earthdata.nasa.gov`. Sin ninguno, el script
-  corta con un mensaje explícito; nunca guarda la contraseña.
+  `[{name, value, domain, path}]`). Si no se pasa, se usa automáticamente
+  `earthdata_cookies.json`, el archivo que guarda el botón **Login Earthdata** de la
+  consola junto a `config.json`. `EARTHDATA_USER`/`EARTHDATA_PASSWORD` y `~/.netrc`
+  **no** sirven para `getfile`: el redirect a URS no conserva la autenticación básica y
+  termina en la página de login.
 - **Las cookies de URS solas no alcanzan**: hay que completar el OAuth visitando una URL
   `getfile` en el navegador para que quede la cookie `GETFILE_APP` del dominio de oceandata.
+  El login de la consola hace exactamente ese recorrido y verifica la sesión antes de
+  guardarla.
 - El `.nc` va a `*.parcial` y se renombra al final, así que un corte deja el archivo
   incompleto marcado y no un gránulo corrupto con nombre definitivo.
 - **Por qué no GIBS**: GIBS publica PACE sólo para océano y atmósfera; los índices de

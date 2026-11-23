@@ -13,6 +13,11 @@ PACE es polar y su swath no cubre el planeta de una vez, así que un día suelto
 huecos. Se bajan varios días y se rellenan por prioridad temporal: el primer píxel con
 dato gana.
 
+`--hasta` es un **techo**: GIBS publica esta capa con días de atraso (a veces más de una
+semana), así que si la fecha pedida todavía no existe el compuesto termina en la última
+fecha publicada, leída de las capacidades WMTS. El atraso es de la capa de GIBS, no del
+satélite: OCI sigue entregando `L2 AOP` a diario.
+
 Teselas WMTS (EPSG:4326, conjunto `1km`): nivel 4 = 20x10 teselas de 512 px, o sea
 10240x5120 de equirectangular, ~3.9 km por píxel en el ecuador.
 
@@ -35,12 +40,17 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 sys.path.insert(0, str(RAIZ / "prototipos"))
 
+from gibs import (  # noqa: E402
+    CAPACIDADES,
+    PACE_TRUE_COLOR,
+    ultima_fecha_de_capa,
+)
 from poster_pace import ortho_inverso, muestrear  # noqa: E402
 from rutas import SALIDAS  # noqa: E402
 from estilo import FUENTE  # noqa: E402
 
 BASE = "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best"
-CAPA = "OCI_PACE_True_Color"
+CAPA = PACE_TRUE_COLOR
 NIVEL = 4                      # 20 x 10 teselas de 512 px -> 10240 x 5120
 TESELA = 512
 
@@ -57,6 +67,23 @@ CREDITO = "Graphic by @Gillo97"
 CACHE = SALIDAS / "teselas_pace"
 
 
+def _capacidades() -> str:
+    """XML de capacidades WMTS, bajado una sola vez por corrida."""
+    import requests
+
+    if _capacidades.xml is None:
+        try:
+            respuesta = requests.get(CAPACIDADES, timeout=120)
+            respuesta.raise_for_status()
+        except requests.RequestException as exc:
+            raise SystemExit(f"No se pudieron leer las capacidades de GIBS: {exc}")
+        _capacidades.xml = respuesta.text
+    return _capacidades.xml
+
+
+_capacidades.xml = None
+
+
 def _matriz(nivel: int) -> tuple[int, int]:
     """(columnas, filas) de teselas del conjunto `1km` para ese nivel.
 
@@ -64,10 +91,9 @@ def _matriz(nivel: int) -> tuple[int, int]:
     potencia de dos limpia (nivel 0 = 2x1, nivel 1 = 3x2, nivel 4 = 20x10).
     """
     import re
-    import requests
 
     if _matriz.cache is None:
-        xml = requests.get(f"{BASE}/1.0.0/WMTSCapabilities.xml", timeout=120).text
+        xml = _capacidades()
         i = xml.find("<TileMatrixSet><ows:Identifier>1km</ows:Identifier>")
         bloque = xml[i:i + 20000]
         cache = {}
@@ -87,27 +113,52 @@ def _url(d: date, nivel: int, fila: int, col: int) -> str:
     return (f"{BASE}/{CAPA}/default/{d:%Y-%m-%d}/1km/{nivel}/{fila}/{col}.jpeg")
 
 
-def bajar_tesela(args) -> tuple[int, int, Path | None]:
-    """Baja una tesela; devuelve (fila, col, ruta) o ruta None si vino vacía."""
+def bajar_tesela(args) -> tuple[int, int, np.ndarray | None]:
+    """Baja una tesela; devuelve (fila, col, píxeles) o None si no vino con dato.
+
+    GIBS responde 200 con un JPEG negro de ~4,7 KB cuando el día todavía no tiene
+    dato en esa tesela. Eso no se cachea: si el día se publica más tarde, la
+    próxima corrida lo vuelve a pedir en vez de quedarse con el hueco.
+    """
+    import io
+
     import requests
+    from PIL import Image
 
     d, nivel, fila, col, carpeta = args
     destino = carpeta / f"{d:%Y%m%d}_{nivel}_{fila}_{col}.jpg"
-    if destino.exists() and destino.stat().st_size > 512:
-        return fila, col, destino
+
+    def leer(contenido: bytes) -> np.ndarray | None:
+        try:
+            img = np.asarray(Image.open(io.BytesIO(contenido)).convert("RGB"),
+                             dtype=np.uint8)
+        except Exception:
+            return None
+        if img.shape[:2] != (TESELA, TESELA):
+            return None
+        return img if (img.sum(axis=2) > 12).any() else None
+
+    if destino.exists():
+        img = leer(destino.read_bytes())
+        if img is not None:
+            return fila, col, img
     try:
         r = requests.get(_url(d, nivel, fila, col), timeout=60)
         r.raise_for_status()
-        destino.write_bytes(r.content)
-        return fila, col, destino
     except Exception:
         return fila, col, None
+    img = leer(r.content)
+    if img is None:
+        return fila, col, None
+    try:
+        destino.write_bytes(r.content)
+    except OSError:
+        pass  # sin caché se puede dibujar igual con lo que ya está en memoria
+    return fila, col, img
 
 
 def mosaico_dia(d: date, nivel: int, ancho: int, alto: int, hilos: int = 16):
     """Arma el mosaico equirectangular de un día (uint8 HxWx3), None si no hay dato."""
-    from PIL import Image
-
     carpeta = CACHE / f"{d:%Y%m%d}_{nivel}"
     carpeta.mkdir(parents=True, exist_ok=True)
     trabajos = [(d, nivel, f, c, carpeta)
@@ -115,15 +166,12 @@ def mosaico_dia(d: date, nivel: int, ancho: int, alto: int, hilos: int = 16):
     salida = np.zeros((alto, ancho, 3), dtype=np.uint8)
     con_dato = 0
     with ThreadPoolExecutor(max_workers=hilos) as pool:
-        for fila, col, ruta in pool.map(bajar_tesela, trabajos):
-            if ruta is None:
-                continue
-            img = np.asarray(Image.open(ruta).convert("RGB"), dtype=np.uint8)
-            if img.shape[:2] != (TESELA, TESELA):
+        for fila, col, img in pool.map(bajar_tesela, trabajos):
+            if img is None:
                 continue
             y0, x0 = fila * TESELA, col * TESELA
             salida[y0:y0 + TESELA, x0:x0 + TESELA] = img
-            con_dato += int((img.sum(axis=2) > 12).any())
+            con_dato += 1
     cobertura = float((salida.sum(axis=2) > 12).mean())
     print(f"  {d}: {con_dato} teselas con dato | cobertura {cobertura * 100:.1f} %")
     return salida if cobertura > 0.01 else None
@@ -192,7 +240,8 @@ def dibujar(disco, titulo, subtitulo, fuente, args, px):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Póster de color real de PACE/OCI desde OCI_PACE_True_Color (GIBS).")
-    ap.add_argument("--hasta", default="2026-10-24", help="último día del compuesto")
+    ap.add_argument("--hasta", default="2026-10-24",
+                    help="último día del compuesto (techo: se recorta a la última fecha publicada)")
     ap.add_argument("--dias", type=int, default=8, help="días hacia atrás a combinar")
     ap.add_argument("--nivel", type=int, default=NIVEL, help=f"nivel WMTS (default {NIVEL})")
     ap.add_argument("--px", type=int, default=PX, help=f"diámetro del globo (default {PX})")
@@ -210,7 +259,15 @@ def main(argv=None) -> int:
     cols, filas = _matriz(nivel)
     ancho, alto = cols * TESELA, filas * TESELA
 
-    fin = date.fromisoformat(args.hasta)
+    # `--hasta` es un techo, no una promesa: si GIBS todavía no publicó ese día, el
+    # compuesto termina en la última fecha disponible de la capa. Sin esto, pedir
+    # "hoy" devolvía 404 en todos los días y el error culpaba a la ventana.
+    xml = _capacidades()
+    ultima = ultima_fecha_de_capa(xml, CAPA)
+    fin_pedido = date.fromisoformat(args.hasta)
+    fin = min(fin_pedido, ultima) if ultima is not None else fin_pedido
+    if ultima is not None and fin != fin_pedido:
+        print(f"GIBS publicó {CAPA} hasta {ultima}; compuesto hasta {fin}.")
     dias = [fin - timedelta(days=i) for i in range(args.dias)]
     print(f"PACE true color: {len(dias)} día(s) hasta {fin} | nivel {nivel} "
           f"({ancho}x{alto} px) | globo {args.px} px")
@@ -230,6 +287,11 @@ def main(argv=None) -> int:
         if faltan < 0.02:
             break
     if equirect is None:
+        if ultima is not None:
+            raise SystemExit(
+                f"GIBS no devolvió datos entre {dias[-1]} y {fin}. "
+                f"Última fecha publicada de {CAPA}: {ultima}."
+            )
         raise SystemExit("Ningún día devolvió datos. Revisá --hasta/--dias.")
 
     cabecera = f"{dias[-1]:%Y-%m-%d} a {fin:%Y-%m-%d}"

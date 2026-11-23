@@ -34,7 +34,8 @@ if [ -n "${CDSAPI_KEY:-}" ]; then
     chmod 600 "$HOME/.cdsapirc"
 fi
 
-# Earthdata Login (PACE): ~/.netrc.
+# Earthdata Login (NISAR/ASF): ~/.netrc. PACE/LANDVI no lo usa: necesita la cookie
+# GETFILE_APP del OAuth, que se copia como earthdata_cookies.json.
 if [ -n "${EARTHDATA_USER:-}" ] && [ -n "${EARTHDATA_PASSWORD:-}" ]; then
     printf 'machine urs.earthdata.nasa.gov login %s password %s\n' \
         "$EARTHDATA_USER" "$EARTHDATA_PASSWORD" > "$HOME/.netrc"

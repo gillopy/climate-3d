@@ -119,6 +119,17 @@ def _rango(dias_atras: int = 0) -> dict[str, str]:
     return {"start": (fin - timedelta(days=1)).isoformat(), "end": fin.isoformat()}
 
 
+def _rango_compuesto(dias: int) -> dict[str, str]:
+    """Ventana de `dias` días terminando ayer en UTC.
+
+    Para los compuestos que se arman hacia atrás (PACE/OCI): un rango de dos días
+    no alcanza para llenar el swath polar, y el render ya recorta a la última
+    fecha que GIBS tenga publicada.
+    """
+    fin = datetime.now(timezone.utc).date() - timedelta(days=1)
+    return {"start": (fin - timedelta(days=dias - 1)).isoformat(), "end": fin.isoformat()}
+
+
 #: Lista cerrada de "últimos N cuadros": la UI no inventa otros valores.
 CUADROS_ULTIMOS = (10, 12, 24, 36, 48, 60)
 
@@ -795,7 +806,7 @@ PRODUCTS: list[Product] = [
                 name="ventana",
                 label="Dias del compuesto",
                 kind="date-range",
-                default=_rango(8),
+                default=_rango_compuesto(8),
                 help="el compuesto se arma hacia atras desde el ultimo dia",
             ),
             ParamSpec(

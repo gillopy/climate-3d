@@ -1847,6 +1847,11 @@ def _pace_truecolor(params: dict[str, Any], work: Path) -> Plan:
     """
     inicio, fin = _rango(params)
     px = _px(params, 2000)
+    if not params.get("ventana") and not params.get("fecha"):
+        # Mismo default que el catálogo (`_rango_compuesto(8)`): el compuesto
+        # necesita varios días para llenar el swath polar.
+        fin = datetime.now(timezone.utc).date() - timedelta(days=1)
+        inicio = fin - timedelta(days=7)
     # El compuesto se arma hacia atras desde el ultimo dia de la ventana.
     dias = max(1, min(31, (fin - inicio).days + 1))
 
