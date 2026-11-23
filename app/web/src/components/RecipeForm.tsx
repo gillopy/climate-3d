@@ -154,6 +154,7 @@ interface Props {
   busy: boolean;
   error: string | null;
   onChange: (nombre: string, valor: Params[string]) => void;
+  onReset?: () => void;
   onSubmit: () => void;
 }
 
@@ -198,6 +199,17 @@ function valorCorto(spec: ParamSpec, valor: Params[string]): string {
  * El formulario no sabe que producto esta mostrando: recorre el esquema que
  * manda el backend. Un producto nuevo aparece solo, sin tocar este archivo.
  */
+function limpiarAyuda(texto: string): string {
+  if (!texto) return "";
+  return texto
+    .replace(/clean_ir es la del modulo comun\/paleta_gibs\.py/gi, "Paleta infrarroja oficial de NASA GIBS")
+    .replace(/;?\s*necesita el MAP_KEY en datos\/firms_map_key\.txt/gi, "")
+    .replace(/define la carpeta de datos\s+\S+/gi, "Selecciona el satélite geoestacionario")
+    .replace(/\b[\w./-]+\.(?:py|txt)\b/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export function RecipeForm({
   product,
   params,
@@ -205,6 +217,7 @@ export function RecipeForm({
   busy,
   error,
   onChange,
+  onReset,
   onSubmit,
 }: Props) {
   const ultimaFecha = dates?.dates.at(0) ?? "";
@@ -262,7 +275,7 @@ export function RecipeForm({
 
   const familia = FAMILIA_META[product.group] ?? {
     etiqueta: product.group,
-    sensor: product.stage,
+    sensor: "Observación satelital",
   };
 
   const hayCambios = product.params.some(
@@ -270,6 +283,10 @@ export function RecipeForm({
   );
 
   function restablecerTodo() {
+    if (onReset) {
+      onReset();
+      return;
+    }
     for (const spec of product.params) onChange(spec.name, spec.default as Params[string]);
   }
 
@@ -353,7 +370,8 @@ export function RecipeForm({
   const campo = (spec: ParamSpec) => {
     const valor = params[spec.name];
     const id = `campo-${spec.name}`;
-    const ayudaId = spec.help ? `ayuda-${spec.name}` : undefined;
+    const ayudaLimpia = limpiarAyuda(spec.help);
+    const ayudaId = ayudaLimpia ? `ayuda-${spec.name}` : undefined;
     const habilitado = estaHabilitado(spec);
     const modificado = !igual(valor, spec.default);
     const padre = SUBORDINADOS[spec.name];
@@ -416,9 +434,9 @@ export function RecipeForm({
             describedBy={ayudaId}
             onChange={(elegido) => onChange(spec.name, elegido)}
           />
-          {spec.help ? (
+          {ayudaLimpia ? (
             <span className="field__help" id={ayudaId}>
-              {spec.help}
+              {ayudaLimpia}
             </span>
           ) : null}
         </div>
@@ -437,9 +455,9 @@ export function RecipeForm({
             describedBy={ayudaId}
             onChange={(elegido) => onChange(spec.name, Number(elegido))}
           />
-          {spec.help ? (
+          {ayudaLimpia ? (
             <span className="field__help" id={ayudaId}>
-              {spec.help}
+              {ayudaLimpia}
             </span>
           ) : null}
         </div>
@@ -515,7 +533,7 @@ export function RecipeForm({
                 </button>
               ) : null}
             </div>
-            {spec.help ? <span className="field__help">{spec.help}</span> : null}
+            {ayudaLimpia ? <span className="field__help">{ayudaLimpia}</span> : null}
           </div>
           <button
             type="button"
@@ -572,9 +590,9 @@ export function RecipeForm({
             {`${maximo}${unidad ? ` ${unidad}` : ""}`}
           </span>
         </div>
-        {spec.help ? (
+        {ayudaLimpia ? (
           <span className="field__help" id={ayudaId}>
-            {spec.help}
+            {ayudaLimpia}
           </span>
         ) : null}
       </div>
@@ -605,16 +623,7 @@ export function RecipeForm({
               <span className="dataset-badge__dot" aria-hidden="true" />
               {familia.etiqueta}
             </span>
-            <code className="dataset-code">{product.id}</code>
-            <span
-              className={
-                product.command_ready
-                  ? "work__flag"
-                  : "work__flag work__flag--off"
-              }
-            >
-              {product.command_ready ? "pipeline activo" : "solo preview"}
-            </span>
+            <span className="dataset-sensor">{familia.sensor}</span>
           </div>
           <h2 className="work__title" id="work-product-title">
             {product.name}
@@ -637,8 +646,8 @@ export function RecipeForm({
             <img src={muestra} alt={`Resultado de ${product.name}`} />
           </div>
           <figcaption className="plate__cap">
-            <span>salida real de este producto</span>
-            <span>{detalleMuestra ? `${product.id} · ${detalleMuestra}` : product.id}</span>
+            <span>Vista previa de referencia</span>
+            <span>{detalleMuestra || product.name}</span>
           </figcaption>
         </figure>
       ) : (
@@ -646,36 +655,6 @@ export function RecipeForm({
           <p className="plate__none">sin muestra de referencia</p>
         </figure>
       )}
-
-      <dl className="folio">
-        <div className="folio__cell">
-          <dt>Familia / Sensor</dt>
-          <dd className="folio__group" data-group={product.group}>
-            <span className="folio__dot" aria-hidden="true" />
-            {product.group}
-          </dd>
-        </div>
-        <div className="folio__cell">
-          <dt>Datos en disco</dt>
-          <dd>
-            {dates
-              ? dates.source === "descubierto"
-                ? `${dates.dates.length} ${
-                    dates.dates.length === 1 ? "fecha" : "fechas"
-                  }`
-                : "ninguno"
-              : "—"}
-          </dd>
-        </div>
-        <div className="folio__cell">
-          <dt>Última fecha</dt>
-          <dd>{dates?.dates.at(0) ?? "—"}</dd>
-        </div>
-        <div className="folio__cell">
-          <dt>Origen</dt>
-          <dd>{dates?.source === "demo" ? "calendario demo" : "descubierto"}</dd>
-        </div>
-      </dl>
 
       <div className="sheet__body">
         <div className="fields">
@@ -700,7 +679,7 @@ export function RecipeForm({
 
         {!product.command_ready ? (
           <p className="sheet__note">
-            No se encontró el Python del repo: solo queda disponible el preview.
+            El motor de procesamiento no está disponible: solo se muestra la vista previa.
           </p>
         ) : null}
       </div>

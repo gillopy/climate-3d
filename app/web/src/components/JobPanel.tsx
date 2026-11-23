@@ -93,9 +93,9 @@ export function JobPanel({ job, corridas, onSelect, onCancel, onReveal }: Props)
             <div className="flow">
               <p className="flow__title">Como corre</p>
               <ol className="flow__list">
-                <li>Elegis el producto y ajustas la receta.</li>
-                <li>El job se encola y ejecuta el script real del repo.</li>
-                <li>El render queda en disco y se abre desde aca.</li>
+                <li>Elegís el producto y ajustás los parámetros.</li>
+                <li>La corrida se encola y procesa los datos satelitales.</li>
+                <li>El resultado se previsualiza y descarga desde acá.</li>
               </ol>
             </div>
             <Clave />

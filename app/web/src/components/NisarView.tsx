@@ -22,6 +22,7 @@ import type {
 import { fechaCorta } from "../formato";
 import type { Job, Params } from "../types";
 import { JobsPanel } from "./JobsPanel";
+import { FechaUnica, VentanaTemporal } from "./controls/Window";
 
 const CENTRO_PARAGUAY: L.LatLngTuple = [-23.4, -58.4];
 const COLOR = "#c084fc";
@@ -29,6 +30,33 @@ const COLOR_SEL = "#e9d5ff";
 const COLOR_PARAGUAY = "#38bdf8";
 //: La caja de selección va en ámbar: no se confunde con las huellas ASF.
 const COLOR_CAJA = "#f5a524";
+const STORAGE_NISAR = "climate3d:nisar:config";
+const FECHAS_VACIAS = new Set<string>();
+const PISO_NISAR = "2024-01-01";
+
+interface NisarEstadoGuardado {
+  capaBase?: CapaBase;
+  etiquetasMapa?: boolean;
+  nivel?: string;
+  desde?: string;
+  hasta?: string;
+  caja?: Caja | null;
+  producto?: string;
+  pol?: string;
+  modo?: string;
+  px?: string;
+}
+
+function leerNisarGuardado(): NisarEstadoGuardado {
+  try {
+    const crudo = window.localStorage.getItem(STORAGE_NISAR);
+    if (!crudo) return {};
+    const parsed = JSON.parse(crudo) as NisarEstadoGuardado;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 type CapaBase = "satelite" | "terreno" | "mapa";
 
@@ -150,13 +178,19 @@ export function NisarView() {
   const esquinasRef = useRef<L.LayerGroup | null>(null);
   const borradorRef = useRef<L.Rectangle | null>(null);
 
+  const inicialRef = useRef<NisarEstadoGuardado | null>(null);
+  if (inicialRef.current === null) {
+    inicialRef.current = leerNisarGuardado();
+  }
+  const inicial = inicialRef.current;
+
   const [catalogo, setCatalogo] = useState<NisarCatalog | null>(null);
-  const [capaBase, setCapaBase] = useState<CapaBase>("satelite");
-  const [etiquetasMapa, setEtiquetasMapa] = useState(true);
-  const [nivel, setNivel] = useState("GCOV");
-  const [desde, setDesde] = useState(() => hoyISO(29));
-  const [hasta, setHasta] = useState(() => hoyISO());
-  const [caja, setCaja] = useState<Caja | null>(null);
+  const [capaBase, setCapaBase] = useState<CapaBase>(inicial.capaBase ?? "satelite");
+  const [etiquetasMapa, setEtiquetasMapa] = useState(inicial.etiquetasMapa ?? true);
+  const [nivel, setNivel] = useState(inicial.nivel ?? "GCOV");
+  const [desde, setDesde] = useState(() => inicial.desde ?? hoyISO(29));
+  const [hasta, setHasta] = useState(() => inicial.hasta ?? hoyISO());
+  const [caja, setCaja] = useState<Caja | null>(() => inicial.caja ?? null);
   const [dibujando, setDibujando] = useState(false);
   const [resultado, setResultado] = useState<NisarSearch | null>(null);
   const [seleccion, setSeleccion] = useState<NisarGranule | null>(null);
@@ -173,19 +207,19 @@ export function NisarView() {
   const ultimoFinComposicion = useRef<number | null>(null);
 
   // Render de la caja: descarga del .h5 + recorte de alta calidad.
-  const [pol, setPol] = useState("auto");
-  const [modo, setModo] = useState("gris");
-  const [px, setPx] = useState("2400");
+  const [pol, setPol] = useState(inicial.pol ?? "auto");
+  const [modo, setModo] = useState(inicial.modo ?? "gris");
+  const [px, setPx] = useState(inicial.px ?? "2400");
   const [trabajo, setTrabajo] = useState<Job | null>(null);
   const [locales, setLocales] = useState<NisarLocalScene[]>([]);
   const [fechasSerie, setFechasSerie] = useState<string[]>([]);
-  const [producto, setProducto] = useState("recorte");
+  const [producto, setProducto] = useState(inicial.producto ?? "recorte");
   const [antesId, setAntesId] = useState("");
   // Fecha anterior elegida a mano: puede no venir de la ventana de busqueda.
   const [antesExterno, setAntesExterno] = useState<NisarTimelineScene | null>(null);
   const [timeline, setTimeline] = useState<NisarTimelineScene[]>([]);
   const [cargandoFechas, setCargandoFechas] = useState(false);
-  const [fechaNueva, setFechaNueva] = useState("");
+  const [fechaNueva, setFechaNueva] = useState(() => hoyISO(12));
   const [resolviendo, setResolviendo] = useState(false);
   const [coordTexto, setCoordTexto] = useState("");
   const [verificarS2, setVerificarS2] = useState(true);
@@ -522,6 +556,26 @@ export function NisarView() {
       marcador.addTo(capaEsquinas);
     }
   }, [caja]);
+
+  useEffect(() => {
+    try {
+      const estado: NisarEstadoGuardado = {
+        capaBase,
+        etiquetasMapa,
+        nivel,
+        desde,
+        hasta,
+        caja,
+        producto,
+        pol,
+        modo,
+        px,
+      };
+      window.localStorage.setItem(STORAGE_NISAR, JSON.stringify(estado));
+    } catch {
+      // Ignorado si localStorage no está disponible.
+    }
+  }, [capaBase, etiquetasMapa, nivel, desde, hasta, caja, producto, pol, modo, px]);
 
   // Sincroniza el campo de texto cuando la caja cambia desde el mapa, buscador o presets.
   useEffect(() => {
@@ -1087,8 +1141,13 @@ export function NisarView() {
     setTimeline([]);
     setLocales([]);
     setFechasSerie([]);
-    setFechaNueva("");
+    setFechaNueva(hoyISO(12));
     setCoordTexto("");
+    try {
+      window.localStorage.removeItem(STORAGE_NISAR);
+    } catch {
+      // Ignorado.
+    }
   }
 
   function aplicarCoordenadas() {
@@ -1393,14 +1452,18 @@ export function NisarView() {
               )}
             </select>
           </label>
-          <label>
-            Desde (UTC)
-            <input type="date" value={desde} onChange={(evento) => setDesde(evento.target.value)} />
-          </label>
-          <label>
-            Hasta (UTC)
-            <input type="date" value={hasta} onChange={(evento) => setHasta(evento.target.value)} />
-          </label>
+          <div className="nisar__ancho nisar__ventana-fecha">
+            <span className="nisar__lbl">Ventana temporal (UTC)</span>
+            <VentanaTemporal
+              value={{ start: desde, end: hasta }}
+              disponibles={FECHAS_VACIAS}
+              piso={PISO_NISAR}
+              onChange={(rango) => {
+                setDesde(rango.start);
+                setHasta(rango.end);
+              }}
+            />
+          </div>
           <button
             type="button"
             className={`btn btn--primary nisar__ancho${
@@ -1553,7 +1616,7 @@ export function NisarView() {
               >
                 {seleccion.local
                   ? "Ya está en disco"
-                  : `Descargar a ${catalogo?.nisar_root ?? "E:\\nisar"}`}
+                  : "Descargar a almacenamiento local"}
               </button>
             </div>
 
@@ -1569,18 +1632,14 @@ export function NisarView() {
                         : producto === "serie"
                           ? "Usa todas las fechas locales del mismo track/frame/colección (mínimo 2). Genera serie, mediana y CUSUM."
                           : producto === "geotiff"
-                            ? "Exporta la caja como GeoTIFF en el EPSG de la escena. El .tif queda en la carpeta del job."
+                            ? "Exporta la caja como GeoTIFF en el EPSG de la escena."
                             : producto === "agua"
                               ? "Máscara de agua abierta: HH y HV bajos. Reporta hectáreas y porcentaje."
                               : producto === "incendio"
                                 ? "Cicatriz por caída de HV entre dos fechas, con focos FIRMS opcionales."
                                 : producto === "fusion"
                                   ? "Compone Sentinel-2 L2A (NDVI sin nubes) sobre la caja y la cruza con HV. Clasificación rule-based, no un modelo entrenado."
-                                  : `Baja el .h5 a ${
-                                      catalogo?.nisar_root
-                                        ? catalogo.nisar_root
-                                        : "la carpeta de datos NISAR"
-                                    } y recorta esta caja.`}
+                                  : "Descarga la escena .h5 al almacenamiento local y recorta esta caja."}
                     {seleccion.size_mb !== null
                       ? ` Pesa ~${seleccion.size_mb} MB.`
                       : ""}
@@ -2013,11 +2072,13 @@ export function NisarView() {
                           Ninguna
                         </button>
                       </div>
-                      <div className="nisar__fechas-head">
-                        <input
-                          type="date"
+                      <div className="nisar__fechas-add">
+                        <FechaUnica
                           value={fechaNueva}
-                          onChange={(evento) => setFechaNueva(evento.target.value)}
+                          disponibles={FECHAS_VACIAS}
+                          piso={PISO_NISAR}
+                          disabled={resolviendo}
+                          onChange={(iso) => setFechaNueva(iso)}
                         />
                         <button
                           type="button"
@@ -2096,11 +2157,13 @@ export function NisarView() {
                           ? "Consultando las fechas del track/frame en ASF…"
                           : "No aparecen otras fechas para este track/frame. Elegí una con el calendario: si existe en ASF se descarga al comparar."}
                       </p>
-                      <div className="nisar__fechas-head">
-                        <input
-                          type="date"
+                      <div className="nisar__fechas-add">
+                        <FechaUnica
                           value={fechaNueva}
-                          onChange={(evento) => setFechaNueva(evento.target.value)}
+                          disponibles={FECHAS_VACIAS}
+                          piso={PISO_NISAR}
+                          disabled={resolviendo}
+                          onChange={(iso) => setFechaNueva(iso)}
                         />
                         <button
                           type="button"

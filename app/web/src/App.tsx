@@ -26,12 +26,49 @@ import type {
 const EN_MARCHA = (estado: JobSummary["status"]) =>
   estado === "queued" || estado === "running";
 
+const STORAGE_VISTA = "climate3d:vista";
+const STORAGE_PRODUCTO = "climate3d:producto";
+const STORAGE_PARAMS_PREFIX = "climate3d:params:";
+
 function valoresIniciales(producto: Product): Params {
   const salida: Params = {};
   for (const spec of producto.params) {
     salida[spec.name] = spec.default as Params[string];
   }
   return salida;
+}
+
+function leerParamsGuardados(producto: Product): Params {
+  const base = valoresIniciales(producto);
+  try {
+    const crudo = window.localStorage.getItem(`${STORAGE_PARAMS_PREFIX}${producto.id}`);
+    if (!crudo) return base;
+    const guardado = JSON.parse(crudo) as Record<string, unknown>;
+    if (!guardado || typeof guardado !== "object") return base;
+    for (const spec of producto.params) {
+      if (spec.name in guardado && guardado[spec.name] !== undefined) {
+        base[spec.name] = guardado[spec.name] as Params[string];
+      }
+    }
+    for (const spec of producto.params) {
+      const ajustado = valorAjustado(spec, base);
+      if (ajustado !== null) base[spec.name] = ajustado;
+    }
+    return ajustarFechas(base);
+  } catch {
+    return base;
+  }
+}
+
+function guardarParams(productId: string, params: Params) {
+  try {
+    window.localStorage.setItem(
+      `${STORAGE_PARAMS_PREFIX}${productId}`,
+      JSON.stringify(params),
+    );
+  } catch {
+    // localStorage deshabilitado o lleno: sigue en memoria.
+  }
 }
 
 export default function App() {
@@ -53,7 +90,15 @@ export default function App() {
   const [filtro, setFiltro] = useState("");
   const [familiaFiltro, setFamiliaFiltro] = useState<string>("todos");
   // Dos vistas en la misma app: la consola de recetas y el visor NISAR.
-  const [vista, setVista] = useState<"consola" | "nisar">("consola");
+  const [vista, setVista] = useState<"consola" | "nisar">(() => {
+    try {
+      return window.localStorage.getItem(STORAGE_VISTA) === "nisar"
+        ? "nisar"
+        : "consola";
+    } catch {
+      return "consola";
+    }
+  });
 
   const satelite = typeof params.satelite === "string" ? params.satelite : "";
   const banda = typeof params.banda === "string" ? params.banda : "";
@@ -74,10 +119,28 @@ export default function App() {
   }, [refrescarCorridas]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_VISTA, vista);
+    } catch {
+      // Ignorado si localStorage no está disponible.
+    }
+  }, [vista]);
+
+  useEffect(() => {
     getCatalog()
       .then((datos) => {
         setCatalogo(datos);
-        if (datos.products.length > 0) elegir(datos.products[0]);
+        if (datos.products.length > 0) {
+          let inicial = datos.products[0];
+          try {
+            const guardadoId = window.localStorage.getItem(STORAGE_PRODUCTO);
+            const encontrado = datos.products.find((p) => p.id === guardadoId);
+            if (encontrado) inicial = encontrado;
+          } catch {
+            // Usa el primero si falla localStorage.
+          }
+          elegir(inicial);
+        }
       })
       .catch((exc: unknown) => {
         setError(exc instanceof Error ? exc.message : "no se pudo leer el catalogo");
@@ -178,8 +241,24 @@ export default function App() {
 
   function elegir(siguiente: Product) {
     setProducto(siguiente);
-    setParams(valoresIniciales(siguiente));
+    setParams(leerParamsGuardados(siguiente));
     setError(null);
+    try {
+      window.localStorage.setItem(STORAGE_PRODUCTO, siguiente.id);
+    } catch {
+      // Ignorado si localStorage no está disponible.
+    }
+  }
+
+  function restablecerProductoActual() {
+    if (!producto) return;
+    const limpios = valoresIniciales(producto);
+    setParams(limpios);
+    try {
+      window.localStorage.removeItem(`${STORAGE_PARAMS_PREFIX}${producto.id}`);
+    } catch {
+      // Ignorado.
+    }
   }
 
   function elegirCorrida(id: string) {
@@ -225,7 +304,6 @@ export default function App() {
   }
 
   const listo = catalogo?.repo_ready === true;
-  const conDatos = catalogo?.data_root_exists === true;
   const consulta = filtro.trim().toLowerCase();
   const familiasDisponibles = Array.from(
     new Set((catalogo?.products ?? []).map((item) => item.group)),
@@ -312,24 +390,13 @@ export default function App() {
           </button>
         </nav>
         <div className="health">
-          <span className="health__item health__item--count">
-            {catalogo ? `${catalogo.products.length} productos` : "leyendo catalogo"}
-          </span>
           <span
             className={`health__item ${
               listo ? "health__item--ok" : "health__item--warn"
             }`}
           >
             <span className="health__swatch" aria-hidden="true" />
-            {listo ? "pipeline listo" : "sin .venv del repo"}
-          </span>
-          <span
-            className={`health__item ${
-              conDatos ? "health__item--ok" : "health__item--warn"
-            }`}
-          >
-            <span className="health__swatch" aria-hidden="true" />
-            {conDatos ? "datos en disco" : "sin datos locales"}
+            {listo ? "pipeline listo" : "modo vista previa"}
           </span>
           <Reloj />
         </div>
@@ -525,9 +592,12 @@ export default function App() {
                     if (ajustado !== null) siguiente[spec.name] = ajustado;
                   }
                   // Y si el satélite nuevo no cubre la fecha elegida, se corre sola.
-                  return ajustarFechas(siguiente);
+                  const final = ajustarFechas(siguiente);
+                  guardarParams(producto.id, final);
+                  return final;
                 })
               }
+              onReset={restablecerProductoActual}
               onSubmit={generar}
             />
           ) : (

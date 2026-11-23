@@ -4793,6 +4793,36 @@ form,
   color: var(--mist);
 }
 
+/* Ventana temporal unificada dentro del panel NISAR */
+.nisar__ventana-fecha {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nisar__lbl {
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.nisar__fechas-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.nisar__fechas-add .btn {
+  min-height: 36px;
+  padding: 4px 10px;
+  font-size: 10.5px;
+}
+
 .barrido__pos {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
