@@ -127,10 +127,6 @@ function dimensionesCaja(caja: Caja): {
   };
 }
 
-function bboxTexto(caja: Caja): string {
-  return `${caja.oeste.toFixed(3)}, ${caja.sur.toFixed(3)}, ${caja.este.toFixed(3)}, ${caja.norte.toFixed(3)}`;
-}
-
 /** `NISAR_..._20261017T214920_...` -> `2026-10-17T21:49:20Z` (ordenable). */
 function instanteDeId(id: string): string {
   const partes = /(\d{8})T(\d{6})/.exec(id);
@@ -211,6 +207,7 @@ export function NisarView() {
   const [algoritmoSme2, setAlgoritmoSme2] = useState("PMI");
   const [soloCalidadSme2, setSoloCalidadSme2] = useState(false);
   const [jobNuevo, setJobNuevo] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
 
   const elegirGranulo = useCallback((granulo: NisarGranule) => {
     setSeleccion(granulo);
@@ -525,6 +522,28 @@ export function NisarView() {
       marcador.addTo(capaEsquinas);
     }
   }, [caja]);
+
+  // Sincroniza el campo de texto cuando la caja cambia desde el mapa, buscador o presets.
+  useEffect(() => {
+    if (!caja) return;
+    setCoordTexto(
+      `${caja.oeste.toFixed(4)},${caja.sur.toFixed(4)},${caja.este.toFixed(4)},${caja.norte.toFixed(4)}`,
+    );
+  }, [caja]);
+
+  async function copiarCoordenadas() {
+    if (!caja) return;
+    const texto = `${caja.oeste.toFixed(4)},${caja.sur.toFixed(4)},${caja.este.toFixed(4)},${caja.norte.toFixed(4)}`;
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(true);
+      window.setTimeout(() => setCopiado(false), 1800);
+    } catch {
+      setCoordTexto(texto);
+      setCopiado(true);
+      window.setTimeout(() => setCopiado(false), 1800);
+    }
+  }
 
   // Toda caja nueva (o cambio de filtros) vuelve a consultar ASF.
   useEffect(() => {
@@ -1251,7 +1270,7 @@ export function NisarView() {
 
         {/* Herramientas interactivas de la caja ROI */}
         <div className="nisar__herramientas">
-          <div className="nisar__tools" role="group" aria-label="Herramienta de dibujo">
+          <div className="nisar__roi-group">
             <button
               type="button"
               className={`nisar__tool${dibujando ? " nisar__tool--on" : ""}`}
@@ -1268,70 +1287,80 @@ export function NisarView() {
                   y="4"
                   width="11"
                   height="8"
-                  rx="1.2"
+                  rx="1"
                   stroke="currentColor"
                   strokeWidth="1.4"
                 />
               </svg>
-              {dibujando ? "Dibujando…" : "Dibujar ROI"}
+              {dibujando ? "Trazando…" : "Trazar cuadro"}
             </button>
-          </div>
 
-          <div className="nisar__presets" role="group" aria-label="Tamaños rápidos de caja ROI">
-            <span className="nisar__presets-lbl">Caja rápida:</span>
-            {[7, 15, 25, 50].map((km) => (
-              <button
-                key={km}
-                type="button"
-                className="nisar__preset-btn"
-                title={`Crear o ajustar caja de ${km} × ${km} km en el centro actual`}
-                onClick={() => redimensionarCajaKm(km)}
-              >
-                {km} km
-              </button>
-            ))}
+            <div className="nisar__presets" role="group" aria-label="Tamaños rápidos de caja ROI">
+              <span className="nisar__presets-lbl">Escala</span>
+              {[7, 15, 25, 50].map((km) => (
+                <button
+                  key={km}
+                  type="button"
+                  className="nisar__preset-btn"
+                  title={`Crear o ajustar caja de ${km} × ${km} km en el centro actual`}
+                  onClick={() => redimensionarCajaKm(km)}
+                >
+                  {km} km
+                </button>
+              ))}
+            </div>
           </div>
-
-          <button type="button" className="btn" onClick={limpiar}>
-            Limpiar
-          </button>
 
           <div className="nisar__coords">
-            <div className="nisar__coords-field">
-              <input
-                type="text"
-                value={coordTexto}
-                aria-label="Caja por coordenadas: oeste, sur, este, norte"
-                placeholder="-61.16,-21.07,-60.83,-20.74"
-                title="Formato: oeste,sur,este,norte (grados). Ejemplo: -61.16,-21.07,-60.83,-20.74"
-                onChange={(evento) => setCoordTexto(evento.target.value)}
-                onKeyDown={(evento) => {
-                  if (evento.key === "Enter") aplicarCoordenadas();
-                }}
-              />
-              <span className="nisar__coords-hint">
-                oeste,sur,este,norte · o arrastrá las 4 esquinas ámbar
-              </span>
-            </div>
+            <span className="nisar__coords-label">BBOX</span>
+            <input
+              type="text"
+              value={coordTexto}
+              aria-label="Caja por coordenadas: oeste, sur, este, norte"
+              placeholder="-61.1600,-21.0700,-60.8300,-20.7400"
+              title="Formato: oeste,sur,este,norte (grados). Podés pegar o editar y presionar Enter."
+              onChange={(evento) => setCoordTexto(evento.target.value)}
+              onKeyDown={(evento) => {
+                if (evento.key === "Enter") aplicarCoordenadas();
+              }}
+            />
             <button
               type="button"
-              className="btn"
+              className="nisar__box-btn"
               disabled={!coordTexto.trim()}
               onClick={aplicarCoordenadas}
             >
-              Usar caja
+              Aplicar
+            </button>
+            <button
+              type="button"
+              className={`nisar__box-btn${copiado ? " nisar__box-btn--copied" : ""}`}
+              disabled={!caja}
+              title="Copiar coordenadas oeste,sur,este,norte al portapapeles"
+              onClick={() => void copiarCoordenadas()}
+            >
+              {copiado ? "Copiado" : "Copiar"}
             </button>
           </div>
 
-          <span
-            className="nisar__coord"
-            title="Caja de selección (oeste, sur, este, norte)"
-          >
-            <i className="nisar__coord-dot" aria-hidden="true" />
-            {caja && infoCaja
-              ? `${bboxTexto(caja)} · ${infoCaja.anchoKm.toFixed(1)}×${infoCaja.altoKm.toFixed(1)} km`
-              : "Sin caja ROI"}
-          </span>
+          <div className="nisar__roi-status">
+            <span
+              className="nisar__coord"
+              title="Dimensiones del cuadro ROI seleccionado"
+            >
+              <i className="nisar__coord-dot" aria-hidden="true" />
+              {caja && infoCaja
+                ? `${infoCaja.anchoKm.toFixed(1)} × ${infoCaja.altoKm.toFixed(1)} km`
+                : "Sin cuadro"}
+            </span>
+            <button
+              type="button"
+              className="nisar__box-btn nisar__box-btn--ghost"
+              onClick={limpiar}
+            >
+              Limpiar
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1353,7 +1382,7 @@ export function NisarView() {
 
         <div className="nisar__filtros">
           <label className="nisar__ancho">
-            01 · Nivel del producto SAR
+            Nivel del producto SAR
             <select value={nivel} onChange={(evento) => setNivel(evento.target.value)}>
               {(catalogo?.levels ?? [{ value: "GCOV", label: "GCOV", detail: "" }]).map(
                 (opcion) => (
@@ -1557,10 +1586,9 @@ export function NisarView() {
                       : ""}
                   </p>
 
-                  {/* Etapa 01: Producto y Escala de Salida */}
+                  {/* Producto y Escala de Salida */}
                   <div className="nisar__stage">
                     <div className="nisar__stage-head">
-                      <span className="fields__num">01</span>
                       <span className="nisar__stage-title">Producto & resolución</span>
                     </div>
                     <div className="nisar__render-ctrl">
@@ -1613,7 +1641,7 @@ export function NisarView() {
                     </div>
                   </div>
 
-                  {/* Etapa 02: Polarización / Umbrales radiométricos */}
+                  {/* Polarización / Umbrales radiométricos */}
                   {producto === "recorte" ||
                   producto === "geotiff" ||
                   producto === "agua" ||
@@ -1623,7 +1651,6 @@ export function NisarView() {
                   producto === "serie" ? (
                     <div className="nisar__stage">
                       <div className="nisar__stage-head">
-                        <span className="fields__num">02</span>
                         <span className="nisar__stage-title">
                           {producto === "recorte" || producto === "geotiff"
                             ? "Polarización & radiometría"
@@ -1773,11 +1800,10 @@ export function NisarView() {
                     </div>
                   ) : null}
 
-                  {/* Etapa 03: Referencia temporal & Corroboración óptica */}
+                  {/* Referencia temporal & Corroboración óptica */}
                   {producto === "cambio" || producto === "incendio" ? (
                     <div className="nisar__stage">
                       <div className="nisar__stage-head">
-                        <span className="fields__num">03</span>
                         <span className="nisar__stage-title">
                           Par temporal & verificación
                         </span>
@@ -1967,7 +1993,7 @@ export function NisarView() {
                     <div className="nisar__fechas">
                       <div className="nisar__fechas-head">
                         <span>
-                          03 · Fechas del track/frame ({fechasDelTrack.length})
+                          Fechas del track/frame ({fechasDelTrack.length})
                           {cargandoFechas ? " · consultando ASF…" : ""}
                         </span>
                         <button
@@ -2143,7 +2169,6 @@ export function NisarView() {
                   </p>
                   <div className="nisar__stage">
                     <div className="nisar__stage-head">
-                      <span className="fields__num">01</span>
                       <span className="nisar__stage-title">Algoritmo & control de calidad</span>
                     </div>
                     <div className="nisar__render-ctrl">
@@ -2226,7 +2251,6 @@ export function NisarView() {
                   </p>
                   <div className="nisar__stage">
                     <div className="nisar__stage-head">
-                      <span className="fields__num">01</span>
                       <span className="nisar__stage-title">Escala interferométrica</span>
                     </div>
                     <div className="nisar__render-ctrl">

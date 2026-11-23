@@ -3984,45 +3984,62 @@ input[type="range"]:disabled {
 }
 
 /* ==========================================================================
-   Scientific Earth-Observation Family Themes & NISAR Workbench Extensions
+   Scientific Earth-Observation Family Themes & Minimalist Geometry
    ========================================================================== */
 
+:root {
+  --r-xs: 2px;
+  --r-sm: 4px;
+  --r-md: 5px;
+  --r-lg: 6px;
+  --pill: 4px;
+}
+
 [data-group="satelite"] {
-  --iris: #38bdf8;
-  --iris-hi: #7dd3fc;
+  --iris: #0ea5e9;
+  --iris-hi: #38bdf8;
   --iris-deep: #0284c7;
-  --iris-soft: rgba(56, 189, 248, 0.16);
-  --iris-line: rgba(56, 189, 248, 0.44);
+  --iris-soft: rgba(14, 165, 233, 0.22);
+  --iris-line: rgba(56, 189, 248, 0.62);
 }
 
 [data-group="modelo"] {
   --iris: #f59e0b;
-  --iris-hi: #fcd34d;
+  --iris-hi: #fbbf24;
   --iris-deep: #d97706;
-  --iris-soft: rgba(245, 158, 11, 0.16);
-  --iris-line: rgba(245, 158, 11, 0.44);
+  --iris-soft: rgba(245, 158, 11, 0.22);
+  --iris-line: rgba(251, 191, 36, 0.62);
 }
 
 [data-group="vegetacion"] {
   --iris: #10b981;
-  --iris-hi: #6ee7b7;
+  --iris-hi: #34d399;
   --iris-deep: #059669;
-  --iris-soft: rgba(16, 185, 129, 0.16);
-  --iris-line: rgba(16, 185, 129, 0.44);
+  --iris-soft: rgba(16, 185, 129, 0.22);
+  --iris-line: rgba(52, 211, 153, 0.62);
 }
 
 [data-group="radar"] {
   --iris: #a855f7;
-  --iris-hi: #d8b4fe;
+  --iris-hi: #c084fc;
   --iris-deep: #9333ea;
-  --iris-soft: rgba(168, 85, 247, 0.16);
-  --iris-line: rgba(168, 85, 247, 0.44);
+  --iris-soft: rgba(168, 85, 247, 0.22);
+  --iris-line: rgba(192, 132, 252, 0.62);
 }
 
 body,
 form,
 .nisar {
   accent-color: var(--iris);
+}
+
+/* Interruptor rectilíneo técnico (sin forma ovalada) */
+.switch {
+  border-radius: 3px;
+}
+
+.switch span {
+  border-radius: 2px;
 }
 
 /* Indicador del dataset activo en la barra superior */
@@ -4032,9 +4049,9 @@ form,
   gap: 6px;
   height: 24px;
   margin-left: 8px;
-  padding: 0 10px;
+  padding: 0 9px;
   border: 1px solid var(--iris-line);
-  border-radius: var(--pill);
+  border-radius: var(--r-xs);
   background: var(--iris-soft);
   font-size: 11px;
   color: var(--paper);
@@ -4044,9 +4061,8 @@ form,
 .topbar__active-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: 1px;
   background: var(--iris-hi);
-  box-shadow: 0 0 0 2px var(--iris-soft);
 }
 
 .topbar__active-group {
@@ -4063,13 +4079,13 @@ form,
 }
 
 .topbar__active-name {
-  font-weight: 500;
+  font-weight: 600;
   max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Píldoras de familia en el catálogo */
+/* Botones de filtro por familia en el catálogo (rectilíneos) */
 .rail__families {
   display: flex;
   flex-wrap: wrap;
@@ -4084,7 +4100,7 @@ form,
   height: 22px;
   padding: 0 8px;
   border: 1px solid var(--line);
-  border-radius: var(--pill);
+  border-radius: var(--r-xs);
   background: var(--obsidian);
   color: var(--fog);
   font-family: var(--narrow);
@@ -4111,7 +4127,7 @@ form,
 .rail__family-dot {
   width: 5px;
   height: 5px;
-  border-radius: 50%;
+  border-radius: 1px;
   background: var(--iris);
 }
 
@@ -4124,9 +4140,8 @@ form,
 .catalog__grupo-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: 1px;
   background: var(--iris);
-  box-shadow: 0 0 0 2px var(--iris-soft);
 }
 
 .catalog__grupo-count {
@@ -4136,9 +4151,31 @@ form,
   color: var(--ash);
 }
 
+/* Cuadro de dataset seleccionado con alto contraste cromático */
 .catalog__item[aria-current="true"] {
-  border-left: 3px solid var(--iris);
-  background: linear-gradient(90deg, var(--iris-soft) 0%, var(--obsidian) 85%);
+  border-left: 4px solid var(--iris-hi);
+  background: var(--iris-soft);
+  box-shadow: inset 0 0 0 1px var(--iris-line);
+}
+
+.catalog__item[aria-current="true"] .catalog__name {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.catalog__item[aria-current="true"] .catalog__desc {
+  color: var(--mist);
+}
+
+.catalog__item[aria-current="true"] .catalog__thumb {
+  border-color: var(--iris-hi);
+}
+
+.catalog__item[aria-current="true"] .catalog__mark {
+  border-radius: 1px;
+  background: var(--iris-hi);
+  border-color: var(--iris-hi);
+  box-shadow: 0 0 0 2px var(--iris-soft);
 }
 
 .catalog__meta {
@@ -4151,8 +4188,8 @@ form,
 .catalog__tag {
   padding: 1px 6px;
   border: 1px solid var(--iris-line);
-  border-radius: var(--pill);
-  background: var(--iris-soft);
+  border-radius: var(--r-xs);
+  background: rgba(8, 9, 10, 0.45);
   color: var(--iris-hi);
   font-family: var(--narrow);
   font-size: 8.5px;
@@ -4180,9 +4217,9 @@ form,
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 9px;
+  padding: 2px 8px;
   border: 1px solid var(--iris-line);
-  border-radius: var(--pill);
+  border-radius: var(--r-xs);
   background: var(--iris-soft);
   color: var(--iris-hi);
   font-family: var(--narrow);
@@ -4195,7 +4232,7 @@ form,
 .dataset-badge__dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: 1px;
   background: var(--iris-hi);
 }
 
@@ -4226,79 +4263,40 @@ form,
 .folio__dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: 1px;
   background: var(--iris);
 }
 
-/* Barra de etapas del pipeline de hiperparámetros */
-.pipeline-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 14px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--carbon);
-}
-
-.pipeline-bar__step {
-  display: inline-flex;
+/* Corrección del layout en campos toggle ("Último cuadro disponible", etc.) */
+.field--toggle {
   align-items: center;
-  gap: 6px;
-  padding: 4px 9px;
-  border: 1px solid var(--line);
-  border-radius: var(--pill);
-  background: var(--obsidian);
-  color: var(--mist);
-  font-size: 11px;
-  text-decoration: none;
-  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.pipeline-bar__step:hover {
-  border-color: var(--iris-line);
-  color: var(--paper);
+.field--toggle .field__top {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
 }
 
-.pipeline-bar__step--mod {
-  border-color: var(--iris-line);
-  background: var(--iris-soft);
-  color: var(--paper);
+.field__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 
-.pipeline-bar__num {
-  font-family: var(--mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  color: var(--iris-hi);
-}
-
-.pipeline-bar__name {
-  font-family: var(--narrow);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.pipeline-bar__badge {
-  padding: 0 5px;
-  border-radius: var(--pill);
-  background: var(--iris);
-  color: #fff;
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 600;
-}
-
-/* Campos subordinados y modificados */
+/* Campos subordinados, modificados y deshabilitados */
 .field--modified {
   box-shadow: inset 0 0 0 1px var(--iris-line);
 }
 
 .field--active {
-  background: linear-gradient(135deg, var(--iris-soft) 0%, var(--obsidian) 70%);
+  background: linear-gradient(90deg, var(--iris-soft) 0%, var(--obsidian) 85%);
 }
 
 .field--sub {
@@ -4306,14 +4304,11 @@ form,
   padding-left: 11px;
 }
 
-.field__dep {
-  padding: 1px 6px;
-  border-radius: var(--pill);
-  background: var(--carbon);
-  color: var(--ash);
-  font-family: var(--mono);
-  font-size: 9.5px;
-  font-weight: 500;
+.field--off {
+  opacity: 0.34;
+  background: rgba(12, 13, 15, 0.72) !important;
+  box-shadow: inset 0 0 0 1px var(--line) !important;
+  filter: grayscale(0.85);
 }
 
 /* --- Buscador de ciudades, capas base y ROI interactivo en NISAR ------ */
@@ -4345,12 +4340,12 @@ form,
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 6px 4px 10px;
+  padding: 3px 5px 3px 9px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-md);
-  background: rgba(15, 16, 17, 0.94);
+  border-radius: var(--r-sm);
+  background: rgba(15, 16, 17, 0.95);
   backdrop-filter: blur(8px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
 }
 
 .nisar__buscador-box > svg {
@@ -4361,7 +4356,7 @@ form,
 .nisar__buscador-box input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 28px;
+  height: 26px;
   border: 0;
   background: transparent;
   color: var(--paper);
@@ -4395,8 +4390,9 @@ form,
 }
 
 .nisar__buscador-ir {
-  min-height: 28px !important;
-  padding: 3px 10px !important;
+  min-height: 26px !important;
+  padding: 2px 9px !important;
+  border-radius: var(--r-xs) !important;
   background: var(--iris) !important;
   color: #fff !important;
   font-size: 11px !important;
@@ -4405,16 +4401,16 @@ form,
 
 .nisar__sugerencias {
   position: absolute;
-  top: calc(100% + 5px);
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
   max-height: 240px;
   margin: 0;
-  padding: 5px;
+  padding: 4px;
   list-style: none;
   overflow-y: auto;
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: rgba(15, 16, 17, 0.97);
   backdrop-filter: blur(10px);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.78);
@@ -4426,9 +4422,9 @@ form,
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  padding: 7px 9px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--mist);
   text-align: left;
@@ -4456,16 +4452,16 @@ form,
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 3px;
+  padding: 2px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-md);
-  background: rgba(15, 16, 17, 0.92);
+  border-radius: var(--r-sm);
+  background: rgba(15, 16, 17, 0.94);
   backdrop-filter: blur(8px);
 }
 
 .nisar__capa-btn {
-  height: 28px;
-  padding: 0 10px;
+  height: 26px;
+  padding: 0 9px;
   border: 0;
   border-radius: var(--r-xs);
   background: transparent;
@@ -4489,39 +4485,54 @@ form,
   box-shadow: inset 0 0 0 1px var(--iris-line);
 }
 
-/* Barra inferior de herramientas ROI en el mapa NISAR */
+/* Barra inferior minimalista de herramientas ROI en el mapa NISAR */
 .nisar__herramientas {
   top: auto;
-  bottom: 24px;
+  bottom: 22px;
   left: 12px;
   right: 12px;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: rgba(12, 13, 15, 0.95);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.72);
+}
+
+.nisar__roi-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .nisar__presets {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
+  gap: 3px;
+  padding: 2px 4px;
   border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--carbon);
+  border-radius: var(--r-xs);
+  background: var(--void);
 }
 
 .nisar__presets-lbl {
+  padding: 0 4px;
   font-family: var(--narrow);
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ash);
-  margin-right: 2px;
 }
 
 .nisar__preset-btn {
-  height: 24px;
-  padding: 0 7px;
-  border: 1px solid var(--line-strong);
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid transparent;
   border-radius: var(--r-xs);
   background: var(--obsidian);
   color: var(--mist);
@@ -4532,19 +4543,113 @@ form,
 
 .nisar__preset-btn:hover {
   border-color: #f5a524;
-  background: rgba(245, 165, 36, 0.16);
+  background: rgba(245, 165, 36, 0.18);
   color: #ffc35c;
+}
+
+/* Consola de coordenadas BBOX con botón Copiar y Aplicar integrados */
+.nisar__coords {
+  flex: 1 1 320px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  background: var(--void);
+}
+
+.nisar__coords-label {
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #f5a524;
+}
+
+.nisar__coords input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 170px;
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.nisar__coords input:focus-visible {
+  outline: none;
+}
+
+.nisar__box-btn {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  background: var(--obsidian);
+  color: var(--mist);
+  font-family: var(--narrow);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nisar__box-btn:hover:not(:disabled) {
+  border-color: var(--iris-line);
+  background: var(--slate);
+  color: var(--paper);
+}
+
+.nisar__box-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.nisar__box-btn--copied {
+  border-color: var(--success) !important;
+  background: var(--success-soft) !important;
+  color: var(--success) !important;
+}
+
+.nisar__box-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--fog);
+}
+
+.nisar__box-btn--ghost:hover:not(:disabled) {
+  border-color: var(--line);
+  background: var(--obsidian);
+  color: var(--paper);
+}
+
+.nisar__roi-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Tiradores arrastrables en las 4 esquinas de la caja ROI */
 .nisar__handle-icon {
-  width: 12px !important;
-  height: 12px !important;
+  width: 11px !important;
+  height: 11px !important;
   border: 2px solid #08090a;
-  border-radius: 3px;
+  border-radius: 1px;
   background: #f5a524;
-  box-shadow: 0 0 0 2px rgba(245, 165, 36, 0.55), 0 2px 6px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 0 0 1px rgba(245, 165, 36, 0.7), 0 2px 6px rgba(0, 0, 0, 0.7);
   cursor: nwse-resize;
+}
+
+.nisar__item[aria-current="true"] {
+  border-left: 3px solid var(--iris-hi);
+  border-color: var(--iris-line);
+  background: var(--iris-soft);
 }
 
 .nisar__chip--level {
@@ -4565,12 +4670,12 @@ form,
   margin: 0;
 }
 
-/* Etapas numeradas dentro del panel de análisis NISAR */
+/* Bloques limpios dentro del panel de análisis NISAR */
 .nisar__stage {
   margin: 10px 0;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--obsidian);
 }
 

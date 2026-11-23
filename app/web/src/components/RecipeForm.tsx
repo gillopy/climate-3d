@@ -32,17 +32,15 @@ const ORDEN_TIEMPO = [
 ];
 
 // Secciones del pipeline científico: agrupan el esquema que manda el backend
-// en 5 etapas numeradas sin dejar parámetros huérfanos en "Otras opciones".
+// en 5 etapas limpias sin dejar parámetros huérfanos en "Otras opciones".
 const SECCIONES: {
   id: string;
-  paso: string;
   titulo: string;
   descripcion: string;
   nombres: string[];
 }[] = [
   {
     id: "fuente",
-    paso: "01",
     titulo: "Fuente & sensor",
     descripcion: "Sensor orbital, banda espectral, modelo y paleta.",
     nombres: [
@@ -59,7 +57,6 @@ const SECCIONES: {
   },
   {
     id: "encuadre",
-    paso: "02",
     titulo: "Encuadre & superposiciones",
     descripcion: "Proyección espacial, recorte Paraguay y focos FIRMS.",
     nombres: [
@@ -75,21 +72,18 @@ const SECCIONES: {
   },
   {
     id: "salida",
-    paso: "03",
     titulo: "Salida & composición",
     descripcion: "Resolución en píxeles, fondo, bordes y mezcla.",
     nombres: ["resolucion", "fondo", "borde", "alpha"],
   },
   {
     id: "tiempo",
-    paso: "04",
     titulo: "Ventana temporal & captura (UTC)",
     descripcion: "Snapshot, último slot publicado, calendario y horarios.",
     nombres: ORDEN_TIEMPO,
   },
   {
     id: "movimiento",
-    paso: "05",
     titulo: "Movimiento & animación",
     descripcion: "Secuencia MP4 y cadencia de cuadros por segundo.",
     nombres: ["animar", "fps"],
@@ -259,7 +253,6 @@ export function RecipeForm({
   if (otros.length > 0) {
     grupos.push({
       id: "otros",
-      paso: "06",
       titulo: "Parámetros adicionales",
       descripcion: "Opciones específicas del producto.",
       nombres: [],
@@ -312,16 +305,56 @@ export function RecipeForm({
   const visibles = resumen.slice(0, 6);
   const restantes = resumen.length - visibles.length;
 
-  const campo = (spec: ParamSpec) => {
-    const valor = params[spec.name];
-    const id = `campo-${spec.name}`;
-    const ayudaId = spec.help ? `ayuda-${spec.name}` : undefined;
-    // Un control puede depender de otro: "ultima" apaga fecha/hora/minuto.
-    const habilitado = spec.enabled_when
+  // Coherencia lógica entre hiperparámetros además del `enabled_when` básico:
+  // - Si `snapshot` y `ultimo` están activos, la ventana de fechas, la fecha,
+  //   la hora y el minuto se ignoran (usa el último slot publicado).
+  // - Si `ultima` está activo, la fecha/hora/minuto tampoco aplican.
+  // - Si `ultimos` está activo, ignora la ventana de fechas, horarios y `animar`
+  //   (ya anima los últimos N cuadros).
+  // - `fps` sólo tiene sentido cuando se va a generar animación (`animar` o `ultimos` sin `snapshot`).
+  const estaHabilitado = (spec: ParamSpec): boolean => {
+    const base = spec.enabled_when
       ? Object.entries(spec.enabled_when).every(
           ([clave, esperado]) => params[clave] === esperado,
         )
       : true;
+    if (!base) return false;
+
+    const esSnapshot = params.snapshot === true;
+    const esUltimo = params.ultimo === true;
+    const esUltima = params.ultima === true;
+    const esUltimos = params.ultimos === true && !esSnapshot;
+    const esAnimar = params.animar === true;
+
+    if (
+      (spec.name === "ventana" ||
+        spec.name === "fecha" ||
+        spec.name === "hora" ||
+        spec.name === "minuto") &&
+      ((esSnapshot && esUltimo) || esUltima || esUltimos)
+    ) {
+      return false;
+    }
+
+    if (
+      (spec.name === "hora_desde" || spec.name === "hora_hasta") &&
+      (esSnapshot || esUltimos)
+    ) {
+      return false;
+    }
+
+    if (spec.name === "fps" && !esAnimar && !esUltimos) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const campo = (spec: ParamSpec) => {
+    const valor = params[spec.name];
+    const id = `campo-${spec.name}`;
+    const ayudaId = spec.help ? `ayuda-${spec.name}` : undefined;
+    const habilitado = estaHabilitado(spec);
     const modificado = !igual(valor, spec.default);
     const padre = SUBORDINADOS[spec.name];
     const claseBase = habilitado ? "field" : "field field--off";
@@ -342,12 +375,6 @@ export function RecipeForm({
       />
     );
 
-    const insigniaPadre = padre ? (
-      <span className="field__dep" title={`Depende de ${padre}`}>
-        ↳ {padre}
-      </span>
-    ) : null;
-
     const top = (etiqueta: string, htmlFor?: string) => (
       <div className="field__top">
         {htmlFor ? (
@@ -361,7 +388,6 @@ export function RecipeForm({
             {etiqueta}
           </span>
         )}
-        {insigniaPadre}
         {modificado ? (
           <button
             type="button"
@@ -474,21 +500,22 @@ export function RecipeForm({
       return (
         <div className={claseToggle} key={spec.name}>
           <div className="field__top">
-            <span className="field__label">
-              {marca}
-              {spec.label}
-              {insigniaPadre}
-            </span>
+            <div className="field__title-row">
+              <span className="field__label">
+                {marca}
+                {spec.label}
+              </span>
+              {modificado ? (
+                <button
+                  type="button"
+                  className="field__reset"
+                  onClick={() => onChange(spec.name, spec.default as Params[string])}
+                >
+                  restablecer
+                </button>
+              ) : null}
+            </div>
             {spec.help ? <span className="field__help">{spec.help}</span> : null}
-            {modificado ? (
-              <button
-                type="button"
-                className="field__reset field__reset--start"
-                onClick={() => onChange(spec.name, spec.default as Params[string])}
-              >
-                restablecer
-              </button>
-            ) : null}
           </div>
           <button
             type="button"
@@ -655,33 +682,6 @@ export function RecipeForm({
       </dl>
 
       <div className="sheet__body">
-        <nav className="pipeline-bar" aria-label="Flujo de parametrización">
-          {grupos.map((grupo) => {
-            const modificados = grupo.specs.filter(
-              (spec) => !igual(params[spec.name], spec.default),
-            ).length;
-            return (
-              <a
-                key={grupo.id}
-                href={`#sec-${grupo.id}`}
-                className={
-                  modificados > 0
-                    ? "pipeline-bar__step pipeline-bar__step--mod"
-                    : "pipeline-bar__step"
-                }
-              >
-                <span className="pipeline-bar__num">{grupo.paso}</span>
-                <span className="pipeline-bar__name">{grupo.titulo}</span>
-                {modificados > 0 ? (
-                  <span className="pipeline-bar__badge" title="Parámetros modificados">
-                    {modificados}
-                  </span>
-                ) : null}
-              </a>
-            );
-          })}
-        </nav>
-
         <div className="fields">
           {grupos.map((grupo) => (
             <section
@@ -690,7 +690,6 @@ export function RecipeForm({
               className="fields__grupo"
             >
               <header className="fields__sec">
-                <span className="fields__num">{grupo.paso}</span>
                 <h3 className="fields__title">{grupo.titulo}</h3>
                 <span className="fields__sec-count">
                   {grupo.specs.length}{" "}

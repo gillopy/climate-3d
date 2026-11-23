@@ -500,6 +500,21 @@ export default function App() {
               onChange={(nombre, valor) =>
                 setParams((previo) => {
                   const siguiente = { ...previo, [nombre]: valor };
+                  // Coherencia entre interruptores mutuamente excluyentes:
+                  // - Activar `snapshot` apaga `ultimos` y `animar`.
+                  // - Apagar `snapshot` apaga `ultimo` (que solo aplica en snapshot).
+                  // - Activar `ultimos` apaga `snapshot` y `ultimo`.
+                  if (nombre === "snapshot") {
+                    if (valor === true) {
+                      if ("ultimos" in siguiente) siguiente.ultimos = false;
+                      if ("animar" in siguiente) siguiente.animar = false;
+                    } else if ("ultimo" in siguiente) {
+                      siguiente.ultimo = false;
+                    }
+                  } else if (nombre === "ultimos" && valor === true) {
+                    if ("snapshot" in siguiente) siguiente.snapshot = false;
+                    if ("ultimo" in siguiente) siguiente.ultimo = false;
+                  }
                   // Cambiar la banda puede dejar la paleta elegida fuera de la
                   // lista: cae en la primera que siga disponible.
                   for (const spec of producto.params) {
