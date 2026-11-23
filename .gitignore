@@ -25,6 +25,10 @@ animacion_*.png
 vista_*.png
 frames_*/
 
+# Artefactos locales de salidas y validación (datos del usuario, no del repo)
+/salidas/
+/validacion/
+
 # Logs
 *.log
 
