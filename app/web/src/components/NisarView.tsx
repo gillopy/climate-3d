@@ -1425,17 +1425,10 @@ export function NisarView() {
 
       <aside className="nisar__panel" aria-label="Escenas NISAR">
         <header className="nisar__head">
-          <div className="work__eyebrow">
-            <span className="dataset-badge" data-group="radar">
-              <span className="dataset-badge__dot" aria-hidden="true" />
-              Radar L-Band SAR
-            </span>
-            <code className="dataset-code">NASA / ISRO NISAR</code>
-          </div>
-          <h2 className="nisar__title">NISAR · Análisis Científico SAR</h2>
+          <h2 className="nisar__title">NISAR · radar de apertura sintética</h2>
           <p className="nisar__sub">
-            Buscá una ciudad o dibujá una caja ROI sobre la imagen satelital. Podés
-            arrastrar las esquinas ámbar para ajustar el recorte exacto.
+            Elegí una caja sobre Paraguay y ASF devuelve las escenas. Las imágenes
+            browse son públicas; los .h5 se descargan con Earthdata.
           </p>
         </header>
 
