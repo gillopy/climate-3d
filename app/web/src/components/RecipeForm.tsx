@@ -599,21 +599,13 @@ export function RecipeForm({
       }}
     >
       <div className="work__head">
-        <div>
+        <div className="work__head-main">
           <div className="work__eyebrow">
             <span className="dataset-badge" data-group={product.group}>
               <span className="dataset-badge__dot" aria-hidden="true" />
               {familia.etiqueta}
             </span>
             <code className="dataset-code">{product.id}</code>
-            <span className="dataset-sensor">{familia.sensor}</span>
-          </div>
-          <h2 className="work__title" id="work-product-title">
-            {product.name}
-          </h2>
-          <p className="work__summary">{product.summary}</p>
-          <div className="work__meta">
-            <code className="work__script">{product.stage}</code>
             <span
               className={
                 product.command_ready
@@ -624,6 +616,10 @@ export function RecipeForm({
               {product.command_ready ? "pipeline activo" : "solo preview"}
             </span>
           </div>
+          <h2 className="work__title" id="work-product-title">
+            {product.name}
+          </h2>
+          <p className="work__summary">{product.summary}</p>
         </div>
         <button
           type="button"

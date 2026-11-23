@@ -181,6 +181,35 @@ export function Calendario({
   }, [visible]);
 
   const [anio, numero] = visible.split("-").map(Number);
+  const [anioPiso, mesPisoNum] = piso.split("-").map(Number);
+  const [anioTope, mesTopeNum] = tope.split("-").map(Number);
+  const aniosDisponibles = useMemo(() => {
+    const desdeAnio = Number.isFinite(anioPiso) ? anioPiso : anioTope - 5;
+    const salida: number[] = [];
+    for (let a = anioTope; a >= desdeAnio; a -= 1) {
+      salida.push(a);
+    }
+    return salida;
+  }, [anioPiso, anioTope]);
+
+  function cambiarMes(nuevoMes: number) {
+    const candidato = `${anio}-${dosDigitos(nuevoMes)}`;
+    if (candidato < piso) {
+      setVisible(piso);
+    } else if (candidato > tope) {
+      setVisible(tope);
+    } else {
+      setVisible(candidato);
+    }
+  }
+
+  function cambiarAnio(nuevoAnio: number) {
+    let m = numero;
+    if (nuevoAnio === anioPiso && m < mesPisoNum) m = mesPisoNum;
+    if (nuevoAnio === anioTope && m > mesTopeNum) m = mesTopeNum;
+    setVisible(`${nuevoAnio}-${dosDigitos(m)}`);
+  }
+
   const inicioRango = inicio <= fin ? inicio : fin;
   const finRango = inicio <= fin ? fin : inicio;
 
@@ -239,9 +268,40 @@ export function Calendario({
         >
           ‹
         </button>
-        <span className="cal__mes" aria-live="polite">
-          {MESES[numero - 1]} {anio}
-        </span>
+        <div className="cal__selectores">
+          <select
+            className="cal__select"
+            aria-label="Seleccionar mes"
+            value={numero}
+            disabled={disabled}
+            onChange={(evento) => cambiarMes(Number(evento.target.value))}
+          >
+            {MESES.map((nombreMes, idx) => {
+              const m = idx + 1;
+              const fueraDeRango =
+                (anio === anioPiso && m < mesPisoNum) ||
+                (anio === anioTope && m > mesTopeNum);
+              return (
+                <option key={nombreMes} value={m} disabled={fueraDeRango}>
+                  {nombreMes}
+                </option>
+              );
+            })}
+          </select>
+          <select
+            className="cal__select cal__select--anio"
+            aria-label="Seleccionar año"
+            value={anio}
+            disabled={disabled}
+            onChange={(evento) => cambiarAnio(Number(evento.target.value))}
+          >
+            {aniosDisponibles.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           type="button"
           className="cal__paso"

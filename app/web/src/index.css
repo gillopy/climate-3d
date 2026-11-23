@@ -4204,13 +4204,109 @@ form,
   color: var(--ash);
 }
 
-/* Cabecera científica del producto en RecipeForm */
+/* Desplegables interactivos de Mes y Año en el Calendario */
+.cal__selectores {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px;
+  gap: 4px;
+  align-items: center;
+}
+
+.cal__select {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  background: var(--void);
+  color: var(--paper);
+  font-family: var(--narrow);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.cal__select:hover:not(:disabled) {
+  border-color: var(--iris-line);
+  background: var(--slate);
+}
+
+.cal__select--anio {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Botón primario (Generar / Buscar): sobrio al pasar el mouse, sin brillo excesivo */
+.btn--primary {
+  background: var(--iris-deep);
+  border: 1px solid var(--iris-line);
+  color: #f8fafc;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--iris);
+  border-color: var(--iris-hi);
+  color: #ffffff;
+}
+
+.btn--primary:active:not(:disabled) {
+  background: var(--iris-deep);
+}
+
+/* Cabecera compacta (Hero) de la Consola de Datasets, alineada al estilo de NISAR */
+.work__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px var(--pad) 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--carbon);
+}
+
+.work__head-main {
+  min-width: 0;
+}
+
 .work__eyebrow {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.work__title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--paper);
+}
+
+.work__summary {
+  margin: 4px 0 0;
+  max-width: 72ch;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ash);
+}
+
+.plate {
+  margin: 12px var(--pad) 12px;
+}
+
+.plate__frame img {
+  max-height: clamp(200px, 34vh, 360px);
+}
+
+.barrido__pos {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--fog);
 }
 
 .dataset-badge {

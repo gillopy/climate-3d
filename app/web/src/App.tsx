@@ -60,7 +60,10 @@ export default function App() {
 
   const refrescarCorridas = useCallback(async () => {
     try {
-      setCorridas(await getJobs());
+      const lista = (await getJobs()).filter(
+        (j) => !j.product_id.startsWith("nisar"),
+      );
+      setCorridas(lista);
     } catch {
       // El sondeo no discute: si falla, se reintenta en el proximo tic.
     }
