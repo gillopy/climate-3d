@@ -13,8 +13,8 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
+import requests
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -51,6 +51,30 @@ def _cookies_utiles(cookies: list[dict[str, Any]]) -> list[dict[str, Any]]:
         c for c in cookies
         if any(dominio in c.get("domain", "") for dominio in DOMINIOS)
     ]
+
+
+def _getfile_valido(cookies: list[dict[str, Any]]) -> bool:
+    """Comprueba que las cookies realmente autentican contra OB.DAAC.
+
+    Una cookie `GETFILE_APP` con `urs_token: 0` se setea apenas se toca getfile,
+    antes del login: esa seguiría devolviendo la página de login. Solo la damos
+    por válida si un request de prueba NO cae en HTML de autenticación.
+    """
+    sesion = requests.Session()
+    sesion.headers["User-Agent"] = "climate3d/1.0"
+    sesion.trust_env = False
+    for c in cookies:
+        sesion.cookies.set(
+            c["name"], c["value"], domain=c.get("domain", ""), path=c.get("path", "/")
+        )
+    try:
+        respuesta = sesion.get(GETFILE, stream=True, timeout=(15, 45), allow_redirects=True)
+        tipo = respuesta.headers.get("Content-Type", "")
+        respuesta.close()
+        # NetCDF/octet-stream = autenticado. text/html = página de login.
+        return "text/html" not in tipo.lower()
+    except requests.RequestException:
+        return False
 
 
 def _chromium_instalado() -> Path | None:
@@ -124,35 +148,25 @@ def login_earthdata_interactive() -> LoginResponse:
                 status_code=500, detail=f"No se pudo abrir la página de login: {exc}"
             ) from exc
 
-        # Esperar a que el usuario complete el login. Señal de éxito: presencia
-        # de GETFILE_APP (oceandata) o de una cookie de sesión URS, y salida de
-        # la pantalla de login.
+        # Esperar a que el usuario complete el login. No basta con que exista
+        # GETFILE_APP: apenas se toca getfile se setea con urs_token=0 y sigue
+        # devolviendo la página de login. Validamos de verdad con un request de
+        # prueba hasta que NO caiga en HTML de autenticación.
         max_espera = 300  # 5 minutos
         inicio = time.time()
         capturadas: list[dict[str, Any]] = []
+        # Espacio entre validaciones: cada una hace un GET a OB.DAAC.
+        siguiente_validacion = 0.0
 
         while time.time() - inicio < max_espera:
-            utiles = _cookies_utiles(contexto.cookies())
-            tiene_getfile = any(
-                "getfile" in c.get("name", "").lower() for c in utiles
-            )
-            en_login = "urs.earthdata.nasa.gov/login" in (pagina.url or "")
-            if utiles and (tiene_getfile or not en_login):
-                capturadas = utiles
-                # Si ya tenemos GETFILE_APP, listo. Si no, esperamos un poco más
-                # a que el redirect final la asiente.
-                if tiene_getfile:
+            transcurrido = time.time() - inicio
+            if transcurrido >= siguiente_validacion:
+                utiles = _cookies_utiles(contexto.cookies())
+                if utiles and _getfile_valido(utiles):
+                    capturadas = utiles
                     break
-            time.sleep(2)
-
-        # Último intento: ensure GETFILE_APP tras navegar de nuevo a getfile.
-        if capturadas and not any("getfile" in c.get("name", "").lower() for c in capturadas):
-            try:
-                pagina.goto(GETFILE, wait_until="domcontentloaded", timeout=30000)
-                time.sleep(3)
-                capturadas = _cookies_utiles(contexto.cookies()) or capturadas
-            except Exception:
-                pass
+                siguiente_validacion = transcurrido + 3
+            time.sleep(1)
 
         navegador.close()
 
@@ -160,8 +174,9 @@ def login_earthdata_interactive() -> LoginResponse:
         raise HTTPException(
             status_code=408,
             detail=(
-                "Tiempo agotado esperando el login. Completá el inicio de sesión "
-                "en la ventana del navegador cuando aparezca."
+                "No se pudo verificar la sesión de Earthdata. Asegurate de "
+                "completar el login en la ventana del navegador y de tener una "
+                "conexión estable. Probá de nuevo."
             ),
         )
 
@@ -182,22 +197,27 @@ def login_earthdata_interactive() -> LoginResponse:
 
 @router.get("/cookies-status")
 def cookies_status() -> dict[str, Any]:
-    """Devuelve si hay cookies guardadas, cuántas y si incluyen GETFILE_APP."""
+    """Devuelve si hay una sesión de Earthdata válida (verificada contra OB.DAAC)."""
     cookies_path = ruta_cookies_earthdata()
     if not cookies_path.is_file():
         return {"ok": True, "configured": False, "cookies_count": 0, "file": str(cookies_path)}
 
     try:
         cookies = json.loads(cookies_path.read_text(encoding="utf-8"))
-        return {
-            "ok": True,
-            "configured": bool(cookies),
-            "cookies_count": len(cookies),
-            "getfile": any("getfile" in c.get("name", "").lower() for c in cookies),
-            "file": str(cookies_path),
-        }
     except (OSError, json.JSONDecodeError) as exc:
         return {"ok": False, "configured": False, "error": str(exc), "file": str(cookies_path)}
+
+    valido = bool(cookies) and _getfile_valido(cookies)
+    if cookies and not valido:
+        # Cookie vencida/incompleta: la descartamos para no dar un falso "conectado".
+        cookies_path.unlink(missing_ok=True)
+    return {
+        "ok": True,
+        "configured": valido,
+        "cookies_count": len(cookies) if valido else 0,
+        "getfile": valido,
+        "file": str(cookies_path),
+    }
 
 
 @router.post("/cookies-clear")
