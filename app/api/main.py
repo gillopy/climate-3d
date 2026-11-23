@@ -119,9 +119,11 @@ def fechas(
 
 @app.post("/api/jobs", response_model=JobSnapshot, status_code=201)
 async def crear_job(receta: RecipeRequest) -> JobSnapshot:
-    # async a proposito: `crear` agenda la tarea en el event loop que corre la API.
+    # async a proposito: `crear_async` resuelve el plan en un worker thread
+    # (sin bloquear el event loop cuando consulta NOAA S3 o NASA GIBS) y agenda
+    # la tarea de ejecucion en el loop principal.
     try:
-        job = gestor.crear(receta.product_id, receta.params)
+        job = await gestor.crear_async(receta.product_id, receta.params)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return job.snapshot()

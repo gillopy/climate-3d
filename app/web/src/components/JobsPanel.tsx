@@ -115,12 +115,28 @@ export function JobsPanel({ jobInicial }: Props) {
     if (corridas.length > 0) setSeleccionId(corridas[0].id);
   }, [corridas, seleccionId]);
 
-  // Lista: se refresca siempre, sin depender de un boton que abra el panel.
+  // Lista: se refresca al montar, al crear un trabajo nuevo, al volver a la pestaña,
+  // y en intervalo corto únicamente mientras haya alguna corrida activa.
+  const hayActivas = corridas.some((corrida) => enMarcha(corrida));
   useEffect(() => {
     void refrescarLista();
-    const tic = window.setInterval(() => void refrescarLista(), 4000);
-    return () => window.clearInterval(tic);
+  }, [refrescarLista, jobInicial]);
+
+  useEffect(() => {
+    const alVisibilidad = () => {
+      if (document.visibilityState === "visible") void refrescarLista();
+    };
+    document.addEventListener("visibilitychange", alVisibilidad);
+    return () => document.removeEventListener("visibilitychange", alVisibilidad);
   }, [refrescarLista]);
+
+  useEffect(() => {
+    if (!hayActivas) return;
+    const tic = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refrescarLista();
+    }, 3000);
+    return () => window.clearInterval(tic);
+  }, [hayActivas, refrescarLista]);
 
   const actualizarFila = useCallback((job: Job) => {
     setCorridas((previo) =>

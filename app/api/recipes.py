@@ -2264,8 +2264,6 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
     granulo = _nisar_nombre(str(params.get("granulo") or "").strip(), "granulo")
     url = str(params.get("url") or "").strip()
     coleccion = _nisar_coleccion(url, str(params.get("coleccion") or ""))
-    if not url.startswith("https://"):
-        raise ValueError("La escena NISAR no trae una URL https de descarga.")
 
     comun = RAIZ_REPO / "comun"
     if str(comun) not in sys.path:
@@ -2274,6 +2272,9 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
 
     raiz_h5 = raiz_nisar()
     h5 = raiz_h5 / coleccion / f"{granulo}.h5"
+    en_disco = _nisar_en_disco(raiz_h5, coleccion, granulo)
+    if (producto == "descarga" or not en_disco) and not url.startswith("https://"):
+        raise ValueError("La escena NISAR no trae una URL https de descarga.")
 
     # Bajar una escena no necesita caja: el .h5 es el mismo para cualquier recorte.
     bbox = str(params.get("bbox") or "").strip()
@@ -2297,9 +2298,9 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             pasos=[_nisar_descarga(granulo, url, coleccion, raiz_h5, "escena", sello)]
         )
 
-    pasos: list[Step] = [
-        _nisar_descarga(granulo, url, coleccion, raiz_h5, "escena"),
-    ]
+    pasos: list[Step] = []
+    if not en_disco:
+        pasos.append(_nisar_descarga(granulo, url, coleccion, raiz_h5, "escena"))
     geojson = str(RAIZ_REPO / "datos" / "paraguay_gadm.json")
     bbox_final = f"{oeste:g},{sur:g},{este:g},{norte:g}"
 

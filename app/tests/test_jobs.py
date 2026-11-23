@@ -311,6 +311,30 @@ class CrearJob(Base):
 
         self.assertIn("Falta el Python del repo", str(error.exception))
 
+    def test_real_reusa_el_plan_de_crear_si_los_parametros_no_cambiaron(self):
+        plan = Plan(
+            pasos=[
+                Step(
+                    kind="render",
+                    label="demo",
+                    script="render.py",
+                    args=[],
+                )
+            ]
+        )
+        trabajo = self.gestor._preparar_job("geocolor", {})
+        trabajo._plan = plan
+        with mock.patch.object(
+            jobs,
+            "planear",
+            side_effect=AssertionError("no debe replanear si _plan ya está armado"),
+        ), mock.patch.object(
+            self.gestor, "_lanzar", new=mock.AsyncMock(return_value=0)
+        ), mock.patch.object(self.gestor, "_publicar"):
+            asyncio.run(self.gestor._real(trabajo))
+
+        self.assertEqual(trabajo.progress, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -247,6 +247,7 @@ class Job:
     logs: list[LogLine] = field(default_factory=list)
     artifacts: list[Artifact] = field(default_factory=list)
     plan: list[str] = field(default_factory=list)
+    _plan: Any | None = None
     error: str | None = None
     dir: Path | None = None
     proc: subprocess.Popen[bytes] | None = None
@@ -311,7 +312,7 @@ class JobManager:
         self._cargar_historial()
 
     # --- API publica -----------------------------------------------------
-    def crear(self, product_id: str, params: dict[str, Any]) -> Job:
+    def _preparar_job(self, product_id: str, params: dict[str, Any]) -> Job:
         producto = get_product(product_id)
         if producto is None:
             raise ValueError(f"Producto desconocido: {product_id}")
@@ -328,7 +329,7 @@ class JobManager:
             id=job_id,
             product_id=producto.id,
             product_name=producto.name,
-            params=params,
+            params=dict(params),
             mode="real",
             dir=self.media_root / "cache" / firma,
         )
@@ -338,18 +339,34 @@ class JobManager:
                 f"Falta el Python del repo: {python_repo()}. "
                 "Sin eso no se puede ejecutar el pipeline."
             )
-        try:
-            job.plan = [p.label for p in planear(product_id, params, job.work).pasos]
-        except ValueError as exc:
-            raise ValueError(str(exc)) from exc
+        return job
 
-        self.jobs[job_id] = job
+    def _agendar_job(self, job: Job, plan_armado: Any) -> Job:
+        job._plan = plan_armado
+        job.plan = [p.label for p in plan_armado.pasos]
+        self.jobs[job.id] = job
         self._podar()
 
         tarea = asyncio.create_task(self._correr(job))
         self._tareas.add(tarea)
         tarea.add_done_callback(self._tareas.discard)
         return job
+
+    def crear(self, product_id: str, params: dict[str, Any]) -> Job:
+        job = self._preparar_job(product_id, params)
+        try:
+            plan_armado = planear(product_id, job.params, job.work)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        return self._agendar_job(job, plan_armado)
+
+    async def crear_async(self, product_id: str, params: dict[str, Any]) -> Job:
+        job = self._preparar_job(product_id, params)
+        try:
+            plan_armado = await asyncio.to_thread(planear, product_id, job.params, job.work)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        return self._agendar_job(job, plan_armado)
 
     def obtener(self, job_id: str) -> Job | None:
         return self.jobs.get(job_id)
@@ -567,7 +584,16 @@ class JobManager:
 
     def _frames_dir(self, job: Job) -> Path | None:
         """Carpeta de cuadros: la primera con `cuadro_*.png` dentro del work."""
-        candidatas = [
+        if not job.work.is_dir():
+            return None
+        # Atajo rapido: casi todas las recetas escriben en `work/frames` o `work/frames_*`
+        # en el primer nivel. Evita recorrer cientos de archivos en `crudos/` o `firms/`.
+        directas = [
+            carpeta
+            for carpeta in (job.work / "frames", *job.work.glob("frames_*"))
+            if carpeta.is_dir() and next(carpeta.glob("cuadro_*.png"), None) is not None
+        ]
+        candidatas = directas or [
             carpeta
             for carpeta in job.work.rglob("*")
             if carpeta.is_dir() and next(carpeta.glob("cuadro_*.png"), None) is not None
@@ -676,10 +702,14 @@ class JobManager:
             self._emitir(job, {"type": "snapshot", "job": job.snapshot().model_dump()})
 
     async def _real(self, job: Job) -> None:
+        params_previos = dict(job.params)
         if job.product_id in PRODUCTOS_ECMWF:
             await self._resolver_corrida(job)
 
-        plan = planear(job.product_id, job.params, job.work)
+        if job._plan is not None and job.params == params_previos:
+            plan = job._plan
+        else:
+            plan = await asyncio.to_thread(planear, job.product_id, job.params, job.work)
         pasos = list(plan.pasos)
         if not pasos:
             raise RuntimeError("la receta no genero ningun paso")

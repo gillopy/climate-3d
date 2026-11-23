@@ -82,6 +82,18 @@ class VisorNisar(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.cliente = TestClient(app)
+        # Los tests de recetas deben ser independientes de los HDF5 personales
+        # que pueda tener el desarrollador en CLIMATE3D_NISAR/E:\\nisar.
+        cls._nisar_tmp = tempfile.TemporaryDirectory()
+        cls._nisar_root_patch = patch.object(
+            rutas, "raiz_nisar", return_value=Path(cls._nisar_tmp.name)
+        )
+        cls._nisar_root_patch.start()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._nisar_root_patch.stop()
+        cls._nisar_tmp.cleanup()
 
     def test_catalogo_declara_niveles_y_caja_de_paraguay(self):
         respuesta = self.cliente.get("/api/nisar/catalog")
@@ -104,7 +116,7 @@ class VisorNisar(unittest.TestCase):
         ):
             respuesta = self.cliente.get(
                 "/api/nisar/search",
-                params={"bbox": "-55.6,-24.5,-55.2,-23.9", "level": "GCOV"},
+                params={"bbox": "-55.6,-24.5,-55.2,-23.9", "level": "GCOV", "max": 1},
             )
 
         self.assertEqual(respuesta.status_code, 200)
@@ -125,6 +137,72 @@ class VisorNisar(unittest.TestCase):
             ["Mapa (lat/lon)", "HH", "HV"],
         )
         self.assertTrue(granulo["asf_url"].startswith("https://search.asf.alaska.edu/"))
+
+    def test_no_llama_a_contar_cuando_entran_todos_en_la_primera_pagina(self):
+        with (
+            patch.object(
+                nisar,
+                "_contar",
+                side_effect=AssertionError("no debe llamar a _contar si < max"),
+            ),
+            patch.object(
+                nisar,
+                "_json_asf",
+                return_value={"type": "FeatureCollection", "features": [FEATURE]},
+            ),
+        ):
+            respuesta = self.cliente.get(
+                "/api/nisar/search",
+                params={"bbox": "-55.6,-24.5,-55.2,-23.9", "level": "GCOV"},
+            )
+
+        self.assertEqual(respuesta.status_code, 200)
+        cuerpo = respuesta.json()
+        self.assertEqual(cuerpo["total"], 1)
+        self.assertEqual(cuerpo["returned"], 1)
+        self.assertEqual(cuerpo["notes"], [])
+
+    def test_busqueda_consulta_contar_cuando_se_llena_el_tope_de_pagina(self):
+        with (
+            patch.object(nisar, "_contar", return_value=55) as mock_contar,
+            patch.object(
+                nisar,
+                "_json_asf",
+                return_value={"type": "FeatureCollection", "features": [FEATURE]},
+            ),
+        ):
+            respuesta = self.cliente.get(
+                "/api/nisar/search",
+                params={"bbox": "-55.6,-24.5,-55.2,-23.9", "level": "GCOV", "max": 1},
+            )
+
+        self.assertEqual(respuesta.status_code, 200)
+        mock_contar.assert_called_once()
+        self.assertEqual(respuesta.json()["total"], 55)
+
+    def test_receta_nisar_omite_descarga_si_el_h5_principal_ya_esta_en_disco(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            base = Path(carpeta) / "NISAR_L2_GCOV_V1"
+            base.mkdir(parents=True)
+            (base / f"{GRANULO}.h5").write_bytes(b"x" * 10_000_000)
+            with patch.object(rutas, "raiz_nisar", return_value=Path(carpeta)):
+                plan = planear(
+                    "nisar_render",
+                    {
+                        "producto": "rvi",
+                        "granulo": GRANULO,
+                        "url": "",
+                        "coleccion": "NISAR_L2_GCOV_V1",
+                        "bbox": "-55.6,-24.5,-55.2,-23.9",
+                        "px": 1200,
+                    },
+                    Path(carpeta),
+                )
+
+        self.assertEqual(
+            [paso.script for paso in plan.pasos],
+            ["prototipos/nisar_rvi.py"],
+        )
 
     def test_caja_invertida_es_400(self):
         respuesta = self.cliente.get(
@@ -235,7 +313,7 @@ class VisorNisar(unittest.TestCase):
         self.assertEqual(plan.pasos[1].kind, "render")
         self.assertIn("--bbox", plan.pasos[1].args)
         self.assertTrue(plan.pasos[1].args[-1].endswith("paraguay_gadm.json"))
-        self.assertIn("nisar", plan.pasos[0].args[-3])
+        self.assertIn("--destino", plan.pasos[0].args)
 
     def test_receta_nisar_rechaza_una_caja_invertida(self):
         with self.assertRaises(ValueError):

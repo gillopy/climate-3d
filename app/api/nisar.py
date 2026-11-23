@@ -666,10 +666,13 @@ def buscar(
     if pol:
         base["mainBandPolarization"] = pol
 
-    total = _contar(base)
     datos = _json_asf({**base, "output": "geojson", "maxResults": str(max_resultados)})
     features = datos.get("features") if isinstance(datos, dict) else None
     granulos = [_granulo(feature) for feature in (features or []) if isinstance(feature, dict)]
+    # Solo consultamos `output=count` cuando el listado alcanzó el tope de página:
+    # si vinieron menos que `max_resultados`, ya tenemos el total exacto y nos
+    # ahorramos una segunda petición HTTP a ASF en el 99% de las búsquedas.
+    total = _contar(base) if len(granulos) >= max_resultados else len(granulos)
     locales = _ids_locales()
     for granulo in granulos:
         # El .h5 en disco manda: si ya esta, se analiza ESA copia y con su
