@@ -126,6 +126,7 @@ export function Select({
               id={`${base}-op-${indice}`}
               role="option"
               aria-selected={opcion.value === value}
+              title={opcion.description || undefined}
               className={
                 indice === activo ? "pick__op pick__op--activa" : "pick__op"
               }

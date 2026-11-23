@@ -344,6 +344,25 @@ def _producto_rgb(pid: str, nombre: str, producto: str, extras=()) -> Product:
     )
 
 
+def _capa_snapshot(value: str, label: str, description: str) -> ParamOption:
+    """Opcion de capa del Snapshot con su explicacion para el '?'."""
+    return ParamOption(value=value, label=label, description=description)
+
+
+# Horarios reales de publicacion sobre Paraguay. Va en el '?' de la capa:
+# el compuesto diario es un mosaico que se arma a medida que pasan los satelites.
+_AYUDA_CAPAS_SNAPSHOT = (
+    "Horarios sobre Paraguay (UTC-3):\n"
+    "- Terra ~10:30 (hasta 2026-12-01)\n"
+    "- NOAA-21/20 ~13:30\n"
+    "- SNPP sin datos desde 2026-11-02\n"
+    "- Aqua ~16:00 (deriva; fin 2027)\n"
+    "- GOES-19 GeoColor cada 10 min\n\n"
+    "El compuesto diario aparece 1-3.5 h despues del paso. Las capas diarias "
+    "ignoran la hora: solo GeoColor usa hora y minuto."
+)
+
+
 PRODUCTS: list[Product] = [
     Product(
         id="goes_c13",
@@ -997,7 +1016,7 @@ PRODUCTS: list[Product] = [
         group="satelite",
         stage="descargar/snapshot_paraguay.py + cuadros/snapshot_paraguay.py",
         summary="Una sola captura recortada a los bordes de Paraguay, sin rotulos. "
-        "VIIRS a 250 m de dia, o GeoColor de dia y noche.",
+        "Color real, falsos colores NOAA/VIIRS o GeoColor de dia y noche.",
         params=[
             ParamSpec(
                 name="capa",
@@ -1005,13 +1024,78 @@ PRODUCTS: list[Product] = [
                 kind="select",
                 default="truecolor",
                 options=[
-                    ParamOption(value="truecolor", label="NOAA-20 / VIIRS (250 m)"),
-                    ParamOption(value="snpp", label="Suomi NPP / VIIRS (250 m)"),
-                    ParamOption(value="aqua", label="Aqua / MODIS (250 m)"),
-                    ParamOption(value="terra", label="Terra / MODIS (250 m)"),
-                    ParamOption(value="geocolor", label="GOES-19 GeoColor (dia y noche, ~2 km)"),
+                    _capa_snapshot(
+                        "truecolor", "NOAA-20 - Color real (250 m)",
+                        "Color real (R=I1, G=M4, B=M3). Lo que ve el ojo; es la "
+                        "capa por defecto y la recomendada para el dia."),
+                    _capa_snapshot(
+                        "noaa20_m11i2i1", "NOAA-20 - Falso color M11-I2-I1",
+                        "Falso color (R=M11, G=I2, B=I1). Resalta cicatrices de "
+                        "incendio y facilita ver inundaciones; separa nieve/hielo "
+                        "de nubes. 250 m."),
+                    _capa_snapshot(
+                        "noaa20_m3i3m11", "NOAA-20 - Falso color M3-I3-M11",
+                        "Falso color (R=M3, G=I3, B=M11). Mapa de nieve y hielo; "
+                        "separa agua liquida de congelada y nubes de hielo de "
+                        "nubes de agua. 250 m."),
+                    _capa_snapshot(
+                        "noaa20_i1i2i1", "NOAA-20 - Superficie I1-I2-I1",
+                        "Superficie (R=I1, G=I2, B=I1). Cambios de vegetacion, "
+                        "sequia e inundaciones. 250 m."),
+                    _capa_snapshot(
+                        "noaa20_m11m7m5", "NOAA-20 - Superficie M11-M7-M5",
+                        "Superficie (R=M11, G=M7, B=M5). Quemaduras, vegetacion "
+                        "y suelo desnudo. 500 m."),
+                    _capa_snapshot(
+                        "noaa20_m5m4m3", "NOAA-20 - Superficie M5-M4-M3",
+                        "Superficie en color natural (R=M5, G=M4, B=M3); menos "
+                        "velo atmosferico que el color real. 500 m."),
+                    _capa_snapshot(
+                        "noaa21", "NOAA-21 - Color real (250 m)",
+                        "Color real de NOAA-21, el VIIRS primario que continua "
+                        "MODIS. 250 m."),
+                    _capa_snapshot(
+                        "noaa21_m11i2i1", "NOAA-21 - Falso color M11-I2-I1",
+                        "Falso color (R=M11, G=I2, B=I1). Resalta cicatrices de "
+                        "incendio y facilita ver inundaciones; separa nieve/hielo "
+                        "de nubes. 250 m."),
+                    _capa_snapshot(
+                        "noaa21_m3i3m11", "NOAA-21 - Falso color M3-I3-M11",
+                        "Falso color (R=M3, G=I3, B=M11). Mapa de nieve y hielo; "
+                        "separa agua liquida de congelada y nubes de hielo de "
+                        "nubes de agua. 250 m."),
+                    _capa_snapshot(
+                        "noaa21_i1i2i1", "NOAA-21 - Superficie I1-I2-I1",
+                        "Superficie (R=I1, G=I2, B=I1). Cambios de vegetacion, "
+                        "sequia e inundaciones. 250 m."),
+                    _capa_snapshot(
+                        "noaa21_m11m7m5", "NOAA-21 - Superficie M11-M7-M5",
+                        "Superficie (R=M11, G=M7, B=M5). Quemaduras, vegetacion "
+                        "y suelo desnudo. 500 m."),
+                    _capa_snapshot(
+                        "noaa21_m5m4m3", "NOAA-21 - Superficie M5-M4-M3",
+                        "Superficie en color natural (R=M5, G=M4, B=M3); menos "
+                        "velo atmosferico que el color real. 500 m."),
+                    _capa_snapshot(
+                        "snpp", "Suomi NPP - Color real (sin datos)",
+                        "Color real Suomi NPP. Sin datos desde 2026-11-02; no "
+                        "usar para fechas nuevas."),
+                    _capa_snapshot(
+                        "aqua", "Aqua - Color real (hasta 2027)",
+                        "Color real Aqua/MODIS. Paso ~16:00 local por la deriva; "
+                        "fin de mision previsto para 2027."),
+                    _capa_snapshot(
+                        "terra", "Terra - Color real (hasta 2026-12-01)",
+                        "Color real Terra/MODIS. Termina el 2026-12-01; queda "
+                        "para archivo historico."),
+                    _capa_snapshot(
+                        "geocolor", "GOES-19 GeoColor (dia/noche, ~2 km)",
+                        "GOES-19 ABI GeoColor cada 10 minutos, dia y noche. El "
+                        "unico con dato temprano; ~2 km. Usa hora y minuto."),
                 ],
-                help="los cuatro True Color son diarios y de 250 m; GeoColor llega a 2 km",
+                help="Elegi satelite y composicion; el '?' explica horarios y "
+                "que resalta cada banda.",
+                tooltip=_AYUDA_CAPAS_SNAPSHOT,
             ),
             ParamSpec(
                 name="ultima",
@@ -1065,7 +1149,8 @@ PRODUCTS: list[Product] = [
                     ParamOption(value=v, label=f"{v} m/px")
                     for v in ("125", "250", "500", "1000", "2000")
                 ],
-                help="250 m/px es el detalle real de VIIRS; por debajo solo interpola",
+                help="250 m/px es el detalle de las capas I-band; las M-band llegan "
+                "a 500 m (pedir menos solo interpola)",
             ),
             ParamSpec(name="borde", label="Dibujar el contorno", kind="toggle", default=True),
             *_params_firms(),

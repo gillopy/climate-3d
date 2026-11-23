@@ -473,15 +473,33 @@ que no se ofrece.
 El producto `snapshot_paraguay` no arma serie ni globo: pide **una sola** imagen y
 la entrega recortada al país, sin rótulos ni barra de color.
 
-Cinco fuentes, y conviene saber cuál da detalle de verdad:
+Capas disponibles (el **?** al lado de la capa muestra los horarios de paso y qué
+resalta cada composición):
 
 | `capa` | Sensor | Compuesto | Detalle real |
 | --- | --- | --- | --- |
-| `truecolor` (default) | NOAA-20 / VIIRS | diario | **250 m** |
-| `snpp` | Suomi NPP / VIIRS | diario | **250 m** |
-| `aqua` | Aqua / MODIS | diario | **250 m** |
-| `terra` | Terra / MODIS | diario | **250 m** |
-| `geocolor` | GOES-19 ABI | cada 10 min | **~700 m** |
+| `truecolor` (default) | NOAA-20 / VIIRS | Color real | **250 m** |
+| `noaa21` | NOAA-21 / VIIRS | Color real | **250 m** |
+| `snpp` | Suomi NPP / VIIRS | Color real | **250 m** |
+| `aqua` | Aqua / MODIS | Color real | **250 m** |
+| `terra` | Terra / MODIS | Color real | **250 m** |
+| `geocolor` | GOES-19 ABI | GeoColor día/noche | **~700 m** |
+
+Composiciones de bandas NOAA/VIIRS (misma API, mismo flujo):
+
+| `capa` | Bandas (R-G-B) | Para qué | Detalle |
+| --- | --- | --- | --- |
+| `noaa20_m11i2i1` / `noaa21_m11i2i1` | M11-I2-I1 | Cicatrices de incendio, inundaciones, nieve/hielo vs nubes | 250 m |
+| `noaa20_m3i3m11` / `noaa21_m3i3m11` | M3-I3-M11 | Nieve y hielo, agua líquida vs congelada | 250 m |
+| `noaa20_i1i2i1` / `noaa21_i1i2i1` | I1-I2-I1 | Vegetación, sequía, inundaciones | 250 m |
+| `noaa20_m11m7m5` / `noaa21_m11m7m5` | M11-M7-M5 | Quemaduras, vegetación y suelo desnudo | 500 m |
+| `noaa20_m5m4m3` / `noaa21_m5m4m3` | M5-M4-M3 | Color natural de superficie, menos velo | 500 m |
+
+**Continuidad de MODIS**: Terra deja de colectar ciencia el **2026-12-01** y Aqua se
+retira en **2027**; Suomi NPP ya cesó la entrega de datos (2026-11-02). NASA no tiene
+un reemplazo en la órbita matinal de Terra: la continuidad es **VIIRS**, con **NOAA-21
+como primario** y **NOAA-20 como secundario** (JPSS-4/NOAA-22 llega en 2027). Para
+fechas nuevas usá `noaa21` o `truecolor`; Terra/Aqua quedan para archivo histórico.
 
 El control no es "píxeles" sino **metros por píxel** (125, 250, 500, 1000, 2000), como
 en EOSDIS: el lado se calcula solo a partir de la caja del GeoJSON. Medido sobre este

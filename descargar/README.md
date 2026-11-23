@@ -19,8 +19,20 @@ conexión** a partir de lo que ya está descargado.
 | `precipitacion_ecmwf.py` | Precipitación total acumulada (`tp`) de IFS 0.25° / AIFS, por HTTP Range | ECMWF Open Data | `DATOS/crudos_precip_<modelo>_<fecha>_<ciclo>z/` (GRIB2 o `.npy` + `serie_tp_mm.npz`) |
 | `anomalia_2t_ecmwf.py` | Temperatura a 2 m (`2t`) del IFS 0.25° y su anomalía vs la climatología ERA5, por HTTP Range | ECMWF Open Data | `DATOS/crudos_anom2t_<modelo>_<fecha>_<ciclo>z/` (GRIB2 + `serie_anom_2t_c.npz`) |
 | `viento_250_mslp.py` | Viento en 250 mb (`u`, `v`) y presión a nivel del mar (`msl`) del IFS 0.25° o del GFS 0.25°, por HTTP Range | ECMWF Open Data / NOAA GFS (AWS) | `DATOS/crudos_viento250[_gfs]_<fecha>_<ciclo>z/` (GRIB2 + `serie_viento_250.npz`) |
-| `snapshot_paraguay.py` | Una captura recortada al país: True Color 250 m (NOAA-20, Suomi NPP, Aqua o Terra) o GeoColor (día/noche); la caja sale del GeoJSON y el tamaño de `--mpp` | NASA GIBS (Worldview Snapshots) | `<out>/crudo_snapshot_<capa>_<fecha>_<px>px.png` |
+| `snapshot_paraguay.py` | Una captura recortada al país: Color real 250 m (NOAA-20, NOAA-21, Suomi NPP, Aqua o Terra), composiciones de bandas NOAA/VIIRS (M11-I2-I1, M3-I3-M11, I1-I2-I1, M11-M7-M5, M5-M4-M3) o GeoColor (día/noche); la caja sale del GeoJSON y el tamaño de `--mpp` | NASA GIBS (Worldview Snapshots) | `<out>/crudo_snapshot_<capa>_<fecha>_<px>px.png` |
 | `goes_descarga.py` | *(módulo)* claves S3 y descarga | — | — |
+
+Composiciones NOAA/VIIRS del snapshot: `noaa20_m11i2i1` / `noaa21_m11i2i1`
+(quemaduras, inundaciones, nieve/hielo), `noaa20_m3i3m11` / `noaa21_m3i3m11`
+(nieve y hielo), `noaa20_i1i2i1` / `noaa21_i1i2i1` (vegetación, sequía),
+`noaa20_m11m7m5` / `noaa21_m11m7m5` (quemaduras, suelo) y
+`noaa20_m5m4m3` / `noaa21_m5m4m3` (color natural de superficie). Las que sólo
+usan bandas M se sirven a 500 m; el resto, a 250 m.
+
+**Continuidad del snapshot**: Terra deja de colectar el **2026-12-01** y Aqua se retira
+en **2027**; Suomi NPP cesó la entrega de datos el **2026-11-02**. La capa operativa de
+reemplazo es **NOAA-21** (`--capa noaa21`), con NOAA-20 como secundaria. NASA no tiene
+un reemplazo en la órbita matinal de Terra: VIIRS continúa la serie de MODIS.
 
 `DATOS` y `SALIDAS` salen de [`../comun/rutas.py`](../comun/rutas.py): se cambian con
 `CLIMATE3D_DATOS` sin tocar código.

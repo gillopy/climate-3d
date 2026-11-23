@@ -433,6 +433,73 @@ class SnapshotParaguay(unittest.TestCase):
         self.assertIn("TIME=2026-10-30T15:00:00Z", geo)
         self.assertIn("GOES-East_ABI_GeoColor", geo)
 
+    def test_noaa21_es_la_continuidad_operativa_de_modis(self):
+        """NOAA-21 reemplaza a Terra/Aqua con VIIRS diario a 250 m."""
+        from comun.paraguay import CAPAS, MPP_NATIVO, url_snapshot
+        from datetime import datetime
+
+        self.assertEqual(CAPAS["noaa21"][0],
+                         "VIIRS_NOAA21_CorrectedReflectance_TrueColor")
+        self.assertTrue(CAPAS["noaa21"][1])
+        self.assertEqual(MPP_NATIVO["noaa21"], 250)
+
+        t = datetime(2026, 11, 21, 15, 0)
+        url = url_snapshot(t, (-63.0, -28.0, -54.0, -19.0), 3200, "noaa21")
+        self.assertIn("VIIRS_NOAA21_CorrectedReflectance_TrueColor", url)
+        self.assertIn("TIME=2026-11-21&", url)
+
+    def test_el_instante_del_crudo_acepta_capas_con_numeros(self):
+        """`noaa21` tiene dígitos: el nombre del crudo igual se parsea."""
+        from comun.paraguay import ts_de_crudo
+        from datetime import datetime
+
+        self.assertEqual(
+            ts_de_crudo("crudo_snapshot_noaa21_20261121T1500_3200px.png"),
+            datetime(2026, 11, 21, 15, 0),
+        )
+        self.assertEqual(
+            ts_de_crudo(
+                "crudo_snapshot_noaa21_m11i2i1_20261121T1500_3200px.png"
+            ),
+            datetime(2026, 11, 21, 15, 0),
+        )
+
+    def test_las_composiciones_noaa_tienen_capa_y_detalle(self):
+        """Cada clave de `CAPAS` tiene su detalle nativo y su capa GIBS."""
+        from comun.paraguay import CAPAS, MPP_NATIVO
+
+        self.assertEqual(set(CAPAS), set(MPP_NATIVO))
+        for clave, (capa_gibs, diaria) in CAPAS.items():
+            self.assertTrue(capa_gibs, clave)
+            self.assertIsInstance(diaria, bool, clave)
+        for clave in (
+            "noaa20_m11i2i1",
+            "noaa20_m3i3m11",
+            "noaa20_i1i2i1",
+            "noaa21_m11i2i1",
+            "noaa21_m3i3m11",
+            "noaa21_i1i2i1",
+        ):
+            self.assertEqual(MPP_NATIVO[clave], 250, clave)
+        for clave in (
+            "noaa20_m11m7m5",
+            "noaa20_m5m4m3",
+            "noaa21_m11m7m5",
+            "noaa21_m5m4m3",
+        ):
+            self.assertEqual(MPP_NATIVO[clave], 500, clave)
+
+    def test_el_tooltip_de_la_capa_explica_horarios_y_bandas(self):
+        producto = catalog.get_product("snapshot_paraguay")
+        assert producto is not None
+        capa = next(p for p in producto.params if p.name == "capa")
+        self.assertIn("Terra", capa.tooltip)
+        self.assertIn("NOAA-21/20", capa.tooltip)
+        self.assertIn("GeoColor", capa.tooltip)
+        opciones = {o.value: o for o in capa.options}
+        self.assertIn("cicatrices", opciones["noaa21_m11i2i1"].description)
+        self.assertIn("500 m", opciones["noaa21_m11m7m5"].description)
+
     def test_esta_en_el_catalogo_con_un_solo_cuadro(self):
         producto = catalog.get_product("snapshot_paraguay")
         self.assertIsNotNone(producto)
@@ -445,7 +512,24 @@ class SnapshotParaguay(unittest.TestCase):
         capa = next(p for p in producto.params if p.name == "capa")
         self.assertEqual(
             {o.value for o in capa.options},
-            {"truecolor", "snpp", "aqua", "terra", "geocolor"},
+            {
+                "truecolor",
+                "noaa20_m11i2i1",
+                "noaa20_m3i3m11",
+                "noaa20_i1i2i1",
+                "noaa20_m11m7m5",
+                "noaa20_m5m4m3",
+                "noaa21",
+                "noaa21_m11i2i1",
+                "noaa21_m3i3m11",
+                "noaa21_i1i2i1",
+                "noaa21_m11m7m5",
+                "noaa21_m5m4m3",
+                "snpp",
+                "aqua",
+                "terra",
+                "geocolor",
+            },
         )
         detalle = next(p for p in producto.params if p.name == "detalle")
         self.assertEqual(detalle.default, "250")
@@ -488,6 +572,28 @@ class SnapshotParaguay(unittest.TestCase):
             plan = recipes.planear("snapshot_paraguay", params, Path(tmp))
         render = plan.pasos[-1]
         self.assertIn("--sin-borde", render.args)
+
+    def test_el_plan_acepta_la_capa_noaa21(self):
+        params = {"capa": "noaa21", "ultima": True, "fecha": DIA.isoformat(),
+                  "hora": 15, "minuto": "00", "margen": 6, "detalle": "250",
+                  "borde": True}
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = recipes.planear("snapshot_paraguay", params, Path(tmp))
+        descarga, render = plan.pasos
+        for paso in (descarga, render):
+            self.assertEqual(paso.args[paso.args.index("--capa") + 1], "noaa21")
+
+    def test_el_plan_acepta_una_composicion_de_bandas(self):
+        params = {"capa": "noaa21_m11i2i1", "ultima": True,
+                  "fecha": DIA.isoformat(), "hora": 15, "minuto": "00",
+                  "margen": 6, "detalle": "250", "borde": True}
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = recipes.planear("snapshot_paraguay", params, Path(tmp))
+        descarga, render = plan.pasos
+        for paso in (descarga, render):
+            self.assertEqual(
+                paso.args[paso.args.index("--capa") + 1], "noaa21_m11i2i1"
+            )
 
     def test_ultima_disponible_se_pide_en_los_dos_pasos(self):
         params = {"capa": "geocolor", "ultima": True, "fecha": DIA.isoformat()}

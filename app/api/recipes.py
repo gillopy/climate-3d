@@ -938,8 +938,11 @@ def _anomalia(params: dict[str, Any], work: Path) -> Plan:
 try:
     from comun.paraguay import CAPAS as _CAPAS_SNAPSHOT
 except Exception:  # pragma: no cover
-    _CAPAS_SNAPSHOT = {k: None for k in ("truecolor", "snpp", "aqua", "terra",
-                                         "geocolor")}
+    _CAPAS_SNAPSHOT = {k: None for k in (
+        "truecolor", "noaa20_m11i2i1", "noaa20_m3i3m11", "noaa20_i1i2i1",
+        "noaa20_m11m7m5", "noaa20_m5m4m3", "noaa21", "noaa21_m11i2i1",
+        "noaa21_m3i3m11", "noaa21_i1i2i1", "noaa21_m11m7m5", "noaa21_m5m4m3",
+        "snpp", "aqua", "terra", "geocolor")}
 
 # La lista de sensores y de ventanas de FIRMS manda desde `comun/firms.py`: la UI
 # no puede ofrecer un valor que el descargador no entienda.

@@ -11,6 +11,8 @@ export type RunMode = "preview" | "real";
 export interface ParamOption {
   value: string;
   label: string;
+  /** Texto largo de la opcion, para el "?" de ayuda. */
+  description?: string;
   /** La opcion solo se ofrece cuando otro parametro tiene este valor. */
   only_when?: Record<string, unknown> | null;
 }
@@ -22,6 +24,8 @@ export interface ParamSpec {
   default: unknown;
   options: ParamOption[];
   help: string;
+  /** Texto largo del "?" junto a la etiqueta. */
+  tooltip?: string;
   min: number | null;
   max: number | null;
   step: number | null;

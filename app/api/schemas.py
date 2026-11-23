@@ -21,6 +21,10 @@ class ParamOption(BaseModel):
 
     value: str
     label: str
+    description: str = Field(
+        default="",
+        description="Texto largo de la opcion, para el '?' de ayuda.",
+    )
     only_when: dict[str, Any] | None = Field(
         default=None,
         description="La opcion solo se ofrece cuando otro parametro vale esto "
@@ -37,6 +41,10 @@ class ParamSpec(BaseModel):
     default: Any
     options: list[ParamOption] = Field(default_factory=list)
     help: str = ""
+    tooltip: str = Field(
+        default="",
+        description="Texto largo del '?' junto a la etiqueta (se muestra al pasar el mouse).",
+    )
     min: float | None = None
     max: float | None = None
     step: float | None = None

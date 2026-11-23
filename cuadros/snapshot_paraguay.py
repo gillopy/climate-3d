@@ -216,7 +216,8 @@ def main(argv=None) -> int:
     ap.add_argument("--minuto", type=int, default=MINUTO,
                     help=f"minuto UTC 0-59 (por defecto {MINUTO})")
     ap.add_argument("--capa", default=CAPA,
-                    help=f"capa del crudo: truecolor o geocolor (por defecto {CAPA})")
+                    help=f"capa del crudo, p. ej. truecolor, noaa21_m11i2i1 o "
+                         f"geocolor (por defecto {CAPA})")
     ap.add_argument("--px", type=int, default=None,
                     help=f"lado de la captura en píxeles (por defecto {PX})")
     ap.add_argument("--mpp", type=float,

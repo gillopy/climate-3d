@@ -430,39 +430,62 @@ export function RecipeForm({
       />
     );
 
-    const top = (etiqueta: string, htmlFor?: string) => (
-      <div className="field__top">
-        {htmlFor ? (
-          <label className="field__label" htmlFor={htmlFor}>
-            {marca}
-            {etiqueta}
-          </label>
-        ) : (
-          <span className="field__label">
-            {marca}
-            {etiqueta}
-          </span>
-        )}
-        {modificado ? (
-          <button
-            type="button"
-            className="field__reset"
-            title={`Volver a ${String(spec.default ?? "—")}`}
-            onClick={() => onChange(spec.name, spec.default as Params[string])}
-          >
-            restablecer
-          </button>
-        ) : null}
-      </div>
-    );
+    const top = (etiqueta: string, htmlFor?: string, tooltip?: string) => {
+      const textoAyuda = tooltip ?? spec.tooltip;
+      return (
+        <div className="field__top">
+          {htmlFor ? (
+            <label className="field__label" htmlFor={htmlFor}>
+              {marca}
+              {etiqueta}
+            </label>
+          ) : (
+            <span className="field__label">
+              {marca}
+              {etiqueta}
+            </span>
+          )}
+          {textoAyuda ? (
+            <span
+              className="field__hint"
+              tabIndex={0}
+              role="note"
+              aria-label={textoAyuda}
+            >
+              ?
+              <span className="field__tooltip" aria-hidden="true">
+                {textoAyuda}
+              </span>
+            </span>
+          ) : null}
+          {modificado ? (
+            <button
+              type="button"
+              className="field__reset"
+              title={`Volver a ${String(spec.default ?? "—")}`}
+              onClick={() => onChange(spec.name, spec.default as Params[string])}
+            >
+              restablecer
+            </button>
+          ) : null}
+        </div>
+      );
+    };
 
     if (spec.kind === "select") {
       // Una opcion puede depender de otro control: la paleta oficial de la
       // banda 16 solo se ofrece cuando esa banda esta elegida.
       const opciones = opcionesVisibles(spec, params);
+      const elegida = opciones.find(
+        (opcion) => opcion.value === String(valor ?? spec.default),
+      );
+      // El "?" muestra los horarios de la capa y que resalta la composicion.
+      const tooltip = [spec.tooltip, elegida?.description]
+        .filter(Boolean)
+        .join("\n\n");
       return (
         <div className={clase} key={spec.name}>
-          {top(spec.label, id)}
+          {top(spec.label, id, tooltip)}
           <Select
             id={id}
             value={String(valor ?? spec.default)}

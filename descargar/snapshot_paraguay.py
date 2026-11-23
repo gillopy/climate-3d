@@ -1,8 +1,12 @@
-"""Descarga una **captura** (snapshot) GeoColor de NASA GIBS recortada a Paraguay.
+"""Descarga una **captura** (snapshot) de NASA GIBS recortada a Paraguay.
 
 No es una serie: es **una sola imagen**. El encuadre no se escribe a mano: sale del
 GeoJSON de Paraguay (`datos/paraguay_gadm.json`) más un margen, así la cobertura
 queda definida por los bordes del país.
+
+La capa por defecto es True Color VIIRS (NOAA-20). `--capa` acepta además NOAA-21
+(el reemplazo operativo de MODIS), Suomi NPP, Aqua, Terra, GeoColor (día/noche) y
+las composiciones de bandas NOAA/VIIRS (`noaa21_m11i2i1`, `noaa20_m3i3m11`, ...).
 
 Fuente (Worldview Snapshots API — un GET):
 
@@ -47,7 +51,7 @@ from rutas import DATOS  # noqa: E402
 # un mensaje que dice la verdad: no es la fecha, es GIBS.
 TIMEOUT = 25
 TIMEOUT_SONDA = 10
-FALLOS_DE_RED = 3          # reintentos de la sonda antes de declarar GIBS caído
+FALLOS_DE_RED = 5          # reintentos de la sonda antes de declarar GIBS caído
 RESPALDO = DATOS / "_snapshot"
 
 GEOJSON = RAIZ / "datos" / "paraguay_gadm.json"
@@ -171,7 +175,7 @@ def _formato(capa: str) -> str:
 
 
 def descargar(t: datetime, caja, px: int, destino: Path, capa: str = CAPA,
-              reintentos: int = 3) -> Path:
+              reintentos: int = 5) -> Path:
     """Baja la captura a `destino`; si ya está, la reutiliza (reanudable)."""
     if destino.exists() and destino.stat().st_size > 5_000:
         return destino
@@ -240,8 +244,10 @@ def main(argv=None) -> int:
     ap.add_argument("--geojson", default=str(GEOJSON),
                     help="GeoJSON que define la cobertura (por defecto, Paraguay GADM)")
     ap.add_argument("--capa", default=CAPA, choices=tuple(CAPAS),
-                    help=f"truecolor = VIIRS 250 m sólo de día; geocolor = GOES-19 "
-                         f"día/noche a ~2 km (por defecto {CAPA})")
+                    help=f"truecolor/noaa21/... = Color real 250 m diario; "
+                         f"noaa20_m11i2i1/... = composiciones de bandas; "
+                         f"geocolor = GOES-19 día/noche a ~2 km "
+                         f"(por defecto {CAPA})")
     ap.add_argument("--ultima", action="store_true",
                     help="ignora --fecha/--hora y busca el gránulo más nuevo publicado")
     ap.add_argument("--verificar", action="store_true",

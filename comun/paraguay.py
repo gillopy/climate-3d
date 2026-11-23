@@ -27,11 +27,26 @@ GOES_SIN_HORIZONTE = 0.9885
 API = "https://wvs.earthdata.nasa.gov/api/v1/snapshot"
 
 # Capas disponibles: (id de GIBS, es un compuesto diario).
-#   truecolor  VIIRS NOAA-20 a 250 m, sólo de día: es la que trae detalle real.
-#   geocolor   GOES-19 ABI a ~2 km, día/noche; pedir más píxeles sólo la agranda.
+#   Color real y composiciones de bandas NOAA/VIIRS (M = 750 m, I = 375 m).
+#   GIBS sirve 250 m para las combinaciones con bandas I y 500 m para las de M.
+#   Terra y Aqua son MODIS; se retiran en 2026-12-01 y 2027 respectivamente.
+#   geocolor es GOES-19 ABI a ~2 km, cada 10 minutos, día y noche.
 CAPAS = {
     # True Color corregido: compuesto diario a 250 m, sólo de día.
     "truecolor": ("VIIRS_NOAA20_CorrectedReflectance_TrueColor", True),
+    # Composiciones NOAA-20 (VIIRS, JPSS-1).
+    "noaa20_m11i2i1": ("VIIRS_NOAA20_CorrectedReflectance_BandsM11-I2-I1", True),
+    "noaa20_m3i3m11": ("VIIRS_NOAA20_CorrectedReflectance_BandsM3-I3-M11", True),
+    "noaa20_i1i2i1": ("VIIRS_NOAA20_SurfaceReflectance_BandsI1-I2-I1", True),
+    "noaa20_m11m7m5": ("VIIRS_NOAA20_SurfaceReflectance_BandsM11-M7-M5", True),
+    "noaa20_m5m4m3": ("VIIRS_NOAA20_SurfaceReflectance_BandsM5-M4-M3", True),
+    # Composiciones NOAA-21 (VIIRS, JPSS-2, primario desde 2022).
+    "noaa21": ("VIIRS_NOAA21_CorrectedReflectance_TrueColor", True),
+    "noaa21_m11i2i1": ("VIIRS_NOAA21_CorrectedReflectance_BandsM11-I2-I1", True),
+    "noaa21_m3i3m11": ("VIIRS_NOAA21_CorrectedReflectance_BandsM3-I3-M11", True),
+    "noaa21_i1i2i1": ("VIIRS_NOAA21_SurfaceReflectance_BandsI1-I2-I1", True),
+    "noaa21_m11m7m5": ("VIIRS_NOAA21_SurfaceReflectance_BandsM11-M7-M5", True),
+    "noaa21_m5m4m3": ("VIIRS_NOAA21_SurfaceReflectance_BandsM5-M4-M3", True),
     "snpp": ("VIIRS_SNPP_CorrectedReflectance_TrueColor", True),
     "aqua": ("MODIS_Aqua_CorrectedReflectance_TrueColor", True),
     "terra": ("MODIS_Terra_CorrectedReflectance_TrueColor", True),
@@ -76,7 +91,8 @@ def techo(capa: str, ahora: datetime) -> datetime:
     return base.replace(hour=0, minute=0)
 
 
-_RE_CRUDO = re.compile(r"crudo_snapshot_[a-z]+_(\d{8}T\d{4})_\d+px\.png$")
+# El nombre de capa puede traer dígitos (`noaa21`) y guiones bajos.
+_RE_CRUDO = re.compile(r"crudo_snapshot_[a-z0-9_]+_(\d{8}T\d{4})_\d+px\.png$")
 
 
 def ts_de_crudo(nombre: str) -> datetime | None:
@@ -154,6 +170,17 @@ def encuadre(margen: float = MARGEN,
 # Por debajo de esto GIBS interpola: el archivo crece y la imagen no gana nada.
 MPP_NATIVO = {
     "truecolor": 250,
+    "noaa20_m11i2i1": 250,
+    "noaa20_m3i3m11": 250,
+    "noaa20_i1i2i1": 250,
+    "noaa20_m11m7m5": 500,
+    "noaa20_m5m4m3": 500,
+    "noaa21": 250,
+    "noaa21_m11i2i1": 250,
+    "noaa21_m3i3m11": 250,
+    "noaa21_i1i2i1": 250,
+    "noaa21_m11m7m5": 500,
+    "noaa21_m5m4m3": 500,
     "snpp": 250,
     "aqua": 250,
     "terra": 250,
