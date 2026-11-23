@@ -4290,6 +4290,52 @@ form,
   min-width: 0;
 }
 
+/* Acciones del hero: login de Earthdata + Restablecer, alineados a la derecha. */
+.work__head-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.earthdata-login {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  max-width: 260px;
+}
+
+.btn--secondary {
+  background: var(--iris-soft);
+  border: 1px solid var(--iris-line);
+  color: var(--iris-hi);
+  font-size: 11px;
+  padding: 7px 12px;
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: var(--iris);
+  color: #ffffff;
+}
+
+.earthdata-ok {
+  font-family: var(--narrow);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #4ade80;
+}
+
+.earthdata-error {
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: #ff8b85;
+  text-align: right;
+}
+
 .work__eyebrow {
   display: flex;
   align-items: center;

@@ -1,4 +1,5 @@
 ﻿import type { CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import type {
   DatesResponse,
   Params,
@@ -10,6 +11,7 @@ import { Select } from "./controls/Select";
 import { FechaUnica, VentanaTemporal } from "./controls/Window";
 import { formatearFecha, formatearRango } from "./controls/Calendar";
 import { opcionesVisibles, pisoDeSatelite } from "../opciones";
+import { earthdataLogin, earthdataCookiesStatus } from "../api";
 
 // El momento de captura y sus banderas ("snapshot", "ultimo", "ultimos") van
 // juntos en el mismo bloque temporal para que los controles dependientes se
@@ -221,6 +223,36 @@ export function RecipeForm({
   onSubmit,
 }: Props) {
   const ultimaFecha = dates?.dates.at(0) ?? "";
+  // Earthdata login interactivo para PACE LANDVI (follaje)
+  const [earthdataConfigurado, setEarthdataConfigurado] = useState(false);
+  const [earthdataLogueando, setEarthdataLogueando] = useState(false);
+  const [earthdataError, setEarthdataError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (product.id === "follaje") {
+      earthdataCookiesStatus()
+        .then((estado) => setEarthdataConfigurado(estado.configured))
+        .catch(() => setEarthdataConfigurado(false));
+    }
+  }, [product.id]);
+
+  async function loginEarthdata() {
+    if (product.id !== "follaje") return;
+    setEarthdataLogueando(true);
+    setEarthdataError(null);
+    try {
+      const resp = await earthdataLogin();
+      if (resp.ok) {
+        setEarthdataConfigurado(true);
+      } else {
+        setEarthdataError(resp.message);
+      }
+    } catch (exc) {
+      setEarthdataError(exc instanceof Error ? exc.message : "Error de login");
+    } finally {
+      setEarthdataLogueando(false);
+    }
+  }
   // Solo cuando el disco tiene las fechas: con el calendario demo no se marca.
   const disponibles = new Set(
     dates?.source === "descubierto" ? dates.dates : [],
@@ -630,14 +662,39 @@ export function RecipeForm({
           </h2>
           <p className="work__summary">{product.summary}</p>
         </div>
-        <button
-          type="button"
-          className="btn btn--ghost"
-          disabled={!hayCambios || busy}
-          onClick={restablecerTodo}
-        >
-          Restablecer
-        </button>
+        <div className="work__head-actions">
+          {product.id === "follaje" && (
+            <div className="earthdata-login">
+              {earthdataConfigurado ? (
+                <span className="earthdata-ok" title="Cookies de Earthdata configuradas">
+                  ✓ Earthdata conectado
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  disabled={earthdataLogueando || busy}
+                  onClick={loginEarthdata}
+                >
+                  {earthdataLogueando ? "Abriendo navegador…" : "Login Earthdata"}
+                </button>
+              )}
+              {earthdataError && (
+                <span className="earthdata-error" role="alert">
+                  {earthdataError}
+                </span>
+              )}
+            </div>
+          )}
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={!hayCambios || busy}
+            onClick={restablecerTodo}
+          >
+            Restablecer
+          </button>
+        </div>
       </div>
 
       {muestra ? (

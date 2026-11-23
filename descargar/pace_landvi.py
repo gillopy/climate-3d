@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import json
 import netrc
-import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -41,7 +40,7 @@ from urllib3.util.retry import Retry
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
-from rutas import DATOS  # noqa: E402
+from rutas import DATOS, ruta_cookies_earthdata  # noqa: E402
 
 BASE = "https://oceandata.sci.gsfc.nasa.gov/getfile"
 PRODUCTO = "LANDVI"
@@ -72,40 +71,8 @@ def candidatos(fecha: date, res: str) -> list[str]:
     return [nombre(fecha, res, TAG), nombre(fecha, res, "")]
 
 
-def _env_repo() -> dict[str, str]:
-    """Lee las variables de autenticación del `.env` sin imprimir valores."""
-    env: dict[str, str] = {}
-    try:
-        for linea in (RAIZ / ".env").read_text(encoding="utf-8-sig").splitlines():
-            limpia = linea.strip()
-            if not limpia or limpia.startswith("#") or "=" not in limpia:
-                continue
-            clave, valor = limpia.split("=", 1)
-            env[clave.strip()] = valor.strip().strip('"').strip("'")
-    except OSError:
-        pass
-    return env
-
-
-def _credenciales() -> tuple[str, str] | None:
-    env_repo = _env_repo()
-    usuario = os.environ.get("EARTHDATA_USER") or env_repo.get("EARTHDATA_USER")
-    clave = os.environ.get("EARTHDATA_PASSWORD") or env_repo.get("EARTHDATA_PASSWORD")
-    if usuario and clave:
-        return usuario, clave
-    try:
-        autenticadores = netrc.netrc().authenticators("urs.earthdata.nasa.gov")
-    except (FileNotFoundError, netrc.NetrcParseError, TypeError):
-        return None
-    if autenticadores:
-        _, login, password = autenticadores
-        if login and password:
-            return login, password
-    return None
-
-
 def _sesion(cookies: Path | None) -> requests.Session:
-    """Sesión autenticada contra URS: cookies, entorno/.env o `.netrc`."""
+    """Sesión autenticada contra URS: cookies de navegador o `.netrc`, en ese orden."""
     s = requests.Session()
     s.headers["User-Agent"] = "climate3d/1.0"
     s.trust_env = False                  # que no se cuele un proxy del sistema
@@ -132,14 +99,14 @@ def _sesion(cookies: Path | None) -> requests.Session:
                           domain=c.get("domain", ""), path=c.get("path", "/"))
         return s
 
-    credenciales = _credenciales()
-    if credenciales is None:
+    try:
+        host, login, clave = netrc.netrc().authenticators("urs.earthdata.nasa.gov")
+    except (FileNotFoundError, netrc.NetrcParseError, TypeError):
         raise SystemExit(
-            "Falta autenticación: configurá EARTHDATA_USER y EARTHDATA_PASSWORD "
-            "en el entorno/.env, exportá cookies del navegador con --cookies, o "
+            "Falta autenticación: exportá las cookies del navegador con --cookies, o "
             "creá ~/.netrc con la entrada de urs.earthdata.nasa.gov."
         )
-    s.auth = credenciales                # básica preventiva, como `wget --auth-no-challenge`
+    s.auth = (login, clave)              # básica preventiva, como `wget --auth-no-challenge`
     return s
 
 
@@ -181,11 +148,21 @@ def main() -> int:
                     help=f"resolución del L3M (default {RES})")
     ap.add_argument("--destino", default=str(DESTINO), help="carpeta de salida")
     ap.add_argument("--cookies", default=None,
-                    help="JSON con las cookies del navegador logueado en Earthdata")
+                    help="JSON con las cookies del navegador logueado en Earthdata. "
+                         "Si no se pasa, se usa ~/.config/climate3d/earthdata_cookies.json si existe.")
     args = ap.parse_args()
 
     salida = Path(args.destino)
-    s = _sesion(Path(args.cookies) if args.cookies else None)
+    # Si no se pasó --cookies, intentar usar el archivo de login interactivo guardado
+    cookies_path = None
+    if args.cookies:
+        cookies_path = Path(args.cookies)
+    else:
+        auto_cookies = ruta_cookies_earthdata()
+        if auto_cookies.is_file():
+            cookies_path = auto_cookies
+            print(f"Usando cookies de Earthdata guardadas: {auto_cookies}")
+    s = _sesion(cookies_path)
 
     dias = fechas(args.desde, args.hasta)
     minimo = MIN_POR_RES[args.res]

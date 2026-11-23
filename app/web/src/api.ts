@@ -70,6 +70,37 @@ export function revealJob(jobId: string): Promise<{ abierto: string }> {
   );
 }
 
+// Earthdata Login interactivo
+export interface EarthdataLoginResponse {
+  ok: boolean;
+  cookies_file: string;
+  cookies_count: number;
+  message: string;
+}
+
+export interface EarthdataCookiesStatus {
+  ok: boolean;
+  configured: boolean;
+  cookies_count: number;
+  getfile?: boolean;
+  file: string;
+  error?: string;
+}
+
+export function earthdataLogin(): Promise<EarthdataLoginResponse> {
+  return fetch("/api/earthdata/login").then((r) => leer<EarthdataLoginResponse>(r));
+}
+
+export function earthdataCookiesStatus(): Promise<EarthdataCookiesStatus> {
+  return fetch("/api/earthdata/cookies-status").then((r) => leer<EarthdataCookiesStatus>(r));
+}
+
+export function earthdataCookiesClear(): Promise<{ ok: boolean; message: string }> {
+  return fetch("/api/earthdata/cookies-clear", { method: "POST" }).then((r) =>
+    leer<{ ok: boolean; message: string }>(r),
+  );
+}
+
 export interface JobHandlers {
   onSnapshot?: (job: Job) => void;
   onLog?: (line: LogLine) => void;

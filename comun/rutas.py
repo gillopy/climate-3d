@@ -51,6 +51,9 @@ CLAVES_CONFIG = ("datos", "media", "nisar")
 #: Nombre del archivo dentro de la carpeta de configuración del usuario.
 NOMBRE_CONFIG = "config.json"
 
+#: Archivo donde se guardan las cookies de Earthdata tras login interactivo.
+NOMBRE_COOKIES_EARTHDATA = "earthdata_cookies.json"
+
 
 def _entorno(entorno: Mapping[str, str] | None) -> Mapping[str, str]:
     return os.environ if entorno is None else entorno
@@ -83,6 +86,14 @@ def ruta_config(entorno: Mapping[str, str] | None = None) -> Path:
     if xdg:
         return Path(xdg) / "climate3d" / NOMBRE_CONFIG
     return Path.home() / ".config" / "climate3d" / NOMBRE_CONFIG
+
+
+def ruta_cookies_earthdata(entorno: Mapping[str, str] | None = None) -> Path:
+    """Ruta del archivo de cookies de Earthdata (login interactivo).
+
+    Se guarda junto a ``config.json`` para que viaje con la configuración del usuario.
+    """
+    return ruta_config(entorno).with_name(NOMBRE_COOKIES_EARTHDATA)
 
 
 def leer_config(entorno: Mapping[str, str] | None = None) -> dict[str, str]:
