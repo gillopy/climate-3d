@@ -1103,14 +1103,24 @@ def _viento_250(params: dict[str, Any], work: Path) -> Plan:
 
 
 # --- FOLLAJE: PACE LANDVI ----------------------------------------------
-#: Resolución canónica del gránulo: descarga y render deben coincidir. El
-#: descargadorDefaults a 4km pero los scripts de cuadros a 0p1deg; sin pasar
-#: `--res` a ambos, la descarga baja 4km y el render no encuentra el archivo.
-RES_FOLLAJE = "4km"
+#: Resolución canónica del gránulo: descarga y render deben coincidir. Los
+#: scripts de cuadros usan un compuesto móvil de 7 días y su default es 0p1deg
+#: (con el que está armada la serie histórica en disco). Si se baja 4km, el
+#: render no encuentra 7 días consecutivos. Fijamos 0p1deg en ambos pasos.
+RES_FOLLAJE = "0p1deg"
+
+
+#: Días del compuesto móvil: cada cuadro necesita esta ventana de datos.
+VENTANA_FOLLAJE = 7
 
 
 def _follaje(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango_de_la_corrida(params)
+    # El compuesto móvil necesita VENTANA_FOLLAJE días terminando en `fin`.
+    # Si el usuario elige un solo día (o un rango corto), extendemos el inicio
+    # hacia atrás para que haya datos suficientes: el día elegido sigue siendo
+    # el último cuadro, pero se arma con la ventana completa.
+    inicio = min(inicio, fin - timedelta(days=VENTANA_FOLLAJE - 1))
     px = _px(params, 1400)
     n = max(1, (fin - inicio).days + 1)
     # Dos vestuarios para la misma data: mapa plano (Robinson) o globo realista.

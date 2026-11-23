@@ -766,6 +766,17 @@ class SnapshotDeUnCuadro(unittest.TestCase):
                 res_descarga, res_render,
                 f"{proyeccion}: descarga baja {res_descarga} pero render busca {res_render}",
             )
+            self.assertEqual(res_descarga, "0p1deg")
+
+    def test_follaje_un_solo_dia_se_extiende_a_la_ventana_de_7(self):
+        plan = recipes.planear(
+            "follaje", {"ventana": {"start": "2026-10-17", "end": "2026-10-17"}}, Path("x")
+        )
+        descarga, render = plan.pasos[0], plan.pasos[-1]
+        # El último día elegido se conserva; el inicio retrocede 6 días.
+        self.assertEqual(descarga.args[descarga.args.index("--hasta") + 1], "2026-10-17")
+        self.assertEqual(descarga.args[descarga.args.index("--desde") + 1], "2026-10-11")
+        self.assertEqual(render.args[render.args.index("--desde") + 1], "2026-10-11")
 
     def test_los_controles_de_animacion_se_apagan_con_snapshot(self):
         producto = catalog.get_product("goes_c13")

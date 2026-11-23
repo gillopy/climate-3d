@@ -1442,6 +1442,8 @@ def data_root_exists() -> bool:
 # --- fechas disponibles -------------------------------------------------
 _FECHA_ISO = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 _DIA_GOES = re.compile(r"_s(\d{4})(\d{3})")
+# Los NetCDF de PACE LANDVI llevan la fecha compacta: PACE_OCI.20261017.L3m...
+_DIA_PACE = re.compile(r"PACE_OCI\.(\d{4})(\d{2})(\d{2})\.")
 
 _CARPETAS_GOES = {
     ("G19", "C13"): "goes_c13_g19",
@@ -1462,6 +1464,8 @@ def _fechas_de_nombres(nombres: list[str], patron: re.Pattern[str]) -> set[str]:
                         date(int(match.group(1)), 1, 1).toordinal() + int(match.group(2)) - 1
                     ).isoformat())
                 else:
+                    # Tanto _FECHA_ISO (YYYY, MM, DD) como _DIA_PACE (YYYYMMDD
+                    # partido en grupos) entregan los tres grupos en el mismo orden.
                     encontradas.add(f"{match.group(1)}-{match.group(2)}-{match.group(3)}")
             except ValueError:
                 continue
@@ -1508,7 +1512,11 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
     if product.id == "follaje":
         datos = raiz / "pace_landvi"
         if datos.is_dir():
-            encontradas |= _fechas_de_nombres([f.name for f in datos.iterdir()], _FECHA_ISO)
+            # Solo los .nc de LANDVI: su fecha es compacta (PACE_OCI.20261017...),
+            # no ISO con guiones. Los .parcial a medias no cuentan como dato.
+            encontradas |= _fechas_de_nombres(
+                [f.name for f in datos.glob("PACE_OCI.*.nc")], _DIA_PACE
+            )
 
     salidas = raiz / "salidas"
     if salidas.is_dir():

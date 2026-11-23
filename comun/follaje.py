@@ -148,17 +148,21 @@ def _sumar(suma: list[np.ndarray], cuenta: np.ndarray, ruta: Path, signo: int) -
 
 
 def dias_moviles(desde: date, hasta: date, ventana: int = 7, res: str = "0p1deg") -> list[date]:
-    """Fechas de cuadro con la ventana completa: recorta el arranque si falta dato.
+    """Fechas de cuadro con la ventana completa: descarta las que tienen huecos.
 
-    La descarga puede empezar en `desde`, pero el primer cuadro necesita `ventana - 1`
-    días **anteriores**; sin este recorte el primer compuesto saldría incompleto (o
-    directo con un `None`).
+    Cada cuadro necesita `ventana` días terminando en su fecha. No basta con
+    validar el primero: si en el medio hay un hueco (un día no publicado, p.ej.
+    12-16 oct), el compuesto móvil recibe un `None` al querer restar ese día.
+    Devolvemos solo las fechas cuya ventana completa existe en disco.
     """
     dias = [desde + timedelta(days=i) for i in range((hasta - desde).days + 1)]
-    for i, dia in enumerate(dias):
-        if all(ruta_dia(dia - timedelta(days=k), res) is not None for k in range(ventana)):
-            return dias[i:]
-    raise SystemExit(f"No hay {ventana} días consecutivos con dato entre {desde} y {hasta}")
+    completos = [
+        dia for dia in dias
+        if all(ruta_dia(dia - timedelta(days=k), res) is not None for k in range(ventana))
+    ]
+    if not completos:
+        raise SystemExit(f"No hay {ventana} días consecutivos con dato entre {desde} y {hasta}")
+    return completos
 
 
 def movil(dias: list[date], ventana: int = 7, res: str = "0p1deg"):
