@@ -11,9 +11,10 @@ aprobado en [`../prototipos/poster_mur_realista.py`](../prototipos/poster_mur_re
   * **sombreado de esfera** sobre el disco ya proyectado (limb darkening + lambertiana
     leve): es lo que hace que se lea como una esfera y no como un círculo pintado.
 
-Encima de eso, **rotación**: el globo arranca mirando al **Pacífico ecuatorial** y da una
-vuelta completa a lo largo de la serie, mientras el compuesto móvil de 7 días avanza un día
-por cuadro. Es decir, en el mismo video pasan las dos cosas: la estación y el giro.
+Encima de eso, **rotación**: por defecto el globo queda fijo y **centrado en Sudamérica**,
+que es donde ocurre la migración de hojas rojas; la animación la da el compuesto móvil de
+7 días avanzando un día por cuadro. Quien quiera el giro global de antes puede pedirlo
+con `--giro 360 --sub 3`.
 
 El compuesto, las máscaras y la paleta viven en [`../comun/follaje.py`](../comun/follaje.py);
 la base y el warp, en [`../comun/globo3d.py`](../comun/globo3d.py).
@@ -21,8 +22,8 @@ la base y el warp, en [`../comun/globo3d.py`](../comun/globo3d.py).
 Uso (desde la raíz del proyecto):
 
     .venv\\Scripts\\python.exe cuadros\\cuadros_follaje_globo.py
-    .venv\\Scripts\\python.exe cuadros\\cuadros_follaje_globo.py --giro 0 --centro -73 -18
-    .venv\\Scripts\\python.exe cuadros\\cuadros_follaje_globo.py --giro 360 --centro -125 0
+    .venv\\Scripts\\python.exe cuadros\\cuadros_follaje_globo.py --centro -73 -18
+    .venv\\Scripts\\python.exe cuadros\\cuadros_follaje_globo.py --giro 360 --sub 3 --centro -125 0
     .venv\\Scripts\\python.exe animar\\armar.py --frames <carpeta> --fps 5
 """
 from __future__ import annotations
@@ -45,7 +46,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 from estilo import BG, TXT, TXT_DIM, WM_COLOR  # noqa: E402
 from follaje import (ROJEZ, VMAX, VMIN, dias_moviles, movil,  # noqa: E402
-                     rango_corto, ruta_dia)
+                     rango_corto)
 from globo3d import base_mundi, iluminar, luminancia, warp_ortho  # noqa: E402
 from rutas import SALIDAS  # noqa: E402
 from series import etiqueta_frames  # noqa: E402
@@ -55,9 +56,9 @@ HASTA = "2026-10-11"
 VENTANA = 7
 RES = "0p1deg"
 PX = 1440
-CENTRO = (-125.0, 0.0)                  # Pacífico ecuatorial, como el globo de MUR
-GIRO = 360.0                            # grados que recorre el centro a lo largo de la serie
-SUB = 3                                 # cuadros por día: interpola el giro, no la fecha
+CENTRO = (-60.0, -15.0)                 # Sudamérica: foco de la migración de hojas rojas
+GIRO = 0.0                              # fijo; --giro 360 recupera el giro global histórico
+SUB = 1                                 # un cuadro por día: anima el compuesto, no el giro
 BASE_PX = 3600                          # ancho de la grilla global de trabajo
 FPS_SUGERIDO = 8
 LIMBO = "#8fa3ad"
@@ -132,12 +133,8 @@ def main() -> int:
     args = ap.parse_args()
 
     d0, d1 = date.fromisoformat(args.desde), date.fromisoformat(args.hasta)
-    faltan = [d for d in (d0, d1) if ruta_dia(d, args.res) is None]
-    if faltan:
-        raise SystemExit(
-            f"Faltan gránulos ({faltan[0]} ...). Corré descargar/pace_landvi.py "
-            f"--res {args.res} --desde {args.desde} --hasta {args.hasta}"
-        )
+    # Un día sin publicar (404) no es fatal: `dias_moviles` se queda con las
+    # fechas cuya ventana de 7 días sí está completa en disco.
     fechas = dias_moviles(d0, d1, args.ventana, args.res)
     dias = len(fechas)
     total = dias * args.sub

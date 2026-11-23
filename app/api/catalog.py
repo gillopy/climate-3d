@@ -1115,7 +1115,25 @@ PRODUCTS: list[Product] = [
         stage="descargar/pace_landvi.py + cuadros/cuadros_follaje.py",
         summary="Indice de vegetacion de PACE sobre fondo de poster, ventana por dias.",
         params=[
-            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range", default=_rango(20)),
+            ParamSpec(
+                name="ventana_preset",
+                label="Ventana prestablecida",
+                kind="select",
+                default="7",
+                options=[
+                    ParamOption(value="", label="Personalizada (calendario)"),
+                    ParamOption(value="7", label="7 cuadros (semana)"),
+                    ParamOption(value="15", label="15 cuadros (quincena)"),
+                    ParamOption(value="30", label="30 cuadros (mes)"),
+                ],
+            ),
+            ParamSpec(
+                name="ventana",
+                label="Ventana temporal",
+                kind="date-range",
+                default=_rango(20),
+                enabled_when={"ventana_preset": ""},
+            ),
             ParamSpec(
                 name="proyeccion",
                 label="Proyeccion",
@@ -1127,7 +1145,7 @@ PRODUCTS: list[Product] = [
                 ],
             ),
             ParamSpec(name="resolucion", label="Resolucion", kind="select", default="1400", options=_RESOLUCIONES),
-            ParamSpec(name="animar", label="Animar", kind="toggle", default=False),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=True),
             ParamSpec(name="fps", label="Cuadros por segundo", kind="slider", default=12, min=4, max=30, step=2),
         ],
     ),
@@ -1278,6 +1296,7 @@ ORDEN_PARAMETROS: tuple[str, ...] = (
     "ultima",
     "ultimos",
     "ultimos_n",
+    "ventana_preset",
     "ventana",
     "fecha",
     "hora",

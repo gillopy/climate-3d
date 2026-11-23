@@ -778,6 +778,36 @@ class SnapshotDeUnCuadro(unittest.TestCase):
         self.assertEqual(descarga.args[descarga.args.index("--desde") + 1], "2026-10-11")
         self.assertEqual(render.args[render.args.index("--desde") + 1], "2026-10-11")
 
+    def test_follaje_preset_de_dias_define_el_rango_y_animation(self):
+        with mock.patch(
+            "app.api.catalog.available_dates",
+            return_value=("descubierto", ["2026-11-22", "2026-11-21"]),
+        ):
+            plan = recipes.planear("follaje", {"ventana_preset": "7"}, Path("x"))
+        descarga, render = plan.pasos[0], plan.pasos[1]
+        # 7 cuadros => 13 días bajados (los 6 primeros son cola del compuesto).
+        self.assertEqual(descarga.args[descarga.args.index("--desde") + 1], "2026-11-10")
+        self.assertEqual(descarga.args[descarga.args.index("--hasta") + 1], "2026-11-22")
+        self.assertEqual(render.expected, 7)
+        # Un preset es una serie: el plan termina armando el video.
+        self.assertEqual(plan.pasos[-1].script, "animar/armar.py")
+
+    def test_follaje_animar_viene_prendido_por_defecto(self):
+        producto = catalog.get_product("follaje")
+        animar = next(spec for spec in producto.params if spec.name == "animar")
+        self.assertIs(animar.default, True)
+
+    def test_follaje_globo_centrado_en_sudamerica(self):
+        import importlib.util
+
+        ruta = Path(__file__).resolve().parents[2] / "cuadros" / "cuadros_follaje_globo.py"
+        espec = importlib.util.spec_from_file_location("_globo_follaje_test", ruta)
+        modulo = importlib.util.module_from_spec(espec)
+        espec.loader.exec_module(modulo)
+        self.assertEqual(modulo.CENTRO, (-60.0, -15.0))
+        self.assertEqual(modulo.GIRO, 0.0)
+        self.assertEqual(modulo.SUB, 1)
+
     def test_los_controles_de_animacion_se_apagan_con_snapshot(self):
         producto = catalog.get_product("goes_c13")
 

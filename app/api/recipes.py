@@ -404,7 +404,16 @@ def planear(product_id: str, params: dict[str, Any], work: Path) -> Plan:
     if plan.descarga is not None and not any(p.kind == "download" for p in plan.pasos):
         plan.pasos.insert(0, plan.descarga)
     # "Últimos datos" siempre es una serie: no depende del switch "Animar".
-    quiere_animar = _bool(params, "animar") or _ultimos(params) > 0
+    # Un preset de follaje también lo es: si el caller no mandó `animar`, se arma
+    # el video igual. Un `animar: false` explícito sí se respeta.
+    preset_follaje = (
+        product_id == "follaje" and str(params.get("ventana_preset") or "").isdigit()
+    )
+    quiere_animar = (
+        _bool(params, "animar")
+        or _ultimos(params) > 0
+        or (preset_follaje and "animar" not in params)
+    )
     if (
         quiere_animar
         and not _snapshot(params)   # un snapshot nunca arma video
@@ -1116,6 +1125,19 @@ VENTANA_FOLLAJE = 7
 
 def _follaje(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango_de_la_corrida(params)
+    preset = str(params.get("ventana_preset") or "")
+    if preset.isdigit() and not _snapshot(params):
+        # Un preset (7/15/30) es una serie cerrada que termina en el último día
+        # con datos. Import tardío: el catálogo importa `repo_listo` de acá.
+        from app.api.catalog import available_dates, get_product  # noqa: PLC0415
+
+        _, dias = available_dates(get_product("follaje"), params)
+        if dias:
+            fin = date.fromisoformat(dias[0])
+            # Cada cuadro consume VENTANA_FOLLAJE días terminando en su fecha:
+            # para animar `preset` cuadros hay que bajar 6 días extra de cola.
+            cuadros = max(1, min(int(preset), 60))
+            inicio = fin - timedelta(days=cuadros + VENTANA_FOLLAJE - 2)
     # El compuesto móvil necesita VENTANA_FOLLAJE días terminando en `fin`.
     # Si el usuario elige un solo día (o un rango corto), extendemos el inicio
     # hacia atrás para que haya datos suficientes: el día elegido sigue siendo
@@ -1123,6 +1145,9 @@ def _follaje(params: dict[str, Any], work: Path) -> Plan:
     inicio = min(inicio, fin - timedelta(days=VENTANA_FOLLAJE - 1))
     px = _px(params, 1400)
     n = max(1, (fin - inicio).days + 1)
+    # Con preset, `n` cuenta los días descargados (cuadros + 6 de cola); el
+    # progreso del render debe contar sólo los cuadros que se van a dibujar.
+    esperadas = max(1, n - (VENTANA_FOLLAJE - 1)) if preset.isdigit() else n
     # Dos vestuarios para la misma data: mapa plano (Robinson) o globo realista.
     globo = str(params.get("proyeccion", "plano")) == "globo"
     script = "cuadros/cuadros_follaje_globo.py" if globo else "cuadros/cuadros_follaje.py"
@@ -1151,7 +1176,7 @@ def _follaje(params: dict[str, Any], work: Path) -> Plan:
             # aca --out es la carpeta de cuadros, no la raiz de salidas.
             "--out", str(work / "frames"),
         ],
-        expected=n,
+        expected=esperadas,
     )
     pasos = [descarga, render_step]  # el origen se consulta siempre
     return Plan(pasos=pasos, descarga=descarga)

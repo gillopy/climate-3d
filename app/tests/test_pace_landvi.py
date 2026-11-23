@@ -44,5 +44,79 @@ class AutenticacionPACE(unittest.TestCase):
         self.assertEqual(ruta.name, "earthdata_cookies.json")
 
 
+class DescargaTolerante(unittest.TestCase):
+    """Un día no publicado (404) no puede cortar una ventana con datos válidos."""
+
+    @staticmethod
+    def _grano(salida, dia, res="0p1deg"):
+        (salida / pace.nombre(dia, res)).write_bytes(b"x" * 6_000_000)
+
+    def test_main_tolera_un_dia_faltante_si_queda_ventana_completa(self):
+        import requests
+        from datetime import date, timedelta
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            salida = Path(carpeta)
+            (salida / "cookies.json").write_text("[]", encoding="utf-8")
+            dias = [date(2026, 11, 17) + timedelta(days=k) for k in range(7)]
+            # Ventana completa terminando en el 22 (16..22); el 23 falla 404.
+            self._grano(salida, date(2026, 11, 16))
+            for dia in dias[:-1]:
+                self._grano(salida, dia)
+
+            def bajar_falso(sesion, url, destino, minimo):
+                if "20261123" in url:
+                    raise requests.HTTPError("404 Client Error: Not Found")
+                destino.write_bytes(b"x" * 6_000_000)
+
+            argv = [
+                "pace_landvi.py", "--desde", "2026-11-17", "--hasta", "2026-11-23",
+                "--res", "0p1deg", "--destino", str(salida),
+                "--cookies", str(salida / "cookies.json"),
+            ]
+            with patch("sys.argv", argv), patch.object(pace, "_sesion", return_value=object()), \
+                    patch.object(pace, "bajar", side_effect=bajar_falso):
+                codigo = pace.main()
+
+        self.assertEqual(codigo, 0)
+
+    def test_main_no_falla_si_solo_hay_un_granulo(self):
+        from datetime import date
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            salida = Path(carpeta)
+            (salida / "cookies.json").write_text("[]", encoding="utf-8")
+            # Un solo día no da ventana, pero la descarga sí cumplió: el que decide
+            # si se puede renderizar es `dias_moviles`, no este script.
+            self._grano(salida, date(2026, 11, 22))
+            argv = [
+                "pace_landvi.py", "--desde", "2026-11-22", "--hasta", "2026-11-22",
+                "--res", "0p1deg", "--destino", str(salida),
+                "--cookies", str(salida / "cookies.json"),
+            ]
+            with patch("sys.argv", argv), patch.object(pace, "_sesion", return_value=object()):
+                codigo = pace.main()
+
+        self.assertEqual(codigo, 0)
+
+    def test_main_falla_si_no_se_obtuvo_ningun_granulo(self):
+        import requests
+        from datetime import date
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            salida = Path(carpeta)
+            (salida / "cookies.json").write_text("[]", encoding="utf-8")
+            argv = [
+                "pace_landvi.py", "--desde", "2026-11-22", "--hasta", "2026-11-22",
+                "--res", "0p1deg", "--destino", str(salida),
+                "--cookies", str(salida / "cookies.json"),
+            ]
+            with patch("sys.argv", argv), patch.object(pace, "_sesion", return_value=object()), \
+                    patch.object(pace, "bajar", side_effect=requests.HTTPError("404")):
+                codigo = pace.main()
+
+        self.assertEqual(codigo, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

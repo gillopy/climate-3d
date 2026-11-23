@@ -34,7 +34,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 sys.path.insert(0, str(RAIZ / "prototipos"))     # reusa el mapa del póster
 from follaje import (COSTA, TINTA, TINTA_SUAVE, VMAX, VMIN,  # noqa: E402
-                     dias_moviles, movil, rango_corto, ruta_dia)
+                     dias_moviles, movil, rango_corto)
 from poster_follaje import mapa_global  # noqa: E402
 from rutas import SALIDAS  # noqa: E402
 from series import etiqueta_frames  # noqa: E402
@@ -90,12 +90,9 @@ def main() -> int:
     args = ap.parse_args()
 
     d0, d1 = date.fromisoformat(args.desde), date.fromisoformat(args.hasta)
-    faltan = [d for d in (d0, d1) if ruta_dia(d, args.res) is None]
-    if faltan:
-        raise SystemExit(
-            f"Faltan gránulos ({faltan[0]} ...). Corré descargar/pace_landvi.py "
-            f"--res {args.res} --desde {args.desde} --hasta {args.hasta}"
-        )
+    # No exigimos que los extremos existan: OB.DAAC a veces no publica el último
+    # día. `dias_moviles` descarta las fechas cuya ventana no está completa, así
+    # que con un hueco se renderizan los cuadros válidos y no se corta el job.
     fechas = dias_moviles(d0, d1, args.ventana, args.res)
     dias = len(fechas)
 

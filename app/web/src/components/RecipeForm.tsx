@@ -22,6 +22,7 @@ const ORDEN_TIEMPO = [
   "ultima",
   "ultimos",
   "ultimos_n",
+  "ventana_preset",
   "ventana",
   "fecha",
   "hora",
@@ -112,6 +113,7 @@ const SUBORDINADOS: Record<string, string> = {
   firms_ventana: "firms",
   ultimo: "snapshot",
   ultimos_n: "ultimos",
+  ventana: "ventana_preset",
   fps: "animar",
 };
 
@@ -338,7 +340,10 @@ export function RecipeForm({
 
   const ventana = porNombre.get("ventana");
   const fechaSuelta = porNombre.get("fecha");
-  if (ventana) {
+  const presetVentana = String(params.ventana_preset ?? "");
+  if (ventana && /^\d+$/.test(presetVentana)) {
+    resumen.push({ clave: "ventana", valor: `${presetVentana} cuadros` });
+  } else if (ventana) {
     const rango = (params[ventana.name] ?? ventana.default) as RangoFechas;
     resumen.push({
       clave: "fecha",

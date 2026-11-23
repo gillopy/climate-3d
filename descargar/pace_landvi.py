@@ -55,6 +55,8 @@ BLOQUE = 4 * 1024 * 1024                # lectura en streaming, 4 MB
 MIN_BYTES = 50_000_000                  # menos que esto es una página de login disfrazada
 # El umbral depende de la resolución: el 0p1deg pesa ~34 MB y el 4km ~170 MB.
 MIN_POR_RES = {"4km": 50_000_000, "2km": 100_000_000, "0p1deg": 5_000_000}
+# Días del compuesto móvil del renderer: con uno solo no hay cuadro posible.
+VENTANA_FOLLAJE = 7
 
 
 def nombre(fecha: date, res: str, tag: str = TAG) -> str:
@@ -140,6 +142,33 @@ def fechas(desde: str, hasta: str):
     return [d0 + timedelta(days=i) for i in range((d1 - d0).days + 1)]
 
 
+def _presente(salida: Path, dia: date, res: str, minimo: int) -> bool:
+    """True si el gránulo de ese día está completo en disco (NRT o definitivo)."""
+    return any(
+        (salida / n).is_file() and (salida / n).stat().st_size >= minimo
+        for n in candidatos(dia, res)
+    )
+
+
+def ventana_completa(
+    salida: Path, dias: list[date], res: str, minimo: int, ventana: int = VENTANA_FOLLAJE
+) -> bool:
+    """¿Queda al menos una ventana de `ventana` días consecutivos con dato?
+
+    OB.DAAC no publica todos los días (el último suele dar 404). El renderer ya
+    descarta las fechas con huecos, así que la descarga sólo debe fallar cuando
+    no queda ningún compuesto armable. Se revisan las ventanas terminando en
+    cada día pedido, de más reciente a más viejo.
+    """
+    for fin in reversed(dias):
+        if all(
+            _presente(salida, fin - timedelta(days=k), res, minimo)
+            for k in range(ventana)
+        ):
+            return True
+    return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--desde", default=DESDE, help=f"primer día UTC (default {DESDE})")
@@ -191,7 +220,18 @@ def main() -> int:
             faltantes += 1
     print(f"Listo: {bajados} gránulo(s) nuevo(s) en {salida}")
     if faltantes:
-        print(f"Error: faltan {faltantes} día(s) de LANDVI; no hay entrada completa para renderizar.")
+        print(f"Aviso: {faltantes} día(s) sin publicar; se descarta esa fecha al renderizar.")
+    if not ventana_completa(salida, dias, args.res, minimo):
+        print(f"Aviso: no hay {VENTANA_FOLLAJE} días consecutivos con dato en este rango.")
+    # Si quedó al menos un gránulo, la descarga cumplió su parte: el renderer es
+    # quien decide qué ventanas de VENTANA_FOLLAJE días se pueden dibujar. Sólo
+    # fallamos cuando no se obtuvo nada (señal de sesión vencida o fechas mal
+    # pedidas), para no dejar pasar un error de autenticación como éxito.
+    if not any(_presente(salida, d, args.res, minimo) for d in dias):
+        print(
+            "Error: no se obtuvo ningún gránulo de LANDVI; revisá la autenticación "
+            "y las fechas pedidas."
+        )
         return 1
     return 0
 
