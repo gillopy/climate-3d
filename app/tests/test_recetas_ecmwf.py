@@ -756,6 +756,17 @@ class SnapshotDeUnCuadro(unittest.TestCase):
         self.assertEqual(plano.pasos[-1].script, "cuadros/cuadros_follaje.py")
         self.assertEqual(globo.pasos[-1].script, "cuadros/cuadros_follaje_globo.py")
 
+    def test_follaje_descarga_y_render_usan_la_misma_resolucion(self):
+        for proyeccion in ("plano", "globo"):
+            plan = recipes.planear("follaje", {"proyeccion": proyeccion}, Path("x"))
+            descarga, render = plan.pasos[0], plan.pasos[-1]
+            res_descarga = descarga.args[descarga.args.index("--res") + 1]
+            res_render = render.args[render.args.index("--res") + 1]
+            self.assertEqual(
+                res_descarga, res_render,
+                f"{proyeccion}: descarga baja {res_descarga} pero render busca {res_render}",
+            )
+
     def test_los_controles_de_animacion_se_apagan_con_snapshot(self):
         producto = catalog.get_product("goes_c13")
 

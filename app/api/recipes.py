@@ -1103,6 +1103,12 @@ def _viento_250(params: dict[str, Any], work: Path) -> Plan:
 
 
 # --- FOLLAJE: PACE LANDVI ----------------------------------------------
+#: Resolución canónica del gránulo: descarga y render deben coincidir. El
+#: descargadorDefaults a 4km pero los scripts de cuadros a 0p1deg; sin pasar
+#: `--res` a ambos, la descarga baja 4km y el render no encuentra el archivo.
+RES_FOLLAJE = "4km"
+
+
 def _follaje(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango_de_la_corrida(params)
     px = _px(params, 1400)
@@ -1115,7 +1121,11 @@ def _follaje(params: dict[str, Any], work: Path) -> Plan:
         kind="download",
         label="bajando LANDVI de PACE",
         script="descargar/pace_landvi.py",
-        args=["--desde", inicio.isoformat(), "--hasta", fin.isoformat()],
+        args=[
+            "--desde", inicio.isoformat(),
+            "--hasta", fin.isoformat(),
+            "--res", RES_FOLLAJE,
+        ],
         expected=n,
         required=True,
     )
@@ -1126,6 +1136,7 @@ def _follaje(params: dict[str, Any], work: Path) -> Plan:
         args=[
             "--desde", inicio.isoformat(),
             "--hasta", fin.isoformat(),
+            "--res", RES_FOLLAJE,
             "--px", str(px),
             # aca --out es la carpeta de cuadros, no la raiz de salidas.
             "--out", str(work / "frames"),

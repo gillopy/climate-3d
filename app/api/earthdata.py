@@ -111,29 +111,42 @@ def login_earthdata_interactive() -> LoginResponse:
     cookies_path = ruta_cookies_earthdata()
     cookies_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Usar cualquier Chromium ya instalado en el cache de Playwright, sin exigir
-    # la revision exacta que espera el paquete (evita descargas innecesarias).
-    chrome_path = _chromium_instalado()
-    opciones_lanzamiento: dict[str, Any] = {
+    opciones_base: dict[str, Any] = {
         "headless": False,
         "args": ["--start-maximized"],
     }
-    if chrome_path is not None:
-        opciones_lanzamiento["executable_path"] = str(chrome_path)
 
     with sync_playwright() as p:
         navegador = None
-        try:
-            navegador = p.chromium.launch(**opciones_lanzamiento)
-        except Exception as exc:
+        # Preferir el navegador real del usuario (Chrome/Edge instalados) para
+        # que no parezca un "navegador de testing". `channel` usa el ejecutable
+        # del sistema; si no está, caemos al Chromium del cache de Playwright.
+        canals = ["chrome", "msedge"]
+        ultimo_error: Exception | None = None
+        for canal in canals:
+            try:
+                navegador = p.chromium.launch(channel=canal, **opciones_base)
+                break
+            except Exception as exc:  # canal no instalado
+                ultimo_error = exc
+        if navegador is None:
+            chrome_path = _chromium_instalado()
+            opciones = dict(opciones_base)
+            if chrome_path is not None:
+                opciones["executable_path"] = str(chrome_path)
+            try:
+                navegador = p.chromium.launch(**opciones)
+            except Exception as exc:
+                ultimo_error = exc
+        if navegador is None:
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    "No se pudo abrir Chromium. Instalalo con: "
-                    "`.venv\\Scripts\\python.exe -m playwright install chromium`. "
-                    f"Detalle: {exc}"
+                    "No se pudo abrir el navegador. Instalá Chrome o Edge, o el "
+                    "Chromium de Playwright. "
+                    f"Detalle: {ultimo_error}"
                 ),
-            ) from exc
+            ) from ultimo_error
 
         contexto = navegador.new_context(no_viewport=True)
         pagina = contexto.new_page()
