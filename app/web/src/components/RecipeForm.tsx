@@ -25,6 +25,7 @@ const ORDEN_TIEMPO = [
   "ventana_preset",
   "ventana",
   "fecha",
+  "dias",
   "hora",
   "minuto",
   "hora_desde",
@@ -68,6 +69,8 @@ const SECCIONES: {
       "proyeccion",
       "paraguay",
       "margen",
+      "zona",
+      "km",
       "firms",
       "firms_fuente",
       "firms_alcance",
@@ -99,7 +102,7 @@ const FAMILIA_META: Record<
   string,
   { etiqueta: string; sensor: string }
 > = {
-  satelite: { etiqueta: "Observación satelital", sensor: "GOES · VIIRS · PACE · Himawari · MUR" },
+  satelite: { etiqueta: "Observación satelital", sensor: "GOES · VIIRS · PACE · Himawari · Meteosat · CBERS · MUR" },
   modelo: { etiqueta: "Modelo numérico", sensor: "ECMWF · IFS · AIFS" },
   vegetacion: { etiqueta: "Biósfera & vegetación", sensor: "PACE OCI · LandVI" },
   radar: { etiqueta: "Radar apertura sintética", sensor: "NISAR L-Band SAR" },

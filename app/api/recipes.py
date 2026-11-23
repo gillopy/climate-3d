@@ -235,6 +235,21 @@ def _ultimos_himawari(n: int) -> list[datetime]:
     )
 
 
+def _ultimos_meteosat(capa: str, n: int) -> list[datetime]:
+    """Los `n` slots más nuevos que publica EUMETView para Meteosat-12.
+
+    El capabilities del WMS declara la última marca de la capa: una sola
+    consulta, sin caminar hacia atrás. Si el XML no se puede leer, el módulo
+    cae al reloj (ahora - 20 min) y el descargador retrocede si hace falta.
+    """
+    comun = RAIZ_REPO / "comun"
+    if str(comun) not in sys.path:
+        sys.path.insert(0, str(comun))
+    from meteosat import ultimos_slots
+
+    return ultimos_slots(n, capa)
+
+
 def _snapshot(params: dict[str, Any]) -> bool:
     """True si el pedido quiere un solo cuadro: sin serie y sin animación.
 
@@ -1470,6 +1485,128 @@ def _himawari(params: dict[str, Any], work: Path) -> Plan:
     pasos = [descarga, render_step]  # el origen se consulta en cada corrida
     return Plan(pasos=pasos, descarga=descarga)
 
+
+
+# --- METEOSAT-12 (MTG-I1): disco completo pintado por EUMETView --------
+_CAPAS_METEOSAT = ("geocolour", "truecolour", "ir")
+
+
+def _meteosat(params: dict[str, Any], work: Path) -> Plan:
+    """Plan del disco completo del FCI: GeoColour, True Colour o IR 10.5 um.
+
+    El WMS ya entrega la imagen pintada en lon/lat; el render la lleva a globo
+    Orthographic centrado en el punto subsatelital (0,0). No hay "Solo Paraguay":
+    desde 0 grados el país queda en el limbo.
+    """
+    inicio, fin = _rango(params)
+    px = _px(params, 1400)
+    n_ultimos = _ultimos(params)
+    animar = bool(n_ultimos) or (_bool(params, "animar") and not _snapshot(params))
+    capa = str(params.get("variante", "geocolour"))
+    if capa not in _CAPAS_METEOSAT:
+        capa = "geocolour"
+
+    if n_ultimos:
+        slots = _ultimos_meteosat(capa, n_ultimos)
+        desde, n, paso = slots[0], len(slots), _PASO_SLOT
+    elif _snapshot(params):
+        desde, n, paso = _slot_snapshot(
+            params, fin, lambda k: _ultimos_meteosat(capa, k)), 1, _PASO_SLOT
+    else:
+        ventana = _ventana_animacion(
+            inicio, fin, params.get("hora_desde", 0), params.get("hora_hasta", 24)
+        )
+        desde, n, paso, _ = _plan_slots(
+            set(), _slot_cenital(inicio, 0.0), animar, ventana
+        )
+
+    comunes = [
+        "--desde", desde.strftime("%Y-%m-%dT%H:%M"),
+        "--n", str(n),
+        "--paso", str(paso),
+        "--px", str(px),
+        "--capa", capa,
+        "--globo",
+        "--out", str(work),
+    ]
+    descarga = Step(
+        kind="download",
+        label=(f"bajando los últimos {n} slots de Meteosat-12"
+               if n_ultimos else f"bajando {n} cuadro(s) de Meteosat-12"),
+        script="descargar/meteosat.py",
+        args=comunes,
+        expected=max(1, n),
+    )
+    render_step = Step(
+        kind="render",
+        label=f"renderizando {n} cuadro(s) de Meteosat-12",
+        script="cuadros/cuadros_meteosat.py",
+        args=[
+            *comunes,
+            "--centro", "0", "0",
+        ],
+        expected=n,
+    )
+    pasos = [descarga, render_step]
+    return Plan(pasos=pasos, descarga=descarga)
+
+
+# --- CBERS-4A: recorte de alta resolucion desde el STAC del INPE --------
+def _cbers(params: dict[str, Any], work: Path) -> Plan:
+    """Recorte cuadrado de CBERS-4A (2 m PCA, 8 m WPM o 16 m MUX).
+
+    La escena la elige el descargador (la más nueva que cubra la zona dentro de
+    la ventana). No hay serie ni animación: un recorte por corrida.
+    """
+    if str(RAIZ_REPO) not in sys.path:
+        sys.path.insert(0, str(RAIZ_REPO))
+    from comun.cbers import ZONAS_2M, etiqueta_zona, recorte
+
+    zona = str(params.get("zona", "asuncion"))
+    try:
+        km = float(params.get("km", 16) or 16)
+    except (TypeError, ValueError):
+        km = 16.0
+    detalle = str(params.get("detalle", "8"))
+    if detalle not in ("2", "8", "16"):
+        detalle = "8"
+    if detalle == "2" and zona not in ZONAS_2M:
+        detalle = "8"   # la UI ya oculta la opción; esto cubre un pedido a mano
+
+    corte = recorte(zona, km, detalle)
+    inicio, fin = _rango(params)
+    if _bool(params, "ultima"):
+        fin = datetime.now(timezone.utc).date()
+        try:
+            dias = max(7, min(730, int(params.get("dias", 120) or 120)))
+        except (TypeError, ValueError):
+            dias = 120
+        inicio = fin - timedelta(days=dias)
+
+    crudos = work / "crudos"
+    descarga = Step(
+        kind="download",
+        label=(f"buscando y recortando CBERS-4A {detalle} m de "
+               f"{etiqueta_zona(zona)}"),
+        script="descargar/cbers.py",
+        args=[
+            "--zona", zona,
+            "--km", f"{km:g}",
+            "--detalle", detalle,
+            "--desde", inicio.isoformat(),
+            "--hasta", fin.isoformat(),
+            "--out", str(crudos),
+        ],
+        expected=1,
+    )
+    render_step = Step(
+        kind="render",
+        label=f"componiendo el recorte de {etiqueta_zona(zona)}",
+        script="cuadros/cuadros_cbers.py",
+        args=["--entrada", str(crudos), "--out", str(work)],
+        expected=1,
+    )
+    return Plan(pasos=[descarga, render_step], descarga=descarga)
 
 
 # --- GOES: una banda cruda con el diseno del color real ----------------
@@ -2771,6 +2908,8 @@ _CONSTRUCTORES = {
     "snapshot_paraguay": _snapshot_paraguay,
     "follaje": _follaje,
     "himawari": _himawari,
+    "meteosat": _meteosat,
+    "cbers_4a": _cbers,
     "nisar_render": _nisar_render,
 }
 
