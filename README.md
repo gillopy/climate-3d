@@ -416,7 +416,8 @@ la segunda, y aparecen en Australia, el sur de África y el cinturón agrícola 
 El dato **no sale de GIBS**: son los gránulos **L3M LANDVI** de OB.DAAC a **4 km** y diarios,
 que traen diez índices de vegetación por archivo y **ya vienen enmascarados para nubes**.
 Cada día pesa ~170 MB y **exige Earthdata Login**, así que es la única rama del repo que
-necesita cuenta. El póster promedia los índices de la semana y recién después divide —al
+necesita cuenta. Configurá `EARTHDATA_USER` y `EARTHDATA_PASSWORD` en el entorno o en
+`.env`, o usá cookies exportadas del navegador/`~/.netrc`. El póster promedia los índices de la semana y recién después divide —al
 revés deja mucho más ruido—, y dibuja en **Robinson** sobre fondo blanco. Los scripts son
 [`descargar/pace_landvi.py`](./descargar/pace_landvi.py) y
 [`prototipos/poster_follaje.py`](./prototipos/poster_follaje.py).

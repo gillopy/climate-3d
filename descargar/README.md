@@ -234,9 +234,10 @@ https://oceandata.sci.gsfc.nasa.gov/getfile/
 | `--destino` | Carpeta de salida (por defecto, `DATOS/pace_landvi`) |
 | `--cookies` | JSON con las cookies de un navegador ya logueado en Earthdata |
 
-- **Autenticación, dos caminos**: `--cookies navegador.json` (formato de Playwright:
-  `[{name, value, domain, path}]`) o `~/.netrc` con `machine urs.earthdata.nasa.gov`. Sin
-  ninguno de los dos, el script corta con un mensaje explícito; nunca guarda la contraseña.
+- **Autenticación**: `--cookies navegador.json` (formato de Playwright:
+  `[{name, value, domain, path}]`), `EARTHDATA_USER` + `EARTHDATA_PASSWORD` en el entorno
+  o `.env`, o `~/.netrc` con `machine urs.earthdata.nasa.gov`. Sin ninguno, el script
+  corta con un mensaje explícito; nunca guarda la contraseña.
 - **Las cookies de URS solas no alcanzan**: hay que completar el OAuth visitando una URL
   `getfile` en el navegador para que quede la cookie `GETFILE_APP` del dominio de oceandata.
 - El `.nc` va a `*.parcial` y se renombra al final, así que un corte deja el archivo

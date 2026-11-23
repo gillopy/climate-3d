@@ -16,6 +16,7 @@ acepta dos formas de autenticarse, y ninguna guarda la contraseña en el repo:
 
   * `--cookies <archivo.json>`: lista de cookies exportada de un navegador ya logueado
     (formato de Playwright: `[{name, value, domain, path, ...}]`).
+  * `EARTHDATA_USER` y `EARTHDATA_PASSWORD` en el entorno o en el `.env` del repo.
   * `~/.netrc` con `machine urs.earthdata.nasa.gov login <usuario> password <clave>`
     (el método histórico de OBPG: autenticación básica preventiva).
 
@@ -29,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import netrc
+import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -68,8 +70,40 @@ def candidatos(fecha: date, res: str) -> list[str]:
     return [nombre(fecha, res, TAG), nombre(fecha, res, "")]
 
 
+def _env_repo() -> dict[str, str]:
+    """Lee las variables de autenticación del `.env` sin imprimir valores."""
+    env: dict[str, str] = {}
+    try:
+        for linea in (RAIZ / ".env").read_text(encoding="utf-8-sig").splitlines():
+            limpia = linea.strip()
+            if not limpia or limpia.startswith("#") or "=" not in limpia:
+                continue
+            clave, valor = limpia.split("=", 1)
+            env[clave.strip()] = valor.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return env
+
+
+def _credenciales() -> tuple[str, str] | None:
+    env_repo = _env_repo()
+    usuario = os.environ.get("EARTHDATA_USER") or env_repo.get("EARTHDATA_USER")
+    clave = os.environ.get("EARTHDATA_PASSWORD") or env_repo.get("EARTHDATA_PASSWORD")
+    if usuario and clave:
+        return usuario, clave
+    try:
+        autenticadores = netrc.netrc().authenticators("urs.earthdata.nasa.gov")
+    except (FileNotFoundError, netrc.NetrcParseError, TypeError):
+        return None
+    if autenticadores:
+        _, login, password = autenticadores
+        if login and password:
+            return login, password
+    return None
+
+
 def _sesion(cookies: Path | None) -> requests.Session:
-    """Sesión autenticada contra URS: cookies de navegador o `.netrc`, en ese orden."""
+    """Sesión autenticada contra URS: cookies, entorno/.env o `.netrc`."""
     s = requests.Session()
     s.headers["User-Agent"] = "climate3d/1.0"
     s.trust_env = False                  # que no se cuele un proxy del sistema
@@ -82,14 +116,14 @@ def _sesion(cookies: Path | None) -> requests.Session:
                           domain=c.get("domain", ""), path=c.get("path", "/"))
         return s
 
-    try:
-        host, login, clave = netrc.netrc().authenticators("urs.earthdata.nasa.gov")
-    except (FileNotFoundError, netrc.NetrcParseError, TypeError):
+    credenciales = _credenciales()
+    if credenciales is None:
         raise SystemExit(
-            "Falta autenticación: exportá las cookies del navegador con --cookies, o "
+            "Falta autenticación: configurá EARTHDATA_USER y EARTHDATA_PASSWORD "
+            "en el entorno/.env, exportá cookies del navegador con --cookies, o "
             "creá ~/.netrc con la entrada de urs.earthdata.nasa.gov."
         )
-    s.auth = (login, clave)              # básica preventiva, como `wget --auth-no-challenge`
+    s.auth = credenciales                # básica preventiva, como `wget --auth-no-challenge`
     return s
 
 
