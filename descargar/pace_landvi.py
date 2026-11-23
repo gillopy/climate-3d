@@ -36,6 +36,8 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
@@ -108,6 +110,20 @@ def _sesion(cookies: Path | None) -> requests.Session:
     s.headers["User-Agent"] = "climate3d/1.0"
     s.trust_env = False                  # que no se cuele un proxy del sistema
 
+    # Reintentos para errores de conexión transitorios (timeout, DNS, reset)
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=2,
+        backoff_factor=2.0,
+        status_forcelist=(500, 502, 503, 504),
+        allowed_methods=frozenset(["GET", "HEAD"]),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    s.mount("https://", adapter)
+    s.mount("http://", adapter)
+
     if cookies:
         # `utf-8-sig` tolera el BOM que agrega PowerShell 5.1 al exportar el JSON.
         jar = json.loads(Path(cookies).read_text(encoding="utf-8-sig"))
@@ -131,7 +147,9 @@ def bajar(s: requests.Session, url: str, destino: Path, min_bytes: int = MIN_BYT
     """Descarga en streaming, reanudable por archivo temporal."""
     destino.parent.mkdir(parents=True, exist_ok=True)
     tmp = destino.with_suffix(destino.suffix + ".parcial")
-    with s.get(url, stream=True, timeout=(30, 300), allow_redirects=True) as r:
+    # Timeout de conexión más generoso (60s) y lectura 300s; los reintentos
+    # los maneja el HTTPAdapter montado en la sesión.
+    with s.get(url, stream=True, timeout=(60, 300), allow_redirects=True) as r:
         r.raise_for_status()
         tipo = r.headers.get("Content-Type", "")
         if "text/html" in tipo:
