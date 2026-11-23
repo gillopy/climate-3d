@@ -11,9 +11,12 @@ import { FechaUnica, VentanaTemporal } from "./controls/Window";
 import { formatearFecha, formatearRango } from "./controls/Calendar";
 import { opcionesVisibles, pisoDeSatelite } from "../opciones";
 
-// La fecha y la hora van siempre al final del formulario y en este orden, sea
-// cual sea el producto: primero se eligen las opciones, después el momento.
+// El momento de captura y sus banderas ("snapshot", "ultimo", "ultimos") van
+// juntos en el mismo bloque temporal para que los controles dependientes se
+// vean lado a lado.
 const ORDEN_TIEMPO = [
+  "snapshot",
+  "ultimo",
   "ultima",
   "ultimos",
   "ultimos_n",
@@ -25,58 +28,103 @@ const ORDEN_TIEMPO = [
   "hora_hasta",
   "corrida",
   "horizonte",
+  "trend",
 ];
 
-// Secciones del inspector: agrupan el esquema que manda el backend sin que este
-// archivo tenga que conocer ningún producto en particular.
+// Secciones del pipeline científico: agrupan el esquema que manda el backend
+// en 5 etapas numeradas sin dejar parámetros huérfanos en "Otras opciones".
 const SECCIONES: {
   id: string;
+  paso: string;
   titulo: string;
   descripcion: string;
   nombres: string[];
 }[] = [
   {
     id: "fuente",
-    titulo: "Fuente de datos",
-    descripcion: "Sensor orbital, encuadre y filtrado.",
+    paso: "01",
+    titulo: "Fuente & sensor",
+    descripcion: "Sensor orbital, banda espectral, modelo y paleta.",
     nombres: [
       "satelite",
       "banda",
       "capa",
+      "compuesto",
       "modelo",
       "paleta",
-      "encuadre",
-      "limbo",
       "nitidez",
-      "proyeccion",
+      "limbo",
       "detalle",
     ],
   },
   {
+    id: "encuadre",
+    paso: "02",
+    titulo: "Encuadre & superposiciones",
+    descripcion: "Proyección espacial, recorte Paraguay y focos FIRMS.",
+    nombres: [
+      "encuadre",
+      "proyeccion",
+      "paraguay",
+      "margen",
+      "firms",
+      "firms_fuente",
+      "firms_alcance",
+      "firms_ventana",
+    ],
+  },
+  {
     id: "salida",
-    titulo: "Salida & geometría",
-    descripcion: "Dimensiones, aspecto 1:1 y filtros espaciales.",
-    nombres: ["resolucion", "fondo", "margen", "borde", "paraguay", "snapshot", "trend"],
+    paso: "03",
+    titulo: "Salida & composición",
+    descripcion: "Resolución en píxeles, fondo, bordes y mezcla.",
+    nombres: ["resolucion", "fondo", "borde", "alpha"],
   },
   {
     id: "tiempo",
-    titulo: "Tiempo (UTC)",
-    descripcion: "Ventana, cadencia orbital y filtros por hora.",
+    paso: "04",
+    titulo: "Ventana temporal & captura (UTC)",
+    descripcion: "Snapshot, último slot publicado, calendario y horarios.",
     nombres: ORDEN_TIEMPO,
   },
   {
     id: "movimiento",
+    paso: "05",
     titulo: "Movimiento & animación",
-    descripcion: "Video MP4 e interpolación temporal.",
+    descripcion: "Secuencia MP4 y cadencia de cuadros por segundo.",
     nombres: ["animar", "fps"],
   },
 ];
+
+// Metadatos visuales de cada familia científica del catálogo.
+const FAMILIA_META: Record<
+  string,
+  { etiqueta: string; sensor: string }
+> = {
+  satelite: { etiqueta: "Observación satelital", sensor: "GOES · VIIRS · PACE · Himawari · MUR" },
+  modelo: { etiqueta: "Modelo numérico", sensor: "ECMWF · IFS · AIFS" },
+  vegetacion: { etiqueta: "Biósfera & vegetación", sensor: "PACE OCI · LandVI" },
+  radar: { etiqueta: "Radar apertura sintética", sensor: "NISAR L-Band SAR" },
+};
+
+// Parámetros subordinados a un toggle principal: se marcan visualmente como
+// sub-control acoplado para que el flujo de parametrización sea evidente.
+const SUBORDINADOS: Record<string, string> = {
+  margen: "paraguay",
+  firms_fuente: "firms",
+  firms_alcance: "firms",
+  firms_ventana: "firms",
+  ultimo: "snapshot",
+  ultimos_n: "ultimos",
+  fps: "animar",
+};
 
 // Clave corta para el resumen de la receta: el nombre completo no entra en un chip.
 const CLAVES: Record<string, string> = {
   satelite: "sat",
   banda: "banda",
   capa: "capa",
+  compuesto: "comp",
   modelo: "modelo",
   paleta: "paleta",
   encuadre: "encuadre",
@@ -85,8 +133,14 @@ const CLAVES: Record<string, string> = {
   proyeccion: "proy",
   resolucion: "px",
   fondo: "fondo",
+  borde: "borde",
+  alpha: "alpha",
   margen: "margen",
   detalle: "m/px",
+  firms: "FIRMS",
+  firms_fuente: "sensor FIRMS",
+  firms_alcance: "alcance FIRMS",
+  firms_ventana: "ventana FIRMS",
   fps: "fps",
   ultimos_n: "cuadros",
   corrida: "ciclo",
@@ -189,8 +243,8 @@ export function RecipeForm({
         } en disco · la última es ${ultimaFecha}`
       : "sin datos locales: se descargan al generar";
 
-  // Cada spec cae en la primera sección que la nombra; lo que no figura queda
-  // en "Otras opciones" para que ningún control se pierda.
+  // Cada spec cae en la sección que la nombra y conserva el orden canónico de
+  // `seccion.nombres`.
   const porNombre = new Map(product.params.map((spec) => [spec.name, spec]));
   const usados = new Set<string>();
   const grupos = SECCIONES.map((seccion) => {
@@ -198,12 +252,6 @@ export function RecipeForm({
       .map((nombre) => porNombre.get(nombre))
       .filter((spec): spec is ParamSpec => Boolean(spec));
     for (const spec of specs) usados.add(spec.name);
-    if (seccion.id === "tiempo") {
-      specs.sort(
-        (uno, otro) =>
-          ORDEN_TIEMPO.indexOf(uno.name) - ORDEN_TIEMPO.indexOf(otro.name),
-      );
-    }
     return { ...seccion, specs };
   }).filter((grupo) => grupo.specs.length > 0);
 
@@ -211,12 +259,18 @@ export function RecipeForm({
   if (otros.length > 0) {
     grupos.push({
       id: "otros",
-      titulo: "Otras opciones",
-      descripcion: "Parámetros que no entran en las secciones anteriores.",
+      paso: "06",
+      titulo: "Parámetros adicionales",
+      descripcion: "Opciones específicas del producto.",
       nombres: [],
       specs: otros,
     });
   }
+
+  const familia = FAMILIA_META[product.group] ?? {
+    etiqueta: product.group,
+    sensor: product.stage,
+  };
 
   const hayCambios = product.params.some(
     (spec) => !igual(params[spec.name], spec.default),
@@ -269,7 +323,15 @@ export function RecipeForm({
         )
       : true;
     const modificado = !igual(valor, spec.default);
-    const clase = habilitado ? "field" : "field field--off";
+    const padre = SUBORDINADOS[spec.name];
+    const claseBase = habilitado ? "field" : "field field--off";
+    const clase = [
+      claseBase,
+      modificado ? "field--modified" : "",
+      padre ? "field--sub" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     // El punto marca "cambiaste el valor": siempre ocupa su lugar para que la
     // etiqueta no salte, y solo se pinta cuando el valor difiere del default.
@@ -279,6 +341,12 @@ export function RecipeForm({
         aria-hidden="true"
       />
     );
+
+    const insigniaPadre = padre ? (
+      <span className="field__dep" title={`Depende de ${padre}`}>
+        ↳ {padre}
+      </span>
+    ) : null;
 
     const top = (etiqueta: string, htmlFor?: string) => (
       <div className="field__top">
@@ -293,6 +361,7 @@ export function RecipeForm({
             {etiqueta}
           </span>
         )}
+        {insigniaPadre}
         {modificado ? (
           <button
             type="button"
@@ -391,17 +460,24 @@ export function RecipeForm({
     }
 
     if (spec.kind === "toggle") {
+      const activo = Boolean(valor);
+      const claseToggle = [
+        "field",
+        "field--toggle",
+        !habilitado ? "field--off" : "",
+        activo ? "field--active" : "",
+        modificado ? "field--modified" : "",
+        padre ? "field--sub" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
       return (
-        <div
-          className={
-            habilitado ? "field field--toggle" : "field field--toggle field--off"
-          }
-          key={spec.name}
-        >
+        <div className={claseToggle} key={spec.name}>
           <div className="field__top">
             <span className="field__label">
               {marca}
               {spec.label}
+              {insigniaPadre}
             </span>
             {spec.help ? <span className="field__help">{spec.help}</span> : null}
             {modificado ? (
@@ -417,7 +493,7 @@ export function RecipeForm({
           <button
             type="button"
             role="switch"
-            aria-checked={Boolean(valor)}
+            aria-checked={activo}
             aria-label={spec.label}
             className="switch"
             disabled={!habilitado}
@@ -481,6 +557,8 @@ export function RecipeForm({
   return (
     <form
       className="sheet"
+      data-group={product.group}
+      aria-labelledby="work-product-title"
       onSubmit={(evento) => {
         evento.preventDefault();
         if (busy) return;
@@ -495,8 +573,30 @@ export function RecipeForm({
     >
       <div className="work__head">
         <div>
-          <h2 className="work__title">{product.name}</h2>
+          <div className="work__eyebrow">
+            <span className="dataset-badge" data-group={product.group}>
+              <span className="dataset-badge__dot" aria-hidden="true" />
+              {familia.etiqueta}
+            </span>
+            <code className="dataset-code">{product.id}</code>
+            <span className="dataset-sensor">{familia.sensor}</span>
+          </div>
+          <h2 className="work__title" id="work-product-title">
+            {product.name}
+          </h2>
           <p className="work__summary">{product.summary}</p>
+          <div className="work__meta">
+            <code className="work__script">{product.stage}</code>
+            <span
+              className={
+                product.command_ready
+                  ? "work__flag"
+                  : "work__flag work__flag--off"
+              }
+            >
+              {product.command_ready ? "pipeline activo" : "solo preview"}
+            </span>
+          </div>
         </div>
         <button
           type="button"
@@ -526,8 +626,11 @@ export function RecipeForm({
 
       <dl className="folio">
         <div className="folio__cell">
-          <dt>Grupo</dt>
-          <dd>{product.group}</dd>
+          <dt>Familia / Sensor</dt>
+          <dd className="folio__group" data-group={product.group}>
+            <span className="folio__dot" aria-hidden="true" />
+            {product.group}
+          </dd>
         </div>
         <div className="folio__cell">
           <dt>Datos en disco</dt>
@@ -552,10 +655,42 @@ export function RecipeForm({
       </dl>
 
       <div className="sheet__body">
+        <nav className="pipeline-bar" aria-label="Flujo de parametrización">
+          {grupos.map((grupo) => {
+            const modificados = grupo.specs.filter(
+              (spec) => !igual(params[spec.name], spec.default),
+            ).length;
+            return (
+              <a
+                key={grupo.id}
+                href={`#sec-${grupo.id}`}
+                className={
+                  modificados > 0
+                    ? "pipeline-bar__step pipeline-bar__step--mod"
+                    : "pipeline-bar__step"
+                }
+              >
+                <span className="pipeline-bar__num">{grupo.paso}</span>
+                <span className="pipeline-bar__name">{grupo.titulo}</span>
+                {modificados > 0 ? (
+                  <span className="pipeline-bar__badge" title="Parámetros modificados">
+                    {modificados}
+                  </span>
+                ) : null}
+              </a>
+            );
+          })}
+        </nav>
+
         <div className="fields">
           {grupos.map((grupo) => (
-            <section key={grupo.id} className="fields__grupo">
+            <section
+              key={grupo.id}
+              id={`sec-${grupo.id}`}
+              className="fields__grupo"
+            >
               <header className="fields__sec">
+                <span className="fields__num">{grupo.paso}</span>
                 <h3 className="fields__title">{grupo.titulo}</h3>
                 <span className="fields__sec-count">
                   {grupo.specs.length}{" "}

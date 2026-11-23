@@ -181,7 +181,6 @@ export function resumenStats(meta: Record<string, unknown>): StatsRow[] {
     Array.isArray(valor) ? valor.join(" · ") : String(valor),
   );
   agregar("Polarización", "polarizacion", texto);
-  agregar("Modo", "modo", texto);
   agregar("Colección", "coleccion", texto);
 
   const clases = meta.clases;

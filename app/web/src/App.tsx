@@ -51,6 +51,7 @@ export default function App() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState("");
+  const [familiaFiltro, setFamiliaFiltro] = useState<string>("todos");
   // Dos vistas en la misma app: la consola de recetas y el visor NISAR.
   const [vista, setVista] = useState<"consola" | "nisar">("consola");
 
@@ -223,14 +224,19 @@ export default function App() {
   const listo = catalogo?.repo_ready === true;
   const conDatos = catalogo?.data_root_exists === true;
   const consulta = filtro.trim().toLowerCase();
-  // El filtro busca en lo que la persona ve y en el id técnico del producto.
-  const coincidencias = (catalogo?.products ?? []).filter(
-    (item) =>
+  const familiasDisponibles = Array.from(
+    new Set((catalogo?.products ?? []).map((item) => item.group)),
+  );
+  // El filtro busca en lo que la persona ve, en la familia elegida y en el id técnico del producto.
+  const coincidencias = (catalogo?.products ?? []).filter((item) => {
+    if (familiaFiltro !== "todos" && item.group !== familiaFiltro) return false;
+    return (
       !consulta ||
       `${item.name} ${item.summary} ${item.group} ${item.id}`
         .toLowerCase()
-        .includes(consulta),
-  );
+        .includes(consulta)
+    );
+  });
   // Agrupa por nombre conservando el orden en que el catalogo los presenta.
   const grupos: { nombre: string; items: Product[] }[] = [];
   const porGrupo = new Map<string, Product[]>();
@@ -246,7 +252,10 @@ export default function App() {
   }
 
   return (
-    <div className="shell">
+    <div
+      className="shell"
+      data-group={vista === "nisar" ? "radar" : (producto?.group ?? "satelite")}
+    >
       <header className="topbar">
         <div className="brand">
           <span className="brand__mark" aria-hidden="true">
@@ -258,8 +267,24 @@ export default function App() {
           </span>
           <span className="brand__txt">
             <h1>Climate 3D</h1>
-            <span className="brand__sub">render console</span>
+            <span className="brand__sub">earth observation workbench</span>
           </span>
+          {vista === "consola" && producto ? (
+            <span className="topbar__active" data-group={producto.group}>
+              <span className="topbar__active-dot" aria-hidden="true" />
+              <span className="topbar__active-group">{producto.group}</span>
+              <span className="topbar__active-sep">·</span>
+              <span className="topbar__active-name">{producto.name}</span>
+            </span>
+          ) : null}
+          {vista === "nisar" ? (
+            <span className="topbar__active" data-group="radar">
+              <span className="topbar__active-dot" aria-hidden="true" />
+              <span className="topbar__active-group">radar</span>
+              <span className="topbar__active-sep">·</span>
+              <span className="topbar__active-name">NISAR L-Band SAR</span>
+            </span>
+          ) : null}
         </div>
         <nav className="vista-switch" aria-label="Vista">
           <button
@@ -270,7 +295,7 @@ export default function App() {
             aria-pressed={vista === "consola"}
             onClick={() => setVista("consola")}
           >
-            Consola
+            Consola de datasets
           </button>
           <button
             type="button"
@@ -280,7 +305,7 @@ export default function App() {
             aria-pressed={vista === "nisar"}
             onClick={() => setVista("nisar")}
           >
-            NISAR
+            Visor NISAR SAR
           </button>
         </nav>
         <div className="health">
@@ -332,7 +357,7 @@ export default function App() {
                   : "—"}
               </span>
             </div>
-            <div className="rail__search">
+            <search className="rail__search">
               <svg
                 width="13"
                 height="13"
@@ -346,9 +371,11 @@ export default function App() {
               <input
                 type="search"
                 value={filtro}
-                placeholder="Filtrar productos"
+                placeholder="Filtrar datasets (GOES, ECMWF, PACE…)"
                 aria-label="Filtrar productos por nombre, grupo o resumen"
                 autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
                 spellCheck={false}
                 onChange={(evento) => setFiltro(evento.target.value)}
               />
@@ -364,13 +391,52 @@ export default function App() {
                   </svg>
                 </button>
               ) : null}
-            </div>
+            </search>
+            {familiasDisponibles.length > 1 ? (
+              <div className="rail__families" role="group" aria-label="Filtrar por familia de sensor">
+                <button
+                  type="button"
+                  className={`rail__family-pill${
+                    familiaFiltro === "todos" ? " rail__family-pill--on" : ""
+                  }`}
+                  aria-pressed={familiaFiltro === "todos"}
+                  onClick={() => setFamiliaFiltro("todos")}
+                >
+                  Todos
+                </button>
+                {familiasDisponibles.map((fam) => (
+                  <button
+                    key={fam}
+                    type="button"
+                    data-group={fam}
+                    className={`rail__family-pill${
+                      familiaFiltro === fam ? " rail__family-pill--on" : ""
+                    }`}
+                    aria-pressed={familiaFiltro === fam}
+                    onClick={() =>
+                      setFamiliaFiltro((actualFam) =>
+                        actualFam === fam ? "todos" : fam,
+                      )
+                    }
+                  >
+                    <span className="rail__family-dot" aria-hidden="true" />
+                    {fam}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <ul className="catalog" aria-labelledby="productos-titulo">
             {grupos.map((grupo) => (
-              <li key={grupo.nombre} className="catalog__grupo">
+              <li
+                key={grupo.nombre}
+                className="catalog__grupo"
+                data-group={grupo.nombre}
+              >
                 <p className="catalog__grupo-nombre" id={`grupo-${grupo.nombre}`}>
+                  <span className="catalog__grupo-dot" aria-hidden="true" />
                   {grupo.nombre}
+                  <span className="catalog__grupo-count">{grupo.items.length}</span>
                 </p>
                 <ul className="catalog__lista" aria-labelledby={`grupo-${grupo.nombre}`}>
                   {grupo.items.map((item) => {
@@ -380,6 +446,7 @@ export default function App() {
                         <button
                           type="button"
                           className="catalog__item"
+                          data-group={item.group}
                           aria-current={activo ? "true" : undefined}
                           onClick={() => elegir(item)}
                         >
@@ -396,6 +463,12 @@ export default function App() {
                           <span className="catalog__body">
                             <span className="catalog__name">{item.name}</span>
                             <span className="catalog__desc">{item.summary}</span>
+                            <span className="catalog__meta">
+                              <span className="catalog__tag">{item.group}</span>
+                              <span className="catalog__params">
+                                {item.params.length} params
+                              </span>
+                            </span>
                           </span>
                           <span className="catalog__mark" aria-hidden="true" />
                         </button>

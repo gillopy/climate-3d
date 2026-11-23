@@ -21,7 +21,7 @@ RAIZ_REPO = Path(__file__).resolve().parents[2]
 if str(RAIZ_REPO) not in sys.path:
     sys.path.insert(0, str(RAIZ_REPO))
 
-from comun.rutas import DATOS as _DATOS  # noqa: E402  (necesita RAIZ_REPO de arriba)
+from comun.rutas import raiz_datos as _raiz_datos  # noqa: E402  (necesita RAIZ_REPO de arriba)
 
 def _paleta(
     value: str, label: str, banda: str | list[str] | None = None
@@ -1244,6 +1244,58 @@ def _con_ultimo(producto: Product) -> Product:
     return producto
 
 
+#: Orden canónico del pipeline de parametrización:
+#: 1. Fuente & Sensor -> 2. Encuadre & Superposiciones -> 3. Salida & Composición
+#: -> 4. Ventana Temporal & Captura (UTC) -> 5. Movimiento & Animación.
+ORDEN_PARAMETROS: tuple[str, ...] = (
+    # 01 · Fuente & Sensor
+    "satelite",
+    "banda",
+    "capa",
+    "compuesto",
+    "modelo",
+    "paleta",
+    "nitidez",
+    "limbo",
+    "detalle",
+    # 02 · Encuadre & Superposiciones
+    "encuadre",
+    "proyeccion",
+    "paraguay",
+    "margen",
+    "firms",
+    "firms_fuente",
+    "firms_alcance",
+    "firms_ventana",
+    # 03 · Salida & Composición
+    "resolucion",
+    "fondo",
+    "borde",
+    "alpha",
+    # 04 · Ventana Temporal & Captura (UTC)
+    "snapshot",
+    "ultimo",
+    "ultima",
+    "ultimos",
+    "ultimos_n",
+    "ventana",
+    "fecha",
+    "hora",
+    "minuto",
+    "hora_desde",
+    "hora_hasta",
+    "corrida",
+    "horizonte",
+    "trend",
+    # 05 · Movimiento & Animación
+    "animar",
+    "fps",
+)
+_POSICION_PARAMETRO = {
+    nombre: indice for indice, nombre in enumerate(ORDEN_PARAMETROS)
+}
+
+
 PRODUCTS = [_con_ultimo(_con_snapshot(_con_paraguay(p))) for p in PRODUCTS]
 
 #: Orden del rail. Los productos se definen en bloques de codigo por familia,
@@ -1380,7 +1432,7 @@ def productos_disponibles() -> list[Product]:
 
 def data_root() -> Path:
     """Raíz de datos: la define ``comun/rutas.py``, acá no se repite."""
-    return _DATOS
+    return _raiz_datos()
 
 
 def data_root_exists() -> bool:
@@ -1426,17 +1478,18 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
     encontradas: set[str] = set()
     raiz = data_root()
 
-    if product.id in ("goes_c13", "goes_truecolor"):
+    if product.id in ("goes_c13", "goes_truecolor", "goes_banda"):
         banda = "C02" if product.id == "goes_truecolor" else str(params.get("banda", "C13"))
+        sat = str(params.get("satelite", "G19"))
         carpeta = _CARPETAS_GOES.get(
-            (str(params.get("satelite", "G19")), banda),
-            "goes_c13_g19",
+            (sat, banda),
+            f"goes_{banda.lower()}_{sat.lower()}",
         )
         datos = raiz / carpeta
         if datos.is_dir():
             encontradas |= _fechas_de_nombres([f.name for f in datos.glob("*.nc")], _DIA_GOES)
 
-    if product.id in ("goes_dust", "goes_airmass", "goes_firetemp"):
+    if product.id in ("goes_dust", "goes_airmass", "goes_firetemp", "goes_sandwich"):
         banda = "C07" if product.id == "goes_firetemp" else "C13"
         datos = raiz / f"goes_{banda.lower()}_{str(params.get('satelite', 'G19')).lower()}"
         if datos.is_dir():
@@ -1461,7 +1514,12 @@ def available_dates(product: Product, params: dict | None = None) -> tuple[str, 
     if salidas.is_dir():
         prefijo = {
             "goes_c13": "frames_G",
+            "goes_banda": "frames_G",
             "goes_truecolor": "poster_G19_truecolor",
+            "goes_sandwich": "frames_sandwich",
+            "geocolor": "frames_geocolor",
+            "truecolor_viirs": "frames_truecolor_viirs",
+            "pace_truecolor": "PACE_truecolor",
             "mur_sst": "frames_mur",
             "mur_realista": "frames_mur",
             "precipitacion_ecmwf": "frames_precipitacion",

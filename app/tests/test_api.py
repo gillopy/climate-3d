@@ -75,6 +75,41 @@ class ContratoDeLaApi(unittest.TestCase):
             self.cliente.get("/api/jobs/no-existe/events").status_code, 404
         )
 
+    def test_available_dates_descubre_datos_locales_en_todos_los_productos_goes_y_gibs(self):
+        import tempfile
+        from unittest.mock import patch
+        from app.api import catalog
+
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            (raiz / "goes_c13_g19").mkdir()
+            (raiz / "goes_c13_g19" / "OR_ABI-L1b-RadF-M6C13_G19_s20261101200000.nc").write_bytes(b"ok")
+            (raiz / "goes_c02_g19").mkdir()
+            (raiz / "goes_c02_g19" / "OR_ABI-L1b-RadF-M6C02_G19_s20261101200000.nc").write_bytes(b"ok")
+            (raiz / "salidas" / "frames_geocolor_globo_G19_2026-04-20T1700_1f_2712px").mkdir(parents=True)
+            (raiz / "salidas" / "frames_truecolor_viirs_noaa20_globo_2026-04-20T0000_1f_2000px").mkdir(parents=True)
+            (raiz / "salidas" / "PACE_truecolor_2026-04-20.png").write_bytes(b"ok")
+
+            por_id = {p.id: p for p in catalog.PRODUCTS}
+            with patch.object(catalog, "data_root", return_value=raiz):
+                for pid in ("goes_banda", "goes_sandwich", "geocolor", "truecolor_viirs", "pace_truecolor"):
+                    fuente, fechas = catalog.available_dates(por_id[pid], {"satelite": "G19", "banda": "C13"})
+                    self.assertEqual(fuente, "descubierto", f"{pid} no descubrio sus fechas en disco")
+                    self.assertIn("2026-04-20", fechas, f"{pid} no devolvio 2026-04-20")
+
+    def test_parametros_de_productos_estan_cubiertos_por_etapas_canonicas_sin_huerfanos(self):
+        from app.api import catalog
+
+        conocidos = set(catalog.ORDEN_PARAMETROS)
+        for producto in catalog.PRODUCTS:
+            nombres = [spec.name for spec in producto.params]
+            desconocidos = [n for n in nombres if n not in conocidos]
+            self.assertEqual(
+                desconocidos,
+                [],
+                f"{producto.id} tiene parametros fuera de ORDEN_PARAMETROS: {desconocidos}",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
