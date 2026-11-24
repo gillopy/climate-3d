@@ -989,11 +989,19 @@ class SnapshotDeUnCuadro(unittest.TestCase):
         producto = catalog.get_product("goes_c13")
 
         for spec in producto.params:
-            if spec.name in ("animar", "hora_desde", "hora_hasta"):
+            if spec.name in ("animar", "hora_desde"):
                 # "Últimos datos" también los apaga: son dos formas de elegir
                 # el momento, y se suman sin pisarse.
                 self.assertEqual(
                     spec.enabled_when, {"ultimos": False, "snapshot": False}, spec.name
+                )
+            elif spec.name == "hora_hasta":
+                # "Hasta el último cuadro" reemplaza el cierre de la ventana: la
+                # hora final no manda y se apaga junto con el snapshot.
+                self.assertEqual(
+                    spec.enabled_when,
+                    {"ultimos": False, "hasta_ultimo": False, "snapshot": False},
+                    spec.name,
                 )
             elif spec.name == "fps":
                 self.assertEqual(spec.enabled_when, {"snapshot": False}, spec.name)

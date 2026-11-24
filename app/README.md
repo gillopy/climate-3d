@@ -379,8 +379,8 @@ del INPE (CC-BY 4.0, sin clave). `detalle` elige 2 m (PCA, sólo zonas cubiertas
 ### Animación: rango horario y cadencia
 
 Al animar, la serie cubre el **rango horario elegido** con la cadencia real del
-ABI: **cada 10 minutos**. Las horas se eligen en hora local (UTC-3), que es como
-se leen los pósters.
+ABI: **cada 10 minutos**. Las horas se eligen en **UTC**, igual que el dataset
+crudo y que la etiqueta de cada cuadro (Paraguay es UTC-3: 12 UTC = 09:00 local).
 
 | Desde | Hasta | Cuadros |
 | --- | --- | --- |
@@ -388,10 +388,16 @@ se leen los pósters.
 | 6 | 18 | 72 |
 | 13 | 15 | 12 |
 
-- El rango se convierte a UTC sumando 3 h: `00–24` local = `03:00` a `03:00` del
-  día siguiente en UTC.
-- El tope duro es 288 cuadros (2 días) para no disparar una descarga de decenas
-  de GB sin querer.
+- El `hasta` es **exclusivo**: `24` cierra el día UTC completo (medianoche del
+  día siguiente). Una ventana de 3 días completos son **432** cuadros.
+- El tope es 288 cuadros (2 días) para no disparar una descarga de decenas de GB
+  sin querer. El globo C13 es la excepción: cada `.nc` pesa ~30 MB, así que su
+  tope es 1008 (7 días). Si una ventana pide más que el tope, se recorta **por el
+  principio** —se pierde el arranque y se conserva el final— y la etiqueta del
+  paso lo dice con el rango real en UTC.
+- **Hasta el último cuadro** (`hasta_ultimo`) ignora la fecha final: cierra la
+  serie en el último slot que NOAA ya publicó. Anima por sí solo (no necesita
+  `animar`) y sirve para pedir "desde el 22 hasta lo que haya" sin adivinar.
 - Con `animar` apagado, el rango no se usa: se renderiza un solo cuadro en el
   cenit.
 

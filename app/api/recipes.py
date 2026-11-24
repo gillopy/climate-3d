@@ -570,6 +570,11 @@ _TOLERANCIA_CENIT = timedelta(minutes=30)
 # los cuadros. Paraguay es UTC-3: la etiqueta de la UI muestra el equivalente.
 _PASO_SLOT = 10  # minutos entre cuadros: la cadencia real del ABI
 _MAX_CUADROS = 288  # 2 dias a 10 min: tope para no disparar 10 GB sin querer
+# El globo C13 es el producto liviano del ABI (~30 MB por slot): una semana a 10
+# min son ~30 GB de .nc y ~45 min de render, muy lejos de los cientos de GB del
+# color real (C02 pesa ~410 MB). Con el tope de 288 una ventana de 3 dias se
+# recortaba a 2 en silencio, y encima se perdia el final: justo lo mas nuevo.
+_MAX_CUADROS_GOES = 1008  # 7 dias a 10 min
 # El ABI (y GIBS) publican con retraso: no se piden slots que todavía no salieron.
 _MARGEN_PUBLICACION = timedelta(minutes=20)
 
@@ -664,23 +669,53 @@ def _ventana_animacion(
     return desde, hasta
 
 
+def _ventana_hasta_ultimo(
+    params: dict[str, Any], inicio: date, sat: str, banda: str
+) -> tuple[datetime, datetime]:
+    """Ventana que arranca en el día elegido y cierra en el último cuadro publicado.
+
+    La fecha final del calendario no manda: el final lo pone NOAA. El `hasta` es
+    exclusivo, así que se suma un paso para que el último slot entre en la serie.
+    Es la forma de pedir "desde el 22 hasta lo que haya" sin adivinar si el día
+    de hoy ya se publicó (el ABI publica con ~20 min de retraso).
+    """
+    h0 = max(0, min(23, int(params.get("hora_desde", 0))))
+    desde = datetime.combine(inicio, time(h0))
+    ultimo = _ultimos_goes(sat, banda, 1)[-1]
+    hasta = ultimo + timedelta(minutes=_PASO_SLOT)
+    if hasta <= desde:
+        raise ValueError(
+            f"La ventana arranca el {desde:%Y-%m-%d %H:%M} UTC y el último cuadro "
+            f"publicado es el {ultimo:%Y-%m-%d %H:%M} UTC: no hay nada que animar. "
+            "Elegí una fecha anterior."
+        )
+    return desde, hasta
+
+
 def _plan_slots(
     disponibles: set[datetime],
     cenital: datetime,
     animar: bool,
     ventana: tuple[datetime, datetime],
+    tope: int = _MAX_CUADROS,
 ) -> tuple[datetime, int, int, bool]:
     """Slot inicial, cuantos cuadros y si hay que descargarlos.
 
     - Poster: un cuadro en el cenit (disco iluminado).
     - Animacion: todo el rango horario elegido, cada 10 minutos.
+
+    `tope` es el techo de cuadros del producto: si la ventana pide mas, se
+    recorta por el PRINCIPIO y se conserva el final (lo mas nuevo, que es lo que
+    se esta mirando). Antes se recortaba el final y la ventana mentia.
     """
     paso = _PASO_SLOT
 
     if animar:
         desde, hasta = ventana
-        n = max(1, int((hasta - desde).total_seconds() // (paso * 60)))
-        n = min(n, _MAX_CUADROS)
+        pedidos = max(1, int((hasta - desde).total_seconds() // (paso * 60)))
+        n = min(pedidos, tope)
+        if n < pedidos:
+            desde = hasta - timedelta(minutes=paso * n)
         faltan = any(
             (desde + timedelta(minutes=paso * i)) not in disponibles
             for i in range(n)
@@ -711,6 +746,8 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
 
     datos_dir = data_root() / f"goes_c13_{sat.lower()}"
     n_ultimos = _ultimos(params)
+    # La ventana resuelta, para poder contarla en la etiqueta del paso.
+    ventana: tuple[datetime, datetime] | None = None
 
     if n_ultimos:
         # "Últimos datos": la ventana de fechas no manda. Se resuelve el tramo
@@ -721,6 +758,14 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
         desde, n, paso, falta = _slot_snapshot(
             params, fin, lambda k: _ultimos_goes(sat, banda, k)), 1, _PASO_SLOT, True
+    elif _bool(params, "hasta_ultimo"):
+        # "Hasta el último cuadro": el final lo pone NOAA, no el calendario. Anima
+        # aunque `animar` esté apagado: pedir una serie es pedir la serie.
+        ventana = _ventana_hasta_ultimo(params, inicio, sat, banda)
+        desde, n, paso, falta = _plan_slots(
+            set(), _slot_cenital(inicio, _LON_SUBSAT.get(sat.upper(), -75.2)),
+            True, ventana, _MAX_CUADROS_GOES,
+        )
     else:
         disponibles = [s for s in _slots_goes(sat, banda) if inicio <= s.date() <= fin]
         lon_sub = _LON_SUBSAT.get(sat.upper(), -75.2)
@@ -733,19 +778,36 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
             cenital,
             _bool(params, "animar") and not _snapshot(params),
             ventana,
+            _MAX_CUADROS_GOES,
         )
+
+    hasta = desde + timedelta(minutes=paso * n)
+    # El rango real va en la etiqueta: es lo que se ve en el panel del job, y era
+    # justo lo que no se veía cuando el tope recortaba la ventana en silencio.
+    rango = f"{desde:%d/%m %H:%M} → {hasta:%d/%m %H:%M} UTC"
+    if n_ultimos:
+        etiqueta = f"bajando los últimos {n} slots de {banda} ({sat}) · {rango}"
+    elif _bool(params, "hasta_ultimo"):
+        etiqueta = (f"bajando {banda} de {sat} hasta el último cuadro "
+                    f"({n} slot(s) · {rango})")
+    else:
+        pedidos = (math.ceil((ventana[1] - ventana[0]) / timedelta(minutes=paso))
+                   if ventana else n)
+        etiqueta = f"bajando {banda} de {sat} ({n} slot(s) · {rango})"
+        if pedidos > n:
+            etiqueta = (f"aviso: tope de {n} cuadros, se pierde el arranque · "
+                        f"{etiqueta}")
 
     # `descargar_goes.py` recorre [desde, hasta) en pasos de `paso` minutos.
     descarga = Step(
         kind="download",
-        label=(f"bajando los últimos {n} slots de {banda} ({sat})"
-               if n_ultimos else f"bajando {banda} de {sat} ({n} slot(s))"),
+        label=etiqueta,
         script="descargar/descargar_goes.py",
         args=[
             "--sat", sat,
             "--banda", banda,
             "--desde", desde.isoformat(),
-            "--hasta", (desde + timedelta(minutes=paso * n)).isoformat(),
+            "--hasta", hasta.isoformat(),
             "--paso", str(paso),
         ],
         expected=max(1, math.ceil(n / 10)),

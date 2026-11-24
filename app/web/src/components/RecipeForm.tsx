@@ -30,6 +30,7 @@ const ORDEN_TIEMPO = [
   "minuto",
   "hora_desde",
   "hora_hasta",
+  "hasta_ultimo",
   "corrida",
   "horizonte",
   "trend",
@@ -359,7 +360,10 @@ export function RecipeForm({
     const rango = (params[ventana.name] ?? ventana.default) as RangoFechas;
     resumen.push({
       clave: "fecha",
-      valor: formatearRango(rango.start, rango.end),
+      valor:
+        params.hasta_ultimo === true
+          ? `${formatearFecha(rango.start)} → último cuadro`
+          : formatearRango(rango.start, rango.end),
     });
   } else if (fechaSuelta) {
     resumen.push({
@@ -387,6 +391,9 @@ export function RecipeForm({
     const esUltima = params.ultima === true;
     const esUltimos = params.ultimos === true && !esSnapshot;
     const esAnimar = params.animar === true;
+    // "Hasta el último cuadro" arma serie por sí solo: el backend la anima sin
+    // el switch de `animar`, así que `fps` también aplica.
+    const esHastaUltimo = params.hasta_ultimo === true && !esSnapshot;
 
     if (
       (spec.name === "ventana" ||
@@ -405,7 +412,7 @@ export function RecipeForm({
       return false;
     }
 
-    if (spec.name === "fps" && !esAnimar && !esUltimos) {
+    if (spec.name === "fps" && !esAnimar && !esUltimos && !esHastaUltimo) {
       return false;
     }
 
