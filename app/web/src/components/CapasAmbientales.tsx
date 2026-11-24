@@ -247,6 +247,7 @@ export function CapasAmbientales({ mapa }: { mapa: L.Map | null }) {
   const grupos = useRef(new Map<string, L.GeoJSON>());
   const abortos = useRef(new Map<string, AbortController>());
   const turnos = useRef(new Map<string, number>());
+  const ultimaCaja = useRef(new Map<string, string>());
   const mapaRef = useRef<L.Map | null>(mapa);
   mapaRef.current = mapa;
 
@@ -322,6 +323,7 @@ export function CapasAmbientales({ mapa }: { mapa: L.Map | null }) {
     async (capa: CapaInfo) => {
       const mapaActual = mapaRef.current;
       if (!mapaActual) return;
+      if (!activasRef.current.includes(capa.id)) return;
       const zoom = Math.round(mapaActual.getZoom());
       const turno = (turnos.current.get(capa.id) ?? 0) + 1;
       turnos.current.set(capa.id, turno);
@@ -329,6 +331,7 @@ export function CapasAmbientales({ mapa }: { mapa: L.Map | null }) {
 
       if (zoom < capa.min_zoom) {
         quitar(capa.id);
+        ultimaCaja.current.delete(capa.id);
         setEstados((previo) => ({
           ...previo,
           [capa.id]: { ...ESTADO_VACIO, requiereZoom: true },
@@ -339,12 +342,17 @@ export function CapasAmbientales({ mapa }: { mapa: L.Map | null }) {
       const caja = cajaDeMapa(mapaActual);
       if (!caja) {
         quitar(capa.id);
+        ultimaCaja.current.delete(capa.id);
         setEstados((previo) => ({
           ...previo,
           [capa.id]: { ...ESTADO_VACIO, error: "La vista cruzó el antimeridiano." },
         }));
         return;
       }
+
+      const clave = `${zoom}|${caja}`;
+      if (ultimaCaja.current.get(capa.id) === clave) return;
+      ultimaCaja.current.set(capa.id, clave);
 
       const control = new AbortController();
       abortos.current.set(capa.id, control);
@@ -355,7 +363,13 @@ export function CapasAmbientales({ mapa }: { mapa: L.Map | null }) {
 
       try {
         const datos = await getCapa(capa.id, caja, zoom, control.signal);
-        if (control.signal.aborted || turnos.current.get(capa.id) !== turno) return;
+        if (
+          control.signal.aborted ||
+          turnos.current.get(capa.id) !== turno ||
+          !activasRef.current.includes(capa.id)
+        ) {
+          return;
+        }
         quitar(capa.id);
         const grupo = crearGrupo(datos, capa, opacidadRef.current);
         if (grupo) {
@@ -375,6 +389,7 @@ export function CapasAmbientales({ mapa }: { mapa: L.Map | null }) {
         }));
       } catch (exc: unknown) {
         if (turnos.current.get(capa.id) !== turno) return;
+        ultimaCaja.current.delete(capa.id);
         quitar(capa.id);
         setEstados((previo) => ({
           ...previo,
@@ -426,6 +441,7 @@ export function CapasAmbientales({ mapa }: { mapa: L.Map | null }) {
       abortos.current.clear();
       grupos.current.forEach((grupo) => grupo.remove());
       grupos.current.clear();
+      ultimaCaja.current.clear();
     };
   }, [mapa, refrescar]);
 
@@ -433,11 +449,14 @@ export function CapasAmbientales({ mapa }: { mapa: L.Map | null }) {
   useEffect(() => {
     if (!mapa || !catalogo) return;
     const vigentes = new Set(activas);
+    abortos.current.forEach((control, id) => {
+      if (!vigentes.has(id)) control.abort();
+    });
     grupos.current.forEach((_, id) => {
-      if (!vigentes.has(id)) {
-        abortos.current.get(id)?.abort();
-        quitar(id);
-      }
+      if (!vigentes.has(id)) quitar(id);
+    });
+    ultimaCaja.current.forEach((_, id) => {
+      if (!vigentes.has(id)) ultimaCaja.current.delete(id);
     });
     setEstados((previo) => {
       const siguiente: Record<string, EstadoCapa> = {};

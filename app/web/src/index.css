@@ -3823,6 +3823,11 @@ input[type="range"]:disabled {
   color: var(--fog);
 }
 
+/* El topbar (1100) va por encima del mapa; los popups siguen visibles arriba. */
+.nisar .leaflet-popup-pane {
+  z-index: 1200;
+}
+
 .nisar .leaflet-bar a {
   border-bottom-color: var(--line);
   background: var(--obsidian);

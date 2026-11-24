@@ -27,6 +27,7 @@ USER_AGENT = "climate3d-capas/0.1 (+local)"
 CACHE_TTL = 6 * 3600.0
 CACHE_MAX = 64
 MAX_FEATURES = 2600
+MAX_BYTES = 24 * 1024 * 1024
 PAGINA_LANDMARK = 1000
 
 WDPA_URL = (
@@ -322,9 +323,13 @@ def _pedir(url: str, params: dict[str, str], timeout: float = 45.0) -> dict[str,
     )
     try:
         with urllib.request.urlopen(pedido, timeout=timeout) as respuesta:
-            crudo = respuesta.read()
+            crudo = respuesta.read(MAX_BYTES + 1)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise ErrorFuente(f"{type(exc).__name__}: {exc}") from exc
+    if len(crudo) > MAX_BYTES:
+        raise ErrorFuente(
+            f"la respuesta superó el máximo de {MAX_BYTES // (1024 * 1024)} MB"
+        )
     try:
         datos = json.loads(crudo.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -345,6 +350,11 @@ def _pedir_consulta(
 ) -> tuple[list[dict[str, Any]], bool]:
     """Devuelve las features crudas y si el servicio aviso que recorto."""
     oeste, sur, este, norte = caja
+    # La tolerancia no puede depender solo del zoom que manda el cliente: una
+    # caja mundial con zoom 22 pediria detalle de 50 m sobre 360 grados. Se
+    # acota tambien por el tamaño de la caja (~2000 muestras por lado).
+    extension = max(este - oeste, norte - sur)
+    tolerancia = max(_offset(zoom, capa), extension / 2000.0)
     geometria = json.dumps(
         {
             "xmin": oeste,
@@ -364,7 +374,7 @@ def _pedir_consulta(
         "outFields": consulta.campos,
         "returnGeometry": "true",
         "outSR": "4326",
-        "maxAllowableOffset": f"{_offset(zoom, capa):g}",
+        "maxAllowableOffset": f"{tolerancia:g}",
         "geometryPrecision": str(_precision(capa, zoom)),
         "returnZ": "false",
         "returnM": "false",
@@ -484,20 +494,26 @@ def _normalizar(
 def _dedupe_biosfera(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """WDPA trae el mismo sitio como reserva nacional y como reserva MAB.
 
-    Se queda con una sola geometria: la internacional (UNESCO) si existe.
+    Sólo se colapsa el par nacional/internacional del mismo sitio (nombre y
+    área): dos sitios distintos que casualmente compartan nombre y área se
+    conservan. Si hay registro UNESCO, se prefiere ése.
     """
-    unicas: dict[tuple[str, int], dict[str, Any]] = {}
+    grupos: dict[tuple[str, int], list[dict[str, Any]]] = {}
     for feature in features:
         props = feature["properties"]
         area = int(round((props.get("area_ha") or 0) / 100.0)) * 100
         clave = (_sin_acentos(props.get("nombre") or ""), area)
-        previa = unicas.get(clave)
-        if previa is None or (
-            props.get("tipo") == "International"
-            and previa["properties"].get("tipo") != "International"
-        ):
-            unicas[clave] = feature
-    return list(unicas.values())
+        grupos.setdefault(clave, []).append(feature)
+
+    unicas: list[dict[str, Any]] = []
+    for grupo in grupos.values():
+        internacionales = [
+            feature
+            for feature in grupo
+            if feature["properties"].get("tipo") == "International"
+        ]
+        unicas.extend(internacionales or grupo)
+    return unicas
 
 
 # --- armado de la capa ---------------------------------------------------
@@ -623,5 +639,6 @@ def capa(
     if guardada is not None:
         return guardada
     respuesta = _armar(definicion, caja, zoom)
-    _cache_guardar(clave, respuesta)
+    if not respuesta["avisos"]:
+        _cache_guardar(clave, respuesta)
     return respuesta

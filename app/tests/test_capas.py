@@ -315,6 +315,31 @@ class CapasAmbientales(unittest.TestCase):
         self.assertEqual(pedir.call_count, 1)
         self.assertEqual(primero, segundo)
 
+    def test_biosfera_no_colapsa_dos_sitios_del_mismo_tipo(self):
+        uno = feature({**WDPA, "desig_type": "National"}, x=0.0)
+        dos = feature({**WDPA, "desig_type": "National"}, x=1.0)
+        with patch.object(
+            capas,
+            "_pedir",
+            return_value={"features": [uno, dos]},
+        ):
+            cuerpo = self._pedir("biosfera", zoom=6).json()
+
+        self.assertEqual(cuerpo["total"], 2)
+
+    def test_una_respuesta_parcial_no_queda_cacheada(self):
+        def falso(url: str, params: dict, timeout: float = 45.0) -> dict:
+            if "comm_ind_Documented" in url:
+                return {"features": [feature({"Name": "X", "Category": "Tierra Indígena"})]}
+            raise capas.ErrorFuente("sin red")
+
+        with patch.object(capas, "_pedir", side_effect=falso):
+            respuesta = self._pedir("territorios-indigenas")
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(respuesta.json()["avisos"])
+        self.assertEqual(len(capas._CACHE), 0)
+
     def test_ecorregiones_usa_el_color_del_dataset_y_lo_valida(self):
         valido = feature({"ECO_NAME": "Dry Chaco", "BIOME_NAME": "Chaco", "COLOR": "#D4D20E"})
         invalido = feature({"ECO_NAME": "Cerrado", "BIOME_NAME": "Cerrado", "COLOR": "rojo"})
