@@ -5101,6 +5101,194 @@ form,
   color: var(--paper);
 }
 
+/* --- Catastro (parcelas del SNC) sobre el mapa NISAR --- */
+.catastro {
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(74vh, 660px);
+  overflow-y: auto;
+}
+
+.catastro__bloque {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.catastro .capas-amb__label {
+  padding: 0;
+}
+
+.catastro .capas-amb__label:hover {
+  background: transparent;
+}
+
+.catastro .capas-amb__opacidad {
+  padding: 2px 0 0;
+  border-top: none;
+}
+
+.catastro__aviso {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fog);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.catastro__aviso p {
+  margin: 0;
+}
+
+.catastro__ruta {
+  color: var(--ash);
+  font-family: var(--mono);
+  font-size: 9px;
+  word-break: break-all;
+}
+
+.catastro__progreso {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.catastro__progreso p {
+  margin: 0;
+  color: var(--fog);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.catastro__barra {
+  height: 6px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--void);
+}
+
+.catastro__barra span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--iris), var(--iris-hi));
+  transition: width 0.3s ease;
+}
+
+.catastro__nota {
+  margin: 0;
+  color: var(--ash);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.catastro__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.catastro__resumen {
+  margin: 2px 0 0;
+  color: var(--mist);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.catastro__resumen strong {
+  color: var(--paper);
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.catastro__lista {
+  max-height: 220px;
+  margin: 4px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  list-style: none;
+}
+
+.catastro__lista li + li {
+  border-top: 1px solid var(--line);
+}
+
+.catastro__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.catastro__item:hover {
+  background: var(--obsidian);
+}
+
+.catastro__item--sel {
+  background: linear-gradient(90deg, rgba(251, 146, 60, 0.16), transparent 82%);
+  box-shadow: inset 2px 0 0 #fb923c;
+}
+
+.catastro__item-id {
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.catastro__item-meta {
+  color: var(--fog);
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+
+.catastro__item-area {
+  color: #fbbf24;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.catastro__pie .capas-amb__links span {
+  color: var(--fog);
+  font-size: 9.5px;
+}
+
+.catastro-pop__copiar {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dotted rgba(192, 132, 252, 0.45);
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* En pantallas angostas el panel se ancla al ancho del mapa, no al botón:
+   la barra tiene `backdrop-filter` y un `position: fixed` quedaría contenido ahí. */
+@media (max-width: 560px) {
+  .capas-amb__wrap:has(.catastro) {
+    position: static;
+  }
+
+  .catastro {
+    width: min(380px, calc(100vw - 40px));
+    max-height: min(62vh, 620px);
+  }
+}
+
 /* Barra inferior minimalista de herramientas ROI en el mapa NISAR */
 .nisar__herramientas {
   top: auto;

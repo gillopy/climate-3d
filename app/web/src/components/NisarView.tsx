@@ -22,6 +22,7 @@ import type {
 import { fechaCorta } from "../formato";
 import type { Job, Params } from "../types";
 import { CapasAmbientales } from "./CapasAmbientales";
+import { CatastroPanel } from "./CatastroPanel";
 import { JobsPanel } from "./JobsPanel";
 import { FechaUnica, VentanaTemporal } from "./controls/Window";
 
@@ -1329,6 +1330,7 @@ export function NisarView() {
               </button>
             ) : null}
             <CapasAmbientales mapa={mapaVivo} />
+            <CatastroPanel mapa={mapaVivo} caja={caja} />
           </div>
         </div>
 
