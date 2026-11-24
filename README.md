@@ -111,6 +111,27 @@ opcionales, escribe `.env` y levanta la app en **http://127.0.0.1:8080**. El det
 completo —qué hay adentro, credenciales, problemas comunes, cómo publicar la imagen— está
 en [`docs/DOCKER.md`](./docs/DOCKER.md).
 
+### Capas ambientales del visor NISAR
+
+El mapa del visor NISAR puede superponer seis capas de conservación, en cualquier parte del
+mundo (no sólo Paraguay):
+
+| Capa | Fuente |
+| --- | --- |
+| Áreas silvestres protegidas (SINASIP y equivalentes nacionales) | WDPA · UNEP-WCMC e IUCN (Protected Planet) |
+| Sitios Ramsar | WDPA · UNEP-WCMC e IUCN / RSIS |
+| Reservas de biosfera (MAB/UNESCO y nacionales) | WDPA · UNEP-WCMC e IUCN |
+| Territorios indígenas y comunitarios | LandMark (WRI) · FAPI y DGEEC |
+| Ecorregiones (Chaco, Pantanal, Cerrado, Bosque Atlántico…) | RESOLVE Ecoregions 2017 (Esri Living Atlas) |
+| Otras áreas de conservación (privadas, binacionales, otras) | WDPA · UNEP-WCMC e IUCN |
+
+Se activan desde **Ambientales**, arriba a la derecha del mapa. La consulta es por la caja
+visible y por zoom: cada capa tiene un zoom mínimo para no pedir continentes enteros, y el
+backend (`/api/capas`) hace de proxy con caché de 6 h, normaliza los atributos y deduplica
+los registros repetidos de biosfera. El popup de cada polígono trae nombre, categoría,
+situación, año, superficie y país; la atribución de las fuentes activas aparece en el mapa.
+
+
 ## Qué se puede lograr
 
 Quince salidas del mismo pipeline, todas con datos reales. En

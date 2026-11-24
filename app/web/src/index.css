@@ -4543,7 +4543,7 @@ form,
   top: 12px;
   left: 52px;
   right: 12px;
-  z-index: 650;
+  z-index: 1100;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -4677,6 +4677,9 @@ form,
 .nisar__capas {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--line-strong);
@@ -4709,6 +4712,388 @@ form,
   background: var(--iris-soft);
   color: var(--iris-hi);
   box-shadow: inset 0 0 0 1px var(--iris-line);
+}
+
+/* --- Capas ambientales (WDPA, LandMark, RESOLVE) sobre el mapa NISAR --- */
+.capas-amb__wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.capas-amb__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.capas-amb__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border: 1px solid var(--iris-line);
+  border-radius: 3px;
+  background: var(--iris-soft);
+  color: var(--iris-hi);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.capas-amb {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 660;
+  display: flex;
+  flex-direction: column;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(64vh, 560px);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: rgba(13, 14, 15, 0.98);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.78);
+  pointer-events: auto;
+  text-align: left;
+}
+
+.capas-amb__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.capas-amb__eyebrow {
+  display: block;
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.capas-amb__titulo {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--paper);
+}
+
+.capas-amb__cerrar {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--fog);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.capas-amb__cerrar:hover {
+  border-color: var(--line-strong);
+  background: var(--slate);
+  color: var(--paper);
+}
+
+.capas-amb__intro {
+  margin: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fog);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.capas-amb__fallo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--danger);
+  font-size: 10.5px;
+}
+
+.capas-amb__fallo p {
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+.capas-amb__vacio {
+  margin: 0;
+  padding: 12px 10px;
+  color: var(--ash);
+  font-size: 11px;
+}
+
+.capas-amb__lista {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.capas-amb__item {
+  border-bottom: 1px solid var(--line);
+}
+
+.capas-amb__item--on {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.09), transparent 78%);
+}
+
+.capas-amb__label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.capas-amb__label:hover {
+  background: var(--obsidian);
+}
+
+.capas-amb__label input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  margin: 2px 0 0;
+  accent-color: var(--iris);
+  cursor: pointer;
+}
+
+.capas-amb__swatch {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+.capas-amb__texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.capas-amb__nombre {
+  color: var(--mist);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.capas-amb__item--on .capas-amb__nombre {
+  color: var(--paper);
+}
+
+.capas-amb__desc {
+  color: var(--fog);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.capas-amb__fuente {
+  color: var(--ash);
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+
+.capas-amb__estado {
+  margin-top: 1px;
+  overflow: hidden;
+  color: var(--iris-hi);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capas-amb__error {
+  color: var(--danger);
+}
+
+.capas-amb__aviso {
+  color: var(--warn);
+}
+
+.capas-amb__opacidad {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.capas-amb__opacidad label {
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.capas-amb__opacidad input {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--iris);
+}
+
+.capas-amb__opacidad span {
+  width: 34px;
+  color: var(--fog);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.capas-amb__pie {
+  padding: 7px 10px 9px;
+  border-top: 1px solid var(--line);
+}
+
+.capas-amb__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  margin-top: 3px;
+}
+
+.capas-amb__links a {
+  color: var(--iris-hi);
+  font-size: 9.5px;
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(192, 132, 252, 0.45);
+}
+
+.capas-amb__links a:hover {
+  color: var(--paper);
+  border-bottom-color: var(--paper);
+}
+
+/* Tooltip y popup de las capas ambientales */
+.nisar .leaflet-tooltip.capas-tooltip {
+  padding: 5px 7px;
+  border-color: var(--line-strong);
+  background: rgba(15, 16, 17, 0.97);
+}
+
+.nisar .leaflet-tooltip-top.capas-tooltip::before {
+  border-top-color: var(--line-strong);
+}
+
+.capas-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.capas-tip__nombre {
+  color: var(--paper);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.capas-tip__meta {
+  color: var(--fog);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.nisar .leaflet-popup.capas-popup .leaflet-popup-content-wrapper {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: rgba(15, 16, 17, 0.98);
+  color: var(--mist);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.7);
+}
+
+.nisar .leaflet-popup.capas-popup .leaflet-popup-tip {
+  background: rgba(15, 16, 17, 0.98);
+  box-shadow: none;
+}
+
+.nisar .leaflet-popup.capas-popup .leaflet-popup-content {
+  margin: 10px 12px;
+  font-family: var(--sans);
+  font-size: 11.5px;
+}
+
+.nisar .leaflet-popup.capas-popup .leaflet-popup-close-button {
+  color: var(--fog);
+}
+
+.capas-pop__titulo {
+  margin: 0 0 6px;
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.capas-pop__datos {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  margin: 0;
+}
+
+.capas-pop__datos dt {
+  font-family: var(--narrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.capas-pop__datos dd {
+  margin: 0;
+  color: var(--mist);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.capas-pop__fuente {
+  margin: 7px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  color: var(--ash);
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.capas-pop__enlace {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--iris-hi);
+  font-size: 10px;
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(192, 132, 252, 0.45);
+}
+
+.capas-pop__enlace:hover {
+  color: var(--paper);
 }
 
 /* Barra inferior minimalista de herramientas ROI en el mapa NISAR */

@@ -21,6 +21,7 @@ import type {
 } from "../nisar";
 import { fechaCorta } from "../formato";
 import type { Job, Params } from "../types";
+import { CapasAmbientales } from "./CapasAmbientales";
 import { JobsPanel } from "./JobsPanel";
 import { FechaUnica, VentanaTemporal } from "./controls/Window";
 
@@ -184,6 +185,7 @@ export function NisarView() {
   }
   const inicial = inicialRef.current;
 
+  const [mapaVivo, setMapaVivo] = useState<L.Map | null>(null);
   const [catalogo, setCatalogo] = useState<NisarCatalog | null>(null);
   const [capaBase, setCapaBase] = useState<CapaBase>(inicial.capaBase ?? "satelite");
   const [etiquetasMapa, setEtiquetasMapa] = useState(inicial.etiquetasMapa ?? true);
@@ -305,6 +307,7 @@ export function NisarView() {
     huellasRef.current = L.layerGroup().addTo(mapa);
     esquinasRef.current = L.layerGroup().addTo(mapa);
     mapaRef.current = mapa;
+    setMapaVivo(mapa);
 
     getParaguay()
       .then((datos: FeatureCollection) => {
@@ -326,6 +329,7 @@ export function NisarView() {
     return () => {
       mapa.remove();
       mapaRef.current = null;
+      setMapaVivo(null);
       capaBaseRef.current = null;
       huellasRef.current = null;
       esquinasRef.current = null;
@@ -1324,6 +1328,7 @@ export function NisarView() {
                 Nombres
               </button>
             ) : null}
+            <CapasAmbientales mapa={mapaVivo} />
           </div>
         </div>
 
