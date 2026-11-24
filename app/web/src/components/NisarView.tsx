@@ -39,6 +39,7 @@ const PISO_NISAR = "2024-01-01";
 interface NisarEstadoGuardado {
   capaBase?: CapaBase;
   etiquetasMapa?: boolean;
+  bordes?: boolean;
   nivel?: string;
   desde?: string;
   hasta?: string;
@@ -175,6 +176,7 @@ export function NisarView() {
   const contenedor = useRef<HTMLDivElement | null>(null);
   const mapaRef = useRef<L.Map | null>(null);
   const capaBaseRef = useRef<L.LayerGroup | null>(null);
+  const bordesRef = useRef<L.LayerGroup | null>(null);
   const huellasRef = useRef<L.LayerGroup | null>(null);
   const cajaLayerRef = useRef<L.Rectangle | null>(null);
   const esquinasRef = useRef<L.LayerGroup | null>(null);
@@ -190,6 +192,7 @@ export function NisarView() {
   const [catalogo, setCatalogo] = useState<NisarCatalog | null>(null);
   const [capaBase, setCapaBase] = useState<CapaBase>(inicial.capaBase ?? "satelite");
   const [etiquetasMapa, setEtiquetasMapa] = useState(inicial.etiquetasMapa ?? true);
+  const [bordes, setBordes] = useState(inicial.bordes ?? true);
   const [nivel, setNivel] = useState(inicial.nivel ?? "GCOV");
   const [desde, setDesde] = useState(() => inicial.desde ?? hoyISO(29));
   const [hasta, setHasta] = useState(() => inicial.hasta ?? hoyISO());
@@ -305,6 +308,7 @@ export function NisarView() {
       maxZoom: 17,
     });
     capaBaseRef.current = L.layerGroup().addTo(mapa);
+    bordesRef.current = L.layerGroup();
     huellasRef.current = L.layerGroup().addTo(mapa);
     esquinasRef.current = L.layerGroup().addTo(mapa);
     mapaRef.current = mapa;
@@ -312,18 +316,17 @@ export function NisarView() {
 
     getParaguay()
       .then((datos: FeatureCollection) => {
-        if (!mapaRef.current) return;
+        if (!mapaRef.current || !bordesRef.current) return;
         L.geoJSON(datos, {
           interactive: false,
           style: {
             color: COLOR_PARAGUAY,
             weight: 1.6,
             opacity: 0.85,
-            fillColor: COLOR_PARAGUAY,
-            fillOpacity: 0.03,
+            fill: false,
             dashArray: "4 3",
           },
-        }).addTo(mapaRef.current);
+        }).addTo(bordesRef.current);
       })
       .catch(() => undefined);
 
@@ -332,6 +335,7 @@ export function NisarView() {
       mapaRef.current = null;
       setMapaVivo(null);
       capaBaseRef.current = null;
+      bordesRef.current = null;
       huellasRef.current = null;
       esquinasRef.current = null;
       cajaLayerRef.current = null;
@@ -378,6 +382,18 @@ export function NisarView() {
       }).addTo(grupo);
     }
   }, [capaBase, etiquetasMapa]);
+
+  // Conmutador del contorno del país: el trazo solo se ve cuando está encendido.
+  useEffect(() => {
+    const grupo = bordesRef.current;
+    const mapa = mapaRef.current;
+    if (!grupo || !mapa) return;
+    if (bordes) {
+      if (!mapa.hasLayer(grupo)) grupo.addTo(mapa);
+    } else if (mapa.hasLayer(grupo)) {
+      mapa.removeLayer(grupo);
+    }
+  }, [bordes, mapaVivo]);
 
   useEffect(() => {
     getNisarCatalog()
@@ -567,6 +583,7 @@ export function NisarView() {
       const estado: NisarEstadoGuardado = {
         capaBase,
         etiquetasMapa,
+        bordes,
         nivel,
         desde,
         hasta,
@@ -580,7 +597,7 @@ export function NisarView() {
     } catch {
       // Ignorado si localStorage no está disponible.
     }
-  }, [capaBase, etiquetasMapa, nivel, desde, hasta, caja, producto, pol, modo, px]);
+  }, [capaBase, etiquetasMapa, bordes, nivel, desde, hasta, caja, producto, pol, modo, px]);
 
   // Sincroniza el campo de texto cuando la caja cambia desde el mapa, buscador o presets.
   useEffect(() => {
@@ -1375,6 +1392,25 @@ export function NisarView() {
                 </button>
               ))}
             </div>
+
+            <button
+              type="button"
+              className={`nisar__tool${bordes ? " nisar__tool--on" : ""}`}
+              aria-pressed={bordes}
+              title="Mostrar u ocultar el contorno del país"
+              onClick={() => setBordes((previo) => !previo)}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M2.6 8.2 5.5 3.4l3.6.9 3.1-1.3 1.2 3.4-1.9 2.6.5 3.3-3 .8-2.4-2.1-3.9-.8Z"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinejoin="round"
+                  strokeDasharray="2.4 1.6"
+                />
+              </svg>
+              {bordes ? "Bordes" : "Sin bordes"}
+            </button>
           </div>
 
           <div className="nisar__coords">
