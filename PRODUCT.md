@@ -42,7 +42,7 @@ de vecino no podría copiar el catálogo sin copiar el pipeline.
 
 ## Capabilities and Constraints
 
-- 12 productos en cuatro grupos: satélite, modelo, color y vegetación.
+- 21 productos en cuatro grupos: satélite, modelo, color y vegetación.
 - Controles soportados: `select`, fecha, rango de fechas, toggle y slider; los tipos y límites vienen del
   backend y no se inventan en el cliente.
 - Estados de trabajo: `queued`, `running`, `done`, `error`, `cancelled`; un solo job activo a la vez.
@@ -70,7 +70,7 @@ de vecino no podría copiar el catálogo sin copiar el pipeline.
 2. **Nada inventado.** Si el script no acepta un flag, la interfaz no muestra ese control.
 3. **El trabajo largo se vigila, no se espera.** Estado, etapa y log siempre visibles sin tapar el render.
 4. **Idioma del oficio.** Nombres técnicos exactos, sin traducciones ni adornos que confundan.
-5. **Densidad con calma.** Mucha información (12 productos, muchos parámetros) sin ruido ni scroll infinito.
+5. **Densidad con calma.** Mucha información (21 productos, muchos parámetros) sin ruido ni scroll infinito.
 
 ## Accessibility & Inclusion
 

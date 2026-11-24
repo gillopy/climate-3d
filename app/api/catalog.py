@@ -349,6 +349,41 @@ def _capa_snapshot(value: str, label: str, description: str) -> ParamOption:
     return ParamOption(value=value, label=label, description=description)
 
 
+def _zonas_cbers() -> list[ParamOption]:
+    """Zonas preset del recorte CBERS, en el orden del catálogo de `comun.cbers`."""
+    from comun.cbers import ZONAS
+
+    return [ParamOption(value=clave, label=valor[0]) for clave, valor in ZONAS.items()]
+
+
+def _detalles_cbers() -> list[ParamOption]:
+    """2 m sólo donde el PCA fusionado tiene escenas; 8/16 m en todo el país."""
+    from comun.cbers import ZONAS_2M
+
+    return [
+        ParamOption(
+            value="8",
+            label="8 m/px - WPM multiespectral",
+            description="BAND1-3 del WPM. Cubre todo el país; el recorte grande "
+            "tarda más porque los TIFF vienen en tiras.",
+        ),
+        ParamOption(
+            value="2",
+            label="2 m/px - WPM PCA (zonas cubiertas)",
+            description="RGB fusionado de 2 m del INPE. Sólo hay escenas válidas "
+            "en Ciudad del Este, Salto del Guairá y (con ventana larga) Encarnación. "
+            "A 2 m el tope de 4000 px deja 8 km por lado.",
+            only_when={"zona": list(ZONAS_2M)},
+        ),
+        ParamOption(
+            value="16",
+            label="16 m/px - MUX multiespectral",
+            description="BAND5-7 del MUX. Cubre todo el país y es el camino más "
+            "liviano para un recorte grande.",
+        ),
+    ]
+
+
 # Horarios reales de publicacion sobre Paraguay. Va en el '?' de la capa:
 # el compuesto diario es un mosaico que se arma a medida que pasan los satelites.
 _AYUDA_CAPAS_SNAPSHOT = (
@@ -1207,6 +1242,145 @@ PRODUCTS: list[Product] = [
         ],
     ),
     Product(
+        id="meteosat",
+        name="Meteosat-12 - disco completo (MTG)",
+        group="satelite",
+        stage="descargar/meteosat.py + cuadros/cuadros_meteosat.py",
+        summary="FCI del MTG-I1 cada 10 minutos: GeoColour (día real, IR y luces "
+        "de ciudad), True Colour o IR 10.5 µm. Disco completo centrado en 0 E; "
+        "Paraguay queda en el limbo, es una vista de Europa/África/Atlántico.",
+        params=[
+            ParamSpec(
+                name="variante",
+                label="Producto",
+                kind="select",
+                default="geocolour",
+                options=[
+                    ParamOption(
+                        value="geocolour",
+                        label="GeoColour (día, IR y luces)",
+                        description="Color real de día, IR y luces de ciudad de noche. "
+                        "El producto que reemplaza al GeoColor de GOES en el disco "
+                        "europeo/africano.",
+                    ),
+                    ParamOption(
+                        value="truecolour",
+                        label="True Colour (sólo día)",
+                        description="Color real del lado diurno; de noche el disco "
+                        "sale negro.",
+                    ),
+                    ParamOption(
+                        value="ir",
+                        label="IR 10.5 µm (día y noche)",
+                        description="Temperatura de brillo en escala de grises; "
+                        "nubes altas en blanco, superficie en gris/negro.",
+                    ),
+                ],
+                help="las tres capas ya vienen pintadas por EUMETView",
+            ),
+            ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
+                      default=_rango(), enabled_when={"ultimos": False}),
+            *_params_ultimos(),
+            *_params_cuadro(),
+            ParamSpec(name="resolucion", label="Resolucion", kind="select",
+                      default="1400", options=_RESOLUCIONES,
+                      help="lado del cuadro en píxeles; el PNG de origen se pide "
+                      "más grande para que el warping no pierda detalle"),
+            ParamSpec(
+                name="hora_desde",
+                label="Desde (UTC)",
+                kind="hour",
+                default=0,
+                min=0,
+                max=23,
+                step=1,
+                help=_AYUDA_HORA_UTC,
+                enabled_when={"ultimos": False},
+            ),
+            ParamSpec(
+                name="hora_hasta",
+                label="Hasta (UTC)",
+                kind="hour",
+                default=24,
+                min=1,
+                max=24,
+                step=1,
+                help="fin exclusivo: 24 cierra el día UTC completo",
+                enabled_when={"ultimos": False},
+            ),
+            ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
+                      enabled_when={"ultimos": False}),
+            ParamSpec(name="fps", label="Cuadros por segundo", kind="slider",
+                      default=12, min=4, max=30, step=2),
+        ],
+    ),
+    Product(
+        id="cbers_4a",
+        name="CBERS-4A - recorte de alta resolución",
+        group="satelite",
+        stage="descargar/cbers.py + cuadros/cuadros_cbers.py",
+        summary="Recorte de una escena CBERS-4A del INPE: 2 m (PCA, zonas "
+        "cubiertas), 8 m (WPM) o 16 m (MUX). Elige zona y tamaño; la escena más "
+        "nueva que cubra la zona se busca sola en el STAC.",
+        params=[
+            ParamSpec(
+                name="zona",
+                label="Zona",
+                kind="select",
+                default="asuncion",
+                options=_zonas_cbers(),
+                help="centro del recorte cuadrado",
+            ),
+            ParamSpec(
+                name="km",
+                label="Tamaño del recorte (km)",
+                kind="slider",
+                default=16,
+                min=4,
+                max=60,
+                step=2,
+                help="lado del cuadrado en kilómetros; el tope de 4000 px recorta "
+                "el pedido en los detalles finos (2 m = 8 km por lado)",
+            ),
+            ParamSpec(
+                name="detalle",
+                label="Detalle",
+                kind="select",
+                default="8",
+                options=_detalles_cbers(),
+                help="2 m sólo donde el INPE publicó el RGB fusionado; 8 y 16 m "
+                "cubren todo el país",
+            ),
+            ParamSpec(
+                name="ultima",
+                label="Última escena disponible",
+                kind="toggle",
+                default=True,
+                help="busca la escena más nueva dentro de la ventana de días",
+            ),
+            ParamSpec(
+                name="fecha",
+                label="Fecha de la escena",
+                kind="date",
+                default=date.today().isoformat(),
+                enabled_when={"ultima": False},
+            ),
+            ParamSpec(
+                name="dias",
+                label="Ventana de búsqueda (días)",
+                kind="select",
+                default="365",
+                options=[
+                    ParamOption(value=v, label=f"{v} días")
+                    for v in ("120", "180", "365", "730")
+                ],
+                help="hacia atrás desde hoy; con una fecha fija no se usa. Para 2 m "
+                "conviene una ventana larga: las escenas válidas no son todas las fechas",
+                enabled_when={"ultima": True},
+            ),
+        ],
+    ),
+    Product(
         id="follaje",
         name="PACE - follaje (LANDVI)",
         # Grupo propio: el rail lo deja despues de los modelos (ver _ORDEN).
@@ -1252,7 +1426,7 @@ PRODUCTS: list[Product] = [
 
 #: Productos que no llevan el switch "Snapshot": el de Snapshot ya es una sola
 #: captura y PACE/OCI ya es un compuesto de varios dias.
-SIN_SNAPSHOT = {"snapshot_paraguay", "pace_truecolor"}
+SIN_SNAPSHOT = {"snapshot_paraguay", "pace_truecolor", "cbers_4a"}
 
 
 def _con_snapshot(producto: Product) -> Product:
@@ -1286,6 +1460,7 @@ def _con_snapshot(producto: Product) -> Product:
 #: el MUR es SST oceánica (Paraguay es mediterráneo, no hay mar que mostrar); el
 #: follaje usa un globo Robinson/3D con otro diseño y el Himawari no lo necesita.
 SIN_PARAGUAY = {"snapshot_paraguay", "mur_sst", "mur_realista", "follaje", "himawari",
+                "meteosat", "cbers_4a",
                 "pace_truecolor"}  # PACE no tiene encuadre Paraguay: es un compuesto global
 
 
@@ -1381,6 +1556,8 @@ ORDEN_PARAMETROS: tuple[str, ...] = (
     "proyeccion",
     "paraguay",
     "margen",
+    "zona",
+    "km",
     "firms",
     "firms_fuente",
     "firms_alcance",
@@ -1399,6 +1576,7 @@ ORDEN_PARAMETROS: tuple[str, ...] = (
     "ventana_preset",
     "ventana",
     "fecha",
+    "dias",
     "hora",
     "minuto",
     "hora_desde",
@@ -1435,6 +1613,8 @@ _ORDEN = (
     "truecolor_viirs",   # NOAA-20
     "pace_truecolor",    # PACE / OCI
     "himawari",
+    "meteosat",
+    "cbers_4a",
     "mur_sst",
     "mur_realista",
     "precipitacion_ecmwf",
@@ -1489,6 +1669,8 @@ _VARIANTES = {
     "viento_250": ("modelo", "paraguay"),
     "follaje": ("proyeccion",),
     "snapshot_paraguay": ("capa",),
+    "meteosat": ("variante",),
+    "cbers_4a": ("zona",),
 }
 
 

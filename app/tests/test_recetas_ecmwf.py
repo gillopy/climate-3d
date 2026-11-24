@@ -271,6 +271,8 @@ class CatalogoDeLaApp(unittest.TestCase):
             "truecolor_viirs",
             "pace_truecolor",
             "himawari",
+            "meteosat",
+            "cbers_4a",
             "mur_sst",
             "mur_realista",
             "precipitacion_ecmwf",

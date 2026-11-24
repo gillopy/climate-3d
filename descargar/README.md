@@ -20,6 +20,8 @@ conexión** a partir de lo que ya está descargado.
 | `anomalia_2t_ecmwf.py` | Temperatura a 2 m (`2t`) del IFS 0.25° y su anomalía vs la climatología ERA5, por HTTP Range | ECMWF Open Data | `DATOS/crudos_anom2t_<modelo>_<fecha>_<ciclo>z/` (GRIB2 + `serie_anom_2t_c.npz`) |
 | `viento_250_mslp.py` | Viento en 250 mb (`u`, `v`) y presión a nivel del mar (`msl`) del IFS 0.25° o del GFS 0.25°, por HTTP Range | ECMWF Open Data / NOAA GFS (AWS) | `DATOS/crudos_viento250[_gfs]_<fecha>_<ciclo>z/` (GRIB2 + `serie_viento_250.npz`) |
 | `snapshot_paraguay.py` | Una captura recortada al país: Color real 250 m (NOAA-20, NOAA-21, Suomi NPP, Aqua o Terra), composiciones de bandas NOAA/VIIRS (M11-I2-I1, M3-I3-M11, I1-I2-I1, M11-M7-M5, M5-M4-M3) o GeoColor (día/noche); la caja sale del GeoJSON y el tamaño de `--mpp` | NASA GIBS (Worldview Snapshots) | `<out>/crudo_snapshot_<capa>_<fecha>_<px>px.png` |
+| `meteosat.py` | Disco completo de Meteosat-12 (MTG-I1) ya pintado: GeoColour, True Colour o IR 10.5 µm | EUMETView (EUMETSAT, WMS, sin clave) | `SALIDAS/frames_meteosat_<vista>_<...>/crudo_NNN.png` |
+| `cbers.py` | Recorte CBERS-4A: PCA 2 m (zonas cubiertas), WPM 8 m o MUX 16 m | STAC del INPE (CC-BY 4.0, sin clave) | `<out>/crudo_cbers.png` + `crudo_cbers.json` |
 | `goes_descarga.py` | *(módulo)* claves S3 y descarga | — | — |
 
 Composiciones NOAA/VIIRS del snapshot: `noaa20_m11i2i1` / `noaa21_m11i2i1`
@@ -513,6 +515,46 @@ slot de 10 min) y `descargar`. Lo usan `descargar_goes.py` y los notebooks de `p
 La parte **local** de GOES (leer `.nc`, recortar, fundidos para GIF) está en
 [`../comun/goes_lectura.py`](../comun/goes_lectura.py), justamente para que se pueda leer sin
 tocar la red.
+
+## `meteosat.py`
+
+Disco completo de Meteosat-12 (MTG-I1) desde EUMETView. EUMETSAT entrega la imagen
+ya pintada (GeoColour, True Colour, IR 10.5 µm) por WMS, en `CRS:84`; no hay NetCDF
+ni que reproyectar la proyección geoestacionaria. Cada cuadro es un `GetMap` de 10
+minutos y se guarda como `crudo_NNN.png`. Sin clave; atribución obligatoria
+"EUMETSAT · EUMETView · CC-BY 4.0".
+
+| Opción | Qué hace |
+|---|---|
+| `--desde` | Primer cuadro UTC (vacío = último publicado) |
+| `--n` / `--paso` | Cuántos cuadros y cada cuántos minutos (10) |
+| `--capa` | `geocolour`, `truecolour` o `ir` |
+| `--px` | Ancho del PNG de origen |
+| `--globo` | Marca la carpeta para el render en globo |
+| `--respaldo` | Con un solo cuadro, cuántos slots retroceder |
+
+- Cobertura: Europa, África y Atlántico. Paraguay queda en el limbo: es un producto
+  de disco completo, no un recorte regional.
+- Render: `cuadros/cuadros_meteosat.py` (Orthographic centrado en 0,0).
+
+## `cbers.py`
+
+Recorte de una escena CBERS-4A del STAC del INPE (CC-BY 4.0, sin clave). Tres
+caminos: PCA RGB 2 m (zonas cubiertas), WPM 8 m y MUX 16 m.
+
+| Opción | Qué hace |
+|---|---|
+| `--zona` | Asunción, Encarnación, Ciudad del Este, ... |
+| `--km` | Lado del recorte cuadrado |
+| `--detalle` | `2`, `8` o `16` m/px |
+| `--desde` / `--hasta` / `--dias` | Ventana de búsqueda |
+| `--item` | Fuerza una escena exacta |
+
+- El `bbox` del STAC es el sobre del swath, no el polígono con dato: el script prueba
+  una muestra de 48×48 y elige la escena más nueva con ≥60 % de dato.
+- 2 m sólo en Ciudad del Este, Salto del Guairá y (con ventana larga) Encarnación; 8 y
+  16 m cubren todo el país. El tope de 4000 px recorta el pedido: 2 m deja 8 km por lado.
+- Salida: `crudo_cbers.png` + `crudo_cbers.json`; render en `cuadros/cuadros_cbers.py`.
 
 ## Next step
 

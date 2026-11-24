@@ -88,7 +88,7 @@ El comando largo, si preferís no usar el asistente (usa lo ya configurado):
 `http://127.0.0.1:8000/api/health` tiene que devolver algo así:
 
 ```json
-{"ok": true, "productos": 12, "data_root": "D:\\Users\\guill\\dataset era5",
+{"ok": true, "productos": 21, "data_root": "D:\\Users\\guill\\dataset era5",
  "data_root_exists": true, "repo_ready": true, "repo_python": "...\\.venv\\Scripts\\python.exe"}
 ```
 
@@ -96,7 +96,7 @@ Y en la UI, arriba a la derecha, los tres indicadores:
 
 | Indicador | Significa |
 | --- | --- |
-| `12 productos` | el catálogo cargó |
+| `21 productos` | el catálogo cargó |
 | `pipeline listo` | encontró el `.venv` de la raíz |
 | `datos en disco` | encontró la carpeta de datos |
 
@@ -238,6 +238,8 @@ GET  /media/...
 | Viento 250 mb (IFS o GFS) | `viento_250_mslp.py --modelo --fecha --ciclo --hasta-hora --paso 3` | `cuadros_viento_250.py ... --modelo --px --fondo-globo --salidas` | `armar.py` |
 | Snapshot Paraguay | `snapshot_paraguay.py --capa --fecha --hora --minuto --px --margen --out` | `snapshot_paraguay.py --capa --fecha --entrada --salidas [--sin-borde]` | — |
 | Follaje PACE | `pace_landvi.py --desde --hasta` | `cuadros_follaje.py --desde --hasta --px --out` | `armar.py` |
+| Meteosat-12 (MTG) | `meteosat.py --desde --n --paso --px --capa --globo` | `cuadros_meteosat.py --desde --n --paso --px --capa --globo --centro 0 0` | `armar.py` sobre `--frames` |
+| CBERS-4A recorte | `cbers.py --zona --km --detalle --desde --hasta` | `cuadros_cbers.py --entrada --out` | — |
 
 ### Fechas y datos faltantes
 
@@ -348,6 +350,27 @@ completo en la proyección del satélite, centrado en su punto subsatelital
 - La descarga decodifica HSD de JMA, así que es más lenta que un `.nc` de GOES.
 - Resolución por defecto **2712 px**: es el default del script y por debajo el
   título se superpone con el crédito.
+
+### Meteosat-12 (MTG-I1)
+
+Producto propio (`meteosat.py` + `cuadros_meteosat.py`): disco completo del FCI
+cada 10 minutos, ya pintado por EUMETView. `variante` elige GeoColour (día, IR y
+luces), True Colour o IR 10.5 µm. Se pide por WMS en `CRS:84` y se reproyecta a
+Orthographic centrado en 0,0. Sin clave; atribución EUMETSAT/CC-BY 4.0.
+
+- Cobertura Europa/África/Atlántico: Paraguay queda en el limbo, así que no lleva
+  "Solo Paraguay". Es el "tercer disco" del anillo geoestacionario.
+
+### CBERS-4A
+
+Producto propio (`cbers.py` + `cuadros_cbers.py`): recorte de una escena del STAC
+del INPE (CC-BY 4.0, sin clave). `detalle` elige 2 m (PCA, sólo zonas cubiertas),
+8 m (WPM) o 16 m (MUX); `zona` y `km` fijan el cuadrado.
+
+- El `bbox` del STAC es el sobre del swath, no el polígono con dato: el descargador
+  prueba una muestra de 48×48 y elige la escena más nueva con ≥60 % de dato.
+- El tope de 4000 px recorta el pedido: 2 m deja 8 km por lado; 8 m, 32 km; 16 m,
+  64 km. La cabecera del póster muestra el m/px real.
 
 ### Animación: rango horario y cadencia
 
