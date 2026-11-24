@@ -43,6 +43,7 @@ from goes_lectura import PATRON, cargar  # noqa: E402
 from goes_descarga import clave_de  # noqa: E402
 from goes_reciente import ultimos_de  # noqa: E402
 from poster_goes import PALETTES  # noqa: E402
+import reuso_cuadros  # noqa: E402
 from rutas import DATOS, SALIDAS  # noqa: E402
 from estilo import FUENTE, TXT, TXT_DIM  # noqa: E402
 
@@ -364,6 +365,44 @@ def _sello_render(args) -> str:
     return hashlib.sha256(json.dumps(datos, sort_keys=True).encode()).hexdigest()[:16]
 
 
+def _escribir_aspecto(almacen: Path, args) -> None:
+    """Deja un `.aspecto.txt` legible dentro del almacén: qué se ve adentro.
+
+    La carpeta se llama con el sello (16 hex), que no dice nada a simple vista.
+    Este archivo es para el humano que entra a mirar `cuadros_render/`.
+    """
+    archivo = almacen / ".aspecto.txt"
+    if archivo.exists():
+        return
+    borde = args.geojson or "(sin borde)"
+    lineas = [
+        f"producto: {args.sat} C13 (globo Orthographic)",
+        f"px: {args.px}",
+        f"paleta: {args.paleta}",
+        f"centro: {args.centro[0]:g}, {args.centro[1]:g}",
+        f"radio: {args.radio:g}",
+        f"escala: {args.vmin:g} a {args.vmax:g}",
+        f"borde: {borde}",
+        f"limpio: {'si' if args.limpio else 'no'}",
+        f"sello: {almacen.name}",
+        f"creado: {datetime.now():%Y-%m-%d %H:%M}",
+        "",
+        "Los cuadros se llaman cuadro_AAAAMMDDTHHMM.png (instante UTC).",
+        "Un cuadro de este aspecto no se vuelve a renderizar.",
+    ]
+    archivo.write_text("\n".join(lineas) + "\n", encoding="utf-8")
+
+
+def _almacen(args) -> Path | None:
+    """Carpeta del almacén compartido para este aspecto (`--reusar/<sello>`)."""
+    if not args.reusar:
+        return None
+    almacen = reuso_cuadros.carpeta_almacen(args.reusar, _sello_render(args))
+    almacen.mkdir(parents=True, exist_ok=True)
+    _escribir_aspecto(almacen, args)
+    return almacen
+
+
 def _instantes(sl_map: dict) -> list[datetime]:
     """Todos los instantes con `.nc` local, en orden cronológico."""
     return sorted(datetime.combine(d, datetime.min.time()).replace(hour=h, minute=m)
@@ -416,6 +455,10 @@ def main(argv=None) -> int:
     ap.add_argument("--datos", help="carpeta de los .nc (default: la del satélite/banda)")
     ap.add_argument("--out", help="carpeta de salida (default: comun.rutas.SALIDAS)")
     ap.add_argument("--frames", help="carpeta de cuadros (default: frames_<etiqueta>)")
+    ap.add_argument("--reusar",
+                    help="raíz del almacén de cuadros ya renderizados: los que ya "
+                         "están (mismo sello de aspecto) se enlazan en --frames en "
+                         "vez de renderizarse de nuevo")
     ap.add_argument("--lote", type=int, default=8,
                     help="cuadros por proceso (cada lote corre en su propio proceso)")
     ap.add_argument("--solo-poster", action="store_true",
@@ -468,17 +511,31 @@ def main(argv=None) -> int:
         gc.collect()
         print(f"escala: {args.vmin:.1f} a {args.vmax:.1f} °C", flush=True)
 
+    # Almacén compartido (si se pidió): la carpeta la decide el sello de aspecto.
+    almacen = _almacen(args)
+
     # Modo lote (interno): renderiza el rango y sale. Cada proceso es independiente,
     # así la RAM de un cuadro no se acumula con el siguiente.
     if args.rango:
         s, e = args.rango
         for i in range(s, e + 1):
             t = slots[i - 1]
-            destino = frames_dir / f"cuadro_{i:03d}.png"
-            if destino.exists() and not args.forzar:
-                continue
+            nombre = reuso_cuadros.nombre_cuadro(t)
+            destino = frames_dir / nombre
+            guardado = almacen / nombre if almacen is not None else None
+            if not args.forzar:
+                if guardado is not None and guardado.is_file():
+                    # Ya renderizado con este aspecto: enlazar y no rehacer.
+                    reuso_cuadros.enlazar(guardado, destino)
+                    continue
+                if destino.is_file():
+                    if guardado is not None:
+                        reuso_cuadros.enlazar(destino, guardado)
+                    continue
             nc = sl_map[(t.date(), t.hour, t.minute)]
             _render_cuadro(nc, destino, args)
+            if guardado is not None:
+                reuso_cuadros.enlazar(destino, guardado)
         return 0
 
     if args.solo_poster:
@@ -494,17 +551,31 @@ def main(argv=None) -> int:
     # El sello invalida los cuadros viejos si cambió el aspecto. Se escribe recién
     # cuando el render terminó: si se escribiera antes, un lote salteado dejaría el
     # sello nuevo apuntando a cuadros con el diseño viejo y no se reharían nunca.
+    # Con `--reusar` la carpeta ES el sello, así que `previo == sello` siempre.
     sello = _sello_render(args)
-    archivo_sello = frames_dir / ".sello_render"
+    archivo_sello = (almacen or frames_dir) / ".sello_render"
     previo = (archivo_sello.read_text(encoding="utf-8").strip()
               if archivo_sello.exists() else None)
     if previo is not None and previo != sello and not args.forzar:
         print("Cambiaron los parámetros de render -> se rehacen los cuadros")
         args.forzar = True
 
+    reusados = 0
+    if almacen is not None and not args.forzar:
+        reusados = sum(
+            1 for t in slots
+            if (almacen / reuso_cuadros.nombre_cuadro(t)).is_file()
+        )
+    detalle = ""
+    if reusados:
+        detalle = (f" | {reusados} ya renderizados, "
+                   f"{len(slots) - reusados} nuevos")
+    elif almacen is not None:
+        detalle = f" | almacén {almacen}"
+
     print(f"{args.sat} C13 | {len(slots)} cuadros desde {slots[0]:%Y-%m-%d %H:%M} UTC | "
-          f"{args.px}x{args.px} px | radio {args.radio:g}° | frames en {frames_dir}",
-          flush=True)
+          f"{args.px}x{args.px} px | radio {args.radio:g}°{detalle} | frames en "
+          f"{frames_dir}", flush=True)
 
     # Cada lote corre en su propio proceso: la RAM de un cuadro (el .nc leído y la malla
     # reproyectada) no se acumula entre cuadros.
@@ -525,6 +596,8 @@ def main(argv=None) -> int:
     archivo_sello.write_text(sello, encoding="utf-8")
 
     print(f"Cuadros en {frames_dir}")
+    if almacen is not None:
+        print(f"Almacén: {almacen}")
     print(f"Armá el video con: .venv\\Scripts\\python.exe animar\\armar.py "
           f"--frames \"{frames_dir}\"")
     return 0

@@ -835,6 +835,10 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         "--datos", str(datos_dir),
         "--out", str(work),
         "--frames", str(work / "frames"),
+        # Almacén compartido por aspecto: los cuadros ya renderizados se enlazan en
+        # `work/frames` en vez de rehacerse (una ventana que se solapa reusa los días
+        # que ya están). El renderer le suma el sello de aspecto a esta ruta.
+        "--reusar", str(data_root() / "cuadros_render" / "goes_c13" / sat.lower()),
         "--lote", "1",
     ]
     if str(params.get("paleta", "clean_ir")) == "clean_ir":

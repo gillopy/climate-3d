@@ -384,6 +384,7 @@ pastilla oscura, aro exterior, viñeta hacia el limbo y marca de agua al medio d
 | `--vmin` / `--vmax` | Extremos de la escala (por defecto, percentiles del primer cuadro) |
 | `--tope` | Resolución del campo leído (por defecto, igual a `--px`) |
 | `--datos` / `--out` / `--frames` | Carpetas de entrada y salida |
+| `--reusar RAIZ` | Almacén de cuadros ya renderizados: los que están (mismo sello de aspecto) se enlazan en vez de rehacerse |
 | `--lote` | Cuadros por proceso (cada lote corre en su propio proceso) |
 | `--solo-poster` / `--forzar` | Sólo el póster del último cuadro / rehacer PNG existentes |
 
@@ -391,6 +392,16 @@ pastilla oscura, aro exterior, viñeta hacia el limbo y marca de agua al medio d
   para la rampa oficial de Worldview está `clean_ir` (ver `cuadros_himawari_ir.py`).
 - Los cuadros van a `frames_G19_C13_<AAAA-MM-DDTHHMM>_<N>f_<PX>px/`, listos para
   `animar/armar.py`.
+- **Nombre por instante.** Cada PNG se llama `cuadro_AAAAMMDDTHHMM.png` (UTC), no
+  `cuadro_001.png`: el mismo slot, con el mismo aspecto, es el mismo archivo en
+  cualquier ventana.
+- **Almacén compartido (`--reusar`).** Los cuadros se guardan una sola vez en
+  `<DATOS>cuadros_render/<producto>/<sat>/<sello>/`, donde `<sello>` es la huella de
+  aspecto (`_sello_render`: px, dpi, encuadre, escala, paleta, versión de diseño) y
+  `.aspecto.txt` dice en castellano qué hay adentro. Aspectos distintos nunca comparten
+  carpeta. La carpeta del job no copia bytes: la enlaza con `os.link` (cae a copia si el
+  volumen no lo permite). Repetir una ventana no renderiza nada; ampliarla renderiza sólo
+  lo nuevo.
 
 ---
 

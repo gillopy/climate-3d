@@ -401,6 +401,14 @@ crudo y que la etiqueta de cada cuadro (Paraguay es UTC-3: 12 UTC = 09:00 local)
 - Con `animar` apagado, el rango no se usa: se renderiza un solo cuadro en el
   cenit.
 
+**Los cuadros también se reciclan.** Cada PNG se guarda con su instante
+(`cuadro_AAAAMMDDTHHMM.png`) en `<DATOS>cuadros_render/goes_c13/<sat>/<sello>/`, donde
+el sello es la huella de aspecto (px, paleta, centro, radio, escala, borde). La carpeta
+del job no copia bytes: enlaza los cuadros de su ventana. Repetir la misma ventana no
+renderiza nada y ampliarla (22→24 y después 22→26) renderiza sólo los días nuevos;
+cambiar `px` o `paleta` abre otra carpeta y rehace todo. `.aspecto.txt` adentro de cada
+sello dice qué hay. El MP4 tampoco se re-encodea si no cambió nada.
+
 Cuidado con el peso: 144 slots de C13 son ~7 GB de `.nc`. La descarga saltea lo
 que ya está en disco, así que repetir una animación no vuelve a bajarla.
 

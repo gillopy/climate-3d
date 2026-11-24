@@ -301,6 +301,16 @@ class Job:
         )
 
 
+def nombre_cache(product_id: str, firma: str) -> str:
+    """Nombre de la carpeta del job: el producto primero, la firma después.
+
+    Antes era un sha1 pelado (`68bb7f6df9c7`): entrabas a `media/cache` y no sabías
+    qué receta había adentro. La firma sigue siendo la identidad del trabajo.
+    """
+    limpio = "".join(c if c.isalnum() or c in "-_" else "_" for c in product_id)
+    return f"{limpio}_{firma}"
+
+
 class JobManager:
     def __init__(self, media_root: Path, max_historial: int = 40) -> None:
         self.media_root = media_root
@@ -331,7 +341,7 @@ class JobManager:
             product_name=producto.name,
             params=dict(params),
             mode="real",
-            dir=self.media_root / "cache" / firma,
+            dir=self.media_root / "cache" / nombre_cache(producto.id, firma),
         )
 
         if not python_repo().is_file():
