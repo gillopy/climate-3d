@@ -62,6 +62,20 @@ SANDWICH = {
     "G18": JOB / "806ac86bcc3e" / "G18_Sandwich_2026-11-18T2100.png",
     "G16": JOB / "cb7be29a3eb7" / "G16_Sandwich_2025-02-02T1700.png",
 }
+# Meteosat-12: el mismo cuadro del 2026-11-23 12:00 UTC en las tres capas, para
+# que la placa cambie con `variante` igual que el render.
+METEOSAT = {
+    "geocolour": JOB / "c406ea1d966b" / "frames_meteosat_globo_2026-11-23T1200_1f_2712px" / "cuadro_001.png",
+    "truecolour": JOB / "88cef0c2f038" / "frames_meteosat_globo_2026-11-23T1200_1f_2712px" / "cuadro_001.png",
+    "ir": JOB / "0d48a0a0d6f3" / "frames_meteosat_globo_2026-11-23T1200_1f_2712px" / "cuadro_001.png",
+}
+# CBERS-4A: un recorte por zona; Ciudad del Este es el de 2 m (PCA), el resto 8 m
+# (WPM). La placa fija usa el de 2 m, que es el que muestra el detalle del sensor.
+CBERS = {
+    "cdeleste": JOB / "5adf917ad026" / "cbers_cdeleste_20261026.png",
+    "asuncion": JOB / "10bd4295fae4" / "cbers_asuncion_20261106.png",
+    "filadelfia": JOB / "0b892dee9a54" / "cbers_filadelfia_20261117.png",
+}
 
 # Placa fija de cada producto. `None` = no hay muestra disponible.
 # Precipitacion y anomalia de 2 m usan el poster de fondo negro.
@@ -84,6 +98,8 @@ FUENTES: dict[str, Path | None] = {
     "snapshot_paraguay": GALERIA / "snapshot_paraguay_2026-10-31T0000.png",
     "himawari": JOB / "9a62988526ae" / "frames" / "cuadro_001.png",
     "follaje": SALIDAS / "frames_follaje_pace_globo_ortho3d_2026-08-07T0000_66f_1440px" / "cuadro_001.png",
+    "meteosat": METEOSAT["geocolour"],
+    "cbers_4a": CBERS["cdeleste"],
 }
 
 #: Placas por variante: `(producto, valores)` -> render. Los campos y su orden son
@@ -106,6 +122,10 @@ for _sat in ("G19", "G18", "G16"):
     VARIANTES[("goes_firetemp", (_sat, "false"))] = RGB["firetemp"][_sat]
     # Sandwich no lleva "paraguay" en el catalogo: la variante es solo el satelite.
     VARIANTES[("goes_sandwich", (_sat,))] = SANDWICH[_sat]
+for _capa, _origen in METEOSAT.items():
+    VARIANTES[("meteosat", (_capa,))] = _origen
+for _zona, _origen in CBERS.items():
+    VARIANTES[("cbers_4a", (_zona,))] = _origen
 
 
 def _nombre(producto: str, valores: tuple[str, ...]) -> str:
