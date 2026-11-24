@@ -30,11 +30,40 @@ CAPAS = {
 #: Caja del disco en lon/lat (la que declara el WMS: -81.28..81.28, -77.36..77.36).
 BBOX = (-81.28, -77.36, 81.28, 77.36)
 
+#: Caja de "Solo Paraguay": 1000 km de lado centrada en el país. Se elige
+#: cuadrada en kilómetros, no en grados, para que el póster no salga deformado:
+#: a 23.4° de latitud un grado de longitud mide 102 km y uno de latitud 111 km.
+BBOX_PARAGUAY = (-63.34, -27.97, -53.55, -18.92)
+
+#: Encuadres del producto: el disco entero o el recorte del país.
+#: Desde 0° el país queda a 58° del subpunto satelital, en el limbo.
+ENCUADRES = {"globo": BBOX, "paraguay": BBOX_PARAGUAY}
+
 PASO = 10                       # minutos entre cuadros del FCI
 INTENTOS = 24                   # 4 h hacia atras si el WMS no dice la ultima
 TIMEOUT = 45
 
 _ISO = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})")
+
+
+def caja(encuadre: str = "globo") -> tuple[float, float, float, float]:
+    """Caja lon/lat del encuadre pedido; un nombre desconocido cae al disco."""
+    return ENCUADRES.get(encuadre, BBOX)
+
+
+def normaliza_encuadre(encuadre: str | None = None, globo: bool = False,
+                       defecto: str = "globo") -> str:
+    """Encuadre pedido por CLI, aceptando el flag viejo ``--globo``.
+
+    ``defecto`` es lo que vale sin flags: ``globo`` en el descargador (siempre
+    bajó el disco) y ``plano`` en el render (dibuja el crudo tal cual).
+    """
+    if encuadre in ENCUADRES:
+        return encuadre
+    if encuadre:
+        return defecto
+    return "globo" if globo else defecto
+
 
 
 def piso_slot(t: datetime, paso: int = PASO) -> datetime:

@@ -518,8 +518,8 @@ tocar la red.
 
 ## `meteosat.py`
 
-Disco completo de Meteosat-12 (MTG-I1) desde EUMETView. EUMETSAT entrega la imagen
-ya pintada (GeoColour, True Colour, IR 10.5 µm) por WMS, en `CRS:84`; no hay NetCDF
+Disco de Meteosat-12 (MTG-I1) desde EUMETView. EUMETSAT entrega la imagen ya
+pintada (GeoColour, True Colour, IR 10.5 µm) por WMS, en `CRS:84`; no hay NetCDF
 ni que reproyectar la proyección geoestacionaria. Cada cuadro es un `GetMap` de 10
 minutos y se guarda como `crudo_NNN.png`. Sin clave; atribución obligatoria
 "EUMETSAT · EUMETView · CC-BY 4.0".
@@ -529,13 +529,18 @@ minutos y se guarda como `crudo_NNN.png`. Sin clave; atribución obligatoria
 | `--desde` | Primer cuadro UTC (vacío = último publicado) |
 | `--n` / `--paso` | Cuántos cuadros y cada cuántos minutos (10) |
 | `--capa` | `geocolour`, `truecolour` o `ir` |
-| `--px` | Ancho del PNG de origen |
-| `--globo` | Marca la carpeta para el render en globo |
+| `--px` | Lado del PNG de origen |
+| `--encuadre` | `globo` (disco entero, por defecto) o `paraguay` (recorte de 1000 km) |
+| `--globo` | Alias viejo de `--encuadre globo` |
 | `--respaldo` | Con un solo cuadro, cuántos slots retroceder |
 
-- Cobertura: Europa, África y Atlántico. Paraguay queda en el limbo: es un producto
-  de disco completo, no un recorte regional.
-- Render: `cuadros/cuadros_meteosat.py` (Orthographic centrado en 0,0).
+- `globo` cubre Europa, África y Atlántico: Paraguay queda a 58° del subpunto
+  satelital, en el limbo.
+- `paraguay` pide la caja cuadrada de 1000 km sobre el país (cuadrada en km, no en
+  grados, para no deformar el póster). El píxel llega estirado y el Rayleigh lava
+  el color: es la vista real del MTG, no un recorte de alta resolución.
+- Render: `cuadros/cuadros_meteosat.py --encuadre globo|paraguay` (Orthographic
+  centrado en 0,0 en globo; marco cuadrado en paraguay).
 
 ## `cbers.py`
 

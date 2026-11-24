@@ -68,7 +68,7 @@ de entrada y `salidas/` con los PNG, frames y videos.
 | Sandwich RGB | `sandwich.py` | — | `cuadros_sandwich.py` | `frames_sandwich_*` |
 | Dust / Air Mass / Fire RGB | `descargar_goes_rgb.py` | `poster_goes_rgb.py` | el mismo `--frames` | `poster_G19_<producto>_*` |
 | Himawari-9 AHI B13 | `descargar_himawari.py` | `cuadros_himawari_ir.py --solo-poster` | `cuadros_himawari_ir.py` | `frames_H09_B13_*` |
-| Meteosat-12 GeoColour/IR | `meteosat.py` | `cuadros_meteosat.py --n 1` | `cuadros_meteosat.py` | `frames_meteosat_*` |
+| Meteosat-12 GeoColour/True Colour/IR | `meteosat.py --encuadre globo\|paraguay` | `cuadros_meteosat.py --n 1 --encuadre ...` | `cuadros_meteosat.py` | `frames_meteosat_*` |
 | CBERS-4A recorte 2/8/16 m | `cbers.py` | `cuadros_cbers.py` | — | `cbers_<zona>_<fecha>.png` |
 | MUR SST | `mur_sst.py` | `poster_mur_realista.py` | `cuadros_mur.py`, `animar_mur_realista.py` | `frames_mur_globo_*` |
 | True Color GIBS | `truecolor.py` | — | `cuadros_truecolor.py` | `frames_truecolor_*` |

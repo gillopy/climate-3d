@@ -59,7 +59,7 @@ de vecino no podría copiar el catálogo sin copiar el pipeline.
 
 ## Evidence on Hand
 
-- `app/web/public/previews/*.webp`: una muestra real por producto (12), generadas desde renders.
+- `app/web/public/previews/*.webp`: una muestra real por producto y, cuando el render cambia con un control, una por variante (satélite, capa, encuadre, zona), generadas desde renders.
 - `docs/galeria/`: renders reales a resolución completa (GOES, MUR, PACE, ECMWF, viento, Himawari).
 - `app/README.md` y `GUIA.md`: flujos, flags y comportamiento real de cada script.
 

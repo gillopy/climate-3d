@@ -1,8 +1,10 @@
-"""Renderiza cuadros de Meteosat-12 (MTG-I1) sobre un globo Orthographic.
+"""Renderiza cuadros de Meteosat-12 (MTG-I1): globo, Paraguay o crudo.
 
 La descarga vive en ``descargar/meteosat.py``: deja ``crudo_NNN.png`` ya
-pintados por EUMETView. Aca se reproyecta la imagen lon/lat a un disco
-Orthographic y se le pone el vestuario del poster (costas, titulo, fuente).
+pintados por EUMETView. Aca se dibuja el póster. En ``globo`` se reproyecta la
+imagen lon/lat a un disco Orthographic; en ``paraguay`` sólo se enmarca el
+recorte cuadrado del país, que ya viene en lon/lat; sin encuadre se dibuja el
+crudo tal cual con la fecha.
 
 El warping se hace a mano con numpy (mapeo inverso + interpolacion bilineal),
 igual que en ``cuadros_geocolor.py``: el ``warp_array`` de cartopy pide
@@ -10,7 +12,8 @@ igual que en ``cuadros_geocolor.py``: el ``warp_array`` de cartopy pide
 
 Uso (desde la raiz del proyecto):
 
-    .venv\\Scripts\\python.exe cuadros\\cuadros_meteosat.py --desde 2026-11-23T12:00 --n 1 --px 1400 --globo
+    .venv\\Scripts\\python.exe cuadros\\cuadros_meteosat.py --desde 2026-11-23T12:00 --n 1 --px 1400 --encuadre globo
+    .venv\\Scripts\\python.exe cuadros\\cuadros_meteosat.py --desde 2026-11-23T15:00 --n 1 --px 1400 --encuadre paraguay --capa truecolour
     .venv\\Scripts\\python.exe cuadros\\cuadros_meteosat.py --help
 """
 from __future__ import annotations
@@ -30,7 +33,7 @@ from PIL import Image
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "comun"))
 from estilo import BG, FUENTE, TXT, TXT_DIM, WM_COLOR, tipografia  # noqa: E402
-from meteosat import BBOX, CAPAS, PASO  # noqa: E402
+from meteosat import BBOX, CAPAS, PASO, normaliza_encuadre  # noqa: E402
 from rutas import SALIDAS  # noqa: E402
 
 PX = 1400
@@ -49,7 +52,7 @@ _FUENTES = {
 _FUENTE = "EUMETSAT · EUMETView · CC-BY 4.0"
 
 _RE_FRAMES = re.compile(
-    r"frames_meteosat_(?:plano|globo)_(\d{4}-\d{2}-\d{2}T\d{4})_")
+    r"frames_meteosat_(?:plano|globo|paraguay)_(\d{4}-\d{2}-\d{2}T\d{4})_")
 
 
 def ts_de_frames(nombre: str) -> datetime | None:
@@ -139,12 +142,15 @@ def _warp_ortho(rgba: np.ndarray, bbox, centro, lado: int,
 
 
 def _sello(args, salida_alto: int) -> str:
+    # `encuadre` ya dice globo/paraguay/plano: el flag viejo no entra, si no
+    # `--globo` y `--encuadre globo` generarían dos firmas para el mismo dibujo.
     datos = {
-        "px": args.px, "dpi": args.dpi, "globo": args.globo,
+        "px": args.px, "dpi": args.dpi,
+        "encuadre": args.encuadre,
         "centro": list(args.centro), "capa": args.capa,
         "credito": args.credito, "sin_fecha": args.sin_fecha,
         "escala_texto": ESCALA_TEXTO, "fuente": tipografia(), "fondo": BG,
-        "diseno": 1,
+        "diseno": 2,
     }
     return hashlib.sha256(json.dumps(datos, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -241,6 +247,55 @@ def render_globo(crudo: Path, t: datetime, args, destino: Path) -> Path:
     return destino
 
 
+def render_paraguay(crudo: Path, t: datetime, args, destino: Path) -> Path:
+    """Póster del recorte "Solo Paraguay".
+
+    El WMS ya entrega el recorte en lon/lat, cuadrado en kilómetros: no hay
+    reproyección, sólo el marco del póster. Desde 0° el país queda a 58° del
+    subpunto satelital, así que el píxel viene estirado y el Rayleigh lava el
+    color: es la vista real del MTG sobre Paraguay, no un defecto del render.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.patheffects as patheffects
+
+    rgba = np.asarray(Image.open(crudo).convert("RGBA"))
+    lado = args.px / args.dpi
+    fig = plt.figure(figsize=(lado, lado), dpi=args.dpi)
+    fig.patch.set_facecolor(BG)
+    # Cuadrado y centrado: deja la banda del título arriba y la de fuentes abajo.
+    ancho_img = 0.84
+    ax = fig.add_axes([0.5 - ancho_img / 2, 0.075, ancho_img, ancho_img])
+    ax.set_facecolor(BG)
+    ax.imshow(rgba, origin="upper", interpolation="bilinear")
+    ax.set_axis_off()
+
+    titulo, descripcion = _FUENTES.get(args.capa, _FUENTES["geocolour"])
+    plt.rcParams.update({"font.family": FUENTE})
+    esc = ESCALA_TEXTO * (args.px / 720.0) ** 0.45
+    halo = [patheffects.withStroke(linewidth=2.4 * esc, foreground=BG)]
+    fig.text(0.026, 0.985, titulo, color=TXT, fontsize=18 * esc, ha="left",
+             va="top", path_effects=halo, zorder=11)
+    if not args.sin_fecha:
+        fig.text(0.026, 0.948, f"PARAGUAY · {t:%d %b %Y · %H:%M} UTC".upper(),
+                 color=TXT_DIM, fontsize=11.5 * esc, ha="left", va="top",
+                 path_effects=halo, zorder=11)
+    fig.text(0.974, 0.985, descripcion, color=TXT_DIM, fontsize=8.6 * esc,
+             ha="right", va="top", path_effects=halo, zorder=11)
+    fig.text(0.026, 0.012, _FUENTE, color=TXT_DIM, fontsize=10 * esc,
+             ha="left", va="bottom")
+    if args.credito:
+        fig.text(0.974, 0.012, args.credito, color=TXT_DIM, fontsize=10 * esc,
+                 ha="right", va="bottom")
+
+    parcial = destino.with_suffix(".png.parcial")
+    fig.savefig(parcial, format="png", facecolor=BG)
+    plt.close(fig)
+    parcial.replace(destino)
+    return destino
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Cuadros (PNG) de Meteosat-12 desde los crudos de EUMETView.")
@@ -254,6 +309,10 @@ def main(argv=None) -> int:
     ap.add_argument("--dpi", type=int, default=DPI, help="dpi del render")
     ap.add_argument("--globo", action="store_true",
                     help="reproyectar a Orthographic (aspecto planeta)")
+    ap.add_argument("--encuadre", choices=("plano", "globo", "paraguay"),
+                    default=None,
+                    help="plano (crudo tal cual), globo (Orthographic) o paraguay "
+                         "(recorte del país en el limbo)")
     ap.add_argument("--centro", nargs=2, type=float, metavar=("LON", "LAT"),
                     default=list(CENTRO),
                     help=f"centro del globo (por defecto {CENTRO[0]:g} {CENTRO[1]:g})")
@@ -274,8 +333,12 @@ def main(argv=None) -> int:
     if not (o < e and s < n):
         raise SystemExit(f"caja invalida: {args.bbox}")
 
+    # Sin flags se dibuja el crudo tal cual; `--globo` es el alias viejo de
+    # `--encuadre globo`, para que los comandos ya documentados sigan andando.
+    args.encuadre = normaliza_encuadre(args.encuadre, args.globo, defecto="plano")
+
     salida = Path(args.out) if args.out else SALIDAS
-    vista = "globo" if args.globo else "plano"
+    vista = args.encuadre
     if args.frames:
         frames_dir = Path(args.frames)
     else:
@@ -291,7 +354,7 @@ def main(argv=None) -> int:
             f"No existe {frames_dir}. Descarga los cuadros con:\n"
             f"  .venv\\Scripts\\python.exe descargar\\meteosat.py "
             f"--desde {t0:%Y-%m-%dT%H:%M} --n {args.n} --px {args.px} "
-            f"--capa {args.capa} --globo")
+            f"--capa {args.capa} --encuadre {args.encuadre}")
 
     sello = _sello(args, args.px)
     archivo_sello = frames_dir / ".sello_render"
@@ -317,7 +380,9 @@ def main(argv=None) -> int:
             continue
         if destino.exists() and destino.stat().st_mtime >= crudo.stat().st_mtime:
             pass
-        elif args.globo:
+        elif args.encuadre == "paraguay":
+            render_paraguay(crudo, t, args, destino)
+        elif args.encuadre == "globo":
             render_globo(crudo, t, args, destino)
         else:
             img = Image.open(crudo).convert("RGBA")
