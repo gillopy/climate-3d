@@ -131,6 +131,19 @@ backend (`/api/capas`) hace de proxy con caché de 6 h, normaliza los atributos 
 los registros repetidos de biosfera. El popup de cada polígono trae nombre, categoría,
 situación, año, superficie y país; la atribución de las fuentes activas aparece en el mapa.
 
+### Catastro: a qué inmueble pertenece la pérdida
+
+El export de parcelas del **SNC** (1.062.544 predios con `ccatastral`, finca, matrícula,
+colonia y superficies) se indexa una vez en SQLite con R-tree y se activa desde
+**Catastro** en el mismo mapa. Ahí se ven los polígonos con su popup y, con un cuadro ROI
+dibujado, **Analizar cuadro ROI** lista los inmuebles que caen adentro con el área afectada
+y el porcentaje de cada predio. Al alejarte quedan las parcelas grandes (el umbral de
+superficie sube solo) y los lotes urbanos aparecen al acercarte. El cuadro es el mismo del
+render NISAR, así que la imagen de cambio queda alineada con los lotes. El dataset **no trae
+nombre de propietario**: se muestran los identificadores registrales del SNC. Detalle,
+configuración (`CLIMATE3D_CATASTRO`) y límites en
+[`app/README.md`](./app/README.md#catastro-parcelas-fincas-y-matrículas).
+
 
 ## Qué se puede lograr
 

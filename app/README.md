@@ -659,6 +659,69 @@ no entra al catálogo: es un visor de búsqueda, no una receta.
 - Endpoints: `GET /api/nisar/catalog`, `/api/nisar/search`, `/api/nisar/browse`
   y `/api/nisar/paraguay`.
 
+### Catastro: parcelas, fincas y matrículas
+
+El mapa puede superponer las **parcelas catastrales del SNC** (Servicio Nacional
+de Catastro) y cruzarlas con el cuadro ROI que se usa para buscar y renderizar
+NISAR. Es la pieza que traduce "acá hubo pérdida de bosque" a "este inmueble":
+
+- **Capa de parcelas**: polígonos con popup de `ccatastral`, departamento,
+  distrito, padrón, zona/manzana/lote, finca, matrícula, colonia, registro de
+  propiedad, superficies legal y medida. Se pide por la caja visible y el zoom,
+  se simplifica según el zoom y se corta en 1.200 parcelas por respuesta: si hay
+  más, el panel avisa "recortado" y muestra las más grandes.
+- **Escala**: desde zoom 5, así que en la vista de país ya se ven las estancias
+  grandes. Una parcela se dibuja recién cuando mide ~2 px de lado: al alejarte
+  quedan sólo las grandes (contornos, sin relleno) y los lotes urbanos aparecen
+  al acercarte, sin amontonarse. El umbral es automático y el panel dice cuál
+  está aplicando:
+
+  | Zoom | Parcela mínima | Zoom | Parcela mínima |
+  | --- | --- | --- | --- |
+  | 5 | 7.988 ha | 10 | 7,8 ha |
+  | 6 | 1.997 ha | 11 | 1,95 ha |
+  | 7 | 499 ha | 12 | 0,49 ha |
+  | 8 | 125 ha | 13 | 0,12 ha |
+  | 9 | 31 ha | 14+ | todas |
+- **Inmuebles afectados**: con un cuadro ROI dibujado, **Analizar cuadro ROI**
+  devuelve cada parcela que cae adentro con su **área afectada** (m²/ha) y la
+  **fracción del predio** que ocupa la zona. La lista se ordena por superficie
+  afectada, se resalta en el mapa por gravedad y al hacer clic vuela a la parcela.
+  El cuadro es el mismo del render NISAR, así que la imagen de cambio y los
+  predios quedan alineados.
+- **Sin nombre de propietario**: el export del SNC no trae dueños. `nombre_obj`
+  es manzana/lote y `parc_usrin`/`parc_usrac` son códigos de usuario del sistema,
+  no personas. El panel muestra los identificadores registrales, que son los que
+  el SNC usa para llegar al expediente; no inventa nombres.
+
+**Configuración (una sola vez).** El shapefile pesa ~167 MB más 1,7 GB de DBF y
+tiene 1.062.544 parcelas, así que no va al repo. Se apunta con
+`CLIMATE3D_CATASTRO` (el `.shp` o su carpeta) o con el asistente de rutas:
+
+```powershell
+.venv\Scripts\python.exe comun\rutas.py --catastro "C:\ruta\al\shapefile"
+```
+
+La primera vez que se abre el panel, el backend construye un **índice SQLite con
+R-tree** en `<MEDIA>/catastro/catastro.sqlite3` (geometría en EPSG:4326 y área en
+m²). Tarda unos minutos y muestra el progreso; después cada vista se resuelve con
+una consulta espacial. Si el `.shp` cambia de tamaño o fecha, el índice se
+rehace solo. Para dejarlo listo antes, o reconstruirlo a mano:
+
+```powershell
+.venv\Scripts\python.exe app\tools\catastro.py --estado
+.venv\Scripts\python.exe app\tools\catastro.py --reconstruir
+```
+
+**Calidad del dato**: el export declara EPSG:32721 (UTM 21S) y `.cpg` UTF-8. Un
+puñado de registros viene guardado en grados lon/lat dentro del mismo shapefile:
+se detectan por rango y se reparan (el índice los cuenta). Los que caen fuera de
+Paraguay se descartan y también se informan en el estado.
+
+Endpoints: `GET /api/catastro` (estado, progreso, rutas y conteos),
+`GET /api/catastro/parcelas?bbox=…&zoom=…` y
+`POST /api/catastro/afectadas` (`{"bbox": [...]}` o `{"poligono": {GeoJSON}}`).
+
 ### Descarga y render (Fase 2)
 
 Con una escena seleccionada y una caja, **Descargar y renderizar** crea un job
