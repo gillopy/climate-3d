@@ -350,17 +350,25 @@ def _render_cuadro(nc: Path, destino: Path, args) -> None:
 
 
 def _sello_render(args) -> str:
-    """Huella de los parámetros que cambian el aspecto; invalida cuadros viejos."""
+    """Huella de los parámetros que cambian el aspecto; invalida cuadros viejos.
+
+    Todo lo que se dibuja tiene que estar acá: si un cambio de aspecto no mueve el
+    sello, el almacén de cuadros devuelve imágenes de otro aspecto con el mismo
+    nombre de archivo. `tope` cambia el detalle (el campo se lee a otra resolución
+    y se muestra escalado) y `limpio` saca títulos, leyenda y costas.
+    """
     import hashlib
     datos = {
         "px": args.px, "dpi": args.dpi, "centro": list(args.centro),
         "radio": args.radio, "credito": args.credito, "sat": args.sat,
         "vmin": args.vmin, "vmax": args.vmax, "borde": args.geojson,
-        "paleta": args.paleta,
+        "paleta": args.paleta, "limpio": bool(args.limpio), "tope": args.tope,
         # v2: el encuadre regional recorta la grilla nativa en vez de submuestrearla.
         "malla": 2,
         # v4: la escala del póster es más fina (barra y pastilla más bajas).
-        "diseno": 4,
+        # v5: el sello incluye `limpio` y `tope` (antes un cambio de esos reusaba
+        #     cuadros de otro aspecto).
+        "diseno": 5,
     }
     return hashlib.sha256(json.dumps(datos, sort_keys=True).encode()).hexdigest()[:16]
 
