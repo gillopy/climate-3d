@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -377,9 +377,11 @@ dependencies = [
     { name = "planetary-computer" },
     { name = "psutil" },
     { name = "pykdtree" },
+    { name = "pyproj" },
     { name = "pystac-client" },
     { name = "rasterio" },
     { name = "requests" },
+    { name = "shapely" },
     { name = "tifffile" },
     { name = "uvicorn" },
     { name = "xarray" },
@@ -405,9 +407,11 @@ requires-dist = [
     { name = "planetary-computer", specifier = "==1.*" },
     { name = "psutil", specifier = "==7.*" },
     { name = "pykdtree", specifier = "==1.4.*" },
+    { name = "pyproj", specifier = "==3.8.*" },
     { name = "pystac-client", specifier = "==0.9.*" },
     { name = "rasterio", specifier = "==1.5.*" },
     { name = "requests", specifier = "==2.34.*" },
+    { name = "shapely", specifier = "==2.2.*" },
     { name = "tifffile", specifier = "==2026.11.*" },
     { name = "uvicorn", specifier = "==0.54.*" },
     { name = "xarray", specifier = "==2025.12.*" },

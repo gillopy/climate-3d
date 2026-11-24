@@ -32,6 +32,10 @@ dependencies = [
     "rasterio==1.5.*",
     "pystac-client==0.9.*",
     "planetary-computer==1.*",
+    # Catastro del SNC en el mapa NISAR (app/api/catastro.py): reproyectar UTM 21S
+    # <-> 4326 y cruzar el cuadro ROI con cada parcela. El shapefile se lee a mano.
+    "shapely==2.2.*",
+    "pyproj==3.8.*",
     # --- consola (app/) ---
     "fastapi==0.162.*",
     "uvicorn==0.54.*",

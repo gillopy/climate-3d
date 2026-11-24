@@ -5,11 +5,13 @@
     DATOS    datos crudos del pipeline (.nc, .npz, .h5) + SALIDAS (los cuadros)
     MEDIA    artefactos de los jobs de la consola, historial y cachés
     NISAR    los .h5 de NISAR (~1.9 GB cada uno), separados por tamaño
+    CATASTRO shapefile de parcelas del SNC (catastro) para el mapa NISAR
 
-La precedencia es la misma para las tres: **variable de entorno → archivo de
+La precedencia es la misma para todas: **variable de entorno → archivo de
 configuración → default de la plataforma**.
 
-- ``CLIMATE3D_DATOS``, ``CLIMATE3D_MEDIA`` y ``CLIMATE3D_NISAR``.
+- ``CLIMATE3D_DATOS``, ``CLIMATE3D_MEDIA``, ``CLIMATE3D_NISAR`` y
+  ``CLIMATE3D_CATASTRO``.
 - El archivo de configuración (``%LOCALAPPDATA%\\climate3d\\config.json`` en Windows,
   ``~/.config/climate3d/config.json`` fuera) lo escribe el asistente de arranque con lo
   que el usuario elige. ``CLIMATE3D_CONFIG`` lo puede mover. Sin archivo, todo sigue
@@ -46,7 +48,7 @@ RUTA_CONTENEDOR = "/data"
 _EXTRA_LEGADAS = (Path(r"D:\Users\guill\Desktop"), RAIZ)
 
 #: Claves válidas del archivo de configuración.
-CLAVES_CONFIG = ("datos", "media", "nisar")
+CLAVES_CONFIG = ("datos", "media", "nisar", "catastro")
 
 #: Nombre del archivo dentro de la carpeta de configuración del usuario.
 NOMBRE_CONFIG = "config.json"
@@ -120,12 +122,18 @@ def guardar_config(
     datos: str | Path | None = None,
     media: str | Path | None = None,
     nisar: str | Path | None = None,
+    catastro: str | Path | None = None,
     entorno: Mapping[str, str] | None = None,
 ) -> Path:
     """Guarda (o actualiza) las raíces elegidas. Sólo pisa las claves que recibe."""
     destino = ruta_config(entorno)
     actual = leer_config(entorno)
-    for clave, valor in (("datos", datos), ("media", media), ("nisar", nisar)):
+    for clave, valor in (
+        ("datos", datos),
+        ("media", media),
+        ("nisar", nisar),
+        ("catastro", catastro),
+    ):
         if valor is None or not str(valor).strip():
             continue
         actual[clave] = str(Path(str(valor).strip()))
@@ -209,6 +217,27 @@ def raiz_nisar(
     return raiz_datos(entorno, plataforma, guardado) / "nisar"
 
 
+def raiz_catastro(
+    entorno: Mapping[str, str] | None = None,
+    plataforma: str | None = None,
+    config: Mapping[str, str] | None = None,
+) -> Path:
+    """Origen del catastro (shapefile de parcelas del SNC).
+
+    ``CLIMATE3D_CATASTRO`` manda; después la clave ``catastro`` del archivo de
+    configuración. Puede ser el ``.shp`` o la carpeta que lo contiene. Sin nada
+    configurado queda ``<datos>/catastro``: mismo acuerdo que NISAR, una sola
+    carpeta para los datos que no van al repo.
+    """
+    valor = (_entorno(entorno).get("CLIMATE3D_CATASTRO") or "").strip()
+    if valor:
+        return Path(valor).expanduser()
+    guardado = _config(entorno, config)
+    if guardado.get("catastro"):
+        return Path(guardado["catastro"]).expanduser()
+    return raiz_datos(entorno, plataforma, guardado) / "catastro"
+
+
 def carpetas_extra(
     entorno: Mapping[str, str] | None = None,
     plataforma: str | None = None,
@@ -237,6 +266,9 @@ CACHE = MEDIA / "cache"
 
 # Raíz de los .h5 NISAR: separada de DATOS por tamaño (ver `raiz_nisar`).
 NISAR = raiz_nisar()
+
+# Origen del catastro (shapefile del SNC) para el mapa NISAR.
+CATASTRO = raiz_catastro()
 
 # El NetCDF de ERA5 puede haberse movido fuera de DATOS: se buscan también estas
 # ubicaciones (no recursivas) para no caer en datos sintéticos sin darse cuenta.
@@ -271,6 +303,7 @@ def resumen(entorno: Mapping[str, str] | None = None) -> dict[str, str]:
         "salidas": str(raiz_datos(entorno) / "salidas"),
         "media": str(raiz_media(entorno)),
         "nisar": str(raiz_nisar(entorno)),
+        "catastro": str(raiz_catastro(entorno)),
     }
 
 
@@ -283,10 +316,13 @@ def _cli(argv: list[str] | None = None) -> int:
     ap.add_argument("--datos", help="raíz de datos, salidas incluidas (a guardar)")
     ap.add_argument("--media", help="raíz de artefactos y cachés (a guardar)")
     ap.add_argument("--nisar", help="raíz de los .h5 de NISAR (a guardar)")
+    ap.add_argument("--catastro", help="shapefile o carpeta del catastro del SNC (a guardar)")
     args = ap.parse_args(argv)
 
-    if args.datos or args.media or args.nisar:
-        ruta = guardar_config(args.datos, args.media, args.nisar)
+    if args.datos or args.media or args.nisar or args.catastro:
+        ruta = guardar_config(
+            args.datos, args.media, args.nisar, catastro=args.catastro
+        )
         print(f"configuración guardada en {ruta}", file=sys.stderr)
 
     print(json.dumps(resumen(), indent=2, ensure_ascii=False))

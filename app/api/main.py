@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .capas import router as capas_router
+from .catastro import router as catastro_router
 from .catalog import (
     available_dates,
     data_root,
@@ -69,6 +70,8 @@ gestor = JobManager(MEDIA)
 app.include_router(nisar_router, prefix="/api/nisar", tags=["nisar"])
 # Capas ambientales del mapa NISAR (WDPA, LandMark, RESOLVE), con cache y proxy.
 app.include_router(capas_router, prefix="/api/capas", tags=["capas"])
+# Catastro: parcelas del SNC indexadas en local y cruce con el cuadro ROI.
+app.include_router(catastro_router, prefix="/api/catastro", tags=["catastro"])
 # Earthdata Login interactivo (PACE LANDVI, etc.)
 app.include_router(earthdata_router)
 
