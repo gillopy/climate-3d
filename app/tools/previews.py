@@ -76,6 +76,13 @@ CBERS = {
     "asuncion": JOB / "10bd4295fae4" / "cbers_asuncion_20261106.png",
     "filadelfia": JOB / "0b892dee9a54" / "cbers_filadelfia_20261117.png",
 }
+# Meteosat en "Solo Paraguay": el recorte de 1000 km sobre el país a las 15:00 UTC
+# (mediodía local, con el sol alto). Salen de una corrida real con
+# `--encuadre paraguay`; quedan en disco porque la placa se regenera desde acá.
+METEOSAT_PARAGUAY = {
+    capa: SALIDAS / "muestras" / f"meteosat_paraguay_{capa}.png"
+    for capa in ("geocolour", "truecolour", "ir")
+}
 
 # Placa fija de cada producto. `None` = no hay muestra disponible.
 # Precipitacion y anomalia de 2 m usan el poster de fondo negro.
@@ -124,6 +131,7 @@ for _sat in ("G19", "G18", "G16"):
     VARIANTES[("goes_sandwich", (_sat,))] = SANDWICH[_sat]
 for _capa, _origen in METEOSAT.items():
     VARIANTES[("meteosat", (_capa,))] = _origen
+    VARIANTES[("meteosat", (_capa, "paraguay"))] = METEOSAT_PARAGUAY[_capa]
 for _zona, _origen in CBERS.items():
     VARIANTES[("cbers_4a", (_zona,))] = _origen
 

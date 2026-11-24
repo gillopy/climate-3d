@@ -1492,11 +1492,12 @@ _CAPAS_METEOSAT = ("geocolour", "truecolour", "ir")
 
 
 def _meteosat(params: dict[str, Any], work: Path) -> Plan:
-    """Plan del disco completo del FCI: GeoColour, True Colour o IR 10.5 um.
+    """Plan del FCI: GeoColour, True Colour o IR 10.5 um, en globo o en Paraguay.
 
-    El WMS ya entrega la imagen pintada en lon/lat; el render la lleva a globo
-    Orthographic centrado en el punto subsatelital (0,0). No hay "Solo Paraguay":
-    desde 0 grados el país queda en el limbo.
+    El WMS ya entrega la imagen pintada en lon/lat. En `globo` el render la lleva
+    a Orthographic centrado en el punto subsatelital (0,0); en `paraguay` se pide
+    el recorte de 1000 km sobre el país y se enmarca cuadrado. Desde 0° Paraguay
+    queda a 58° del subpunto satelital, en el limbo.
     """
     inicio, fin = _rango(params)
     px = _px(params, 1400)
@@ -1505,6 +1506,9 @@ def _meteosat(params: dict[str, Any], work: Path) -> Plan:
     capa = str(params.get("variante", "geocolour"))
     if capa not in _CAPAS_METEOSAT:
         capa = "geocolour"
+    encuadre = str(params.get("encuadre", "globo"))
+    if encuadre not in ("globo", "paraguay"):
+        encuadre = "globo"
 
     if n_ultimos:
         slots = _ultimos_meteosat(capa, n_ultimos)
@@ -1526,7 +1530,7 @@ def _meteosat(params: dict[str, Any], work: Path) -> Plan:
         "--paso", str(paso),
         "--px", str(px),
         "--capa", capa,
-        "--globo",
+        "--encuadre", encuadre,
         "--out", str(work),
     ]
     descarga = Step(
@@ -1537,14 +1541,12 @@ def _meteosat(params: dict[str, Any], work: Path) -> Plan:
         args=comunes,
         expected=max(1, n),
     )
+    # `--centro` sólo tiene sentido reproyectando a globo.
     render_step = Step(
         kind="render",
         label=f"renderizando {n} cuadro(s) de Meteosat-12",
         script="cuadros/cuadros_meteosat.py",
-        args=[
-            *comunes,
-            "--centro", "0", "0",
-        ],
+        args=[*comunes, *(["--centro", "0", "0"] if encuadre == "globo" else [])],
         expected=n,
     )
     pasos = [descarga, render_step]

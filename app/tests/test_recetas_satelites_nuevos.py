@@ -8,6 +8,7 @@ INPE (ver `odd/tasks/satelites-meteosat-cbers.md`).
 """
 from __future__ import annotations
 
+import math
 import sys
 import tempfile
 import unittest
@@ -49,10 +50,16 @@ class Catalogo(unittest.TestCase):
         self.assertIn("variante", nombres)
         self.assertIn("ultimos", nombres)
         self.assertIn("ultimo", nombres)          # lo agrega `_con_ultimo`
-        self.assertNotIn("paraguay", nombres)     # el disco no lleva recorte
+        self.assertNotIn("paraguay", nombres)     # el recorte es `encuadre`, no un toggle
         variantes = {o.value for o in next(
             s for s in producto.params if s.name == "variante").options}
         self.assertEqual(variantes, set(meteosat.CAPAS))
+
+    def test_meteosat_elige_encuadre_globo_o_paraguay(self):
+        producto = catalog.get_product("meteosat")
+        spec = next(s for s in producto.params if s.name == "encuadre")
+        self.assertEqual(spec.default, "globo")
+        self.assertEqual({o.value for o in spec.options}, {"globo", "paraguay"})
 
     def test_cbers_sin_snapshot_y_con_zonas(self):
         producto = catalog.get_product("cbers_4a")
@@ -81,13 +88,86 @@ class Meteosat(unittest.TestCase):
         self.assertEqual([p.kind for p in plan.pasos], ["download", "render"])
         descarga, render = plan.pasos
         self.assertEqual(descarga.script, "descargar/meteosat.py")
-        self.assertIn("--globo", descarga.args)
+        self.assertEqual(descarga.args[descarga.args.index("--encuadre") + 1], "globo")
         self.assertEqual(descarga.args[descarga.args.index("--capa") + 1], "geocolour")
         self.assertEqual(descarga.args[descarga.args.index("--desde") + 1],
                          "2026-11-20T12:30")
         self.assertEqual(render.script, "cuadros/cuadros_meteosat.py")
         self.assertEqual(render.args[render.args.index("--centro") + 1:][:2],
                          ["0", "0"])
+
+    def test_encuadre_paraguay_cambia_los_dos_pasos(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = recipes.planear("meteosat", {
+                "variante": "truecolour",
+                "encuadre": "paraguay",
+                "snapshot": True,
+                "ultimo": False,
+                "fecha": "2026-11-23",
+                "hora": 15,
+                "minuto": "00",
+                "resolucion": "1400",
+            }, Path(tmp))
+        descarga, render = plan.pasos
+        for paso in (descarga, render):
+            self.assertEqual(paso.args[paso.args.index("--encuadre") + 1], "paraguay")
+            self.assertNotIn("--globo", paso.args)
+        # Sin globo no hay centro que reproyectar.
+        self.assertNotIn("--centro", render.args)
+
+    def test_encuadre_desconocido_cae_a_globo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = recipes.planear("meteosat", {
+                "variante": "ir", "encuadre": "inventado", "snapshot": True,
+                "ultimo": False, "fecha": "2026-11-23", "hora": 9, "minuto": "00",
+            }, Path(tmp))
+        self.assertEqual(plan.pasos[0].args[plan.pasos[0].args.index("--encuadre") + 1],
+                         "globo")
+
+    def test_placas_por_variante_y_encuadre(self):
+        producto = catalog.get_product("meteosat")
+        with tempfile.TemporaryDirectory() as tmp:
+            carpeta = Path(tmp)
+            for nombre in ("meteosat--truecolour--paraguay.webp",
+                           "meteosat--truecolour.webp"):
+                (carpeta / nombre).write_bytes(b"")
+            variantes = catalog._muestras(producto, carpeta)
+        self.assertEqual(len(variantes), 2)
+        self.assertEqual(variantes[0].when,
+                         {"variante": "truecolour", "encuadre": "paraguay"})
+        self.assertEqual(variantes[1].when, {"variante": "truecolour"})
+
+    def test_caja_paraguay_es_cuadrada_en_km(self):
+        o, s, e, n = meteosat.caja("paraguay")
+        lat = (s + n) / 2
+        km_lon = (e - o) * 111.32 * math.cos(math.radians(lat))
+        km_lat = (n - s) * 110.57
+        self.assertAlmostEqual(km_lon, km_lat, delta=km_lat * 0.01)
+        # Cubre el país entero con margen.
+        self.assertLess(o, -62.6)
+        self.assertGreater(e, -54.3)
+        self.assertLess(s, -27.5)
+        self.assertGreater(n, -19.3)
+
+    def test_caja_desconocida_cae_al_disco(self):
+        self.assertEqual(meteosat.caja("inventado"), meteosat.BBOX)
+        self.assertEqual(meteosat.caja(), meteosat.BBOX)
+
+    def test_globo_sigue_aceptando_el_flag_viejo(self):
+        # El flag `--globo` de los comandos viejos tiene que seguir funcionando.
+        self.assertEqual(meteosat.normaliza_encuadre(None, globo=True), "globo")
+        self.assertEqual(meteosat.normaliza_encuadre("", globo=True), "globo")
+        self.assertEqual(meteosat.normaliza_encuadre("paraguay", globo=False), "paraguay")
+        self.assertEqual(meteosat.normaliza_encuadre("paraguay", globo=True), "paraguay")
+        self.assertEqual(meteosat.normaliza_encuadre("inventado", globo=False), "globo")
+
+    def test_la_carpeta_de_frames_lleva_el_encuadre(self):
+        from cuadros import cuadros_meteosat as render
+        from descargar import meteosat as baja
+        t = datetime(2026, 11, 23, 15, 0)
+        etiqueta = baja._etiqueta("paraguay", t, 1, 1400)
+        self.assertEqual(etiqueta, "frames_meteosat_paraguay_2026-11-23T1500_1f_1400px")
+        self.assertEqual(render.ts_de_frames(etiqueta), t)
 
     def test_variante_desconocida_cae_a_geocolour(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -105,6 +185,15 @@ class Meteosat(unittest.TestCase):
         self.assertIn("crs=CRS%3A84", url)
         self.assertIn("time=2026-11-20T12%3A00%3A00Z", url)
         self.assertIn("width=800", url)
+
+    def test_url_wms_paraguay_pide_la_caja_del_pais(self):
+        o, s, e, n = meteosat.caja("paraguay")
+        url = meteosat.url_cuadro(datetime(2026, 11, 20, 15, 0), "truecolour",
+                                  ancho=900, alto=900, bbox=(o, s, e, n))
+        self.assertIn("layers=mtg_fd%3Argb_truecolour", url)
+        self.assertIn(f"bbox={o:g}%2C{s:g}%2C{e:g}%2C{n:g}", url)
+        self.assertIn("width=900", url)
+        self.assertIn("height=900", url)
 
     def test_piso_slot(self):
         self.assertEqual(meteosat.piso_slot(datetime(2026, 11, 20, 12, 37)),

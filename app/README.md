@@ -238,7 +238,7 @@ GET  /media/...
 | Viento 250 mb (IFS o GFS) | `viento_250_mslp.py --modelo --fecha --ciclo --hasta-hora --paso 3` | `cuadros_viento_250.py ... --modelo --px --fondo-globo --salidas` | `armar.py` |
 | Snapshot Paraguay | `snapshot_paraguay.py --capa --fecha --hora --minuto --px --margen --out` | `snapshot_paraguay.py --capa --fecha --entrada --salidas [--sin-borde]` | — |
 | Follaje PACE | `pace_landvi.py --desde --hasta` | `cuadros_follaje.py --desde --hasta --px --out` | `armar.py` |
-| Meteosat-12 (MTG) | `meteosat.py --desde --n --paso --px --capa --globo` | `cuadros_meteosat.py --desde --n --paso --px --capa --globo --centro 0 0` | `armar.py` sobre `--frames` |
+| Meteosat-12 (MTG) | `meteosat.py --desde --n --paso --px --capa --encuadre` | `cuadros_meteosat.py --desde --n --paso --px --capa --encuadre [--centro 0 0]` | `armar.py` sobre `--frames` |
 | CBERS-4A recorte | `cbers.py --zona --km --detalle --desde --hasta` | `cuadros_cbers.py --entrada --out` | — |
 
 ### Fechas y datos faltantes
@@ -353,13 +353,17 @@ completo en la proyección del satélite, centrado en su punto subsatelital
 
 ### Meteosat-12 (MTG-I1)
 
-Producto propio (`meteosat.py` + `cuadros_meteosat.py`): disco completo del FCI
-cada 10 minutos, ya pintado por EUMETView. `variante` elige GeoColour (día, IR y
-luces), True Colour o IR 10.5 µm. Se pide por WMS en `CRS:84` y se reproyecta a
-Orthographic centrado en 0,0. Sin clave; atribución EUMETSAT/CC-BY 4.0.
+Producto propio (`meteosat.py` + `cuadros_meteosat.py`): disco del FCI cada 10
+minutos, ya pintado por EUMETView. `variante` elige GeoColour (día, IR y luces),
+True Colour o IR 10.5 µm. Se pide por WMS en `CRS:84`; en `globo` se reproyecta a
+Orthographic centrado en 0,0 y en `paraguay` se pide el recorte del país y se
+enmarca cuadrado. Sin clave; atribución EUMETSAT/CC-BY 4.0.
 
-- Cobertura Europa/África/Atlántico: Paraguay queda en el limbo, así que no lleva
-  "Solo Paraguay". Es el "tercer disco" del anillo geoestacionario.
+- Cobertura Europa/África/Atlántico: Paraguay queda a 58° del subpunto satelital,
+  en el limbo. `encuadre: paraguay` recorta 1000 km cuadrados sobre el país, pero
+  el píxel viene estirado y el Rayleigh lava el color: sirve para ver el paso de
+  los sistemas, no para detalle. IR es el que mejor se lleva con el limbo.
+- Es el "tercer disco" del anillo geoestacionario.
 
 ### CBERS-4A
 

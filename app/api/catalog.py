@@ -1247,8 +1247,9 @@ PRODUCTS: list[Product] = [
         group="satelite",
         stage="descargar/meteosat.py + cuadros/cuadros_meteosat.py",
         summary="FCI del MTG-I1 cada 10 minutos: GeoColour (día real, IR y luces "
-        "de ciudad), True Colour o IR 10.5 µm. Disco completo centrado en 0 E; "
-        "Paraguay queda en el limbo, es una vista de Europa/África/Atlántico.",
+        "de ciudad), True Colour o IR 10.5 µm. En globo, el disco completo "
+        "centrado en 0 E; o recortado a Paraguay, que queda en el limbo de la "
+        "vista europea/africana.",
         params=[
             ParamSpec(
                 name="variante",
@@ -1277,6 +1278,29 @@ PRODUCTS: list[Product] = [
                     ),
                 ],
                 help="las tres capas ya vienen pintadas por EUMETView",
+            ),
+            ParamSpec(
+                name="encuadre",
+                label="Encuadre",
+                kind="select",
+                default="globo",
+                options=[
+                    ParamOption(
+                        value="globo",
+                        label="Globo (disco completo)",
+                        description="El disco del MTG entero, con el punto "
+                        "subsatelital en 0°: Europa, África y el Atlántico.",
+                    ),
+                    ParamOption(
+                        value="paraguay",
+                        label="Solo Paraguay",
+                        description="Recorte de 1000 km sobre el país. Desde 0° "
+                        "Paraguay queda a 58° del subpunto satelital: el píxel se "
+                        "estira y el color se lava. Es la vista real del MTG "
+                        "sobre Paraguay, no un render de alta resolución.",
+                    ),
+                ],
+                help="Meteosat-12 mira desde 0°: Paraguay cae en el limbo",
             ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
                       default=_rango(), enabled_when={"ultimos": False}),
@@ -1669,7 +1693,7 @@ _VARIANTES = {
     "viento_250": ("modelo", "paraguay"),
     "follaje": ("proyeccion",),
     "snapshot_paraguay": ("capa",),
-    "meteosat": ("variante",),
+    "meteosat": (("variante", "encuadre"), ("variante",)),
     "cbers_4a": ("zona",),
 }
 
