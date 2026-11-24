@@ -1388,6 +1388,36 @@ code {
   min-width: 0;
 }
 
+/* Vaciar el extremo "hasta": la ventana sigue hasta el último cuadro publicado. */
+.datepick__accion {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--pill);
+  background: transparent;
+  color: var(--ash);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.datepick__accion:hover {
+  background: var(--slate);
+  color: var(--paper);
+}
+
+.datepick__accion:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 /* --- Calendario ------------------------------------------------------ */
 .cal {
   width: 100%;

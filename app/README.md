@@ -395,11 +395,12 @@ crudo y que la etiqueta de cada cuadro (Paraguay es UTC-3: 12 UTC = 09:00 local)
   tope es 1008 (7 días). Si una ventana pide más que el tope, se recorta **por el
   principio** —se pierde el arranque y se conserva el final— y la etiqueta del
   paso lo dice con el rango real en UTC.
-- **Hasta el último cuadro** (`hasta_ultimo`) ignora la fecha final: cierra la
-  serie en el último slot que NOAA ya publicó. Anima por sí solo (no necesita
-  `animar`) y sirve para pedir "desde el 22 hasta lo que haya" sin adivinar.
-- Con `animar` apagado, el rango no se usa: se renderiza un solo cuadro en el
-  cenit.
+- **Sin fecha final** (`hasta` vacío) la serie cierra en el último slot que NOAA ya
+  publicó. En el calendario se vacía con la **×** del extremo "Hasta" y se vuelve a
+  fijar abriéndolo de nuevo; la hora final se apaga sola. Anima sin el switch
+  "Animar": pedir "desde el 22 hasta donde haya" es pedir una serie.
+- Con `animar` apagado (y una fecha final puesta), el rango no se usa: se renderiza
+  un solo cuadro en el cenit.
 
 **Los cuadros también se reciclan.** Cada PNG se guarda con su instante
 (`cuadro_AAAAMMDDTHHMM.png`) en `<DATOS>cuadros_render/goes_c13/<sat>/<sello>/`, donde

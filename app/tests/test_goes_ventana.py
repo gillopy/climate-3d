@@ -100,14 +100,13 @@ class RecortePorElFinal(unittest.TestCase):
 
 
 class HastaElUltimoCuadro(unittest.TestCase):
-    """El final lo pone NOAA, no el calendario."""
+    """Sin fecha final, el final lo pone NOAA, no el calendario."""
 
     ULTIMO = datetime(2026, 11, 4, 18, 10)
 
     def _plan(self, **extra) -> recipes.Plan:
-        # La fecha final del calendario miente a propósito: tiene que ignorarla.
-        params = _params(animar=False, hasta_ultimo=True,
-                         ventana={"start": "2026-11-02", "end": "2026-11-09"})
+        # El extremo "hasta" vacío ES el pedido: hasta el último cuadro publicado.
+        params = _params(animar=False, ventana={"start": "2026-11-02", "end": ""})
         params.update(extra)
         with mock.patch.object(recipes, "_ultimos_goes", return_value=[self.ULTIMO]):
             with mock.patch.object(recipes, "_slots_goes", return_value=[]):
@@ -125,33 +124,67 @@ class HastaElUltimoCuadro(unittest.TestCase):
     def test_la_etiqueta_dice_que_va_hasta_el_ultimo(self):
         self.assertIn("último", _paso(self._plan(), "download").label)
 
+    def test_planear_agrega_el_paso_de_animacion(self):
+        with mock.patch.object(recipes, "_ultimos_goes", return_value=[self.ULTIMO]):
+            with mock.patch.object(recipes, "_slots_goes", return_value=[]):
+                plan = recipes.planear("goes_c13", {
+                    "satelite": "G19", "paleta": "clean_ir", "resolucion": "1400",
+                    "animar": False, "ventana": {"start": "2026-11-02", "end": ""},
+                }, Path("C:/tmp/work"))
+        self.assertIn("animate", [p.kind for p in plan.pasos])
+
     def test_sin_slots_despues_del_arranque_avisa(self):
         with self.assertRaises(ValueError) as caja:
-            self._plan(ventana={"start": "2026-11-05", "end": "2026-11-09"})
+            self._plan(ventana={"start": "2026-11-05", "end": ""})
         self.assertIn("último", str(caja.exception))
 
 
+class SinAnimar(unittest.TestCase):
+    """Con el switch de animar apagado sale un cuadro, y el log no miente."""
+
+    def _plan(self, **extra) -> recipes.Plan:
+        params = _params(animar=False)
+        params.update(extra)
+        return _plan(params)
+
+    def test_un_solo_cuadro(self):
+        render = _paso(self._plan(), "render")
+        self.assertEqual(_arg(render, "--n"), "1")
+
+    def test_no_habla_del_tope(self):
+        # El tope no tuvo nada que ver: el recorte es del switch de animar.
+        self.assertNotIn("tope", _paso(self._plan(), "download").label)
+
+    def test_la_etiqueta_muestra_el_cuadro_elegido(self):
+        descarga = _paso(self._plan(), "download")
+        self.assertIn("1 slot(s)", descarga.label)
+        self.assertIn("01/11", descarga.label)
+
+
 class ControlesDelCatalogo(unittest.TestCase):
-    """La UI pide el final de las dos maneras, nunca a la vez."""
+    """La ventana de GOES C13 puede quedar sin fecha final; la hora sí manda."""
 
     def _spec(self, nombre: str):
         producto = next(p for p in catalog.PRODUCTS if p.id == "goes_c13")
         return next(s for s in producto.params if s.name == nombre)
 
-    def test_el_toggle_arranca_apagado(self):
-        self.assertIs(self._spec("hasta_ultimo").default, False)
+    def test_la_ventana_permite_rango_abierto(self):
+        self.assertTrue(self._spec("ventana").permite_abierto)
 
-    def test_el_calendario_se_apaga_con_el_toggle(self):
-        # `snapshot` no aparece acá: lo apaga la regla del formulario, no el spec.
+    def test_ya_no_hay_toggle_hasta_el_ultimo(self):
+        nombres = {s.name for p in catalog.PRODUCTS for s in p.params}
+        self.assertNotIn("hasta_ultimo", nombres)
+
+    def test_el_calendario_sigue_enabled_con_ultimos_apagado(self):
         self.assertEqual(
             self._spec("ventana").enabled_when,
-            {"ultimos": False, "hasta_ultimo": False},
+            {"ultimos": False},
         )
 
-    def test_la_hora_final_se_apaga_con_el_toggle(self):
+    def test_la_hora_final_se_apaga_con_el_snapshot(self):
         self.assertEqual(
             self._spec("hora_hasta").enabled_when,
-            {"ultimos": False, "hasta_ultimo": False, "snapshot": False},
+            {"ultimos": False, "snapshot": False},
         )
 
     def test_la_hora_inicial_sigue_mandando(self):

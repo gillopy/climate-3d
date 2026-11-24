@@ -33,6 +33,8 @@ export interface ParamSpec {
   enabled_when: Record<string, unknown> | null;
   /** Se muestra solo cuando otro parametro tiene este valor. */
   visible_when?: Record<string, unknown> | null;
+  /** El rango de fechas puede quedar sin final: "hasta el último cuadro". */
+  permite_abierto?: boolean;
 }
 
 export interface PreviewVariant {

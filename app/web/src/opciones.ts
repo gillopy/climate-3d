@@ -70,11 +70,13 @@ export function ajustarFechas(params: Params): Params {
     const fin = String(ventana.end ?? "");
     const nuevoInicio = inicio && inicio < piso ? piso : inicio;
     const nuevoFin = fin && fin < piso ? piso : fin;
-    if (nuevoInicio !== inicio || nuevoFin !== fin) {
+    // Un final vacío es "hasta el último cuadro": no se rellena solo.
+    const finAjustado = nuevoFin && nuevoFin < nuevoInicio ? nuevoInicio : nuevoFin;
+    if (nuevoInicio !== inicio || finAjustado !== fin) {
       siguiente.ventana = {
         ...ventana,
         start: nuevoInicio,
-        end: nuevoFin < nuevoInicio ? nuevoInicio : nuevoFin,
+        end: finAjustado,
       };
     }
   }

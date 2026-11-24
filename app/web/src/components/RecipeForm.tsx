@@ -30,7 +30,6 @@ const ORDEN_TIEMPO = [
   "minuto",
   "hora_desde",
   "hora_hasta",
-  "hasta_ultimo",
   "corrida",
   "horizonte",
   "trend",
@@ -336,6 +335,13 @@ export function RecipeForm({
     for (const spec of product.params) onChange(spec.name, spec.default as Params[string]);
   }
 
+  // Ventana sin fecha final ("hasta el último cuadro"): el producto deja vacío el
+  // extremo "hasta", la serie llega al último slot publicado y la hora final deja
+  // de mandar. No hace falta el switch de "Animar": pedir la serie es pedirla.
+  const ventanaCruda = params.ventana as RangoFechas | undefined;
+  const rangoAbierto =
+    !!ventanaCruda && typeof ventanaCruda === "object" && !ventanaCruda.end;
+
   // Resumen de la receta: las opciones visibles + el momento elegido.
   const resumen: { clave: string; valor: string }[] = [];
   for (const spec of product.params) {
@@ -361,7 +367,7 @@ export function RecipeForm({
     resumen.push({
       clave: "fecha",
       valor:
-        params.hasta_ultimo === true
+        rangoAbierto
           ? `${formatearFecha(rango.start)} → último cuadro`
           : formatearRango(rango.start, rango.end),
     });
@@ -381,7 +387,8 @@ export function RecipeForm({
   // - Si `ultima` está activo, la fecha/hora/minuto tampoco aplican.
   // - Si `ultimos` está activo, ignora la ventana de fechas, horarios y `animar`
   //   (ya anima los últimos N cuadros).
-  // - `fps` sólo tiene sentido cuando se va a generar animación (`animar` o `ultimos` sin `snapshot`).
+  // - `fps` sólo tiene sentido cuando se va a generar animación (`animar`, `ultimos`
+  //   o una ventana sin final, que siempre anima).
   const estaHabilitado = (spec: ParamSpec): boolean => {
     const base = coincideParams(spec.enabled_when, params);
     if (!base) return false;
@@ -391,9 +398,6 @@ export function RecipeForm({
     const esUltima = params.ultima === true;
     const esUltimos = params.ultimos === true && !esSnapshot;
     const esAnimar = params.animar === true;
-    // "Hasta el último cuadro" arma serie por sí solo: el backend la anima sin
-    // el switch de `animar`, así que `fps` también aplica.
-    const esHastaUltimo = params.hasta_ultimo === true && !esSnapshot;
 
     if (
       (spec.name === "ventana" ||
@@ -412,7 +416,12 @@ export function RecipeForm({
       return false;
     }
 
-    if (spec.name === "fps" && !esAnimar && !esUltimos && !esHastaUltimo) {
+    if (spec.name === "fps" && !esAnimar && !esUltimos && !rangoAbierto) {
+      return false;
+    }
+
+    // Sin fecha final no hay hora final que elegir.
+    if (spec.name === "hora_hasta" && rangoAbierto) {
       return false;
     }
 
@@ -570,6 +579,7 @@ export function RecipeForm({
             value={rango}
             disponibles={disponibles}
             piso={pisoFecha}
+            abierto={spec.permite_abierto}
             disabled={!habilitado}
             onChange={(siguiente) => onChange(spec.name, siguiente)}
           />

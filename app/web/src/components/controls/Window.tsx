@@ -21,12 +21,14 @@ function Extremo({
   fecha,
   abierto,
   alAbrir,
+  accion,
   children,
 }: {
   nombre: string;
   fecha: string;
   abierto: boolean;
   alAbrir: () => void;
+  accion?: ReactNode;
   children: (arriba: boolean) => ReactNode;
 }) {
   const boton = useRef<HTMLButtonElement | null>(null);
@@ -55,6 +57,7 @@ function Extremo({
         <span className="datepick__k">{nombre}</span>
         <span className="datepick__v">{fecha}</span>
       </button>
+      {accion}
       {abierto ? children(arriba) : null}
     </div>
   );
@@ -65,6 +68,11 @@ interface VentanaProps {
   disponibles: Set<string>;
   /** Arranque de datos de la selección (el satélite): hasta dónde irse atrás. */
   piso?: string;
+  /**
+   * El extremo "hasta" se puede dejar vacío: significa "hasta el último cuadro
+   * publicado". Sólo lo declara el producto que sabe resolverlo.
+   */
+  abierto?: boolean;
   disabled?: boolean;
   onChange: (rango: RangoFechas) => void;
 }
@@ -75,41 +83,56 @@ interface VentanaProps {
  * El comienzo manda: si se elige un día posterior al final, la ventana se
  * achica a ese día. El final nunca mueve el comienzo — los días anteriores
  * quedan deshabilitados en su calendario.
+ *
+ * Con `abierto`, el final se puede vaciar ("hasta el último cuadro"): el
+ * extremo queda sin calendario y se vuelve a fijar abriéndolo de nuevo.
  */
 export function VentanaTemporal({
   value,
   disponibles,
   piso,
+  abierto = false,
   disabled,
   onChange,
 }: VentanaProps) {
-  const [abierto, setAbierto] = useState<"start" | "end" | null>(null);
+  const [cual, setCual] = useState<"start" | "end" | null>(null);
   const caja = useRef<HTMLDivElement | null>(null);
   const inicio = ISO.test(value.start) ? value.start : hoyUTC();
-  const fin = ISO.test(value.end) && value.end >= inicio ? value.end : inicio;
+  // `end` vacío = sin fecha final, no "un día suelto".
+  const sinFin = abierto && !ISO.test(value.end);
+  const fin = sinFin
+    ? inicio
+    : ISO.test(value.end) && value.end >= inicio
+      ? value.end
+      : inicio;
   const dias = diasEntre(inicio, fin);
 
   useEffect(() => {
-    if (!abierto) return;
+    if (!cual) return;
     const afuera = (evento: PointerEvent) => {
       if (caja.current && !caja.current.contains(evento.target as Node)) {
-        setAbierto(null);
+        setCual(null);
       }
     };
     document.addEventListener("pointerdown", afuera);
     return () => document.removeEventListener("pointerdown", afuera);
-  }, [abierto]);
+  }, [cual]);
 
   function elegirInicio(iso: string) {
-    onChange({ start: iso, end: iso > fin ? iso : fin });
-    setAbierto(null);
+    onChange({ start: iso, end: sinFin ? "" : iso > fin ? iso : fin });
+    setCual(null);
   }
 
   function elegirFin(iso: string) {
     // El final no toca el comienzo: si quedara antes, ni siquiera es clickeable.
     if (iso < inicio) return;
     onChange({ start: inicio, end: iso });
-    setAbierto(null);
+    setCual(null);
+  }
+
+  function hastaElUltimo() {
+    onChange({ start: inicio, end: "" });
+    setCual(null);
   }
 
   return (
@@ -117,14 +140,14 @@ export function VentanaTemporal({
       className={disabled ? "datepick datepick--off" : "datepick"}
       ref={caja}
       onKeyDown={(evento) => {
-        if (evento.key === "Escape") setAbierto(null);
+        if (evento.key === "Escape") setCual(null);
       }}
     >
       <Extremo
         nombre="Desde"
         fecha={formatearFecha(inicio)}
-        abierto={abierto === "start"}
-        alAbrir={() => setAbierto(abierto === "start" ? null : "start")}
+        abierto={cual === "start"}
+        alAbrir={() => setCual(cual === "start" ? null : "start")}
       >
         {(arriba) => (
           <div
@@ -151,9 +174,23 @@ export function VentanaTemporal({
 
       <Extremo
         nombre="Hasta"
-        fecha={formatearFecha(fin)}
-        abierto={abierto === "end"}
-        alAbrir={() => setAbierto(abierto === "end" ? null : "end")}
+        fecha={sinFin ? "último cuadro" : formatearFecha(fin)}
+        abierto={cual === "end"}
+        alAbrir={() => setCual(cual === "end" ? null : "end")}
+        accion={
+          abierto && !sinFin ? (
+            <button
+              type="button"
+              className="datepick__accion"
+              title="Sin fecha final: hasta el último cuadro publicado"
+              aria-label="Hasta el último cuadro publicado"
+              disabled={disabled}
+              onClick={hastaElUltimo}
+            >
+              ×
+            </button>
+          ) : undefined
+        }
       >
         {(arriba) => (
           <div
@@ -181,10 +218,14 @@ export function VentanaTemporal({
 
       <span
         className="datepick__days"
-        title={formatearRango(inicio, fin)}
-        aria-label={`${dias} ${dias === 1 ? "día" : "días"}`}
+        title={
+          sinFin
+            ? "sin fecha final: hasta el último cuadro publicado"
+            : formatearRango(inicio, fin)
+        }
+        aria-label={sinFin ? "sin fecha final" : `${dias} ${dias === 1 ? "día" : "días"}`}
       >
-        {dias} d
+        {sinFin ? "último" : `${dias} d`}
       </span>
     </div>
   );

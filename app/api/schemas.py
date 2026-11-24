@@ -58,6 +58,11 @@ class ParamSpec(BaseModel):
         description="El control solo se muestra cuando otro parametro vale esto "
         "(por ejemplo, la variante solo para NOAA-20/21).",
     )
+    permite_abierto: bool = Field(
+        default=False,
+        description="El rango de fechas puede quedar sin final ('hasta el ultimo "
+        "cuadro publicado'), por ejemplo en las animaciones de GOES.",
+    )
 
 
 class PreviewVariant(BaseModel):

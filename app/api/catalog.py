@@ -422,7 +422,9 @@ PRODUCTS: list[Product] = [
             ),
             ParamSpec(name="ventana", label="Ventana temporal", kind="date-range",
                       default=_rango(),
-                      enabled_when={"ultimos": False, "hasta_ultimo": False}),
+                      # Sin fecha final = "hasta el último cuadro publicado".
+                      permite_abierto=True,
+                      enabled_when={"ultimos": False}),
             *_params_ultimos(),
             *_params_cuadro(),
             ParamSpec(
@@ -454,15 +456,6 @@ PRODUCTS: list[Product] = [
                 max=24,
                 step=1,
                 help="fin exclusivo: 24 cierra el día UTC completo",
-                enabled_when={"ultimos": False, "hasta_ultimo": False},
-            ),
-            ParamSpec(
-                name="hasta_ultimo",
-                label="Hasta el último cuadro",
-                kind="toggle",
-                default=False,
-                help="ignora la fecha final: baja desde el día elegido hasta el último "
-                     "slot que NOAA ya publicó (el ABI publica con ~20 min de retraso)",
                 enabled_when={"ultimos": False},
             ),
             ParamSpec(name="animar", label="Animar", kind="toggle", default=False,
@@ -1474,7 +1467,7 @@ def _con_snapshot(producto: Product) -> Product:
         return producto
     for spec in producto.params:
         if spec.name in ("animar", "fps", "hora_desde", "hora_hasta",
-                         "ultimos", "ultimos_n", "hasta_ultimo"):
+                         "ultimos", "ultimos_n"):
             # Se suma la condición, no se pisa: "últimos" ya trae la suya.
             spec.enabled_when = {**(spec.enabled_when or {}), "snapshot": False}
     producto.params.insert(
@@ -1615,7 +1608,6 @@ ORDEN_PARAMETROS: tuple[str, ...] = (
     "minuto",
     "hora_desde",
     "hora_hasta",
-    "hasta_ultimo",
     "corrida",
     "horizonte",
     "trend",

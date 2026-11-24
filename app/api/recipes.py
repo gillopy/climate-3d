@@ -119,6 +119,20 @@ def _rango(params: dict[str, Any]) -> tuple[date, date]:
     return inicio, fin
 
 
+def _ventana_abierta(params: dict[str, Any]) -> bool:
+    """True si el rango no tiene fecha final: "hasta el último cuadro publicado".
+
+    La UI deja vacío el extremo "hasta" del calendario (sólo en los productos que
+    declaran `permite_abierto`) y el plan cierra la serie con el último slot que
+    la fuente ya publicó. Para el resto de los productos un rango sin final no
+    tiene sentido y `_rango` lo trata como un día suelto.
+    """
+    bruto = params.get("ventana")
+    if not isinstance(bruto, dict):
+        return False
+    return not str(bruto.get("end") or "").strip()
+
+
 def _px(params: dict[str, Any], por_defecto: int = 1400, tope: int = 4000) -> int:
     """Resolución pedida, acotada a lo que ofrece el catálogo.
 
@@ -427,6 +441,8 @@ def planear(product_id: str, params: dict[str, Any], work: Path) -> Plan:
     quiere_animar = (
         _bool(params, "animar")
         or _ultimos(params) > 0
+        # Un rango sin final ("hasta el último cuadro") es una serie, no un cuadro.
+        or _ventana_abierta(params)
         or (preset_follaje and "animar" not in params)
     )
     if (
@@ -758,9 +774,10 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         # Snapshot: el cuadro exacto que eligió el usuario (hora y minuto UTC).
         desde, n, paso, falta = _slot_snapshot(
             params, fin, lambda k: _ultimos_goes(sat, banda, k)), 1, _PASO_SLOT, True
-    elif _bool(params, "hasta_ultimo"):
-        # "Hasta el último cuadro": el final lo pone NOAA, no el calendario. Anima
-        # aunque `animar` esté apagado: pedir una serie es pedir la serie.
+    elif _ventana_abierta(params):
+        # Sin fecha final: el final lo pone la fuente, no el calendario. Anima
+        # aunque `animar` esté apagado: pedir "desde el 22 hasta donde haya" es
+        # pedir una serie, no un cuadro suelto.
         ventana = _ventana_hasta_ultimo(params, inicio, sat, banda)
         desde, n, paso, falta = _plan_slots(
             set(), _slot_cenital(inicio, _LON_SUBSAT.get(sat.upper(), -75.2)),
@@ -787,14 +804,16 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
     rango = f"{desde:%d/%m %H:%M} → {hasta:%d/%m %H:%M} UTC"
     if n_ultimos:
         etiqueta = f"bajando los últimos {n} slots de {banda} ({sat}) · {rango}"
-    elif _bool(params, "hasta_ultimo"):
+    elif _ventana_abierta(params):
         etiqueta = (f"bajando {banda} de {sat} hasta el último cuadro "
                     f"({n} slot(s) · {rango})")
     else:
         pedidos = (math.ceil((ventana[1] - ventana[0]) / timedelta(minutes=paso))
                    if ventana else n)
         etiqueta = f"bajando {banda} de {sat} ({n} slot(s) · {rango})"
-        if pedidos > n:
+        # El aviso es del TOPE, no de cualquier recorte: con `animar` apagado el
+        # plan también pide un solo cuadro, y decir "tope de 1" era mentira.
+        if n == _MAX_CUADROS_GOES and pedidos > n:
             etiqueta = (f"aviso: tope de {n} cuadros, se pierde el arranque · "
                         f"{etiqueta}")
 
