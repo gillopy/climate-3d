@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from .capas import router as capas_router
 from .catalog import (
     available_dates,
     data_root,
@@ -66,6 +67,8 @@ gestor = JobManager(MEDIA)
 
 # Visor NISAR: busqueda y browse publico, separado del catalogo de recetas.
 app.include_router(nisar_router, prefix="/api/nisar", tags=["nisar"])
+# Capas ambientales del mapa NISAR (WDPA, LandMark, RESOLVE), con cache y proxy.
+app.include_router(capas_router, prefix="/api/capas", tags=["capas"])
 # Earthdata Login interactivo (PACE LANDVI, etc.)
 app.include_router(earthdata_router)
 
