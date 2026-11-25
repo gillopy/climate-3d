@@ -51,8 +51,10 @@ HOST_OBDAAC = "oceandata.sci.gsfc.nasa.gov"
 #: Nombre de la cookie que OB.DAAC usa como sesión para `getfile`.
 COOKIE_SESION = "GETFILE_APP"
 
-#: Dominio con el que se guarda la cookie pegada a mano.
-DOMINIO_COOKIE = ".earthdata.nasa.gov"
+#: Dominio de la cookie pegada a mano. `GETFILE_APP` la emite OB.DAAC para el host de
+#: `getfile`: si se guardara con dominio earthdata.nasa.gov el jar de requests no la
+#: enviaría a oceandata y la verificación fallaría con una cookie perfectamente válida.
+DOMINIO_COOKIE = HOST_OBDAAC
 
 
 class LoginResponse(BaseModel):
@@ -94,10 +96,15 @@ def _normalizar(peticion: CookiesRequest) -> list[dict[str, Any]]:
                 raise HTTPException(
                     status_code=400, detail="Cada cookie necesita `name` y `value` de texto"
                 )
+            dominio = str(cruda.get("domain") or DOMINIO_COOKIE)
+            if nombre == COOKIE_SESION:
+                # La sesión de `getfile` sólo vale para OB.DAAC: se re-ancla ahí aunque
+                # el export la haya traído con el dominio del portal de Earthdata.
+                dominio = DOMINIO_COOKIE
             limpias.append({
                 "name": nombre,
                 "value": valor,
-                "domain": str(cruda.get("domain") or DOMINIO_COOKIE),
+                "domain": dominio,
                 "path": str(cruda.get("path") or "/"),
             })
         utiles = _cookies_utiles(limpias)

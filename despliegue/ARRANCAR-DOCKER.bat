@@ -78,13 +78,16 @@ rem --- sello del commit: que Docker no sirva codigo viejo sin avisar ----------
 set "COMMIT="
 for /f "delims=" %%i in ('git -C "%~dp0.." rev-parse --short HEAD 2^>nul') do set "COMMIT=%%i"
 if defined COMMIT set "CLIMATE3D_COMMIT=%COMMIT%"
-rem Si la imagen no estaba, compose la baja del registry: hay que traerla AHORA
-rem para poder verificar su sello antes de arrancarla, nunca al reves.
+rem Si la imagen no estaba y el objetivo es una referencia de registry, se baja
+rem AHORA para poder verificar su sello antes de arrancarla (nunca al reves).
+rem Con el tag local por defecto no hay nada que bajar: se compila como siempre.
 if not defined YA_EXISTIA (
+if /i not "%OBJETIVO%"=="climate3d:local" (
 echo       Bajando %OBJETIVO%...
 docker pull "%OBJETIVO%"
 if errorlevel 1 goto fallo
 set "YA_EXISTIA=1"
+)
 )
 set "IMAGEN_COMMIT="
 set "SIN_SELLO="

@@ -96,6 +96,24 @@ class GuardarCookiePegada(unittest.TestCase):
         self.assertEqual(guardadas[0]["name"], earthdata.COOKIE_SESION)
         self.assertEqual(guardadas[0]["value"], "valor-de-la-cookie")
 
+    def test_la_cookie_se_guarda_para_obdaac(self) -> None:
+        # `GETFILE_APP` la emite OB.DAAC: si se guardara con dominio
+        # earthdata.nasa.gov, el jar de requests no la mandaría a oceandata y la
+        # verificación fallaría con una cookie válida.
+        self._guardar(True, cookie="valor-de-la-cookie")
+
+        guardadas = json.loads(self.ruta.read_text(encoding="utf-8"))
+        self.assertEqual(guardadas[0]["domain"], earthdata.HOST_OBDAAC)
+        self.assertEqual(earthdata.DOMINIO_COOKIE, earthdata.HOST_OBDAAC)
+
+    def test_una_lista_mal_scopeada_se_reancla_a_obdaac(self) -> None:
+        mal = [{"name": "GETFILE_APP", "value": "v", "domain": ".earthdata.nasa.gov", "path": "/"}]
+
+        self._guardar(True, cookies=mal)
+
+        guardadas = json.loads(self.ruta.read_text(encoding="utf-8"))
+        self.assertEqual(guardadas[0]["domain"], earthdata.HOST_OBDAAC)
+
     def test_acepta_el_formato_nombre_igual_valor(self) -> None:
         self._guardar(True, cookie="GETFILE_APP=valor-limpio")
 

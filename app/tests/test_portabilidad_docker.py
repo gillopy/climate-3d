@@ -175,6 +175,12 @@ class ElSelloDeCommitDeLaImagen(unittest.TestCase):
         self.assertIn("goto fallo", bloque)
         self.assertIn("CLIMATE3D_SIN_SELLO", bloque)
 
+    def test_no_hace_pull_del_tag_local_por_defecto(self) -> None:
+        # Con el tag local no hay registry: un `docker pull` a ciegas fallaría y
+        # cortaría el arranque antes de compilar.
+        cuerpo = _sin_comentarios(self.bat)
+        self.assertIn('if /i not "%OBJETIVO%"=="climate3d:local"', cuerpo)
+
     def test_el_lanzador_verifica_la_imagen_que_va_a_correr(self) -> None:
         # El sello se leía de `climate3d:local` mientras compose podía correr
         # `${IMAGE}`: se verificaba una imagen y se arrancaba otra.
