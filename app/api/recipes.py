@@ -528,11 +528,40 @@ _SLOT_GOES = re.compile(r"_s(\d{4})(\d{3})(\d{2})(\d{2})")
 _LON_SUBSAT = {"G16": -75.2, "G19": -75.2, "G18": -137.2}
 
 
+#: Forma aceptable de un selector que se usa como nombre de carpeta (G19, C13...).
+_NOMBRE_SEGURO = re.compile(r"^[A-Za-z0-9]{2,8}$")
+
+
+def _selector(params: dict[str, Any], nombre: str, defecto: str) -> str:
+    """Valor de un selector del catálogo, con forma segura para una carpeta.
+
+    Los selectores llegan del cuerpo del pedido sin validar contra el catálogo; acá
+    sólo se exige que sean un identificador corto (sin separadores ni puntos), que es
+    lo que el pipeline necesita para nombrar la carpeta de datos.
+    """
+    valor = str(params.get(nombre, defecto)).strip()
+    if not _NOMBRE_SEGURO.match(valor):
+        raise ValueError(
+            f"El parámetro {nombre} tiene un valor inesperado: {valor!r}. "
+            "Se esperaba un identificador corto, como G19 o C13."
+        )
+    return valor
+
+
+def _carpeta_datos(nombre: str) -> Path:
+    """Carpeta bajo la raíz de datos; falla si la ruta resuelta se sale de ella."""
+    from .catalog import data_root  # import local: evita el ciclo
+
+    raiz = data_root().resolve()
+    carpeta = (raiz / nombre).resolve()
+    if carpeta != raiz and raiz not in carpeta.parents:
+        raise ValueError(f"La receta intenta escribir fuera de la raíz de datos: {nombre}")
+    return carpeta
+
+
 def _slots_goes(sat: str, banda: str) -> list[datetime]:
     """Marcas de tiempo con `.nc` real en disco, leidas del nombre del archivo."""
-    from .catalog import data_root  # import local: evita el ciclo catalogo<->recetas
-
-    carpeta = data_root() / f"goes_{banda.lower()}_{sat.lower()}"
+    carpeta = _carpeta_datos(f"goes_{banda.lower()}_{sat.lower()}")
     if not carpeta.is_dir():
         return []
     slots: list[datetime] = []
@@ -754,13 +783,11 @@ def _plan_slots(
 
 def _goes(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
-    sat = str(params.get("satelite", "G19"))
+    sat = _selector(params, "satelite", "G19")
     banda = "C13"
     px = _px(params)
 
-    from .catalog import data_root  # import local: evita el ciclo
-
-    datos_dir = data_root() / f"goes_c13_{sat.lower()}"
+    datos_dir = _carpeta_datos(f"goes_c13_{sat.lower()}")
     n_ultimos = _ultimos(params)
     # La ventana resuelta, para poder contarla en la etiqueta del paso.
     ventana: tuple[datetime, datetime] | None = None
@@ -857,7 +884,7 @@ def _goes(params: dict[str, Any], work: Path) -> Plan:
         # Almacén compartido por aspecto: los cuadros ya renderizados se enlazan en
         # `work/frames` en vez de rehacerse (una ventana que se solapa reusa los días
         # que ya están). El renderer le suma el sello de aspecto a esta ruta.
-        "--reusar", str(data_root() / "cuadros_render" / "goes_c13" / sat.lower()),
+        "--reusar", str(_carpeta_datos(f"cuadros_render/goes_c13/{sat.lower()}")),
         "--lote", "1",
     ]
     if str(params.get("paleta", "clean_ir")) == "clean_ir":
@@ -1699,8 +1726,8 @@ def _cbers(params: dict[str, Any], work: Path) -> Plan:
 # --- GOES: una banda cruda con el diseno del color real ----------------
 def _goes_banda(params: dict[str, Any], work: Path) -> Plan:
     inicio, fin = _rango(params)
-    sat = str(params.get("satelite", "G19"))
-    banda = str(params.get("banda", "C13"))
+    sat = _selector(params, "satelite", "G19")
+    banda = _selector(params, "banda", "C13")
     px = _px(params, 2712)
     n_ultimos = _ultimos(params)
     animar = bool(n_ultimos) or (_bool(params, "animar") and not _snapshot(params))
