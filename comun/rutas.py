@@ -44,15 +44,23 @@ RAIZ = Path(__file__).resolve().parents[1]
 RUTA_LEGADA = r"D:\Users\guill\dataset era5"
 
 
-def ruta_por_defecto() -> Path:
+def ruta_por_defecto(plataforma: str | None = None) -> Path:
     """Raíz de datos de una instalación nueva, sin configuración previa.
 
     En el contenedor es el volumen ``/data``; fuera de él, una carpeta del usuario
     (``~/climate3d/datos``), que no depende de cómo se llame quien lo corre.
+
+    Acepta ``plataforma`` igual que el resto del módulo: resolver por ``os.name``
+    hacía que preguntar por otra plataforma devolviera la ruta del host.
     """
-    if os.name == "nt":
+    if _plataforma(plataforma) == "nt":
         return Path.home() / "climate3d" / "datos"
     return Path(RUTA_CONTENEDOR)
+
+
+def _ruta_legada_existe() -> bool:
+    """Si esta instalación ya venía guardando los datos en la ruta histórica."""
+    return Path(RUTA_LEGADA).is_dir()
 
 #: Punto de montaje del volumen en el contenedor (y default fuera de Windows).
 RUTA_CONTENEDOR = "/data"
@@ -191,10 +199,10 @@ def raiz_datos(
     if _plataforma(plataforma) == "nt":
         # Una instalación vieja puede tener los datos en la ruta histórica: si existe se
         # sigue usando, para no "mudarle" la carpeta a quien ya la tenía así.
-        if Path(RUTA_LEGADA).is_dir():
+        if _ruta_legada_existe():
             return Path(RUTA_LEGADA)
-        return ruta_por_defecto()
-    return Path(RUTA_CONTENEDOR)
+        return ruta_por_defecto(plataforma)
+    return ruta_por_defecto(plataforma)
 
 
 def raiz_media(
