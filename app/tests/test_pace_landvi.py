@@ -35,7 +35,7 @@ class AutenticacionPACE(unittest.TestCase):
 
         mensaje = str(contexto.exception)
         self.assertIn("--cookies", mensaje)
-        self.assertIn("Login Earthdata", mensaje)
+        self.assertIn("Conectar Earthdata", mensaje)
         self.assertNotIn(".netrc", mensaje)
 
     def test_ruta_cookies_earthdata_es_independiente_del_repo(self):

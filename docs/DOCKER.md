@@ -75,7 +75,7 @@ puntuales.
 
 > **Follaje PACE no usa esas claves.** OB.DAAC exige la cookie `GETFILE_APP` que deja el
 > OAuth en un navegador, y el login interactivo no puede abrir una ventana dentro del
-> contenedor. Corré una vez la app nativa (`ARRANCAR.bat`), usá **Login Earthdata** y copiá
+> contenedor. Corré una vez la app nativa (`ARRANCAR.bat`), usá **Conectar Earthdata** (pegar la cookie) y copiá
 > `earthdata_cookies.json` a la carpeta de configuración del contenedor
 > (`$HOME/.config/climate3d/`, con `HOME=/tmp/home` dentro de la imagen; montala si querés
 > que sobreviva al reinicio). Usuario/clave y `~/.netrc` no sirven para `getfile`.

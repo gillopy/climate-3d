@@ -76,13 +76,15 @@ class ArtefactosDelContenedor(unittest.TestCase):
         self.assertNotIn("python cdsapi\n", texto)
         self.assertRegex(texto, r"cdsapi==[0-9]")
 
-    def test_el_login_no_manda_instalar_a_mano(self) -> None:
-        # S1 (auditoría): el 500 de /api/earthdata/login le decía al operador que
-        # corriera `pip install playwright` dentro del .venv que el lock mantiene
-        # fijo. Ahora la salida es el grupo declarado en pyproject.
+    def test_el_login_no_depende_de_un_navegador_automatizado(self) -> None:
+        # S1: el login de Earthdata abría Chrome/Edge con Playwright (dependencia
+        # pesada e inservible en Docker). Ahora la cookie se pega a mano y se
+        # verifica contra OB.DAAC, así que el proyecto no menciona Playwright.
         earthdata = (RAIZ / "app" / "api" / "earthdata.py").read_text(encoding="utf-8")
-        self.assertNotIn("-m pip install playwright", earthdata)
-        self.assertIn("uv sync --group browser", earthdata)
+        for prohibido in ("import playwright", "sync_playwright", "PLAYWRIGHT_BROWSERS_PATH"):
+            self.assertNotIn(prohibido, earthdata)
+        pyproject = (RAIZ / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertNotIn("playwright", pyproject.lower())
 
     def test_compose_publica_solo_en_loopback(self) -> None:
         texto = (DESPLIEGUE / "docker-compose.yml").read_text(encoding="utf-8")

@@ -1,20 +1,24 @@
-"""Earthdata Login interactivo: abre navegador, captura cookies, las guarda.
+"""Earthdata Login sin automatizar navegador: el operador pega la cookie.
 
-OB.DAAC (oceandata.sci.gsfc.nasa.gov) exige la cookie de sesión `GETFILE_APP`,
-que solo se obtiene completando el flujo OAuth de Earthdata (URS) en un navegador
-real. Este módulo abre Chrome/Edge en modo visible, deja al usuario loguearse y
-captura las cookies resultantes para reutilizarlas en `descargar/pace_landvi.py`.
+OB.DAAC (oceandata.sci.gsfc.nasa.gov) exige la cookie de sesión `GETFILE_APP`, que
+sólo se obtiene completando el flujo OAuth de Earthdata (URS) en un navegador real.
+Antes este módulo abría Chrome/Edge con Playwright para capturarla: una dependencia
+pesada (navegador incluido) al servicio de una sola pantalla, y además inservible
+dentro de Docker, donde no hay display.
 
-El navegador se abre en la máquina donde corre la API: funciona con la app nativa
-(`ARRANCAR.bat`). Dentro de Docker no hay display, así que el endpoint responde
-409 y las cookies se llevan desde la app nativa o vía `~/.netrc`.
+Ahora el flujo es manual y funciona igual en nativo y en contenedor:
+
+1. La UI te manda a `GETFILE` en tu navegador y te pide iniciar sesión en URS.
+2. Copiás la cookie `GETFILE_APP` desde las herramientas de desarrollo (o el
+   contenido de `earthdata_cookies.json` si ya lo tenés) y la pegás en la consola.
+3. `POST /api/earthdata/cookies` la verifica contra OB.DAAC y, sólo si autentica,
+   la guarda con permisos de dueño para que la use `descargar/pace_landvi.py`.
 """
 from __future__ import annotations
 
 import json
 import os
 import sys
-import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -44,6 +48,12 @@ GETFILE = (
 DOMINIOS = ("urs.earthdata.nasa.gov", "oceandata.sci.gsfc.nasa.gov", "earthdata.nasa.gov")
 HOST_OBDAAC = "oceandata.sci.gsfc.nasa.gov"
 
+#: Nombre de la cookie que OB.DAAC usa como sesión para `getfile`.
+COOKIE_SESION = "GETFILE_APP"
+
+#: Dominio con el que se guarda la cookie pegada a mano.
+DOMINIO_COOKIE = ".earthdata.nasa.gov"
+
 
 class LoginResponse(BaseModel):
     ok: bool
@@ -52,12 +62,63 @@ class LoginResponse(BaseModel):
     message: str
 
 
+class CookiesRequest(BaseModel):
+    """Cookie pegada a mano.
+
+    Acepta las dos formas cómodas: el valor pelado de `GETFILE_APP` (o
+    `GETFILE_APP=valor`, tal como se copia del navegador) o la lista completa de
+    cookies de un `earthdata_cookies.json` exportado.
+    """
+
+    cookie: str | None = None
+    cookies: list[dict[str, Any]] | None = None
+
+
 def _cookies_utiles(cookies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Filtra las cookies de los dominios de Earthdata/OB.DAAC."""
     return [
         c for c in cookies
         if any(dominio in c.get("domain", "") for dominio in DOMINIOS)
     ]
+
+
+def _normalizar(peticion: CookiesRequest) -> list[dict[str, Any]]:
+    """Convierte lo que pegó el operador en la lista de cookies de la sesión."""
+    if peticion.cookies:
+        limpias: list[dict[str, Any]] = []
+        for cruda in peticion.cookies:
+            if not isinstance(cruda, dict):
+                raise HTTPException(status_code=400, detail="Cada cookie debe ser un objeto")
+            nombre, valor = cruda.get("name"), cruda.get("value")
+            if not isinstance(nombre, str) or not isinstance(valor, str) or not nombre:
+                raise HTTPException(
+                    status_code=400, detail="Cada cookie necesita `name` y `value` de texto"
+                )
+            limpias.append({
+                "name": nombre,
+                "value": valor,
+                "domain": str(cruda.get("domain") or DOMINIO_COOKIE),
+                "path": str(cruda.get("path") or "/"),
+            })
+        utiles = _cookies_utiles(limpias)
+        if not utiles:
+            raise HTTPException(
+                status_code=400,
+                detail="Esas cookies no son de Earthdata/OB.DAAC: falta el dominio correcto.",
+            )
+        return utiles
+
+    pegada = (peticion.cookie or "").strip()
+    if not pegada:
+        raise HTTPException(
+            status_code=400,
+            detail="Pegá el valor de la cookie GETFILE_APP (o el contenido de earthdata_cookies.json).",
+        )
+    if "=" in pegada and "\n" not in pegada:
+        nombre, _, valor = pegada.partition("=")
+        if nombre.strip().upper() == COOKIE_SESION:
+            pegada = valor.strip()
+    return [{"name": COOKIE_SESION, "value": pegada, "domain": DOMINIO_COOKIE, "path": "/"}]
 
 
 def _pedir_prueba(cookies: list[dict[str, Any]], timeout: tuple[float, float]):
@@ -92,154 +153,52 @@ def _estado_sesion(
     return host == HOST_OBDAAC
 
 
-def _chromium_instalado() -> Path | None:
-    """Busca un chrome.exe ya instalado en el cache de Playwright.
+@router.post("/cookies", response_model=LoginResponse)
+def guardar_cookies(peticion: CookiesRequest) -> LoginResponse:
+    """Verifica y guarda la cookie de sesión que pegó el operador.
 
-    El paquete Python puede esperar una revisión distinta de la que hay en disco;
-    apuntar al ejecutable existente evita tener que descargar otro navegador.
+    Nunca guarda algo sin verificar: si OB.DAAC no confirma la sesión, responde
+    400 (cookie vencida o equivocada) o 503 (no se pudo comprobar por red) y el
+    archivo anterior queda intacto.
     """
-    ruta_cache = os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or ""
-    cache = (
-        Path(ruta_cache) if ruta_cache
-        else Path.home() / "AppData" / "Local" / "ms-playwright"
-    )
-    if not cache.is_dir():
-        return None
-    for carpeta in sorted(cache.glob("chromium*"), reverse=True):
-        candidato = next(carpeta.rglob("chrome.exe"), None)
-        if candidato is not None and candidato.is_file():
-            return candidato
-    return None
-
-
-@router.get("/login", response_model=LoginResponse)
-def login_earthdata_interactive() -> LoginResponse:
-    """Abre Chrome/Edge visible, espera el login y guarda las cookies de sesión."""
-    if os.environ.get("CLIMATE3D_CONTENEDOR"):
+    cookies = _normalizar(peticion)
+    estado = _estado_sesion(cookies)
+    if estado is None:
         raise HTTPException(
-            status_code=409,
+            status_code=503,
             detail=(
-                "El login con navegador no está disponible dentro de Docker: la "
-                "ventana se abriría en el contenedor, sin pantalla. Corré una vez la "
-                "app nativa (ARRANCAR.bat), usá 'Login Earthdata' y copiá "
-                "earthdata_cookies.json a la carpeta de configuración del contenedor. "
-                "Usuario/clave y ~/.netrc no sirven para getfile."
+                "No se pudo verificar la cookie contra OB.DAAC (sin red o el sitio no "
+                "respondió). Probá de nuevo en un rato: no se guardó nada."
             ),
         )
-
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError as exc:
+    if not estado:
         raise HTTPException(
-            status_code=500,
+            status_code=400,
             detail=(
-                "Falta la dependencia opcional `browser`. No instales paquetes a mano "
-                "en el .venv: corré `uv sync --group browser` y reiniciá la consola "
-                "(eso deja la versión y el hash en uv.lock). Si tenés Chrome o Edge "
-                "instalado, no hace falta bajar un Chromium aparte."
+                "La cookie no autentica contra OB.DAAC. Copiá de nuevo `GETFILE_APP` "
+                "después de iniciar sesión en https://urs.earthdata.nasa.gov."
             ),
-        ) from exc
+        )
 
     cookies_path = ruta_cookies_earthdata()
     cookies_path.parent.mkdir(parents=True, exist_ok=True)
-
-    opciones_base: dict[str, Any] = {
-        "headless": False,
-        "args": ["--start-maximized"],
-    }
-
-    with sync_playwright() as p:
-        navegador = None
-        # Preferir el navegador real del usuario (Chrome/Edge instalados) para
-        # que no parezca un "navegador de testing". `channel` usa el ejecutable
-        # del sistema; si no está, caemos al Chromium del cache de Playwright.
-        canals = ["chrome", "msedge"]
-        ultimo_error: Exception | None = None
-        for canal in canals:
-            try:
-                navegador = p.chromium.launch(channel=canal, **opciones_base)
-                break
-            except Exception as exc:  # canal no instalado
-                ultimo_error = exc
-        if navegador is None:
-            chrome_path = _chromium_instalado()
-            opciones = dict(opciones_base)
-            if chrome_path is not None:
-                opciones["executable_path"] = str(chrome_path)
-            try:
-                navegador = p.chromium.launch(**opciones)
-            except Exception as exc:
-                ultimo_error = exc
-        if navegador is None:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "No se pudo abrir el navegador. Instalá Chrome o Edge, o el "
-                    "Chromium de Playwright. "
-                    f"Detalle: {ultimo_error}"
-                ),
-            ) from ultimo_error
-
-        contexto = navegador.new_context(no_viewport=True)
-        pagina = contexto.new_page()
-
-        # Arrancar desde getfile: redirige a URS para loguearse y, al volver,
-        # OB.DAAC asienta la cookie GETFILE_APP que necesita el descargador.
-        try:
-            pagina.goto(GETFILE, wait_until="domcontentloaded", timeout=60000)
-        except Exception as exc:
-            navegador.close()
-            raise HTTPException(
-                status_code=500, detail=f"No se pudo abrir la página de login: {exc}"
-            ) from exc
-
-        # Esperar a que el usuario complete el login. No basta con que exista
-        # GETFILE_APP: apenas se toca getfile se setea con urs_token=0 y sigue
-        # devolviendo la página de login. Validamos de verdad con un request de
-        # prueba hasta que el redirect ya no caiga en URS.
-        max_espera = 300  # 5 minutos
-        inicio = time.time()
-        capturadas: list[dict[str, Any]] = []
-        # Espacio entre validaciones: cada una hace un GET a OB.DAAC.
-        siguiente_validacion = 0.0
-
-        while time.time() - inicio < max_espera:
-            transcurrido = time.time() - inicio
-            if transcurrido >= siguiente_validacion:
-                utiles = _cookies_utiles(contexto.cookies())
-                if utiles and _estado_sesion(utiles) is True:
-                    capturadas = utiles
-                    break
-                siguiente_validacion = transcurrido + 3
-            time.sleep(1)
-
-        navegador.close()
-
-    if not capturadas:
-        raise HTTPException(
-            status_code=408,
-            detail=(
-                "No se pudo verificar la sesión de Earthdata. Asegurate de "
-                "completar el login en la ventana del navegador y de tener una "
-                "conexión estable. Probá de nuevo."
-            ),
-        )
-
     cookies_path.write_text(
-        json.dumps(capturadas, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(cookies, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     try:
-        # Las cookies son una sesión viva: que no las lea cualquiera en POSIX.
         os.chmod(cookies_path, 0o600)
-    except OSError:
-        pass
+    except OSError as exc:  # pragma: no cover - plataformas sin chmod
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pudieron restringir los permisos de {cookies_path}: {exc}",
+        ) from exc
 
     return LoginResponse(
         ok=True,
         cookies_file=str(cookies_path),
-        cookies_count=len(capturadas),
+        cookies_count=len(cookies),
         message=(
-            f"Sesión guardada: {len(capturadas)} cookies de Earthdata. "
+            f"Sesión guardada: {len(cookies)} cookie(s) de Earthdata. "
             "Ya podés generar PACE LANDVI."
         ),
     )
@@ -247,11 +206,11 @@ def login_earthdata_interactive() -> LoginResponse:
 
 @router.get("/cookies-status")
 def cookies_status() -> dict[str, Any]:
-    """Devuelve si hay una sesión de Earthdata válida (verificada contra OB.DAAC).
+    """Informa si hay una sesión guardada y si todavía autentica.
 
-    Un error de red **no** invalida las cookies: se informa ``verified: False`` y
-    se conservan. Sólo se descarta el archivo cuando OB.DAAC confirma que la
-    sesión ya no autentica (el redirect vuelve a URS).
+    Sólo lee: un GET no borra nada. Si la sesión venció se informa
+    ``verified: false`` con ``stale: true`` y el operador decide (volver a pegar
+    la cookie o usar `POST /api/earthdata/cookies-clear`).
     """
     cookies_path = ruta_cookies_earthdata()
     if not cookies_path.is_file():
@@ -267,7 +226,7 @@ def cookies_status() -> dict[str, Any]:
 
     estado = _estado_sesion(cookies, timeout=(3, 8))
     if estado is None:
-        # Sin red no se puede afirmar que venció: no se borra nada.
+        # Sin red no se puede afirmar que venció: se informa sin veredicto.
         return {
             "ok": True,
             "configured": True,
@@ -276,22 +235,13 @@ def cookies_status() -> dict[str, Any]:
             "file": str(cookies_path),
         }
 
-    if not estado:
-        cookies_path.unlink(missing_ok=True)
-        return {
-            "ok": True,
-            "configured": False,
-            "verified": True,
-            "cookies_count": 0,
-            "file": str(cookies_path),
-        }
-
     return {
         "ok": True,
         "configured": True,
-        "verified": True,
+        "verified": estado,
+        "stale": not estado,
         "cookies_count": len(cookies),
-        "getfile": True,
+        "getfile": estado,
         "file": str(cookies_path),
     }
 

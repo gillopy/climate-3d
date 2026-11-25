@@ -255,7 +255,7 @@ https://oceandata.sci.gsfc.nasa.gov/getfile/
 
 - **Autenticación**: `--cookies navegador.json` (formato de Playwright:
   `[{name, value, domain, path}]`). Si no se pasa, se usa automáticamente
-  `earthdata_cookies.json`, el archivo que guarda el botón **Login Earthdata** de la
+  `earthdata_cookies.json`, el archivo que guarda el botón **Conectar Earthdata** de la
   consola junto a `config.json`. `EARTHDATA_USER`/`EARTHDATA_PASSWORD` y `~/.netrc`
   **no** sirven para `getfile`: el redirect a URS no conserva la autenticación básica y
   termina en la página de login.

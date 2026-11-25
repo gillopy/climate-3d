@@ -11,11 +11,14 @@ import { Select } from "./controls/Select";
 import { FechaUnica, VentanaTemporal } from "./controls/Window";
 import { formatearFecha, formatearRango } from "./controls/Calendar";
 import { coincideParams, opcionesVisibles, pisoDeSatelite } from "../opciones";
-import { earthdataLogin, earthdataCookiesStatus } from "../api";
+import { earthdataSaveCookies, earthdataCookiesStatus } from "../api";
 
 // El momento de captura y sus banderas ("snapshot", "ultimo", "ultimos") van
 // juntos en el mismo bloque temporal para que los controles dependientes se
 // vean lado a lado.
+// Misma URL que usa el backend para disparar el OAuth de Earthdata.
+const EARTHDATA_GETFILE =
+  "https://oceandata.sci.gsfc.nasa.gov/getfile/";
 const ORDEN_TIEMPO = [
   "snapshot",
   "ultimo",
@@ -234,6 +237,8 @@ export function RecipeForm({
   // Earthdata login interactivo para PACE LANDVI (follaje)
   const [earthdataConfigurado, setEarthdataConfigurado] = useState(false);
   const [earthdataLogueando, setEarthdataLogueando] = useState(false);
+  const [earthdataPegando, setEarthdataPegando] = useState(false);
+  const [earthdataCookie, setEarthdataCookie] = useState("");
   const [earthdataError, setEarthdataError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -244,19 +249,29 @@ export function RecipeForm({
     }
   }, [product.id]);
 
-  async function loginEarthdata() {
+  /** Guarda la cookie GETFILE_APP que el operador copió de su navegador. */
+  async function guardarCookieEarthdata() {
     if (product.id !== "follaje") return;
+    const pegada = earthdataCookie.trim();
+    if (!pegada) {
+      setEarthdataError("Pegá el valor de la cookie GETFILE_APP.");
+      return;
+    }
     setEarthdataLogueando(true);
     setEarthdataError(null);
     try {
-      const resp = await earthdataLogin();
+      const resp = await earthdataSaveCookies({ cookie: pegada });
       if (resp.ok) {
         setEarthdataConfigurado(true);
+        setEarthdataPegando(false);
+        setEarthdataCookie("");
       } else {
         setEarthdataError(resp.message);
       }
     } catch (exc) {
-      setEarthdataError(exc instanceof Error ? exc.message : "Error de login");
+      setEarthdataError(
+        exc instanceof Error ? exc.message : "No se pudo guardar la cookie",
+      );
     } finally {
       setEarthdataLogueando(false);
     }
@@ -727,10 +742,40 @@ export function RecipeForm({
                   type="button"
                   className="btn btn--secondary"
                   disabled={earthdataLogueando || busy}
-                  onClick={loginEarthdata}
+                  onClick={() => setEarthdataPegando((abierto) => !abierto)}
                 >
-                  {earthdataLogueando ? "Abriendo navegador…" : "Login Earthdata"}
+                  {earthdataPegando ? "Cerrar" : "Conectar Earthdata"}
                 </button>
+              )}
+              {earthdataPegando && !earthdataConfigurado && (
+                <div className="earthdata-pegar">
+                  <p className="earthdata-ayuda">
+                    Abrí{" "}
+                    <a href={EARTHDATA_GETFILE} target="_blank" rel="noreferrer">
+                      OB.DAAC
+                    </a>{" "}
+                    e iniciá sesión en Earthdata. Después copiá la cookie{" "}
+                    <code>GETFILE_APP</code> (DevTools → Application → Cookies →
+                    earthdata.nasa.gov) y pegala acá.
+                  </p>
+                  <input
+                    type="password"
+                    className="earthdata-cookie"
+                    placeholder="valor de GETFILE_APP"
+                    value={earthdataCookie}
+                    onChange={(evento) => setEarthdataCookie(evento.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    disabled={earthdataLogueando || busy}
+                    onClick={guardarCookieEarthdata}
+                  >
+                    {earthdataLogueando ? "Verificando…" : "Guardar cookie"}
+                  </button>
+                </div>
               )}
               {earthdataError && (
                 <span className="earthdata-error" role="alert">
