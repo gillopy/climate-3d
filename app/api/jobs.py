@@ -385,6 +385,9 @@ class JobManager:
         # Pedidos que pueden estar vivos a la vez. `max_historial` acota la lista
         # y solo evicta jobs terminales; esto acota lo que se acepta.
         self.max_admision = max_admision if max_admision is not None else _max_admision_entorno()
+        # Pedidos ya admitidos que todavia estan planeando: ocupan lugar antes de
+        # existir en self.jobs, si no dos POST simultaneos pasan el mismo control.
+        self._en_vuelo = 0
         # Un solo worker: los pedidos se encolan en vez de pelearse la maquina.
         self._un_slot = asyncio.Semaphore(1)
         self._tareas: set[asyncio.Task] = set()
@@ -442,19 +445,27 @@ class JobManager:
 
     async def crear_async(self, product_id: str, params: dict[str, Any]) -> Job:
         job = self._preparar_job(product_id, params)
+        # Reservar el lugar antes de planear: entre el control y el `await` no hay
+        # ningun punto de suspension, asi que dos pedidos simultaneos no pueden ver
+        # el mismo `en_curso()` y pasar los dos.
         self._verificar_admision()
+        self._en_vuelo += 1
         try:
             plan_armado = await asyncio.to_thread(planear, product_id, job.params, job.work)
         except ValueError as exc:
             raise ValueError(str(exc)) from exc
+        finally:
+            self._en_vuelo -= 1
         return self._agendar_job(job, plan_armado)
 
     def obtener(self, job_id: str) -> Job | None:
         return self.jobs.get(job_id)
 
     def en_curso(self) -> int:
-        """Pedidos vivos: en cola o corriendo. Los terminales no ocupan lugar."""
-        return sum(1 for job in self.jobs.values() if job.status not in TERMINALES)
+        """Pedidos vivos: planeando, en cola o corriendo. Los terminales no ocupan lugar."""
+        return self._en_vuelo + sum(
+            1 for job in self.jobs.values() if job.status not in TERMINALES
+        )
 
     def _verificar_admision(self) -> None:
         """Frena el pedido cuando ya hay `max_admision` trabajos vivos.
@@ -506,14 +517,9 @@ class JobManager:
 
     async def seguir(self, job_id: str) -> AsyncIterator[dict[str, Any]]:
         job = self.jobs[job_id]
-        # La cota se mira antes de abrir la cola: la cola de una conexion que no
-        # llega a existir tampoco ocupa memoria.
-        if not self.admite_suscriptor(job):
-            raise SinCupo(
-                f"Este job ya tiene {len(job.subs)} conexiones de progreso abiertas "
-                f"(el maximo es {SSE_MAX_SUBS}). Cerra una pestaña o espera a que "
-                "alguna se cierre y volve a abrir el stream."
-            )
+        # La cota de conexiones la decide el endpoint antes de abrir la respuesta
+        # (`admite_suscriptor`): re-chequearla aca solo podria abortar un stream ya
+        # abierto, asi que la cola se crea y se registra sin segundo control.
         cola = _ColaSSE(SSE_MAXSIZE)
         job.subs.add(cola)
         try:

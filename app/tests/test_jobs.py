@@ -554,10 +554,9 @@ class StreamDeProgreso(unittest.IsolatedAsyncioTestCase):
             abiertas.append(flujo)
         self.assertFalse(self.gestor.admite_suscriptor(trabajo))
 
-        de_mas = self.gestor.seguir(trabajo.id)
-        with self.assertRaises(jobs.SinCupo):
-            await de_mas.__anext__()
-
+        # El corte por cupo lo decide el endpoint (`main.eventos`) ANTES de abrir la
+        # respuesta: si se re-chequeara aca, la conexion ya estaria abierta y solo
+        # podria abortarse a mitad de stream en vez de devolver un 429 limpio.
         for flujo in abiertas:
             await flujo.aclose()
         self.assertEqual(trabajo.subs, set(), "el cupo no se libera al cerrar la conexion")

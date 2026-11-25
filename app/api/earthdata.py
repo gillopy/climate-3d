@@ -189,15 +189,21 @@ def guardar_cookies(peticion: CookiesRequest) -> LoginResponse:
 
     cookies_path = ruta_cookies_earthdata()
     cookies_path.parent.mkdir(parents=True, exist_ok=True)
-    cookies_path.write_text(
-        json.dumps(cookies, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    datos = json.dumps(cookies, ensure_ascii=False, indent=2).encode("utf-8")
+    # Se escribe en un temporal con modo 0600 desde el dia cero y recien despues se
+    # publica: si el chmod fallara, la cookie anterior queda intacta y la nueva nunca
+    # existio con permisos amplios.
+    temporal = cookies_path.with_suffix(cookies_path.suffix + ".nuevo")
     try:
-        os.chmod(cookies_path, 0o600)
+        descriptor = os.open(temporal, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "wb") as fh:
+            fh.write(datos)
+        os.replace(temporal, cookies_path)
     except OSError as exc:  # pragma: no cover - plataformas sin chmod
+        temporal.unlink(missing_ok=True)
         raise HTTPException(
             status_code=500,
-            detail=f"No se pudieron restringir los permisos de {cookies_path}: {exc}",
+            detail=f"No se pudo guardar {cookies_path} con permisos de dueño: {exc}",
         ) from exc
 
     return LoginResponse(

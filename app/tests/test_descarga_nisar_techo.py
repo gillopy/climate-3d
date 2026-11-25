@@ -12,7 +12,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-RAIZ = Path(__file__).resolve().parents[1]
+# Los tests viven en app/tests/: la raiz del repo esta dos niveles arriba
+# (con parents[1] el modulo solo funcionaba bajo el descubridor de unittest).
+RAIZ = Path(__file__).resolve().parents[2]
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
