@@ -68,13 +68,17 @@ class ArtefactosDelContenedor(unittest.TestCase):
         self.assertIn('mkdir -p "$MEDIA"', entrypoint)
         self.assertNotIn("/app/app/var/media", entrypoint)
 
-    def test_cdsapi_se_instala_con_version_fija(self) -> None:
-        # S1 (auditoría): `uv sync --frozen` fija todo el entorno, y esta línea era
-        # la única excepción: un `uv pip install cdsapi` a secas resolvía versión y
-        # dependencias desde el índice en cada build, sin hash ni entrada en el lock.
+    def test_cdsapi_entra_por_el_lock(self) -> None:
+        # S1 (auditoría): `uv sync --frozen` fija todo el entorno y esta era la única
+        # excepción: un `uv pip install cdsapi` a secas resolvía versión y dependencias
+        # desde el índice en cada build, sin hash ni entrada en el lock. Ahora entra por
+        # el grupo `era5`, así que su versión y sus hashes viven en uv.lock.
         texto = (DESPLIEGUE / "Dockerfile").read_text(encoding="utf-8")
-        self.assertNotIn("python cdsapi\n", texto)
-        self.assertRegex(texto, r"cdsapi==[0-9]")
+        self.assertNotIn("python cdsapi", texto)
+        self.assertNotIn("uv pip install", texto)
+        self.assertIn("--group era5", texto)
+        lock = (RAIZ / "uv.lock").read_text(encoding="utf-8")
+        self.assertIn('name = "cdsapi"', lock)
 
     def test_el_login_no_depende_de_un_navegador_automatizado(self) -> None:
         # S1: el login de Earthdata abría Chrome/Edge con Playwright (dependencia
