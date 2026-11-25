@@ -374,6 +374,25 @@ class Admision(Base):
     mira unicamente los jobs no terminales.
     """
 
+    def test_un_pedido_sin_parametros_usa_los_defaults_del_catalogo(self):
+        # La UI arma el formulario con los defaults del catálogo; la API tiene que
+        # comportarse igual. Antes, `params: {}` planeaba otra cosa (y podía fallar el
+        # render por falta de la fecha que la UI sí manda).
+        gestor = jobs.JobManager(self.media)
+
+        trabajo = gestor._preparar_job("snapshot_paraguay", {})
+
+        self.assertEqual(trabajo.params["capa"], "truecolor")
+        self.assertIn("fecha", trabajo.params)
+        self.assertIn("margen", trabajo.params)
+
+    def test_un_parametro_explicito_gana_sobre_el_default(self):
+        gestor = jobs.JobManager(self.media)
+
+        trabajo = gestor._preparar_job("snapshot_paraguay", {"capa": "falsecolor"})
+
+        self.assertEqual(trabajo.params["capa"], "falsecolor")
+
     def _gestor_con(self, cuantos: int, **kwargs) -> "jobs.JobManager":
         gestor = jobs.JobManager(self.media, **kwargs)
         for numero in range(cuantos):

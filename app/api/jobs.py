@@ -399,6 +399,11 @@ class JobManager:
         if producto is None:
             raise ValueError(f"Producto desconocido: {product_id}")
 
+        # El catalogo declara el default de cada control y la UI lo manda armado: quien
+        # llama a la API sin pasar un parametro tiene que obtener lo mismo que el boton,
+        # no un plan distinto (y a veces roto) por falta de ese valor.
+        params = {**{p.name: p.default for p in producto.params}, **params}
+
         job_id = uuid.uuid4().hex[:12]
         # `descargar` no cambia el resultado del render: se excluye de la firma
         # para que activar la descarga no invalide cuadros ya hechos.
