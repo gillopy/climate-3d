@@ -133,9 +133,9 @@ def login_earthdata_interactive() -> LoginResponse:
         raise HTTPException(
             status_code=500,
             detail=(
-                "Playwright no está instalado en el entorno de la app. "
-                "Ejecutá `.venv\\Scripts\\python.exe -m pip install playwright` "
-                "(o `uv pip install playwright`) y reintentá. Si tenés Chrome o Edge "
+                "Falta la dependencia opcional `browser`. No instales paquetes a mano "
+                "en el .venv: corré `uv sync --group browser` y reiniciá la consola "
+                "(eso deja la versión y el hash en uv.lock). Si tenés Chrome o Edge "
                 "instalado, no hace falta bajar un Chromium aparte."
             ),
         ) from exc

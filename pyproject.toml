@@ -51,6 +51,17 @@ dev = [
     "requests==2.34.*",
 ]
 
+browser = [
+    # Login interactivo de Earthdata (app/api/earthdata.py). Es opcional porque el
+    # resto de la consola no lo usa; se instala con `uv sync --group browser`.
+    "playwright==1.*",
+]
+era5 = [
+    # `descargar_era5.py` lo importa. Va como grupo y no como dependencia dura
+    # porque el .nc de ERA5 ya suele estar bajado; la imagen lo instala pineado.
+    "cdsapi==0.7.*",
+]
+
 [tool.uv]
 # El repo no es un paquete instalable: uv solo construye el entorno.
 package = false

@@ -68,6 +68,22 @@ class ArtefactosDelContenedor(unittest.TestCase):
         self.assertIn('mkdir -p "$MEDIA"', entrypoint)
         self.assertNotIn("/app/app/var/media", entrypoint)
 
+    def test_cdsapi_se_instala_con_version_fija(self) -> None:
+        # S1 (auditoría): `uv sync --frozen` fija todo el entorno, y esta línea era
+        # la única excepción: un `uv pip install cdsapi` a secas resolvía versión y
+        # dependencias desde el índice en cada build, sin hash ni entrada en el lock.
+        texto = (DESPLIEGUE / "Dockerfile").read_text(encoding="utf-8")
+        self.assertNotIn("python cdsapi\n", texto)
+        self.assertRegex(texto, r"cdsapi==[0-9]")
+
+    def test_el_login_no_manda_instalar_a_mano(self) -> None:
+        # S1 (auditoría): el 500 de /api/earthdata/login le decía al operador que
+        # corriera `pip install playwright` dentro del .venv que el lock mantiene
+        # fijo. Ahora la salida es el grupo declarado en pyproject.
+        earthdata = (RAIZ / "app" / "api" / "earthdata.py").read_text(encoding="utf-8")
+        self.assertNotIn("-m pip install playwright", earthdata)
+        self.assertIn("uv sync --group browser", earthdata)
+
     def test_compose_publica_solo_en_loopback(self) -> None:
         texto = (DESPLIEGUE / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn('"127.0.0.1:${PORT:-8080}:8000"', texto)

@@ -455,7 +455,7 @@ usuario y la clave no alcanzan para `getfile`: hace falta la cookie `GETFILE_APP
 el OAuth. Con el producto *Follaje* abierto, tocá **Login Earthdata**, completá el login en
 la ventana de Chrome/Edge y la app guarda las cookies junto a `config.json` (en Windows,
 `%LOCALAPPDATA%\climate3d\earthdata_cookies.json`); el descargador las usa solo. El botón
-necesita Playwright en el venv (`pip install playwright`); si falta, la consola te lo dice.
+necesita Playwright en el venv (`uv sync --group browser`, que deja versión y hash en `uv.lock`); si falta, la consola te lo dice.
 Para la CLI también sirve `--cookies <archivo.json>`. El póster promedia los índices de la semana y recién después divide —al
 revés deja mucho más ruido—, y dibuja en **Robinson** sobre fondo blanco. Los scripts son
 [`descargar/pace_landvi.py`](./descargar/pace_landvi.py) y
