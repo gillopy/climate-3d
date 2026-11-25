@@ -6,9 +6,11 @@ del repo.
 """
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +39,8 @@ from .schemas import (
     JobSummary,
     RecipeRequest,
 )
+
+log = logging.getLogger("climate3d.api")
 
 RAIZ_APP = Path(__file__).resolve().parents[1]
 RAIZ_REPO = RAIZ_APP.parent
@@ -226,8 +230,19 @@ async def eventos(job_id: str, request: Request) -> StreamingResponse:
 
 
 @app.exception_handler(Exception)
-async def error_no_controlado(_: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
+async def error_no_controlado(request: Request, exc: Exception) -> JSONResponse:
+    """Error interno sin filtrar internos.
+
+    El detalle (tipo de excepcion, rutas absolutas, mensajes de librerias) va al log
+    del servidor con un id de incidente; el cliente recibe ese id para citarlo. Antes
+    el cuerpo traia `Tipo: mensaje`, que es informacion de la maquina del operador.
+    """
+    incidente = uuid.uuid4().hex[:12]
+    log.exception("error no controlado [%s] %s %s", incidente, request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Error interno.", "incidente": incidente},
+    )
 
 
 # Build del frontend: un solo puerto para toda la app.
