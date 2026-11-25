@@ -29,7 +29,7 @@ from .catalog import (
     productos_disponibles,
 )
 from .earthdata import router as earthdata_router
-from .jobs import JobManager
+from .jobs import JobManager, SinCupo
 from .nisar import router as nisar_router
 from .recipes import python_repo, repo_listo
 from .schemas import (
@@ -137,6 +137,11 @@ async def crear_job(receta: RecipeRequest) -> JobSnapshot:
     # la tarea de ejecucion en el loop principal.
     try:
         job = await gestor.crear_async(receta.product_id, receta.params)
+    except SinCupo as exc:
+        # La cola esta llena: no es un pedido invalido, es «volve a intentar».
+        raise HTTPException(
+            status_code=429, detail=str(exc), headers={"Retry-After": "30"}
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return job.snapshot()
@@ -203,8 +208,20 @@ def revelar_carpeta(job_id: str) -> dict[str, str]:
 
 @app.get("/api/jobs/{job_id}/events")
 async def eventos(job_id: str, request: Request) -> StreamingResponse:
-    if gestor.obtener(job_id) is None:
+    job = gestor.obtener(job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail="Job desconocido")
+    # Se mira antes de abrir el stream: una vez que la respuesta empezo a salir,
+    # ya no se puede contestar 429. Cada conexion tiene su cola acotada.
+    if not gestor.admite_suscriptor(job):
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Este job ya tiene todas sus conexiones de progreso abiertas. "
+                "Cerra otra pestaña o espera a que alguna se cierre."
+            ),
+            headers={"Retry-After": "15"},
+        )
 
     async def flujo():
         import json

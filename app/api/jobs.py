@@ -91,6 +91,32 @@ _SONDEO_MEMORIA_S = 2.0
 # el archivo de paginacion y el commit queda clavado donde este.
 _DISCO_SISTEMA_MINIMO_GB = 2.0
 
+# Admision: cuantos pedidos pueden estar vivos a la vez (en cola o corriendo).
+# La ejecucion ya se serializa con un solo slot, asi que aceptar pedidos sin
+# limite no acelera nada: solo los deja esperando para siempre. Un cliente sin
+# autenticacion podia encolar de a miles y `_podar` no los evicta, porque solo
+# borra jobs terminales. Un operador que lanza de a uno nunca llega al tope.
+MAX_ADMISION = 4
+# ``CLIMATE3D_MAX_JOBS`` lo mueve sin tocar el codigo (un valor invalido o <= 0
+# se ignora y queda el de arriba: nunca dejamos la cola cerrada por un typo).
+MAX_ADMISION_ENV = "CLIMATE3D_MAX_JOBS"
+
+# Cota de la cola SSE de cada conexion. Un cliente que deja de leer no puede
+# quedarse con todos los eventos del job en memoria: 256 alcanza de sobra para
+# un tramo de log y una vuelta de progreso.
+SSE_MAXSIZE = 256
+# Conexiones de progreso simultaneas por job (una pestaña, un celular). Todas
+# reciben lo mismo: mas que esto solo ocupa memoria.
+SSE_MAX_SUBS = 8
+
+
+class SinCupo(Exception):
+    """Pedido rechazado por un tope del servidor, no por la receta.
+
+    No hereda de ``ValueError`` a proposito: eso es validacion del pedido (400),
+    esto es «el servidor esta ocupado, reintenta» (429).
+    """
+
 
 def _commit_libre_mb() -> int | None:
     """Memoria que el sistema todavia puede comprometer, en MB.
@@ -132,6 +158,14 @@ def _disco_sistema_libre_gb() -> float | None:
         return shutil.disk_usage(raiz).free / (1024**3)
     except OSError:
         return None
+
+
+def _max_admision_entorno() -> int:
+    """Tope de admision: ``CLIMATE3D_MAX_JOBS`` manda; si no sirve, ``MAX_ADMISION``."""
+    crudo = (os.environ.get(MAX_ADMISION_ENV) or "").strip()
+    if crudo.isdigit() and int(crudo) > 0:
+        return int(crudo)
+    return MAX_ADMISION
 
 
 def _sin_memoria(textos: list[str]) -> bool:
@@ -231,6 +265,33 @@ def _epoch(iso: str | None) -> float:
         return 0.0
 
 
+class _ColaSSE(asyncio.Queue):
+    """Cola de eventos de UNA conexion SSE, con cota y politica de descarte.
+
+    Politica explicita: cuando el cliente deja de leer y la cola se llena, se
+    descarta el evento **mas viejo de esa conexion** para meter el nuevo. Asi el
+    emisor (el job) nunca se bloquea ni pierde el hilo, y el cliente que vuelve a
+    leer recibe lo mas reciente. Lo que se entrega sigue siendo completo y en
+    orden: lo unico que puede faltar es el tramo mas viejo, y el snapshot inicial
+    ya contaba el estado (`logs`, `artifacts`) cuando la conexion abrio.
+    """
+
+    def __init__(self, maxsize: int = SSE_MAXSIZE) -> None:
+        super().__init__(maxsize=maxsize)
+        # Eventos que esta conexion perdio por no leer a tiempo: sirve para
+        # diagnosticar, no se emite a la UI (el contrato de eventos no cambia).
+        self.descartados = 0
+
+    def publicar(self, evento: dict[str, Any]) -> None:
+        while self.full():
+            try:
+                self.get_nowait()
+            except asyncio.QueueEmpty:  # pragma: no cover - no deberia pasar
+                break
+            self.descartados += 1
+        self.put_nowait(evento)
+
+
 @dataclass
 class Job:
     id: str
@@ -252,7 +313,7 @@ class Job:
     dir: Path | None = None
     proc: subprocess.Popen[bytes] | None = None
     cancelar: asyncio.Event = field(default_factory=asyncio.Event)
-    subs: set[asyncio.Queue] = field(default_factory=set)
+    subs: set[_ColaSSE] = field(default_factory=set)
 
     @property
     def work(self) -> Path:
@@ -312,10 +373,18 @@ def nombre_cache(product_id: str, firma: str) -> str:
 
 
 class JobManager:
-    def __init__(self, media_root: Path, max_historial: int = 40) -> None:
+    def __init__(
+        self,
+        media_root: Path,
+        max_historial: int = 40,
+        max_admision: int | None = None,
+    ) -> None:
         self.media_root = media_root
         self.jobs: dict[str, Job] = {}
         self.max_historial = max_historial
+        # Pedidos que pueden estar vivos a la vez. `max_historial` acota la lista
+        # y solo evicta jobs terminales; esto acota lo que se acepta.
+        self.max_admision = max_admision if max_admision is not None else _max_admision_entorno()
         # Un solo worker: los pedidos se encolan en vez de pelearse la maquina.
         self._un_slot = asyncio.Semaphore(1)
         self._tareas: set[asyncio.Task] = set()
@@ -364,6 +433,7 @@ class JobManager:
 
     def crear(self, product_id: str, params: dict[str, Any]) -> Job:
         job = self._preparar_job(product_id, params)
+        self._verificar_admision()
         try:
             plan_armado = planear(product_id, job.params, job.work)
         except ValueError as exc:
@@ -372,6 +442,7 @@ class JobManager:
 
     async def crear_async(self, product_id: str, params: dict[str, Any]) -> Job:
         job = self._preparar_job(product_id, params)
+        self._verificar_admision()
         try:
             plan_armado = await asyncio.to_thread(planear, product_id, job.params, job.work)
         except ValueError as exc:
@@ -380,6 +451,30 @@ class JobManager:
 
     def obtener(self, job_id: str) -> Job | None:
         return self.jobs.get(job_id)
+
+    def en_curso(self) -> int:
+        """Pedidos vivos: en cola o corriendo. Los terminales no ocupan lugar."""
+        return sum(1 for job in self.jobs.values() if job.status not in TERMINALES)
+
+    def _verificar_admision(self) -> None:
+        """Frena el pedido cuando ya hay `max_admision` trabajos vivos.
+
+        Se llama despues de validar la receta (producto conocido, Python del repo
+        presente): esos errores siguen siendo de validacion y no se tapan con un
+        «ocupado». Antes de planear, que es lo que consulta la red.
+        """
+        vivos = self.en_curso()
+        if vivos < self.max_admision:
+            return
+        raise SinCupo(
+            f"Ya hay {vivos} pedidos en curso o en cola y el limite es "
+            f"{self.max_admision}. Espera a que termine uno (o cancela alguno "
+            "desde la lista de corridas) y volve a pedirlo."
+        )
+
+    def admite_suscriptor(self, job: Job) -> bool:
+        """Si entra una conexion SSE mas para este job (cota por job)."""
+        return len(job.subs) < SSE_MAX_SUBS
 
     def listar(self) -> list[Job]:
         return sorted(self.jobs.values(), key=lambda j: j.created_at, reverse=True)
@@ -411,7 +506,15 @@ class JobManager:
 
     async def seguir(self, job_id: str) -> AsyncIterator[dict[str, Any]]:
         job = self.jobs[job_id]
-        cola: asyncio.Queue = asyncio.Queue()
+        # La cota se mira antes de abrir la cola: la cola de una conexion que no
+        # llega a existir tampoco ocupa memoria.
+        if not self.admite_suscriptor(job):
+            raise SinCupo(
+                f"Este job ya tiene {len(job.subs)} conexiones de progreso abiertas "
+                f"(el maximo es {SSE_MAX_SUBS}). Cerra una pestaña o espera a que "
+                "alguna se cierre y volve a abrir el stream."
+            )
+        cola = _ColaSSE(SSE_MAXSIZE)
         job.subs.add(cola)
         try:
             yield {"type": "snapshot", "job": job.snapshot().model_dump()}
@@ -561,8 +664,10 @@ class JobManager:
             self.jobs.pop(viejo.id, None)
 
     def _emitir(self, job: Job, evento: dict[str, Any]) -> None:
+        # `publicar` nunca bloquea ni tira `QueueFull`: si una conexion se lleno,
+        # descarta su evento mas viejo (ver `_ColaSSE`).
         for cola in list(job.subs):
-            cola.put_nowait(evento)
+            cola.publicar(evento)
 
     def _log(self, job: Job, texto: str, level: str = "info") -> None:
         linea = LogLine(at=_ahora(), level=level, text=texto)  # type: ignore[arg-type]
