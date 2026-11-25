@@ -165,6 +165,23 @@ class ElSelloDeCommitDeLaImagen(unittest.TestCase):
         self.assertIn("SIN_SELLO", cuerpo)
         self.assertNotIn("findstr", cuerpo)
 
+    def test_una_imagen_que_no_se_puede_verificar_no_arranca(self) -> None:
+        # S1 (auditoría): sin sello el lanzador sólo avisaba y seguía, así que una
+        # imagen de procedencia desconocida (tar sin checksum o tag mutable)
+        # arrancaba con el .env del operador y /data escribible. Ahora falla
+        # cerrado, salvo que el operador lo pida explícitamente.
+        cuerpo = _sin_comentarios(self.bat)
+        bloque = cuerpo[cuerpo.index(":imagen_sin_sello"):cuerpo.index(":imagen_lista")]
+        self.assertIn("goto fallo", bloque)
+        self.assertIn("CLIMATE3D_SIN_SELLO", bloque)
+
+    def test_el_lanzador_verifica_la_imagen_que_va_a_correr(self) -> None:
+        # El sello se leía de `climate3d:local` mientras compose podía correr
+        # `${IMAGE}`: se verificaba una imagen y se arrancaba otra.
+        cuerpo = _sin_comentarios(self.bat)
+        self.assertIn('set "OBJETIVO=', cuerpo)
+        self.assertIn('docker image inspect "%OBJETIVO%"', cuerpo)
+
     @unittest.skipUnless(sys.platform == "win32", "cmd y for /f son de Windows")
     def test_el_guard_acepta_el_sello_que_escribe_docker(self) -> None:
         # docker escribe el label con LF suelto. Un `findstr /r ...$` no matchea
