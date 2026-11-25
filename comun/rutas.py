@@ -39,7 +39,20 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[1]
 
 #: Valor histórico: lo que el repo usaba antes de que esto fuera configurable.
+#: Se sigue leyendo como fallback (hay instalaciones que descargan ahí), pero ya no es
+#: el default: una ruta personal no sirve para que otra persona pueda correr el proyecto.
 RUTA_LEGADA = r"D:\Users\guill\dataset era5"
+
+
+def ruta_por_defecto() -> Path:
+    """Raíz de datos de una instalación nueva, sin configuración previa.
+
+    En el contenedor es el volumen ``/data``; fuera de él, una carpeta del usuario
+    (``~/climate3d/datos``), que no depende de cómo se llame quien lo corre.
+    """
+    if os.name == "nt":
+        return Path.home() / "climate3d" / "datos"
+    return Path(RUTA_CONTENEDOR)
 
 #: Punto de montaje del volumen en el contenedor (y default fuera de Windows).
 RUTA_CONTENEDOR = "/data"
@@ -175,7 +188,13 @@ def raiz_datos(
     guardado = _config(entorno, config).get("datos")
     if guardado:
         return Path(guardado).expanduser()
-    return Path(RUTA_LEGADA) if _plataforma(plataforma) == "nt" else Path(RUTA_CONTENEDOR)
+    if _plataforma(plataforma) == "nt":
+        # Una instalación vieja puede tener los datos en la ruta histórica: si existe se
+        # sigue usando, para no "mudarle" la carpeta a quien ya la tenía así.
+        if Path(RUTA_LEGADA).is_dir():
+            return Path(RUTA_LEGADA)
+        return ruta_por_defecto()
+    return Path(RUTA_CONTENEDOR)
 
 
 def raiz_media(

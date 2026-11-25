@@ -17,13 +17,19 @@ services:
     # registry), se usa esa y no se compila. `IMAGE=ghcr.io/usuario/climate3d:1.0`.
     image: ${IMAGE:-climate3d:local}
     env_file:
-      - .env
+      # Opcional a propósito: sin claves la app arranca igual y los productos que no
+      # necesitan credenciales (GOES, truecolor, snapshot) funcionan. Los que sí las
+      # necesitan lo avisan en el log del job.
+      - path: .env
+        required: false
     ports:
       - "127.0.0.1:${PORT:-8080}:8000"
     volumes:
       # Una sola raíz: los .nc, las salidas y los artefactos de los jobs (`.media/`)
       # viven en tu disco, no en la imagen. Sobreviven a un rebuild.
-      - "${DATA_DIR:?falta DATA_DIR: corré setup.ps1 o setup.sh, o copiá env.example a .env}:/data"
+      # Sin DATA_DIR se usa una carpeta al lado del repo: sirve para probar sin
+      # configurar nada. Con volumen propio, setea DATA_DIR en el entorno.
+      - "${DATA_DIR:-../.datos-climate3d}:/data"
     restart: unless-stopped
     stop_grace_period: 30s
     healthcheck:

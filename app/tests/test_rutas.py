@@ -14,6 +14,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -23,6 +24,28 @@ for candidato in (RAIZ, RAIZ / "comun"):
 
 import rutas  # noqa: E402
 from app.api.recipes import _python_repo  # noqa: E402
+
+
+class RaizPortable(unittest.TestCase):
+    """Sin configuración, la raíz no puede ser una ruta personal del autor."""
+
+    def test_el_default_vive_en_la_carpeta_del_usuario(self):
+        from pathlib import Path
+
+        with mock.patch("comun.rutas.Path.is_dir", return_value=False):
+            raiz = rutas.raiz_datos({}, "nt")
+
+        self.assertEqual(raiz, Path.home() / "climate3d" / "datos")
+        self.assertNotIn("guill", str(raiz))
+
+    def test_una_instalacion_vieja_conserva_su_ruta(self):
+        from pathlib import Path
+
+        with mock.patch("comun.rutas.Path.is_dir", return_value=True):
+            raiz = rutas.raiz_datos({}, "nt")
+
+        self.assertEqual(raiz, Path(rutas.RUTA_LEGADA))
+        self.assertTrue((raiz / "nisar").as_posix().endswith("nisar"))
 
 
 class RaizDeDatos(unittest.TestCase):

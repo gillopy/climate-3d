@@ -93,7 +93,9 @@ class ArtefactosDelContenedor(unittest.TestCase):
     def test_compose_publica_solo_en_loopback(self) -> None:
         texto = (DESPLIEGUE / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn('"127.0.0.1:${PORT:-8080}:8000"', texto)
-        self.assertIn("${DATA_DIR:?", texto)
+        # DATA_DIR tiene default: el compose arranca sin configurar nada (S5).
+        self.assertIn("${DATA_DIR:-", texto)
+        self.assertIn("required: false", texto)
         self.assertNotIn("0.0.0.0:${PORT", texto)
 
 
