@@ -492,6 +492,20 @@ class JobManager:
         """Si entra una conexion SSE mas para este job (cota por job)."""
         return len(job.subs) < SSE_MAX_SUBS
 
+    def reservar_suscriptor(self, job: Job) -> _ColaSSE | None:
+        """Reserva el cupo y devuelve la cola, o ``None`` si el job esta lleno.
+
+        El control y el registro ocurren en la misma llamada, sin ``await`` en el
+        medio: dos aperturas simultaneas ya no pueden ver el mismo conteo y pasarse
+        del tope. El endpoint la reserva antes de abrir la respuesta; si no hay
+        cupo, todavia se puede contestar 429.
+        """
+        if not self.admite_suscriptor(job):
+            return None
+        cola = _ColaSSE(SSE_MAXSIZE)
+        job.subs.add(cola)
+        return cola
+
     def listar(self) -> list[Job]:
         return sorted(self.jobs.values(), key=lambda j: j.created_at, reverse=True)
 
@@ -520,13 +534,19 @@ class JobManager:
             job.stage = "cancelando..."
         return True
 
-    async def seguir(self, job_id: str) -> AsyncIterator[dict[str, Any]]:
+    async def seguir(
+        self, job_id: str, cola: _ColaSSE | None = None
+    ) -> AsyncIterator[dict[str, Any]]:
         job = self.jobs[job_id]
-        # La cota de conexiones la decide el endpoint antes de abrir la respuesta
-        # (`admite_suscriptor`): re-chequearla aca solo podria abortar un stream ya
-        # abierto, asi que la cola se crea y se registra sin segundo control.
-        cola = _ColaSSE(SSE_MAXSIZE)
-        job.subs.add(cola)
+        if cola is None:
+            # Sin cola reservada (uso interno o tests) se reserva aca; si no hay
+            # cupo, el llamador recibe SinCupo antes de haber emitido nada.
+            cola = self.reservar_suscriptor(job)
+            if cola is None:
+                raise SinCupo(
+                    f"Este job ya tiene {len(job.subs)} conexiones de progreso "
+                    f"abiertas (el maximo es {SSE_MAX_SUBS})."
+                )
         try:
             yield {"type": "snapshot", "job": job.snapshot().model_dump()}
             if job.status in TERMINALES:

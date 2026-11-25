@@ -211,9 +211,11 @@ async def eventos(job_id: str, request: Request) -> StreamingResponse:
     job = gestor.obtener(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job desconocido")
-    # Se mira antes de abrir el stream: una vez que la respuesta empezo a salir,
-    # ya no se puede contestar 429. Cada conexion tiene su cola acotada.
-    if not gestor.admite_suscriptor(job):
+    # La reserva se toma ANTES de abrir el stream: una vez que la respuesta empezo
+    # a salir ya no se puede contestar 429, y si se mirara el conteo sin reservarlo
+    # dos aperturas simultaneas podrian pasarse del tope.
+    cola = gestor.reservar_suscriptor(job)
+    if cola is None:
         raise HTTPException(
             status_code=429,
             detail=(
@@ -226,7 +228,7 @@ async def eventos(job_id: str, request: Request) -> StreamingResponse:
     async def flujo():
         import json
 
-        async for evento in gestor.seguir(job_id):
+        async for evento in gestor.seguir(job_id, cola):
             if await request.is_disconnected():
                 break
             if evento.get("type") == "ping":

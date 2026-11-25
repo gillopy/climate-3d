@@ -581,6 +581,20 @@ class StreamDeProgreso(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(trabajo.subs, set(), "el cupo no se libera al cerrar la conexion")
         self.assertTrue(self.gestor.admite_suscriptor(trabajo))
 
+    def test_el_cupo_de_sse_se_reserva_sin_pasarse_del_tope(self):
+        # Control y registro en la misma llamada: dos aperturas simultáneas no
+        # pueden ver el mismo conteo y abrir una conexión de más.
+        trabajo = self._job_vivo()
+        reservadas = [self.gestor.reservar_suscriptor(trabajo) for _ in range(jobs.SSE_MAX_SUBS)]
+
+        self.assertTrue(all(cola is not None for cola in reservadas))
+        self.assertIsNone(self.gestor.reservar_suscriptor(trabajo))
+        self.assertEqual(len(trabajo.subs), jobs.SSE_MAX_SUBS)
+
+        for cola in reservadas:
+            trabajo.subs.discard(cola)
+        self.assertIsNotNone(self.gestor.reservar_suscriptor(trabajo))
+
     async def test_una_conexion_lenta_no_le_saca_eventos_a_la_que_lee(self):
         # El descarte es por conexion: el que lee al dia no pierde nada porque
         # otra pestaña dejada abierta se este llenando.
