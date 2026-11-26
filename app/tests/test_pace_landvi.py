@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import requests
+
 
 RAIZ = Path(__file__).resolve().parents[2]
 ESPEC = importlib.util.spec_from_file_location("pace_landvi", RAIZ / "descargar" / "pace_landvi.py")
@@ -18,8 +20,19 @@ ESPEC.loader.exec_module(pace)
 
 
 class AutenticacionPACE(unittest.TestCase):
-    def test_sesion_usa_cookies_del_archivo(self):
-        with tempfile.TemporaryDirectory() as carpeta:
+    """La sesión prefiere usuario/clave: sin navegador ni cookie manual."""
+
+    def test_sesion_usa_credenciales_antes_que_cookies(self):
+        with patch.object(pace, "_credenciales", return_value=("usuario", "clave")):
+            sesion = pace._sesion(Path("cookies-que-no-existen.json"))
+
+        self.assertIsInstance(sesion, pace.SesionEarthdata)
+        self.assertEqual(sesion.auth, ("usuario", "clave"))
+
+    def test_sesion_usa_cookies_del_archivo_si_no_hay_credenciales(self):
+        with tempfile.TemporaryDirectory() as carpeta, patch.object(
+            pace, "_credenciales", return_value=None
+        ):
             cookies = Path(carpeta) / "cookies.json"
             cookies.write_text(
                 '[{"name": "GETFILE_APP", "value": "abc", "domain": "oceandata.sci.gsfc.nasa.gov", "path": "/"}]',
@@ -29,14 +42,44 @@ class AutenticacionPACE(unittest.TestCase):
 
         self.assertEqual(sesion.cookies.get("GETFILE_APP"), "abc")
 
-    def test_sesion_exige_cookies_si_faltan(self):
-        with self.assertRaises(SystemExit) as contexto:
-            pace._sesion(None)
+    def test_sesion_pide_credenciales_o_cookies_si_no_hay_nada(self):
+        with patch.object(pace, "_credenciales", return_value=None):
+            with self.assertRaises(SystemExit) as contexto:
+                pace._sesion(None)
 
         mensaje = str(contexto.exception)
-        self.assertIn("--cookies", mensaje)
+        self.assertIn("EARTHDATA_USER", mensaje)
         self.assertIn("Conectar Earthdata", mensaje)
-        self.assertNotIn(".netrc", mensaje)
+
+    def test_el_auth_sobrevive_al_redirect_a_urs(self):
+        # `requests` borra el header cuando el redirect cambia de host, y el login
+        # de Earthdata depende de ese salto: OB.DAAC -> URS -> OB.DAAC.
+        sesion = pace.SesionEarthdata("usuario", "clave")
+
+        class Respuesta:
+            class request:  # noqa: N801 - imita la forma que espera requests
+                url = "https://oceandata.sci.gsfc.nasa.gov/getfile/x.nc"
+
+        pedido = requests.Request(
+            "GET", "https://urs.earthdata.nasa.gov/oauth/authorize"
+        ).prepare()
+        pedido.headers["Authorization"] = "Basic algo-viejo"
+        sesion.rebuild_auth(pedido, Respuesta())
+
+        self.assertTrue(pedido.headers["Authorization"].startswith("Basic "))
+
+    def test_el_auth_no_se_manda_a_un_host_ajeno(self):
+        sesion = pace.SesionEarthdata("usuario", "clave")
+
+        class Respuesta:
+            class request:  # noqa: N801 - imita la forma que espera requests
+                url = "https://oceandata.sci.gsfc.nasa.gov/getfile/x.nc"
+
+        pedido = requests.Request("GET", "https://ejemplo.com/ruta").prepare()
+        pedido.headers["Authorization"] = "Basic algo-viejo"
+        sesion.rebuild_auth(pedido, Respuesta())
+
+        self.assertNotIn("Authorization", pedido.headers)
 
     def test_ruta_cookies_earthdata_es_independiente_del_repo(self):
         with tempfile.TemporaryDirectory() as carpeta:

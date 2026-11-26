@@ -170,6 +170,35 @@ class CookiesStatus(unittest.TestCase):
         ruta.write_text(json.dumps(COOKIES), encoding="utf-8")
         return ruta
 
+    def test_informa_si_el_entorno_ya_tiene_usuario_y_clave(self):
+        # Con las dos variables, `pace_landvi.py` baja sin cookie y la consola no
+        # tiene por qué pedir que se conecte Earthdata a mano.
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / "no-existe.json"
+            with mock.patch.object(earthdata, "ruta_cookies_earthdata", return_value=ruta), \
+                 mock.patch.dict(
+                     earthdata.os.environ,
+                     {"EARTHDATA_USER": "u", "EARTHDATA_PASSWORD": "c"},
+                 ):
+                estado = earthdata.cookies_status()
+
+        self.assertTrue(estado["credenciales"])
+        self.assertFalse(estado["configured"])
+
+    def test_sin_credenciales_lo_dice(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = Path(carpeta) / "no-existe.json"
+            entorno = {
+                k: v
+                for k, v in earthdata.os.environ.items()
+                if k not in ("EARTHDATA_USER", "EARTHDATA_PASSWORD")
+            }
+            with mock.patch.object(earthdata, "ruta_cookies_earthdata", return_value=ruta), \
+                 mock.patch.dict(earthdata.os.environ, entorno, clear=True):
+                estado = earthdata.cookies_status()
+
+        self.assertFalse(estado["credenciales"])
+
     def test_un_corte_de_red_conserva_las_cookies(self):
         with tempfile.TemporaryDirectory() as carpeta:
             ruta = self._archivo(carpeta)

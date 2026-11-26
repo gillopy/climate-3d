@@ -450,14 +450,13 @@ la segunda, y aparecen en Australia, el sur de África y el cinturón agrícola 
 El dato **no sale de GIBS**: son los gránulos **L3M LANDVI** de OB.DAAC, diarios, que traen
 diez índices de vegetación por archivo y **ya vienen enmascarados para nubes**. La consola
 los baja en **0p1deg** (~37 MB por día); el descargador también acepta **4 km** (~170 MB).
-**Exige Earthdata Login**, así que es la única rama del repo que necesita cuenta. El
-usuario y la clave no alcanzan para `getfile`: hace falta la cookie `GETFILE_APP` que deja
-el OAuth. Con el producto *Follaje* abierto, tocá **Conectar Earthdata**, iniciá sesión en
-la ventana de Chrome/Edge y la app guarda las cookies junto a `config.json` (en Windows,
-`%LOCALAPPDATA%\climate3d\earthdata_cookies.json`); el descargador las usa solo. El botón
-no necesita nada extra: abrís OB.DAAC en tu navegador, iniciás sesión, copiás la cookie
-`GETFILE_APP` y la pegás en la consola. El backend la verifica contra OB.DAAC antes de
-guardarla, así que una cookie vencida no reemplaza a la buena.
+**Exige Earthdata Login**, así que es la única rama del repo que necesita cuenta. Basta con
+`EARTHDATA_USER` y `EARTHDATA_PASSWORD` en el `.env` (o en `~/.netrc`): el descargador
+repite el Basic auth en el redirect de OB.DAAC a URS y baja el `.nc` sin navegador ni
+cookies. Si preferís no poner la clave, sigue estando **Conectar Earthdata**: abrís
+OB.DAAC, iniciás sesión, copiás la cookie `GETFILE_APP` y la pegás en la consola; el
+backend la verifica contra OB.DAAC antes de guardarla, así que una cookie vencida no
+reemplaza a la buena (queda en `%LOCALAPPDATA%\climate3d\earthdata_cookies.json`).
 Para la CLI también sirve `--cookies <archivo.json>`. El póster promedia los índices de la semana y recién después divide —al
 revés deja mucho más ruido—, y dibuja en **Robinson** sobre fondo blanco. Los scripts son
 [`descargar/pace_landvi.py`](./descargar/pace_landvi.py) y

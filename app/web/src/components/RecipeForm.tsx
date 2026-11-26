@@ -244,7 +244,11 @@ export function RecipeForm({
   useEffect(() => {
     if (product.id === "follaje") {
       earthdataCookiesStatus()
-        .then((estado) => setEarthdataConfigurado(estado.configured))
+        .then((estado) =>
+          // Con usuario y clave en el entorno, PACE baja sin cookie: no hay nada
+          // que conectar. El flujo de la cookie queda para quien no guarda la clave.
+          setEarthdataConfigurado(estado.configured || Boolean(estado.credenciales)),
+        )
         .catch(() => setEarthdataConfigurado(false));
     }
   }, [product.id]);
@@ -734,8 +738,11 @@ export function RecipeForm({
           {product.id === "follaje" && (
             <div className="earthdata-login">
               {earthdataConfigurado ? (
-                <span className="earthdata-ok" title="Cookies de Earthdata configuradas">
-                  ✓ Earthdata conectado
+                <span
+                  className="earthdata-ok"
+                  title="Earthdata configurado: usuario y clave en el entorno, o cookie guardada"
+                >
+                  ✓ Earthdata listo
                 </span>
               ) : (
                 <button

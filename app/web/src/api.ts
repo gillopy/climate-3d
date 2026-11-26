@@ -81,6 +81,8 @@ export interface EarthdataLoginResponse {
 export interface EarthdataCookiesStatus {
   ok: boolean;
   configured: boolean;
+  /** Usuario y clave en el entorno: la cookie no hace falta. */
+  credenciales?: boolean;
   cookies_count: number;
   getfile?: boolean;
   verified?: boolean;

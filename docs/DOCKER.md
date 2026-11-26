@@ -71,14 +71,14 @@ puntuales.
 | --- | --- | --- | --- |
 | `FIRMS_MAP_KEY` | NASA FIRMS | focos de calor | <https://firms.modaps.eosdis.nasa.gov/api/map_key/> |
 | `CDSAPI_KEY` | Copernicus CDS | descarga de ERA5 | <https://cds.climate.copernicus.eu/> |
-| `EARTHDATA_USER` + `EARTHDATA_PASSWORD` | Earthdata Login | NISAR (ASF), vía `~/.netrc` | <https://urs.earthdata.nasa.gov/> |
+| `EARTHDATA_USER` + `EARTHDATA_PASSWORD` | Earthdata Login | NISAR (ASF) y Follaje PACE | <https://urs.earthdata.nasa.gov/> |
 
-> **Follaje PACE no usa esas claves.** OB.DAAC exige la cookie `GETFILE_APP` que deja el
-> OAuth en un navegador, y el login interactivo no puede abrir una ventana dentro del
-> contenedor. Corré una vez la app nativa (`ARRANCAR.bat`), usá **Conectar Earthdata** (pegar la cookie) y copiá
-> `earthdata_cookies.json` a la carpeta de configuración del contenedor
-> (`$HOME/.config/climate3d/`, con `HOME=/tmp/home` dentro de la imagen; montala si querés
-> que sobreviva al reinicio). Usuario/clave y `~/.netrc` no sirven para `getfile`.
+> **Follaje PACE usa esas mismas claves.** OB.DAAC pide una sesión de Earthdata Login:
+> el descargador repite el Basic auth en el redirect a URS y baja el `.nc` sin navegador,
+> así que el contenedor no necesita ninguna cookie. Si preferís no guardar la clave,
+> queda la cookie `GETFILE_APP` del botón **Conectar Earthdata** (la app nativa la deja en
+> `earthdata_cookies.json`; para el contenedor hay que copiarla a
+> `$HOME/.config/climate3d/`, con `HOME=/tmp/home` y un volumen si querés que sobreviva).
 
 Todas viajan por entorno: el entrypoint escribe `~/.cdsapirc` y `~/.netrc` al arrancar, así
 que no hay que preparar archivos a mano. El `.env` generado incluye credenciales: está en

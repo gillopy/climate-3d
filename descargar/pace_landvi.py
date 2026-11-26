@@ -12,17 +12,18 @@ Fuente (OB.DAAC, no GIBS: GIBS no publica PACE sobre tierra):
 
 El archivo pesa ~170 MB por día en 4 km (~37 MB en 0p1deg) y **exige Earthdata Login**:
 `getfile` responde 302 a `urs.earthdata.nasa.gov` y sin sesión válida no entrega el NetCDF.
-Este script se autentica con cookies del OAuth de Earthdata, y ninguna guarda la
-contraseña en el repo:
 
-  * `--cookies <archivo.json>`: lista de cookies exportada de un navegador ya logueado
-    (formato de Playwright: `[{name, value, domain, path, ...}]`). Si se omite, usa
-    automáticamente el archivo que guarda el botón **Conectar Earthdata** de la consola
-    (`earthdata_cookies.json`, junto a `config.json`).
+Hay dos formas de autenticarse, y la primera no pide navegador ni cookies:
 
-`EARTHDATA_USER`/`EARTHDATA_PASSWORD` y `~/.netrc` no alcanzan para `getfile`: el redirect
-a URS no conserva la autenticación básica y termina en la página de login. La cookie
-`GETFILE_APP` sólo la deja el OAuth completado en un navegador.
+  1. **Usuario y clave de Earthdata** (`EARTHDATA_USER`/`EARTHDATA_PASSWORD` en el
+     entorno o en el `.env` del repo, o `~/.netrc`). `getfile` manda a URS, URS valida
+     con Basic y vuelve con la cookie de la app. `requests` borra el header
+     Authorization cuando el redirect cambia de host, que es justo lo que rompía este
+     camino: `SesionEarthdata` lo vuelve a poner para los hosts de la NASA.
+  2. `--cookies <archivo.json>`: lista de cookies exportada de un navegador ya logueado
+     (formato de Playwright: `[{name, value, domain, path, ...}]`). Si se omite, usa
+     automáticamente el archivo que guarda el botón **Conectar Earthdata** de la consola
+     (`earthdata_cookies.json`, junto a `config.json`). Queda como respaldo.
 
 Uso (desde la raíz del proyecto):
 
@@ -33,12 +34,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import netrc
+import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
+from requests.auth import HTTPBasicAuth
 from urllib3.util.retry import Retry
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -76,14 +81,75 @@ def candidatos(fecha: date, res: str) -> list[str]:
     return [nombre(fecha, res, TAG), nombre(fecha, res, "")]
 
 
-def _sesion(cookies: Path | None) -> requests.Session:
-    """Sesión autenticada contra OB.DAAC con las cookies del OAuth de Earthdata.
+def _credenciales() -> tuple[str, str] | None:
+    """Usuario y clave de Earthdata: entorno, `.env` del repo y después `~/.netrc`."""
+    usuario = os.environ.get("EARTHDATA_USER")
+    clave = os.environ.get("EARTHDATA_PASSWORD")
+    if usuario and clave:
+        return usuario, clave
+    env_repo = _leer_env(RAIZ / ".env")
+    usuario = usuario or env_repo.get("EARTHDATA_USER")
+    clave = clave or env_repo.get("EARTHDATA_PASSWORD")
+    if usuario and clave:
+        return usuario, clave
+    try:
+        _, login, password = netrc.netrc().authenticators("urs.earthdata.nasa.gov")
+    except (FileNotFoundError, netrc.NetrcParseError, TypeError):
+        return None
+    if login and password:
+        return login, password
+    return None
 
-    No hay camino de usuario/clave ni `.netrc`: `getfile` redirige a URS y la
-    autenticación básica no sobrevive ese redirect (termina en la página de login).
-    La cookie `GETFILE_APP` sólo la deja el OAuth completado en un navegador.
+
+def _leer_env(ruta: Path) -> dict[str, str]:
+    """Pares clave=valor de un `.env`, sin exportarlos al proceso."""
+    if not ruta.is_file():
+        return {}
+    datos: dict[str, str] = {}
+    for linea in ruta.read_text(encoding="utf-8-sig").splitlines():
+        if "=" in linea and not linea.lstrip().startswith("#"):
+            clave, _, valor = linea.partition("=")
+            valor = valor.strip().strip('"')
+            if valor:
+                datos[clave.strip()] = valor
+    return datos
+
+
+#: Hosts de la NASA que participan del login: el redirect OB.DAAC <-> URS.
+_HOSTS_NASA = ("urs.earthdata.nasa.gov", "oceandata.sci.gsfc.nasa.gov")
+
+
+class SesionEarthdata(requests.Session):
+    """Sesión que conserva el Basic auth al saltar de OB.DAAC a URS.
+
+    `requests` borra el header Authorization cuando un redirect cambia de host. El
+    login de Earthdata depende justamente de ese salto: `getfile` manda a URS, URS
+    valida con Basic y vuelve con la cookie de la app. Sin reenviarlo, el pedido
+    termina en la página HTML de login y el `.nc` nunca baja.
+    """
+
+    def __init__(self, usuario: str, clave: str) -> None:
+        super().__init__()
+        self.auth = (usuario, clave)
+        self._basico = HTTPBasicAuth(usuario, clave)
+
+    def rebuild_auth(self, prepared_request, response):  # noqa: D401 - hook de requests
+        super().rebuild_auth(prepared_request, response)
+        host = (urlparse(prepared_request.url).hostname or "").lower()
+        if host in _HOSTS_NASA and "Authorization" not in prepared_request.headers:
+            self._basico(prepared_request)
+
+
+def _sesion(cookies: Path | None) -> requests.Session:
+    """Sesión autenticada contra OB.DAAC.
+
+    Primero usuario y clave (no necesita navegador ni cookies); si no hay, las
+    cookies del OAuth como respaldo.
     """
     s = requests.Session()
+    credenciales = _credenciales()
+    if credenciales:
+        s = SesionEarthdata(*credenciales)
     s.headers["User-Agent"] = "climate3d/1.0"
     s.trust_env = False                  # que no se cuele un proxy del sistema
 
@@ -101,8 +167,13 @@ def _sesion(cookies: Path | None) -> requests.Session:
     s.mount("https://", adapter)
     s.mount("http://", adapter)
 
+    if credenciales:
+        print("Autenticando con EARTHDATA_USER/EARTHDATA_PASSWORD")
+        return s
+
     if cookies:
         # `utf-8-sig` tolera el BOM que agrega PowerShell 5.1 al exportar el JSON.
+        print(f"Autenticando con cookies de Earthdata: {cookies}")
         jar = json.loads(Path(cookies).read_text(encoding="utf-8-sig"))
         for c in jar:
             s.cookies.set(c["name"], c["value"],
@@ -110,9 +181,9 @@ def _sesion(cookies: Path | None) -> requests.Session:
         return s
 
     raise SystemExit(
-        "Falta autenticación: en la consola, abrí Follaje y usá 'Conectar Earthdata' "
-        "pegando la cookie GETFILE_APP (guarda earthdata_cookies.json), o pasá "
-        "--cookies con el JSON exportado del navegador."
+        "Falta autenticación: cargá EARTHDATA_USER y EARTHDATA_PASSWORD en el .env "
+        "(o en ~/.netrc). Si preferís no poner la clave, seguí usando 'Conectar "
+        "Earthdata' y el archivo de cookies."
     )
 
 
@@ -178,10 +249,7 @@ def _cookies_para_usar(explicito: str | None) -> Path | None:
     if explicito:
         return Path(explicito)
     auto = ruta_cookies_earthdata()
-    if auto.is_file():
-        print(f"Usando cookies de Earthdata guardadas: {auto}")
-        return auto
-    return None
+    return auto if auto.is_file() else None
 
 
 def main() -> int:

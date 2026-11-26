@@ -1,12 +1,17 @@
-"""Earthdata Login sin automatizar navegador: el operador pega la cookie.
+"""Earthdata Login sin automatizar navegador: cookie pegada a mano, como respaldo.
 
-OB.DAAC (oceandata.sci.gsfc.nasa.gov) exige la cookie de sesión `GETFILE_APP`, que
-sólo se obtiene completando el flujo OAuth de Earthdata (URS) en un navegador real.
-Antes este módulo abría Chrome/Edge con Playwright para capturarla: una dependencia
-pesada (navegador incluido) al servicio de una sola pantalla, y además inservible
-dentro de Docker, donde no hay display.
+OB.DAAC (oceandata.sci.gsfc.nasa.gov) acepta dos formas de autenticación:
 
-Ahora el flujo es manual y funciona igual en nativo y en contenedor:
+* Usuario y clave de Earthdata (`EARTHDATA_USER`/`EARTHDATA_PASSWORD`): es el camino
+  que usa `descargar/pace_landvi.py`. No necesita esta pantalla.
+* La cookie de sesión `GETFILE_APP`, que sólo deja el flujo OAuth completado en un
+  navegador real. Este módulo existe para esa alternativa.
+
+Antes el flujo con cookie se automatizaba abriendo Chrome/Edge con Playwright: una
+dependencia pesada (navegador incluido) al servicio de una sola pantalla, y además
+inservible dentro de Docker, donde no hay display.
+
+Ahora es manual y funciona igual en nativo y en contenedor:
 
 1. La UI te manda a `GETFILE` en tu navegador y te pide iniciar sesión en URS.
 2. Copiás la cookie `GETFILE_APP` desde las herramientas de desarrollo (o el
@@ -217,25 +222,57 @@ def guardar_cookies(peticion: CookiesRequest) -> LoginResponse:
     )
 
 
+def _hay_credenciales() -> bool:
+    """Si hay usuario y clave de Earthdata en el entorno.
+
+    Con eso `descargar/pace_landvi.py` baja de OB.DAAC sin cookie, así que la
+    consola no tiene por qué ofrecer el flujo de la cookie. `ARRANCAR.ps1` y el
+    `env_file` de compose exportan las dos variables al proceso.
+    """
+    return bool(
+        os.environ.get("EARTHDATA_USER") and os.environ.get("EARTHDATA_PASSWORD")
+    )
+
+
 @router.get("/cookies-status")
 def cookies_status() -> dict[str, Any]:
     """Informa si hay una sesión guardada y si todavía autentica.
 
     Sólo lee: un GET no borra nada. Si la sesión venció se informa
     ``verified: false`` con ``stale: true`` y el operador decide (volver a pegar
-    la cookie o usar `POST /api/earthdata/cookies-clear`).
+    la cookie o usar `POST /api/earthdata/cookies-clear`). ``credenciales`` dice
+    si el entorno ya tiene usuario y clave, en cuyo caso la cookie no hace falta.
     """
+    credenciales = _hay_credenciales()
     cookies_path = ruta_cookies_earthdata()
     if not cookies_path.is_file():
-        return {"ok": True, "configured": False, "cookies_count": 0, "file": str(cookies_path)}
+        return {
+            "ok": True,
+            "configured": False,
+            "credenciales": credenciales,
+            "cookies_count": 0,
+            "file": str(cookies_path),
+        }
 
     try:
         cookies = json.loads(cookies_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return {"ok": False, "configured": False, "error": str(exc), "file": str(cookies_path)}
+        return {
+            "ok": False,
+            "configured": False,
+            "credenciales": credenciales,
+            "error": str(exc),
+            "file": str(cookies_path),
+        }
 
     if not cookies:
-        return {"ok": True, "configured": False, "cookies_count": 0, "file": str(cookies_path)}
+        return {
+            "ok": True,
+            "configured": False,
+            "credenciales": credenciales,
+            "cookies_count": 0,
+            "file": str(cookies_path),
+        }
 
     estado = _estado_sesion(cookies, timeout=(3, 8))
     if estado is None:
@@ -243,6 +280,7 @@ def cookies_status() -> dict[str, Any]:
         return {
             "ok": True,
             "configured": True,
+            "credenciales": credenciales,
             "verified": False,
             "cookies_count": len(cookies),
             "file": str(cookies_path),
@@ -251,6 +289,7 @@ def cookies_status() -> dict[str, Any]:
     return {
         "ok": True,
         "configured": True,
+        "credenciales": credenciales,
         "verified": estado,
         "stale": not estado,
         "cookies_count": len(cookies),
