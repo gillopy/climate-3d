@@ -12,7 +12,7 @@ import type {
   CatastroEstado,
   ParcelaProps,
 } from "../catastro";
-import { cajaDeMapa } from "../mapa";
+import { cajaDeMapa, contiene } from "../mapa";
 import type { Caja } from "../nisar";
 
 const STORAGE = "climate3d:nisar:catastro";
@@ -21,6 +21,16 @@ const PANE_AFECTADAS = "catastroAfectadas";
 const OPACIDAD_MIN = 0.05;
 const OPACIDAD_MAX = 0.7;
 const COLOR = "#f8fafc";
+
+/** Cuánto se agranda la vista al pedirla (fracción por lado).
+ *
+ * Un paneo menor a este margen ya está dibujado: no hay que consultar de nuevo.
+ */
+const MARGEN_VISTA = 0.25;
+
+/** Espera tras el último movimiento antes de consultar. Corta, porque cada
+ * movimiento nuevo aborta el pedido anterior de todos modos. */
+const ESPERA_MOVIMIENTO = 180;
 
 const NUMERO = new Intl.NumberFormat("es-PY");
 
@@ -195,7 +205,8 @@ export function CatastroPanel({
   const estilosBase = useRef(new Map<string, L.PathOptions>());
   const abortoDibujo = useRef<AbortController | null>(null);
   const abortoAnalisis = useRef<AbortController | null>(null);
-  const ultimaCaja = useRef<string | null>(null);
+  /** Última caja pedida (ya con margen) y el zoom al que se pidió. */
+  const pedidoRef = useRef<{ zoom: number; caja: string } | null>(null);
   const zoomRef = useRef(8);
   const mapaRef = useRef<L.Map | null>(mapa);
   mapaRef.current = mapa;
@@ -279,7 +290,7 @@ export function CatastroPanel({
     zoomRef.current = zoom;
     if (!datos?.disponible || zoom < zoomMin) {
       quitarParcelas();
-      ultimaCaja.current = null;
+      pedidoRef.current = null;
       setVista({
         ...VISTA_VACIA,
         requiereZoom: zoom < zoomMin,
@@ -292,16 +303,19 @@ export function CatastroPanel({
     }
     const cajaTexto = cajaDeMapa(mapaActual);
     if (!cajaTexto) return;
-    const clave = `${zoom}|${cajaTexto}`;
-    if (ultimaCaja.current === clave) return;
-    ultimaCaja.current = clave;
+    // Si la vista nueva sigue adentro de lo ya pedido y sin cambiar de zoom, lo que
+    // está dibujado alcanza: pedir de nuevo solo repite la consulta.
+    const pedido = pedidoRef.current;
+    if (pedido && pedido.zoom === zoom && contiene(pedido.caja, cajaTexto)) return;
+    const cajaPedido = cajaDeMapa(mapaActual, MARGEN_VISTA) ?? cajaTexto;
+    pedidoRef.current = { zoom, caja: cajaPedido };
 
     abortoDibujo.current?.abort();
     const control = new AbortController();
     abortoDibujo.current = control;
     setVista((previo) => ({ ...previo, cargando: true, error: null }));
     try {
-      const resultado = await getParcelas(cajaTexto, zoom, control.signal);
+      const resultado = await getParcelas(cajaPedido, zoom, control.signal);
       if (control.signal.aborted || !activoRef.current) return;
       quitarParcelas();
       if (resultado.features.length) {
@@ -341,7 +355,7 @@ export function CatastroPanel({
       });
     } catch (exc: unknown) {
       if (control.signal.aborted) return;
-      ultimaCaja.current = null;
+      pedidoRef.current = null;
       setVista({
         ...VISTA_VACIA,
         error: exc instanceof Error ? exc.message : "No se pudieron cargar las parcelas.",
@@ -364,7 +378,7 @@ export function CatastroPanel({
       temporizador = window.setTimeout(() => {
         temporizador = null;
         void cargar();
-      }, 320);
+      }, ESPERA_MOVIMIENTO);
     };
     mapa.on("moveend", alMover);
     mapa.on("zoomend", alMover);
@@ -374,7 +388,7 @@ export function CatastroPanel({
       if (temporizador !== null) window.clearTimeout(temporizador);
       abortoDibujo.current?.abort();
       quitarParcelas();
-      ultimaCaja.current = null;
+      pedidoRef.current = null;
     };
   }, [mapa, cargar, quitarParcelas]);
 
@@ -384,7 +398,7 @@ export function CatastroPanel({
     if (!activo) {
       abortoDibujo.current?.abort();
       quitarParcelas();
-      ultimaCaja.current = null;
+      pedidoRef.current = null;
       setVista(VISTA_VACIA);
       return;
     }

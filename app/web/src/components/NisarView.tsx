@@ -306,6 +306,9 @@ export function NisarView() {
       zoom: 6,
       minZoom: 4,
       maxZoom: 17,
+      // Canvas en vez de un <path> SVG por geometría: con la capa de catastro
+      // encendida hay más de mil polígonos y el árbol SVG congela el hilo.
+      preferCanvas: true,
     });
     capaBaseRef.current = L.layerGroup().addTo(mapa);
     bordesRef.current = L.layerGroup();

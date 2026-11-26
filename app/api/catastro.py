@@ -21,6 +21,7 @@ import sqlite3
 import struct
 import threading
 import time
+from collections import OrderedDict
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,17 @@ ZOOM_MIN = 5
 #: Parcelas por respuesta: con más, el GeoJSON tapa el mapa y el navegador sufre.
 LIMITE_DIBUJO = 1200
 LIMITE_AFECTADAS = 500
+
+#: Ancho máximo (grados) de una vista que conviene resolver por el R-tree. Más que
+#: esto es una vista de país o departamento: el R-tree devolvería cientos de miles
+#: de cajas y ordenarlas cuesta más que recorrer el índice de área, que ya viene
+#: ordenado de mayor a menor.
+VISTA_ANCHA_GRADOS = 1.0
+
+#: Respuestas recientes, por caja y zoom. El visor repite vistas al ir y volver (y
+#: al reconectar el SSE): recalcular consulta + simplificación no aporta nada.
+#: Se acota por cantidad: una respuesta completa ronda el medio millón de bytes.
+CACHE_RESPUESTAS = 24
 
 #: Tolerancia de simplificación en grados por zoom (~3 m a 14, ~0,5 m a 17).
 SIMPLIFICACION = {
@@ -298,6 +310,29 @@ _SQL_INSERT = (
 _SQL_INSERT_GEO = "INSERT INTO parcelas_geo VALUES (?,?,?,?,?)"
 
 
+# --- consultas de la vista -------------------------------------------------
+#: Vista de país o departamento: se maneja por el índice de área, que ya viene de
+#: mayor a menor, y se mira la caja de cada parcela por id.
+_SQL_VISTA_ANCHA = (
+    f"SELECT {_COLUMNAS} FROM parcelas AS p INDEXED BY parcelas_area "
+    "JOIN parcelas_geo AS g ON g.id = p.id "
+    "WHERE p.area_m2 >= ? "
+    "AND g.maxx >= ? AND g.minx <= ? AND g.maxy >= ? AND g.miny <= ? "
+    "ORDER BY p.area_m2 DESC LIMIT ?"
+)
+
+#: Vista de trabajo: el R-tree acota primero a la caja y el área se filtra después.
+#: Al revés (manejando por el índice de área) una vista con menos parcelas grandes
+#: que el límite obligaba a recorrer el país entero antes de rendirse.
+_SQL_VISTA_RTREE = (
+    f"SELECT {_COLUMNAS} FROM parcelas_geo AS g "
+    "JOIN parcelas AS p ON p.id = g.id "
+    "WHERE g.maxx >= ? AND g.minx <= ? AND g.maxy >= ? AND g.miny <= ? "
+    "{filtro}"
+    "ORDER BY p.area_m2 DESC LIMIT ?"
+)
+
+
 def _texto(valor: Any) -> str:
     """Campo de texto limpio. El SNC rellena con asteriscos los campos vacíos."""
     if valor is None:
@@ -486,6 +521,8 @@ def construir_indice(shp: Path, db: Path, avisar: Any = None) -> dict[str, Any]:
             if intento == 49:
                 raise
             time.sleep(0.4)
+    # Las respuestas guardadas describen el índice anterior: se tiran con él.
+    vaciar_cache()
     return {clave: valor for clave, valor in meta.items()}
 
 
@@ -644,7 +681,47 @@ def _caja(bruto: str) -> tuple[float, float, float, float]:
 
 
 def _conectar() -> sqlite3.Connection:
-    return sqlite3.connect(f"{ruta_indice().as_uri()}?mode=ro", uri=True, timeout=10.0)
+    con = sqlite3.connect(f"{ruta_indice().as_uri()}?mode=ro", uri=True, timeout=10.0)
+    # El índice pesa cientos de MB y una vista toca solo una parte. Con mmap el
+    # sistema sirve las páginas desde su propia caché en vez de pedir cada lectura
+    # al disco: en un equipo con disco lento eso es la diferencia entre abrir una
+    # vista en milisegundos o esperar segundos.
+    con.execute("PRAGMA mmap_size = 536870912")  # 512 MB
+    con.execute("PRAGMA cache_size = -65536")  # 64 MB de caché de la conexión
+    return con
+
+
+# --- caché de respuestas --------------------------------------------------
+_CACHE_RESPUESTAS: "OrderedDict[tuple[float, float, float, float, int], dict[str, Any]]" = (
+    OrderedDict()
+)
+_CACHE_CANDADO = threading.Lock()
+
+
+def _cache_buscar(clave: tuple[float, float, float, float, int]) -> dict[str, Any] | None:
+    """Respuesta ya calculada para esa caja y zoom, si sigue en la caché."""
+    with _CACHE_CANDADO:
+        guardada = _CACHE_RESPUESTAS.get(clave)
+        if guardada is None:
+            return None
+        _CACHE_RESPUESTAS.move_to_end(clave)
+        return guardada
+
+
+def _cache_guardar(
+    clave: tuple[float, float, float, float, int], respuesta: dict[str, Any]
+) -> None:
+    with _CACHE_CANDADO:
+        _CACHE_RESPUESTAS[clave] = respuesta
+        _CACHE_RESPUESTAS.move_to_end(clave)
+        while len(_CACHE_RESPUESTAS) > CACHE_RESPUESTAS:
+            _CACHE_RESPUESTAS.popitem(last=False)
+
+
+def vaciar_cache() -> None:
+    """Descarta las respuestas guardadas: obligatorio al reemplazar el índice."""
+    with _CACHE_CANDADO:
+        _CACHE_RESPUESTAS.clear()
 
 
 def _vacio(
@@ -750,26 +827,23 @@ def parcelas(caja: tuple[float, float, float, float], zoom: int) -> dict[str, An
     area_min = area_minima(zoom)
     tolerancia = _offset_zoom(zoom)
     oeste, sur, este, norte = caja
+    clave = (oeste, sur, este, norte, zoom)
+    guardada = _cache_buscar(clave)
+    if guardada is not None:
+        return guardada
+
     # Las cajas del R-tree son float32: el margen evita perder el borde.
     margen = 2e-5
     izquierda, derecha = oeste - margen, este + margen
     abajo, arriba = sur - margen, norte + margen
     # Una vista de más de un grado de ancho no es la de este zoom: si igual se
     # pidió, conviene devolver las más grandes en vez de ordenar un millón.
-    ancha = max(este - oeste, norte - sur) > 1.0
+    ancha = max(este - oeste, norte - sur) > VISTA_ANCHA_GRADOS
     con = _conectar()
     try:
-        if area_min > 0 or ancha:
-            # Vista de país o departamento: el R-tree devuelve cientos de miles
-            # de lotes y ordenarlos tarda minutos. Conviene recorrer el índice
-            # de área de mayor a menor y quedarse con las que caen en la vista:
-            # son justo las estancias grandes que se leen a esta escala.
+        if ancha:
             filas = con.execute(
-                f"SELECT {_COLUMNAS} FROM parcelas AS p INDEXED BY parcelas_area "
-                "JOIN parcelas_geo AS g ON g.id = p.id "
-                "WHERE p.area_m2 >= ? "
-                "AND g.maxx >= ? AND g.minx <= ? AND g.maxy >= ? AND g.miny <= ? "
-                "ORDER BY p.area_m2 DESC LIMIT ?",
+                _SQL_VISTA_ANCHA,
                 (
                     area_min,
                     izquierda,
@@ -780,12 +854,13 @@ def parcelas(caja: tuple[float, float, float, float], zoom: int) -> dict[str, An
                 ),
             ).fetchall()
         else:
+            filtro_area = "AND p.area_m2 >= ? " if area_min > 0 else ""
+            parametros: list[Any] = [izquierda, derecha, abajo, arriba]
+            if area_min > 0:
+                parametros.append(area_min)
+            parametros.append(LIMITE_DIBUJO + 1)
             filas = con.execute(
-                f"SELECT {_COLUMNAS} FROM parcelas_geo AS g "
-                "JOIN parcelas AS p ON p.id = g.id "
-                "WHERE g.maxx >= ? AND g.minx <= ? AND g.maxy >= ? AND g.miny <= ? "
-                "ORDER BY p.area_m2 DESC LIMIT ?",
-                (izquierda, derecha, abajo, arriba, LIMITE_DIBUJO + 1),
+                _SQL_VISTA_RTREE.format(filtro=filtro_area), parametros
             ).fetchall()
     finally:
         con.close()
@@ -816,6 +891,7 @@ def parcelas(caja: tuple[float, float, float, float], zoom: int) -> dict[str, An
         respuesta["avisos"] = [
             "Se muestran las parcelas más grandes de la vista: acercate para ver todas."
         ]
+    _cache_guardar(clave, respuesta)
     return respuesta
 
 

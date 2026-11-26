@@ -356,6 +356,54 @@ class Catastro(unittest.TestCase):
         self.assertTrue(cuerpo["requiere_indice"])
         self.assertEqual(cuerpo["total"], 0)
 
+    # --- velocidad --------------------------------------------------------
+    def test_la_vista_de_trabajo_la_maneja_el_rtree(self):
+        # El bug era manejar por el índice de área global: en una vista con menos
+        # parcelas grandes que el límite, SQLite recorría el país entero.
+        con = catastro._conectar()  # noqa: SLF001 - se mira el plan real
+        try:
+            plan = con.execute(
+                "EXPLAIN QUERY PLAN " + catastro._SQL_VISTA_RTREE.format(filtro=""),
+                (455900.0, 456700.0, 7409900.0, 7410300.0, 1201),
+            ).fetchall()
+        finally:
+            con.close()
+        detalle = " ".join(str(fila[-1]) for fila in plan)
+        # `g` es el alias de parcelas_geo: la vista maneja por el R-tree y busca la
+        # fila de atributos por rowid, en vez de recorrer el índice de área.
+        self.assertIn("SCAN g VIRTUAL TABLE", detalle)
+        self.assertNotIn("parcelas_area", detalle)
+
+    def test_la_vista_ancha_sigue_recorriendo_el_indice_de_area(self):
+        con = catastro._conectar()  # noqa: SLF001 - se mira el plan real
+        try:
+            plan = con.execute(
+                "EXPLAIN QUERY PLAN " + catastro._SQL_VISTA_ANCHA,
+                (0.0, -180.0, 180.0, -90.0, 90.0, 1201),
+            ).fetchall()
+        finally:
+            con.close()
+        detalle = " ".join(str(fila[-1]) for fila in plan)
+        self.assertIn("parcelas_area", detalle)
+
+    def test_la_misma_vista_se_responde_desde_la_cache(self):
+        caja = self._caja(455900, 7409900, 456700, 7410300)
+
+        primera = catastro.parcelas(caja, 15)
+        segunda = catastro.parcelas(caja, 15)
+
+        self.assertIs(primera, segunda)
+
+    def test_reconstruir_el_indice_tira_la_cache(self):
+        caja = self._caja(455900, 7409900, 456700, 7410300)
+        primera = catastro.parcelas(caja, 15)
+
+        catastro.construir_indice(self.shp, catastro.ruta_indice())
+        segunda = catastro.parcelas(caja, 15)
+
+        self.assertIsNot(primera, segunda)
+        self.assertEqual(primera["total"], segunda["total"])
+
     # --- afectadas -------------------------------------------------------
     def test_afectadas_mide_la_mitad_exacta_de_una_parcela(self):
         poly = catastro.PedidoAfectadas(
