@@ -80,6 +80,15 @@ class ArtefactosDelContenedor(unittest.TestCase):
         lock = (RAIZ / "uv.lock").read_text(encoding="utf-8")
         self.assertIn('name = "cdsapi"', lock)
 
+    def test_el_runtime_trae_las_librerias_que_pide_rasterio(self) -> None:
+        # rasterio trae sus propias GDAL y las carga en tiempo de ejecucion: el
+        # paquete se instalaba bien, pero `import rasterio` moria con
+        # "libexpat.so.1: cannot open shared object file" y toda la fusion optica
+        # quedaba apagada sin decir por que.
+        texto = (DESPLIEGUE / "Dockerfile").read_text(encoding="utf-8")
+        runtime = texto[texto.index("apt-get install") :]
+        self.assertIn("libexpat1", runtime[:400])
+
     def test_el_login_no_depende_de_un_navegador_automatizado(self) -> None:
         # S1: el login de Earthdata abría Chrome/Edge con Playwright (dependencia
         # pesada e inservible en Docker). Ahora la cookie se pega a mano y se

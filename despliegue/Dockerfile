@@ -28,6 +28,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # con sus bibliotecas adentro: NO hace falta el toolchain de desarrollo. Instalar
 # `libeccodes-dev` arrastra gcc-14, gfortran y cpp-14 (~200 MB) sin ninguna ganancia;
 # probado que `import eccodes` funciona solo con `libeccodes0` + `libeccodes-data`.
+# `libexpat1` no lo pide pip: es una dependencia de las GDAL que rasterio trae
+# empaquetadas y carga en tiempo de ejecucion. Sin el, `import rasterio` falla con
+# "libexpat.so.1: cannot open shared object file" y la fusion optica queda apagada.
 # ffmpeg tampoco va acá: lo baja imageio-ffmpeg en build time, más abajo.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -36,6 +39,7 @@ RUN apt-get update \
       passwd \
       libeccodes0 \
       libeccodes-data \
+      libexpat1 \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

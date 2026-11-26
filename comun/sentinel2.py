@@ -40,8 +40,12 @@ try:
     from rasterio.windows import from_bounds
 
     DISPONIBLE = True
-except ImportError:  # pragma: no cover - depende del venv de los scripts
+except ImportError as _exc:  # pragma: no cover - depende del venv de los scripts
+    # Se guarda el motivo real: en el contenedor el paquete estaba instalado pero
+    # le faltaba una libreria del sistema (libexpat), y el mensaje generico mandaba
+    # a buscar el problema en el lugar equivocado.
     DISPONIBLE = False
+    MOTIVO = str(_exc) or "import fallo sin detalle"
 
 STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
 
@@ -67,7 +71,7 @@ def _ventana(src, bbox):
 def grilla(xs: np.ndarray, ys: np.ndarray, epsg: int):
     """Transform afín y CRS de un recorte ya orientado (oeste->este, norte->sur)."""
     if not DISPONIBLE:
-        raise RuntimeError("faltan rasterio/pystac-client/planetary-computer")
+        raise RuntimeError(f"no puedo usar la grilla optica: {MOTIVO}")
     mpp_x = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
     mpp_y = abs(float(ys[0] - ys[-1])) / max(1, len(ys) - 1)
     transform = Affine.translation(
@@ -211,7 +215,7 @@ def buscar_items(
 ):
     """Items L2A con menos nubes que `nubes_max` en +-`dias` de `centro`."""
     if not DISPONIBLE:
-        raise RuntimeError("faltan rasterio/pystac-client/planetary-computer")
+        raise RuntimeError(f"no puedo leer Sentinel-2: {MOTIVO}")
     desde = centro - timedelta(days=max(1, int(dias)))
     hasta = centro + timedelta(days=max(1, int(dias)))
     print(f"buscando Sentinel-2 del {desde} al {hasta} (nubes < {nubes_max:g}%)")
