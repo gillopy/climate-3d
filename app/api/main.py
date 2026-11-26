@@ -6,9 +6,11 @@ del repo.
 """
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +29,7 @@ from .catalog import (
     productos_disponibles,
 )
 from .earthdata import router as earthdata_router
-from .jobs import JobManager
+from .jobs import JobManager, SinCupo
 from .nisar import router as nisar_router
 from .recipes import python_repo, repo_listo
 from .schemas import (
@@ -37,6 +39,8 @@ from .schemas import (
     JobSummary,
     RecipeRequest,
 )
+
+log = logging.getLogger("climate3d.api")
 
 RAIZ_APP = Path(__file__).resolve().parents[1]
 RAIZ_REPO = RAIZ_APP.parent
@@ -133,6 +137,11 @@ async def crear_job(receta: RecipeRequest) -> JobSnapshot:
     # la tarea de ejecucion en el loop principal.
     try:
         job = await gestor.crear_async(receta.product_id, receta.params)
+    except SinCupo as exc:
+        # La cola esta llena: no es un pedido invalido, es «volve a intentar».
+        raise HTTPException(
+            status_code=429, detail=str(exc), headers={"Retry-After": "30"}
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return job.snapshot()
@@ -199,13 +208,27 @@ def revelar_carpeta(job_id: str) -> dict[str, str]:
 
 @app.get("/api/jobs/{job_id}/events")
 async def eventos(job_id: str, request: Request) -> StreamingResponse:
-    if gestor.obtener(job_id) is None:
+    job = gestor.obtener(job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail="Job desconocido")
+    # La reserva se toma ANTES de abrir el stream: una vez que la respuesta empezo
+    # a salir ya no se puede contestar 429, y si se mirara el conteo sin reservarlo
+    # dos aperturas simultaneas podrian pasarse del tope.
+    cola = gestor.reservar_suscriptor(job)
+    if cola is None:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Este job ya tiene todas sus conexiones de progreso abiertas. "
+                "Cerra otra pestaña o espera a que alguna se cierre."
+            ),
+            headers={"Retry-After": "15"},
+        )
 
     async def flujo():
         import json
 
-        async for evento in gestor.seguir(job_id):
+        async for evento in gestor.seguir(job_id, cola):
             if await request.is_disconnected():
                 break
             if evento.get("type") == "ping":
@@ -226,8 +249,19 @@ async def eventos(job_id: str, request: Request) -> StreamingResponse:
 
 
 @app.exception_handler(Exception)
-async def error_no_controlado(_: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
+async def error_no_controlado(request: Request, exc: Exception) -> JSONResponse:
+    """Error interno sin filtrar internos.
+
+    El detalle (tipo de excepcion, rutas absolutas, mensajes de librerias) va al log
+    del servidor con un id de incidente; el cliente recibe ese id para citarlo. Antes
+    el cuerpo traia `Tipo: mensaje`, que es informacion de la maquina del operador.
+    """
+    incidente = uuid.uuid4().hex[:12]
+    log.exception("error no controlado [%s] %s %s", incidente, request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Error interno.", "incidente": incidente},
+    )
 
 
 # Build del frontend: un solo puerto para toda la app.

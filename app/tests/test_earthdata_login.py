@@ -1,7 +1,8 @@
-"""Sesión de Earthdata: un corte de red no es una sesión vencida.
+"""Sesión de Earthdata sin navegador automatizado.
 
-La prueba contra OB.DAAC distingue tres estados: válida, vencida y "no se pudo
-comprobar". Sólo la vencida descarta el archivo de cookies.
+La cookie `GETFILE_APP` se pega a mano y se verifica contra OB.DAAC antes de
+guardarla. Un corte de red no es una sesión vencida, y un GET de estado nunca
+borra el archivo.
 
     .venv\\Scripts\\python.exe -m unittest app.tests.test_earthdata_login
 """
@@ -72,14 +73,95 @@ class EstadoDeSesion(unittest.TestCase):
             self.assertIsNone(earthdata._estado_sesion(COOKIES))
 
 
-class LoginEnContenedor(unittest.TestCase):
-    def test_en_docker_avisa_sin_intentar_abrir_navegador(self):
-        with mock.patch.dict(earthdata.os.environ, {"CLIMATE3D_CONTENEDOR": "1"}):
-            with self.assertRaises(earthdata.HTTPException) as ctx:
-                earthdata.login_earthdata_interactive()
+class GuardarCookiePegada(unittest.TestCase):
+    """POST /api/earthdata/cookies: verificar antes de escribir, siempre."""
 
-        self.assertEqual(ctx.exception.status_code, 409)
-        self.assertIn("Docker", ctx.exception.detail)
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.ruta = Path(self._tmp.name) / "earthdata_cookies.json"
+        self.addCleanup(self._tmp.cleanup)
+        parche = mock.patch.object(earthdata, "ruta_cookies_earthdata", return_value=self.ruta)
+        parche.start()
+        self.addCleanup(parche.stop)
+
+    def _guardar(self, estado: bool | None, **cuerpo: object) -> earthdata.LoginResponse:
+        with mock.patch.object(earthdata, "_estado_sesion", return_value=estado):
+            return earthdata.guardar_cookies(earthdata.CookiesRequest(**cuerpo))
+
+    def test_una_cookie_pegada_y_valida_se_guarda(self) -> None:
+        respuesta = self._guardar(True, cookie="valor-de-la-cookie")
+
+        self.assertTrue(respuesta.ok)
+        guardadas = json.loads(self.ruta.read_text(encoding="utf-8"))
+        self.assertEqual(guardadas[0]["name"], earthdata.COOKIE_SESION)
+        self.assertEqual(guardadas[0]["value"], "valor-de-la-cookie")
+
+    def test_la_cookie_se_guarda_para_obdaac(self) -> None:
+        # `GETFILE_APP` la emite OB.DAAC: si se guardara con dominio
+        # earthdata.nasa.gov, el jar de requests no la mandaría a oceandata y la
+        # verificación fallaría con una cookie válida.
+        self._guardar(True, cookie="valor-de-la-cookie")
+
+        guardadas = json.loads(self.ruta.read_text(encoding="utf-8"))
+        self.assertEqual(guardadas[0]["domain"], earthdata.HOST_OBDAAC)
+        self.assertEqual(earthdata.DOMINIO_COOKIE, earthdata.HOST_OBDAAC)
+
+    def test_una_lista_mal_scopeada_se_reancla_a_obdaac(self) -> None:
+        mal = [{"name": "GETFILE_APP", "value": "v", "domain": ".earthdata.nasa.gov", "path": "/"}]
+
+        self._guardar(True, cookies=mal)
+
+        guardadas = json.loads(self.ruta.read_text(encoding="utf-8"))
+        self.assertEqual(guardadas[0]["domain"], earthdata.HOST_OBDAAC)
+
+    def test_acepta_el_formato_nombre_igual_valor(self) -> None:
+        self._guardar(True, cookie="GETFILE_APP=valor-limpio")
+
+        guardadas = json.loads(self.ruta.read_text(encoding="utf-8"))
+        self.assertEqual(guardadas[0]["value"], "valor-limpio")
+
+    def test_acepta_la_lista_de_un_json_exportado(self) -> None:
+        respuesta = self._guardar(True, cookies=COOKIES)
+
+        self.assertEqual(respuesta.cookies_count, 1)
+        self.assertTrue(self.ruta.is_file())
+
+    def test_una_lista_sin_dominio_de_earthdata_se_rechaza(self) -> None:
+        ajenas = [{"name": "otra", "value": "x", "domain": "ejemplo.com", "path": "/"}]
+
+        with self.assertRaises(earthdata.HTTPException) as ctx:
+            self._guardar(True, cookies=ajenas)
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertFalse(self.ruta.exists())
+
+    def test_una_cookie_que_no_autentica_no_se_guarda(self) -> None:
+        with self.assertRaises(earthdata.HTTPException) as ctx:
+            self._guardar(False, cookie="vencida")
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertFalse(self.ruta.exists())
+
+    def test_sin_red_no_se_guarda_y_se_avisa(self) -> None:
+        with self.assertRaises(earthdata.HTTPException) as ctx:
+            self._guardar(None, cookie="cualquiera")
+
+        self.assertEqual(ctx.exception.status_code, 503)
+        self.assertFalse(self.ruta.exists())
+
+    def test_sin_cookie_ni_lista_es_pedido_invalido(self) -> None:
+        with self.assertRaises(earthdata.HTTPException) as ctx:
+            self._guardar(True)
+
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_funciona_igual_dentro_del_contenedor(self) -> None:
+        # Ya no hay navegador que abrir: el flujo manual sirve en Docker.
+        with mock.patch.dict(earthdata.os.environ, {"CLIMATE3D_CONTENEDOR": "1"}):
+            respuesta = self._guardar(True, cookie="valor-en-docker")
+
+        self.assertTrue(respuesta.ok)
+        self.assertTrue(self.ruta.is_file())
 
 
 class CookiesStatus(unittest.TestCase):
@@ -99,16 +181,18 @@ class CookiesStatus(unittest.TestCase):
             self.assertTrue(estado["configured"])
             self.assertFalse(estado["verified"])
 
-    def test_sesion_vencida_descarta_el_archivo(self):
+    def test_sesion_vencida_no_borra_el_archivo(self):
+        # Un GET no destruye credenciales: informa `stale` y el operador decide.
         with tempfile.TemporaryDirectory() as carpeta:
             ruta = self._archivo(carpeta)
             with mock.patch.object(earthdata, "ruta_cookies_earthdata", return_value=ruta), \
                  mock.patch.object(earthdata, "_estado_sesion", return_value=False):
                 estado = earthdata.cookies_status()
 
-            self.assertFalse(ruta.exists())
-            self.assertFalse(estado["configured"])
-            self.assertTrue(estado["verified"])
+            self.assertTrue(ruta.is_file(), "el GET de estado no puede borrar la sesión")
+            self.assertTrue(estado["configured"])
+            self.assertFalse(estado["verified"])
+            self.assertTrue(estado["stale"])
 
     def test_sesion_valida_conserva_el_archivo(self):
         with tempfile.TemporaryDirectory() as carpeta:

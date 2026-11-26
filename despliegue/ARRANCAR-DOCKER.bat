@@ -53,7 +53,10 @@ echo       ok, Docker responde.
 echo.
 
 echo [2/3] Verificando la aplicacion...
-docker image inspect climate3d:local >nul 2>&1
+rem La imagen que se verifica es la que compose va a correr (${IMAGE:-climate3d:local}).
+set "OBJETIVO=%IMAGE%"
+if not defined OBJETIVO set "OBJETIVO=climate3d:local"
+docker image inspect "%OBJETIVO%" >nul 2>&1
 if errorlevel 1 goto sin_imagen
 set "YA_EXISTIA=1"
 goto imagen_ok
@@ -75,12 +78,20 @@ rem --- sello del commit: que Docker no sirva codigo viejo sin avisar ----------
 set "COMMIT="
 for /f "delims=" %%i in ('git -C "%~dp0.." rev-parse --short HEAD 2^>nul') do set "COMMIT=%%i"
 if defined COMMIT set "CLIMATE3D_COMMIT=%COMMIT%"
-if not defined YA_EXISTIA goto imagen_lista
-if not defined COMMIT goto imagen_lista
-
+rem Si la imagen no estaba y el objetivo es una referencia de registry, se baja
+rem AHORA para poder verificar su sello antes de arrancarla (nunca al reves).
+rem Con el tag local por defecto no hay nada que bajar: se compila como siempre.
+if not defined YA_EXISTIA (
+if /i not "%OBJETIVO%"=="climate3d:local" (
+echo       Bajando %OBJETIVO%...
+docker pull "%OBJETIVO%"
+if errorlevel 1 goto fallo
+set "YA_EXISTIA=1"
+)
+)
 set "IMAGEN_COMMIT="
 set "SIN_SELLO="
-docker image inspect climate3d:local --format "{{.Config.Labels.climate3d_commit}}" > "%TEMP%\climate3d_commit.txt" 2>nul
+docker image inspect "%OBJETIVO%" --format "{{.Config.Labels.climate3d_commit}}" > "%TEMP%\climate3d_commit.txt" 2>nul
 rem Ojo con dos cosas que ya rompieron esto: docker escribe el label con LF
 rem suelto (un findstr con "$" no lo matchea) y, si la imagen no tiene labels,
 rem imprime literalmente "<no value>" (cmd lee el "<" como redireccion). Se lee
@@ -106,9 +117,18 @@ if errorlevel 1 goto fallo
 goto imagen_lista
 
 :imagen_sin_sello
+if /i "%CLIMATE3D_SIN_SELLO%"=="1" goto imagen_sin_sello_igual
 echo.
-echo       ! La imagen no dice con que commit se compilo (vino de un .tar o es vieja).
-echo         No puedo verificar si esta al dia.
+echo       [x] No puedo verificar de donde salio la imagen (no trae el sello del
+echo           commit: vino de un .tar sin checksum, de un tag mutable o es vieja).
+echo           Esa imagen arrancaria con tus claves del .env y /data escribible.
+echo           Por eso no la arranco.
+echo.
+echo           Si sabes lo que haces: set CLIMATE3D_SIN_SELLO=1 y volve a ejecutar.
+goto fallo
+:imagen_sin_sello_igual
+echo.
+echo       ! CLIMATE3D_SIN_SELLO=1: arranco sin verificar de donde salio la imagen.
 goto imagen_lista
 
 :imagen_lista

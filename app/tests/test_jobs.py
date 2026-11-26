@@ -10,6 +10,7 @@ historial sobrevive al reinicio sin romperse por una linea corrupta.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import tempfile
 import unittest
@@ -26,6 +27,14 @@ try:
 except ImportError:  # pragma: no cover - faltan dependencias del venv de la app
     jobs = None
     Plan = Step = None
+
+try:
+    from fastapi.testclient import TestClient
+
+    from app.api import main
+except ImportError:  # pragma: no cover - faltan dependencias del venv de la app
+    TestClient = None
+    main = None
 
 
 def _nuevo_job(media: Path, job_id: str = "j1", **extra) -> "jobs.Job":
@@ -355,6 +364,259 @@ class CrearJob(Base):
             asyncio.run(self.gestor._real(trabajo))
 
         self.assertEqual(trabajo.progress, 1.0)
+
+
+class Admision(Base):
+    """Tope de admision: la cola no crece con pedidos que nunca van a arrancar.
+
+    La ejecucion ya se serializa con un solo slot, asi que aceptar pedidos sin
+    limite no acelera nada: solo deja trabajos esperando para siempre. El tope
+    mira unicamente los jobs no terminales.
+    """
+
+    def test_un_pedido_sin_parametros_usa_los_defaults_del_catalogo(self):
+        # La UI arma el formulario con los defaults del catálogo; la API tiene que
+        # comportarse igual. Antes, `params: {}` planeaba otra cosa (y podía fallar el
+        # render por falta de la fecha que la UI sí manda).
+        gestor = jobs.JobManager(self.media)
+
+        trabajo = gestor._preparar_job("snapshot_paraguay", {})
+
+        self.assertEqual(trabajo.params["capa"], "truecolor")
+        self.assertIn("fecha", trabajo.params)
+        self.assertIn("margen", trabajo.params)
+
+    def test_un_parametro_explicito_gana_sobre_el_default(self):
+        gestor = jobs.JobManager(self.media)
+
+        trabajo = gestor._preparar_job("snapshot_paraguay", {"capa": "falsecolor"})
+
+        self.assertEqual(trabajo.params["capa"], "falsecolor")
+
+    def _gestor_con(self, cuantos: int, **kwargs) -> "jobs.JobManager":
+        gestor = jobs.JobManager(self.media, **kwargs)
+        for numero in range(cuantos):
+            trabajo = _nuevo_job(
+                self.media,
+                job_id=f"v{numero}",
+                status="queued",
+                created_at=f"2026-11-0{numero + 1}T00:00:00+00:00",
+            )
+            gestor.jobs[trabajo.id] = trabajo
+        return gestor
+
+    def _crear(self, gestor: "jobs.JobManager") -> "jobs.Job":
+        """Crea un pedido sin planear de verdad ni agendar la tarea real."""
+        with mock.patch.object(jobs, "python_repo", lambda: Path(sys.executable)), mock.patch.object(
+            jobs, "planear", return_value=Plan()
+        ), mock.patch.object(gestor, "_agendar_job", side_effect=lambda job, _plan: job):
+            return gestor.crear("geocolor", {})
+
+    def test_rechaza_el_pedido_cuando_la_admision_esta_llena(self):
+        gestor = self._gestor_con(2, max_admision=2)
+
+        with mock.patch.object(
+            jobs, "python_repo", lambda: Path(sys.executable)
+        ), mock.patch.object(
+            jobs, "planear", side_effect=AssertionError("no se planea un pedido que no entra")
+        ):
+            with self.assertRaises(jobs.SinCupo) as error:
+                gestor.crear("geocolor", {})
+
+        texto = str(error.exception)
+        self.assertIn("2 pedidos", texto)
+        self.assertIn("limite es 2", texto)
+        self.assertIn("cancel", texto)  # dice que hacer, no solo que fallo
+        self.assertEqual(gestor.en_curso(), 2, "el pedido rechazado quedo en la lista")
+
+    def test_los_jobs_terminados_no_ocupan_lugar(self):
+        gestor = self._gestor_con(0, max_admision=1)
+        for numero, estado in enumerate(("done", "error", "cancelled")):
+            terminado = _nuevo_job(self.media, job_id=f"t{numero}", status=estado)
+            gestor.jobs[terminado.id] = terminado
+
+        self.assertEqual(gestor.en_curso(), 0)
+        trabajo = self._crear(gestor)
+
+        self.assertEqual(trabajo.status, "queued")
+
+    def test_el_tope_por_defecto_deja_lanzar_de_a_uno(self):
+        # Sin ``CLIMATE3D_MAX_JOBS`` manda el default de la spec.
+        limpio = {k: v for k, v in os.environ.items() if k != jobs.MAX_ADMISION_ENV}
+        with mock.patch.dict(os.environ, limpio, clear=True):
+            self.assertEqual(jobs.JobManager(self.media).max_admision, 4)
+        # Un operador con tres pedidos vivos todavia entra con el cuarto.
+        lleno = self._gestor_con(3, max_admision=jobs.MAX_ADMISION)
+        self.assertEqual(self._crear(lleno).status, "queued")
+
+    def test_cancelar_un_pedido_libera_el_lugar(self):
+        # El camino de salida del tope tiene que servir: cancelar desde la lista
+        # de corridas devuelve el cupo sin reiniciar la API.
+        gestor = self._gestor_con(1, max_admision=1)
+        with mock.patch.object(
+            jobs, "python_repo", lambda: Path(sys.executable)
+        ), mock.patch.object(jobs, "planear", return_value=Plan()):
+            with self.assertRaises(jobs.SinCupo):
+                gestor.crear("geocolor", {})
+
+            self.assertTrue(gestor.cancelar("v0"))
+            trabajo = self._crear(gestor)
+
+        self.assertEqual(trabajo.status, "queued")
+        self.assertNotIn("v0", [j.id for j in gestor.listar() if j.status not in jobs.TERMINALES])
+
+    def test_el_tope_se_configura_por_entorno(self):
+        with mock.patch.dict(os.environ, {"CLIMATE3D_MAX_JOBS": "2"}):
+            self.assertEqual(jobs.JobManager(self.media).max_admision, 2)
+
+    def test_un_valor_de_entorno_invalido_no_bloquea_la_cola(self):
+        for crudo in ("", "0", "-3", "muchos"):
+            with mock.patch.dict(os.environ, {"CLIMATE3D_MAX_JOBS": crudo}):
+                self.assertEqual(
+                    jobs.JobManager(self.media).max_admision,
+                    jobs.MAX_ADMISION,
+                    f"{crudo!r} no deberia dejar la cola cerrada",
+                )
+
+
+@unittest.skipIf(jobs is None, "la API necesita las dependencias del venv de la app")
+class RespuestaHttpDeLaAdmision(unittest.TestCase):
+    @unittest.skipIf(TestClient is None, "la API necesita las dependencias del venv de la app")
+    def test_un_pedido_sin_cupo_es_429_y_no_400_ni_500(self):
+        cliente = TestClient(main.app, raise_server_exceptions=False)
+        lleno = jobs.SinCupo(
+            "Ya hay 4 pedidos en curso o en cola y el limite es 4. "
+            "Espera a que termine uno o cancela alguno desde la lista de corridas."
+        )
+
+        with mock.patch.object(
+            main.gestor, "crear_async", new=mock.AsyncMock(side_effect=lleno)
+        ):
+            respuesta = cliente.post(
+                "/api/jobs", json={"product_id": "geocolor", "params": {}}
+            )
+
+        self.assertEqual(respuesta.status_code, 429, respuesta.text)
+        self.assertIn("limite es 4", respuesta.json()["detail"])
+        self.assertIn("Retry-After", respuesta.headers)
+
+
+@unittest.skipIf(jobs is None, "la API necesita las dependencias del venv de la app")
+class StreamDeProgreso(unittest.IsolatedAsyncioTestCase):
+    """Cotas del stream SSE: un cliente que deja de leer no retiene todo."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.media = Path(self._tmp.name)
+        self.media.mkdir(exist_ok=True)
+        self.gestor = jobs.JobManager(self.media)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _job_vivo(self, job_id: str = "sse") -> "jobs.Job":
+        trabajo = _nuevo_job(self.media, job_id=job_id, status="running")
+        self.gestor.jobs[trabajo.id] = trabajo
+        return trabajo
+
+    async def _drenar(self, flujo, cuantos: int) -> list[dict]:
+        """Lee `cuantos` eventos con un solo tope de espera (no uno por evento)."""
+
+        async def leer():
+            return [await flujo.__anext__() for _ in range(cuantos)]
+
+        return await asyncio.wait_for(leer(), 5)
+
+    async def test_al_dia_entrega_todos_los_eventos_en_orden(self):
+        # El contrato de los eventos que si se entregan no cambia: snapshot
+        # primero y despues todo lo emitido, en orden.
+        trabajo = self._job_vivo()
+        flujo = self.gestor.seguir(trabajo.id)
+
+        primero = await asyncio.wait_for(flujo.__anext__(), 1)
+        self.assertEqual(primero["type"], "snapshot")
+        for numero in range(3):
+            self.gestor._emitir(trabajo, {"type": "log", "line": {"n": numero}})
+
+        recibidos = await self._drenar(flujo, 3)
+
+        self.assertEqual([e["line"]["n"] for e in recibidos], [0, 1, 2])
+        await flujo.aclose()
+
+    async def test_el_buffer_de_una_conexion_tiene_cota_y_deja_lo_mas_nuevo(self):
+        trabajo = self._job_vivo()
+        flujo = self.gestor.seguir(trabajo.id)
+        self.assertEqual((await asyncio.wait_for(flujo.__anext__(), 1))["type"], "snapshot")
+
+        total = jobs.SSE_MAXSIZE + 10
+        for numero in range(total):
+            self.gestor._emitir(trabajo, {"type": "log", "line": {"n": numero}})
+
+        cola = next(iter(trabajo.subs))
+        self.assertEqual(cola.qsize(), jobs.SSE_MAXSIZE)
+        recibidos = await self._drenar(flujo, jobs.SSE_MAXSIZE)
+        # Se descarta el evento mas viejo de esa conexion, no el mas nuevo.
+        self.assertEqual(
+            [e["line"]["n"] for e in recibidos],
+            list(range(total - jobs.SSE_MAXSIZE, total)),
+        )
+        await flujo.aclose()
+
+    async def test_no_abre_mas_conexiones_que_el_tope_por_job(self):
+        trabajo = self._job_vivo()
+        abiertas = []
+        for _ in range(jobs.SSE_MAX_SUBS):
+            flujo = self.gestor.seguir(trabajo.id)
+            self.assertEqual(
+                (await asyncio.wait_for(flujo.__anext__(), 1))["type"], "snapshot"
+            )
+            abiertas.append(flujo)
+        self.assertFalse(self.gestor.admite_suscriptor(trabajo))
+
+        # El corte por cupo lo decide el endpoint (`main.eventos`) ANTES de abrir la
+        # respuesta: si se re-chequeara aca, la conexion ya estaria abierta y solo
+        # podria abortarse a mitad de stream en vez de devolver un 429 limpio.
+        for flujo in abiertas:
+            await flujo.aclose()
+        self.assertEqual(trabajo.subs, set(), "el cupo no se libera al cerrar la conexion")
+        self.assertTrue(self.gestor.admite_suscriptor(trabajo))
+
+    def test_el_cupo_de_sse_se_reserva_sin_pasarse_del_tope(self):
+        # Control y registro en la misma llamada: dos aperturas simultáneas no
+        # pueden ver el mismo conteo y abrir una conexión de más.
+        trabajo = self._job_vivo()
+        reservadas = [self.gestor.reservar_suscriptor(trabajo) for _ in range(jobs.SSE_MAX_SUBS)]
+
+        self.assertTrue(all(cola is not None for cola in reservadas))
+        self.assertIsNone(self.gestor.reservar_suscriptor(trabajo))
+        self.assertEqual(len(trabajo.subs), jobs.SSE_MAX_SUBS)
+
+        for cola in reservadas:
+            trabajo.subs.discard(cola)
+        self.assertIsNotNone(self.gestor.reservar_suscriptor(trabajo))
+
+    async def test_una_conexion_lenta_no_le_saca_eventos_a_la_que_lee(self):
+        # El descarte es por conexion: el que lee al dia no pierde nada porque
+        # otra pestaña dejada abierta se este llenando.
+        with mock.patch.object(jobs, "SSE_MAXSIZE", 8):
+            trabajo = self._job_vivo()
+            lenta = self.gestor.seguir(trabajo.id)
+            rapida = self.gestor.seguir(trabajo.id)
+            await asyncio.wait_for(lenta.__anext__(), 1)
+            await asyncio.wait_for(rapida.__anext__(), 1)
+
+            total = 18
+            for numero in range(total):
+                self.gestor._emitir(trabajo, {"type": "log", "line": {"n": numero}})
+                leido = await asyncio.wait_for(rapida.__anext__(), 1)
+                self.assertEqual(leido["line"]["n"], numero)
+
+            # La conexion que no leyo guardo los ultimos eventos y conto los perdidos.
+            cola_lenta = [c for c in trabajo.subs if c.qsize() == 8]
+            self.assertTrue(cola_lenta, "la conexion lenta no quedo acotada")
+            self.assertEqual(cola_lenta[0].descartados, total - 8)
+            await lenta.aclose()
+            await rapida.aclose()
 
 
 if __name__ == "__main__":

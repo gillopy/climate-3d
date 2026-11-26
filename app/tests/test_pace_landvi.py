@@ -35,7 +35,7 @@ class AutenticacionPACE(unittest.TestCase):
 
         mensaje = str(contexto.exception)
         self.assertIn("--cookies", mensaje)
-        self.assertIn("Login Earthdata", mensaje)
+        self.assertIn("Conectar Earthdata", mensaje)
         self.assertNotIn(".netrc", mensaje)
 
     def test_ruta_cookies_earthdata_es_independiente_del_repo(self):
@@ -95,7 +95,13 @@ class DescargaTolerante(unittest.TestCase):
                 "--res", "0p1deg", "--destino", str(salida),
                 "--cookies", str(salida / "cookies.json"),
             ]
-            with patch("sys.argv", argv), patch.object(pace, "_sesion", return_value=object()):
+            # `bajar` se parchea: el gránulo de este caso ya está en disco, pero si
+            # el script decidiera bajarlo la prueba saldría a la red. La suite tiene
+            # que correr sin red (S1).
+            def bajar_falso(sesion, url, destino, minimo):
+                destino.write_bytes(b"x" * 6_000_000)
+
+            with patch("sys.argv", argv), patch.object(pace, "_sesion", return_value=object()),                     patch.object(pace, "bajar", side_effect=bajar_falso):
                 codigo = pace.main()
 
         self.assertEqual(codigo, 0)

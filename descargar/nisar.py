@@ -36,6 +36,10 @@ from rutas import raiz_nisar  # noqa: E402
 
 BLOQUE = 8 * 1024 * 1024
 MIN_BYTES = 10_000_000  # un H5 real pesa cientos de MB; menos que esto es un error
+
+#: Techo por granulo. Un GCOV real ronda 1.9 GB; 8 GB deja aire para productos
+#: mas grandes sin permitir que un origen externo llene el volumen de datos.
+MAX_BYTES = 8 * 1024**3
 EDL = "https://urs.earthdata.nasa.gov"
 EDL_CLIENT_ID = "BO_n7nTIlMljdvU6kRRB3g"
 ASF_AUTH = "https://cumulus.asf.alaska.edu/login"
@@ -222,6 +226,13 @@ def bajar(s: requests.Session, url: str, destino: Path) -> None:
             for bloque in r.iter_content(BLOQUE):
                 if not bloque:
                     continue
+                if ya + len(bloque) > MAX_BYTES:
+                    fh.close()
+                    parcial.unlink(missing_ok=True)
+                    raise SystemExit(
+                        f"La descarga supero el techo de {MAX_BYTES / 1e9:.0f} GB: "
+                        "se descarta el .parcial. Revisa el origen del archivo."
+                    )
                 fh.write(bloque)
                 ya += len(bloque)
                 if total:

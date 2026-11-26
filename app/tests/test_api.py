@@ -18,10 +18,12 @@ if str(RAIZ) not in sys.path:
 try:
     from fastapi.testclient import TestClient
 
+    from app.api import main
     from app.api.main import app
 except ImportError:  # pragma: no cover - faltan dependencias del venv de la app
     TestClient = None
     app = None
+    main = None
 
 
 @unittest.skipIf(TestClient is None, "la API necesita las dependencias del venv de la app")
@@ -38,6 +40,23 @@ class ContratoDeLaApi(unittest.TestCase):
         self.assertIn("repo_python", cuerpo)
         self.assertIn("data_root", cuerpo)
         self.assertGreater(cuerpo["productos"], 0)
+
+    def test_un_error_no_controlado_no_filtra_el_detalle(self):
+        # S1 (auditoría): el handler global devolvía `Tipo: mensaje` al cliente, con
+        # rutas absolutas y detalles de librerías. Ahora el cliente recibe un id de
+        # incidente y el detalle queda sólo en el log del servidor.
+        from unittest import mock
+
+        cliente = TestClient(app, raise_server_exceptions=False)
+        with mock.patch.object(main, "productos_disponibles", side_effect=RuntimeError("ruta /secreta/x")):
+            respuesta = cliente.get("/api/catalog")
+
+        self.assertEqual(respuesta.status_code, 500)
+        cuerpo = respuesta.json()
+        self.assertEqual(cuerpo["detail"], "Error interno.")
+        self.assertRegex(cuerpo["incidente"], r"^[0-9a-f]{12}$")
+        self.assertNotIn("secreta", respuesta.text)
+        self.assertNotIn("RuntimeError", respuesta.text)
 
     def test_catalogo_trae_productos_y_rutas(self):
         respuesta = self.cliente.get("/api/catalog")

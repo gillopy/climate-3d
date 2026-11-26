@@ -51,6 +51,12 @@ dev = [
     "requests==2.34.*",
 ]
 
+era5 = [
+    # `descargar_era5.py` lo importa. Va como grupo y no como dependencia dura
+    # porque el .nc de ERA5 ya suele estar bajado; la imagen lo instala pineado.
+    "cdsapi==0.7.*",
+]
+
 [tool.uv]
 # El repo no es un paquete instalable: uv solo construye el entorno.
 package = false

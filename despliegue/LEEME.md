@@ -23,7 +23,7 @@ Doble clic en **`ARRANCAR.bat`**. Pregunta cuatro cosas y arranca en
    salidas y la caché. Enter conserva la que ya está.
 2. **Claves** (opcionales): NASA FIRMS (focos de calor), Copernicus CDS (ERA5) y
    Earthdata para NISAR. Enter en cada una conserva la que ya estaba. PACE/follaje no usa
-   esas claves: se loguea desde la consola con **Login Earthdata**.
+   esas claves: se loguea desde la consola con **Conectar Earthdata** (pegás la cookie `GETFILE_APP`).
 3. Si quedó trabajo viejo dentro del repo, ofrece moverlo.
 4. Levanta la consola y **abre http://127.0.0.1:8000 en tu navegador por defecto**,
    en cuanto la API responde. Si la app todavía no levantó, no abre nada: espera.

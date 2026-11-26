@@ -452,10 +452,12 @@ diez índices de vegetación por archivo y **ya vienen enmascarados para nubes**
 los baja en **0p1deg** (~37 MB por día); el descargador también acepta **4 km** (~170 MB).
 **Exige Earthdata Login**, así que es la única rama del repo que necesita cuenta. El
 usuario y la clave no alcanzan para `getfile`: hace falta la cookie `GETFILE_APP` que deja
-el OAuth. Con el producto *Follaje* abierto, tocá **Login Earthdata**, completá el login en
+el OAuth. Con el producto *Follaje* abierto, tocá **Conectar Earthdata**, iniciá sesión en
 la ventana de Chrome/Edge y la app guarda las cookies junto a `config.json` (en Windows,
 `%LOCALAPPDATA%\climate3d\earthdata_cookies.json`); el descargador las usa solo. El botón
-necesita Playwright en el venv (`pip install playwright`); si falta, la consola te lo dice.
+no necesita nada extra: abrís OB.DAAC en tu navegador, iniciás sesión, copiás la cookie
+`GETFILE_APP` y la pegás en la consola. El backend la verifica contra OB.DAAC antes de
+guardarla, así que una cookie vencida no reemplaza a la buena.
 Para la CLI también sirve `--cookies <archivo.json>`. El póster promedia los índices de la semana y recién después divide —al
 revés deja mucho más ruido—, y dibuja en **Robinson** sobre fondo blanco. Los scripts son
 [`descargar/pace_landvi.py`](./descargar/pace_landvi.py) y

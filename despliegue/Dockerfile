@@ -46,12 +46,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /uvx /bin/
 COPY pyproject.toml uv.lock ./
 
 # Dependencias primero: cambiar el c��digo no reinstala nada de esto.
-RUN uv sync --frozen --no-dev --no-install-project
+# El grupo `era5` entra por el mismo lock: cdsapi con version exacta y hashes.
+RUN uv sync --frozen --no-dev --no-install-project --group era5
 
-# `cdsapi` queda solo en la imagen. El repo lo deja fuera a prop��sito porque el .nc de
-# ERA5 ya suele estar bajado; acǭ quien llega puede no tenerlo, y el asistente ofrece
-# la clave del CDS. Sin esto, `descargar_era5.py` muere con ModuleNotFoundError.
-RUN uv pip install --python /app/.venv/bin/python cdsapi
+# `cdsapi` solo hace falta para descargar el .nc de ERA5, que suele venir bajado:
+# por eso vive en el grupo `era5` y no en las dependencias duras. Entra por el lock,
+# con version exacta y hashes, igual que el resto del entorno.
 
 # ffmpeg queda horneado: el primer render no depende de la red.
 RUN /app/.venv/bin/python -c \

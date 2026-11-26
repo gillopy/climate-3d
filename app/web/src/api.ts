@@ -88,8 +88,20 @@ export interface EarthdataCookiesStatus {
   error?: string;
 }
 
-export function earthdataLogin(): Promise<EarthdataLoginResponse> {
-  return fetch("/api/earthdata/login").then((r) => leer<EarthdataLoginResponse>(r));
+/** Guarda la cookie de sesión de Earthdata que el operador pega a mano.
+ *
+ * El backend la verifica contra OB.DAAC antes de escribirla: si no autentica
+ * responde 400 y si no hay red responde 503, sin tocar la cookie anterior.
+ */
+export function earthdataSaveCookies(payload: {
+  cookie?: string;
+  cookies?: unknown[];
+}): Promise<EarthdataLoginResponse> {
+  return fetch("/api/earthdata/cookies", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).then((r) => leer<EarthdataLoginResponse>(r));
 }
 
 export function earthdataCookiesStatus(): Promise<EarthdataCookiesStatus> {

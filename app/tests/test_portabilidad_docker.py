@@ -68,10 +68,34 @@ class ArtefactosDelContenedor(unittest.TestCase):
         self.assertIn('mkdir -p "$MEDIA"', entrypoint)
         self.assertNotIn("/app/app/var/media", entrypoint)
 
+    def test_cdsapi_entra_por_el_lock(self) -> None:
+        # S1 (auditoría): `uv sync --frozen` fija todo el entorno y esta era la única
+        # excepción: un `uv pip install cdsapi` a secas resolvía versión y dependencias
+        # desde el índice en cada build, sin hash ni entrada en el lock. Ahora entra por
+        # el grupo `era5`, así que su versión y sus hashes viven en uv.lock.
+        texto = (DESPLIEGUE / "Dockerfile").read_text(encoding="utf-8")
+        self.assertNotIn("python cdsapi", texto)
+        self.assertNotIn("uv pip install", texto)
+        self.assertIn("--group era5", texto)
+        lock = (RAIZ / "uv.lock").read_text(encoding="utf-8")
+        self.assertIn('name = "cdsapi"', lock)
+
+    def test_el_login_no_depende_de_un_navegador_automatizado(self) -> None:
+        # S1: el login de Earthdata abría Chrome/Edge con Playwright (dependencia
+        # pesada e inservible en Docker). Ahora la cookie se pega a mano y se
+        # verifica contra OB.DAAC, así que el proyecto no menciona Playwright.
+        earthdata = (RAIZ / "app" / "api" / "earthdata.py").read_text(encoding="utf-8")
+        for prohibido in ("import playwright", "sync_playwright", "PLAYWRIGHT_BROWSERS_PATH"):
+            self.assertNotIn(prohibido, earthdata)
+        pyproject = (RAIZ / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertNotIn("playwright", pyproject.lower())
+
     def test_compose_publica_solo_en_loopback(self) -> None:
         texto = (DESPLIEGUE / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn('"127.0.0.1:${PORT:-8080}:8000"', texto)
-        self.assertIn("${DATA_DIR:?", texto)
+        # DATA_DIR tiene default: el compose arranca sin configurar nada (S5).
+        self.assertIn("${DATA_DIR:-", texto)
+        self.assertIn("required: false", texto)
         self.assertNotIn("0.0.0.0:${PORT", texto)
 
 
@@ -146,6 +170,29 @@ class ElSelloDeCommitDeLaImagen(unittest.TestCase):
         cuerpo = _sin_comentarios(self.bat)
         self.assertIn("SIN_SELLO", cuerpo)
         self.assertNotIn("findstr", cuerpo)
+
+    def test_una_imagen_que_no_se_puede_verificar_no_arranca(self) -> None:
+        # S1 (auditoría): sin sello el lanzador sólo avisaba y seguía, así que una
+        # imagen de procedencia desconocida (tar sin checksum o tag mutable)
+        # arrancaba con el .env del operador y /data escribible. Ahora falla
+        # cerrado, salvo que el operador lo pida explícitamente.
+        cuerpo = _sin_comentarios(self.bat)
+        bloque = cuerpo[cuerpo.index(":imagen_sin_sello"):cuerpo.index(":imagen_lista")]
+        self.assertIn("goto fallo", bloque)
+        self.assertIn("CLIMATE3D_SIN_SELLO", bloque)
+
+    def test_no_hace_pull_del_tag_local_por_defecto(self) -> None:
+        # Con el tag local no hay registry: un `docker pull` a ciegas fallaría y
+        # cortaría el arranque antes de compilar.
+        cuerpo = _sin_comentarios(self.bat)
+        self.assertIn('if /i not "%OBJETIVO%"=="climate3d:local"', cuerpo)
+
+    def test_el_lanzador_verifica_la_imagen_que_va_a_correr(self) -> None:
+        # El sello se leía de `climate3d:local` mientras compose podía correr
+        # `${IMAGE}`: se verificaba una imagen y se arrancaba otra.
+        cuerpo = _sin_comentarios(self.bat)
+        self.assertIn('set "OBJETIVO=', cuerpo)
+        self.assertIn('docker image inspect "%OBJETIVO%"', cuerpo)
 
     @unittest.skipUnless(sys.platform == "win32", "cmd y for /f son de Windows")
     def test_el_guard_acepta_el_sello_que_escribe_docker(self) -> None:

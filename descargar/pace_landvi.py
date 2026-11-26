@@ -17,7 +17,7 @@ contraseña en el repo:
 
   * `--cookies <archivo.json>`: lista de cookies exportada de un navegador ya logueado
     (formato de Playwright: `[{name, value, domain, path, ...}]`). Si se omite, usa
-    automáticamente el archivo que guarda el botón **Login Earthdata** de la consola
+    automáticamente el archivo que guarda el botón **Conectar Earthdata** de la consola
     (`earthdata_cookies.json`, junto a `config.json`).
 
 `EARTHDATA_USER`/`EARTHDATA_PASSWORD` y `~/.netrc` no alcanzan para `getfile`: el redirect
@@ -110,8 +110,9 @@ def _sesion(cookies: Path | None) -> requests.Session:
         return s
 
     raise SystemExit(
-        "Falta autenticación: usá el botón 'Login Earthdata' de la consola (guarda "
-        "earthdata_cookies.json) o pasá --cookies con el JSON exportado del navegador."
+        "Falta autenticación: en la consola, abrí Follaje y usá 'Conectar Earthdata' "
+        "pegando la cookie GETFILE_APP (guarda earthdata_cookies.json), o pasá "
+        "--cookies con el JSON exportado del navegador."
     )
 
 
