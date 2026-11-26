@@ -73,6 +73,11 @@ COPY despliegue/entrypoint.sh /usr/local/bin/entrypoint.sh
 # appuser, no el build. Dentro de la imagen no queda nada que escribir en /app/app/var.
 RUN chmod 0755 /usr/local/bin/entrypoint.sh \
  && useradd --create-home --uid 1000 --shell /bin/bash appuser
+# El HOME es /tmp/home (ENV de arriba) y los RUN anteriores corrieron como root: uv
+# y el chequeo de imports dejaron /tmp/home (con su .cache) con dueño root. appuser
+# no podia escribir ahi las credenciales (~/.cdsapirc, ~/.netrc) y el contenedor
+# entraba en un bucle de reinicio en cuanto el .env traia claves.
+RUN mkdir -p /tmp/home && chown -R 1000:1000 /tmp/home
 
 USER appuser
 

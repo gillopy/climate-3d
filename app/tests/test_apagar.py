@@ -69,9 +69,10 @@ class ElLanzadorDeWindows(unittest.TestCase):
         # del npipe y no baja nada. Por eso `down` no puede vivir en el .bat.
         self.assertNotIn("docker compose down", _bat())
 
-    def test_el_bat_propaga_el_fallo(self) -> None:
-        # `pause` pisa errorlevel: sin guardarlo antes, el exit 1 del .ps1 se
-        # pierde y cualquier script que llame al .bat ve éxito.
+    def test_el_bat_propaga_el_fallo_y_se_cierra_solo(self) -> None:
+        # La espera pisa errorlevel: sin guardarlo antes, el exit 1 del .ps1 se
+        # pierde y cualquier script que llame al .bat ve éxito. Además la ventana
+        # no puede quedarse esperando una tecla: al terminar se cierra sola.
         # Se miran las líneas reales: los comentarios `rem` no ejecutan nada.
         lineas = [
             linea.strip()
@@ -81,7 +82,10 @@ class ElLanzadorDeWindows(unittest.TestCase):
         cuerpo = "\n".join(lineas)
         self.assertIn('set "codigo=%errorlevel%"', cuerpo)
         self.assertIn("exit /b %codigo%", cuerpo)
-        self.assertLess(cuerpo.index('set "codigo=%errorlevel%"'), cuerpo.index("pause"))
+        self.assertNotIn("pause", cuerpo)
+        # El éxito sale sin esperar; el fallo espera y se cierra igual.
+        self.assertIn('if "%codigo%"=="0" exit /b 0', cuerpo)
+        self.assertLess(cuerpo.index('set "codigo=%errorlevel%"'), cuerpo.index("ping -n"))
 
     def test_el_bat_va_con_crlf(self) -> None:
         # .gitattributes pide CRLF para *.bat: con LF, `goto` se porta raro.

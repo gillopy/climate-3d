@@ -16,6 +16,9 @@ fallar() {
 
 # El HOME vive en /tmp para no depender del UID con el que se monte el volumen.
 mkdir -p "$HOME" || fallar "no se pudo crear el HOME '$HOME'."
+# Si el HOME no es escribible, ~/.cdsapirc y ~/.netrc fallan con un "Permission
+# denied" y el contenedor reinicia en bucle sin decir por que. Mejor decirlo aca.
+[ -w "$HOME" ] || fallar "el HOME '$HOME' no es escribible por el usuario del contenedor ($(id -un)). La imagen tiene que crearlo con el dueño correcto."
 
 if [ ! -d "$DATOS" ]; then
     fallar "no existe la raíz de datos '$DATOS'. Revisá el volumen /data (DATA_DIR en .env)."

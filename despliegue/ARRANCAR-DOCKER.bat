@@ -45,7 +45,7 @@ echo [x] Docker no respondio en 3 minutos.
 echo     Abri Docker Desktop a mano, espera a que diga "Engine running"
 echo     y volve a ejecutar este archivo.
 echo.
-pause
+ping -n 13 127.0.0.1 >nul
 exit /b 1
 
 :docker_ok
@@ -56,6 +56,12 @@ echo [2/3] Verificando la aplicacion...
 rem La imagen que se verifica es la que compose va a correr (${IMAGE:-climate3d:local}).
 set "OBJETIVO=%IMAGE%"
 if not defined OBJETIVO set "OBJETIVO=climate3d:local"
+rem El sello del commit se hornea al compilar (build arg de docker-compose.yml), asi
+rem que tiene que estar definido ANTES del build, no despues: si no, la imagen sale
+rem sin sello y la verificacion de abajo la rechaza.
+set "COMMIT="
+for /f "delims=" %%i in ('git -C "%~dp0.." rev-parse --short HEAD 2^>nul') do set "COMMIT=%%i"
+if defined COMMIT set "CLIMATE3D_COMMIT=%COMMIT%"
 docker image inspect "%OBJETIVO%" >nul 2>&1
 if errorlevel 1 goto sin_imagen
 set "YA_EXISTIA=1"
@@ -72,15 +78,21 @@ goto imagen_ok
 
 :compilar
 echo       No hay imagen local: se compila ahora (10-20 minutos la primera vez).
+rem Faltaba el build: se imprimia "se compila" y se seguia de largo, la imagen no
+rem existia y la verificacion del sello la rechazaba (fail closed). Con una
+rem referencia de registry no se compila: la baja :imagen_ok y verifica su sello.
+if /i not "%OBJETIVO%"=="climate3d:local" goto imagen_ok
+docker compose build
+if errorlevel 1 goto fallo
+set "YA_EXISTIA=1"
+echo       ok.
+goto imagen_ok
 
 :imagen_ok
 rem --- sello del commit: que Docker no sirva codigo viejo sin avisar ----------
-set "COMMIT="
-for /f "delims=" %%i in ('git -C "%~dp0.." rev-parse --short HEAD 2^>nul') do set "COMMIT=%%i"
-if defined COMMIT set "CLIMATE3D_COMMIT=%COMMIT%"
 rem Si la imagen no estaba y el objetivo es una referencia de registry, se baja
 rem AHORA para poder verificar su sello antes de arrancarla (nunca al reves).
-rem Con el tag local por defecto no hay nada que bajar: se compila como siempre.
+rem Con el tag local por defecto no hay nada que bajar: ya se compilo arriba.
 if not defined YA_EXISTIA (
 if /i not "%OBJETIVO%"=="climate3d:local" (
 echo       Bajando %OBJETIVO%...
@@ -149,7 +161,8 @@ echo.
 echo    Para apagarla: doble clic en APAGAR.bat
 echo ==========================================
 echo.
-pause
+rem Unos segundos para leer el mensaje y la ventana se cierra sola.
+ping -n 6 127.0.0.1 >nul
 exit /b 0
 
 :sin_docker
@@ -160,7 +173,7 @@ echo     2. Instalalo con las opciones por defecto.
 echo     3. Si te pide reiniciar, reinicia.
 echo     4. Volve a ejecutar este archivo.
 echo.
-pause
+ping -n 13 127.0.0.1 >nul
 start "" "https://www.docker.com/products/docker-desktop/"
 exit /b 1
 
@@ -169,5 +182,5 @@ echo.
 echo [x] Algo fallo.
 echo     Copia el texto de arriba y mandalo.
 echo.
-pause
+ping -n 13 127.0.0.1 >nul
 exit /b 1

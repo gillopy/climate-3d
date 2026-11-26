@@ -258,8 +258,45 @@ class ElSelloDeCommitDeLaImagen(unittest.TestCase):
         self.assertEqual(destinos - etiquetas, set())
 
 
+class ElAsistenteDeConfiguracion(unittest.TestCase):
+    """setup.ps1 reescribe el .env: no puede borrar lo que ya estaba configurado.
+
+    Por qué existe: correr el asistente sin consola (o responder Enter) regeneraba
+    el .env desde cero. Se perdían DATA_DIR y las credenciales, y la app después
+    pedía EARTHDATA_USER/EARTHDATA_PASSWORD aunque ya estuvieran puestas.
+    """
+
+    def setUp(self) -> None:
+        self.texto = (DESPLIEGUE / "setup.ps1").read_text(encoding="utf-8")
+
+    def test_lee_el_env_anterior_como_valor_por_defecto(self) -> None:
+        self.assertIn("$previo", self.texto)
+        for clave in (
+            "DATA_DIR",
+            "PORT",
+            "FIRMS_MAP_KEY",
+            "CDSAPI_KEY",
+            "EARTHDATA_USER",
+            "EARTHDATA_PASSWORD",
+        ):
+            with self.subTest(clave=clave):
+                self.assertIn(f"$previo.ContainsKey('{clave}')", self.texto)
+
+    def test_una_respuesta_vacia_no_pisa_el_valor(self) -> None:
+        # Las claves se preguntan a una variable temporal y sólo se aplican si
+        # traen algo: `$FirmsKey = Preguntar ...` borraba con Enter.
+        self.assertNotIn("$FirmsKey = Preguntar", self.texto)
+        self.assertNotIn("$EarthdataPassword = Preguntar", self.texto)
+        self.assertIn("if (-not [string]::IsNullOrWhiteSpace($r)) { $FirmsKey = $r }", self.texto)
+        self.assertIn(
+            "if (-not [string]::IsNullOrWhiteSpace($r)) { $EarthdataPassword = $r }",
+            self.texto,
+        )
+
+
 class InterpreteAisladoDelEntorno(unittest.TestCase):
     def test_un_mapa_vacio_no_hereda_os_environ(self) -> None:
+
         # `_python_repo({})` es "sin entorno", no "el entorno real".
         with mock.patch.dict(os.environ, {"CLIMATE3D_PYTHON": "/centinela/python"}):
             self.assertEqual(_python_repo(), Path("/centinela/python"))

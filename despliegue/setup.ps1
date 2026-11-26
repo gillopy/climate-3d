@@ -75,12 +75,37 @@ if ($LASTEXITCODE -ne 0) {
 }
 Ok 'Docker responde.'
 
+# Lo que ya estaba configurado no se pierde. Antes, correr el script sin consola
+# (o responder Enter) volvia a escribir el .env desde cero y borraba carpeta de
+# datos y credenciales: la app despues pedia EARTHDATA_USER/PASSWORD aunque ya
+# estuvieran puestas. Se lee el .env anterior y se usa como valor por defecto.
+$previo = @{}
+$rutaEnv = Join-Path $raiz '.env'
+if (Test-Path -LiteralPath $rutaEnv) {
+    foreach ($linea in Get-Content -LiteralPath $rutaEnv) {
+        if ($linea -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$') {
+            $valor = $Matches[2].Trim().Trim('"')
+            if (-not [string]::IsNullOrWhiteSpace($valor)) {
+                $previo[$Matches[1].ToUpperInvariant()] = $valor
+            }
+        }
+    }
+}
+if (-not $PSBoundParameters.ContainsKey('Port') -and $previo.ContainsKey('PORT')) {
+    $anterior = 0
+    if ([int]::TryParse($previo['PORT'], [ref]$anterior) -and $anterior -gt 0) {
+        $Port = $anterior
+    }
+}
+
 
 Paso '[2/6] Carpeta de datos (los .nc y las salidas)'
 $sugerida = 'D:\climate3d-data'
 if (-not (Test-Path -LiteralPath 'D:\')) {
     $sugerida = Join-Path $env:USERPROFILE 'climate3d-data'
 }
+# La configuracion existente manda: el default de arriba solo sirve la primera vez.
+if ($previo.ContainsKey('DATA_DIR')) { $sugerida = $previo['DATA_DIR'] }
 if ([string]::IsNullOrWhiteSpace($DataDir)) {
     $entrada = Preguntar "  ¿Dónde guardamos los datos? [$sugerida]"
     if ([string]::IsNullOrWhiteSpace($entrada)) { $DataDir = $sugerida } else { $DataDir = $entrada }
@@ -150,6 +175,21 @@ Write-Host '  FIRMS      -> focos de calor  (gratis: https://firms.modaps.eosdis
 Write-Host '  CDS        -> descarga ERA5   (gratis: https://cds.climate.copernicus.eu/)'
 Write-Host '  Earthdata  -> follaje PACE    (gratis: https://urs.earthdata.nasa.gov/)'
 
+# Lo que ya estaba en el .env cuenta como configurado: no se vuelve a preguntar
+# ni se borra si no hay respuesta.
+if ([string]::IsNullOrWhiteSpace($FirmsKey) -and $previo.ContainsKey('FIRMS_MAP_KEY')) {
+    $FirmsKey = $previo['FIRMS_MAP_KEY']
+}
+if ([string]::IsNullOrWhiteSpace($CdsKey) -and $previo.ContainsKey('CDSAPI_KEY')) {
+    $CdsKey = $previo['CDSAPI_KEY']
+}
+if ([string]::IsNullOrWhiteSpace($EarthdataUser) -and $previo.ContainsKey('EARTHDATA_USER')) {
+    $EarthdataUser = $previo['EARTHDATA_USER']
+}
+if ([string]::IsNullOrWhiteSpace($EarthdataPassword) -and $previo.ContainsKey('EARTHDATA_PASSWORD')) {
+    $EarthdataPassword = $previo['EARTHDATA_PASSWORD']
+}
+
 $hayFlags = -not ([string]::IsNullOrWhiteSpace($FirmsKey) -and
                   [string]::IsNullOrWhiteSpace($CdsKey) -and
                   [string]::IsNullOrWhiteSpace($EarthdataUser))
@@ -157,10 +197,14 @@ $hayFlags = -not ([string]::IsNullOrWhiteSpace($FirmsKey) -and
 if (-not $hayFlags) {
     $quiere = Preguntar '  ¿Configuramos credenciales ahora? (s/N)'
     if ($quiere -match '^(s|si|sí|y|yes)$') {
-        $FirmsKey = Preguntar '  FIRMS MAP_KEY'
-        $CdsKey = Preguntar '  Copernicus CDS key'
-        $EarthdataUser = Preguntar '  Earthdata usuario'
-        $EarthdataPassword = Preguntar '  Earthdata clave'
+        $r = Preguntar '  FIRMS MAP_KEY'
+        if (-not [string]::IsNullOrWhiteSpace($r)) { $FirmsKey = $r }
+        $r = Preguntar '  Copernicus CDS key'
+        if (-not [string]::IsNullOrWhiteSpace($r)) { $CdsKey = $r }
+        $r = Preguntar '  Earthdata usuario'
+        if (-not [string]::IsNullOrWhiteSpace($r)) { $EarthdataUser = $r }
+        $r = Preguntar '  Earthdata clave'
+        if (-not [string]::IsNullOrWhiteSpace($r)) { $EarthdataPassword = $r }
     }
 }
 
