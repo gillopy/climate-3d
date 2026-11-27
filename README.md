@@ -2,61 +2,101 @@
 
 ![Póster GOES-19 · disco completo · 4 de octubre de 2026, 04:45 UTC](docs/portada.png)
 
-Animaciones y pósteres del clima con datos reales: **ERA5** (reanálisis) y
-**GOES-R ABI** (satélite). Todo se renderiza local con matplotlib + cartopy en un
-estilo de afiche — fondo oscuro, barra de color fina al pie, rótulos discretos.
-No hay servicios ni cuentas de por medio: bajás el dato y lo dibujás.
+Animaciones y pósteres del clima con datos reales: **ERA5** (reanálisis), **GOES-R ABI**
+y otros satélites. El render es siempre local, con matplotlib + cartopy y un estilo de
+afiche — fondo oscuro, barra de color fina al pie, rótulos discretos. No hay ningún
+servicio propio que correr: bajás el dato y lo dibujás. Las fuentes públicas que sí piden
+red están acotadas: NASA GIBS para las capas ya pintadas, FIRMS con una clave gratuita y
+Earthdata Login para PACE y NISAR.
 
-## Las cuatro etapas
+## El mapa del repo
 
 El repo está separado por **rol**, y se lee en el orden en que se usa:
 
 | Carpeta | Qué hace | ¿Internet? |
 | --- | --- | --- |
-| [`descargar/`](./descargar) | Baja los datasets (NOAA S3, Copernicus CDS, NASA GIBS) | **Sí** |
-| [`prototipos/`](./prototipos) | Pósteres e imágenes fijas, y los notebooks originales | No (salvo `nisar_fusion.py`) |
-| [`cuadros/`](./cuadros) | Renderiza una animación cuadro por cuadro | No |
+| [`descargar/`](./descargar) | Baja los datasets (NOAA S3, Copernicus CDS, NASA GIBS, ASF) | **Sí** |
+| [`prototipos/`](./prototipos) | Pósteres e imágenes fijas | Casi nunca: `poster_goes_lst.py`, `poster_mur_realista.py` y `poster_pace_gibs.py` piden GIBS, y `nisar_fusion.py` consulta Sentinel-2 |
+| [`cuadros/`](./cuadros) | Renderiza una animación cuadro por cuadro | No, salvo reponer un `.nc` truncado |
 | [`animar/`](./animar) | Junta los cuadros en un MP4 o un GIF | No |
+| [`comun/`](./comun) | Lo compartido: rutas, paletas, lecturas y kits por producto | No |
+| [`app/`](./app) | La consola web: producto + parámetros → los comandos reales del repo | Sí: los jobs descargan |
+| [`despliegue/`](./despliegue) | Lanzadores, asistente y contenedor | Solo al construir la imagen |
+
+Aparte viven [`validacion/`](./validacion) (mide los productos NISAR contra una referencia
+óptica de Sentinel-2), [`docs/`](./docs) (la portada, [`docs/galeria/`](./docs/galeria) y el
+catálogo [`docs/FLUJOS.md`](./docs/FLUJOS.md)) y `odd/` (notas internas de trabajo, fuera de
+lo publicado).
 
 ### Scripts por etapa
 
 | Etapa | Scripts |
 | --- | --- |
-| `descargar/` | `descargar_goes.py`, `descargar_era5.py`, `descargar_himawari.py`, `truecolor_goes.py`, `geocolor.py`, `mur_sst.py`, `truecolor.py`, `sandwich.py`, `pace_landvi.py`, `nisar.py`, `precipitacion_ecmwf.py`, `anomalia_2t_ecmwf.py`, `viento_250_mslp.py` |
-| `prototipos/` | `poster_goes.py`, `poster_goes_realista.py`, `poster_goes_truecolor.py`, `poster_goes_disco.py`, `poster_mur_realista.py`, `animar_mur_realista.py`, `poster_pace.py`, `poster_pace_gibs.py`, `poster_anomalia.py`, `poster_follaje.py`, `poster_nisar.py`, `nisar_rvi.py`, `nisar_cambio.py`, `nisar_serie.py`, `nisar_geotiff.py`, `nisar_agua.py`, `nisar_incendio.py`, `nisar_fusion.py`, `vista_paraguay.py` |
-| `cuadros/` | `cuadros_goes.py`, `cuadros_c13_ir.py`, `cuadros_himawari_ir.py`, `cuadros_geocolor.py`, `cuadros_mur.py`, `cuadros_truecolor.py`, `cuadros_sandwich.py`, `cuadros_follaje.py`, `cuadros_follaje_globo.py`, `cuadros_precipitacion.py`, `cuadros_anomalia_2t.py`, `cuadros_viento_250.py` |
+| `descargar/` | `anomalia_2t_ecmwf.py`, `cbers.py`, `descargar_era5.py`, `descargar_goes_lst.py`, `descargar_goes_rgb.py`, `descargar_goes.py`, `descargar_himawari.py`, `firms.py`, `geocolor.py`, `goes_descarga.py`, `meteosat.py`, `mur_sst.py`, `nisar.py`, `pace_landvi.py`, `precipitacion_ecmwf.py`, `sandwich.py`, `snapshot_paraguay.py`, `truecolor_goes.py`, `truecolor.py`, `viento_250_mslp.py` |
+| `prototipos/` | `animar_mur_realista.py`, `nisar_agua.py`, `nisar_cambio.py`, `nisar_color_optico.py`, `nisar_fusion.py`, `nisar_geotiff.py`, `nisar_gunw.py`, `nisar_incendio.py`, `nisar_rvi.py`, `nisar_serie.py`, `nisar_sme2_calibracion.py`, `nisar_sme2.py`, `poster_anomalia.py`, `poster_follaje.py`, `poster_goes_banda.py`, `poster_goes_disco.py`, `poster_goes_lst.py`, `poster_goes_realista.py`, `poster_goes_rgb.py`, `poster_goes_sandwich.py`, `poster_goes_truecolor.py`, `poster_goes.py`, `poster_indices.py`, `poster_mur_realista.py`, `poster_nisar.py`, `poster_pace_gibs.py`, `poster_pace.py`, `vista_paraguay.py` |
+| `cuadros/` | `cuadros_anomalia_2t.py`, `cuadros_c13_ir.py`, `cuadros_cbers.py`, `cuadros_follaje_globo.py`, `cuadros_follaje.py`, `cuadros_geocolor.py`, `cuadros_goes.py`, `cuadros_himawari_ir.py`, `cuadros_meteosat.py`, `cuadros_mur.py`, `cuadros_precipitacion.py`, `cuadros_sandwich.py`, `cuadros_truecolor.py`, `cuadros_viento_250.py`, `snapshot_paraguay.py` |
 | `animar/` | `armar.py` |
 
 El catálogo completo, flujo por flujo —qué baja cada script, qué póster produce, cómo se
 anima y qué se verificó— está en [`docs/FLUJOS.md`](./docs/FLUJOS.md).
 
-Los tres últimos scripts de cada fila son **pares de ECMWF**: cada descargador escribe una
-serie `.npz` y su render la convierte en globo.
-`descargar/precipitacion_ecmwf.py` y `cuadros/cuadros_precipitacion.py` aceptan
-`--modelo {ifs,aifs-ens,aifs-single}`; `descargar/anomalia_2t_ecmwf.py` y
-`cuadros/cuadros_anomalia_2t.py` aceptan `--modelo {ifs,aifs-single}`.
+Los pares de ECMWF se reparten entre las filas: el descargador deja una serie `.npz` y su
+render en `cuadros/` la convierte en globo. `descargar/precipitacion_ecmwf.py` y
+`cuadros/cuadros_precipitacion.py` aceptan `--modelo {ifs,aifs-ens,aifs-single}`;
+`descargar/anomalia_2t_ecmwf.py` y `cuadros/cuadros_anomalia_2t.py` aceptan
+`--modelo {ifs,aifs-single}`; y `descargar/viento_250_mslp.py` y
+`cuadros/cuadros_viento_250.py` aceptan `--modelo {ifs,gfs}`.
 
-Aparte, [`comun/`](./comun) guarda lo compartido (rutas, constantes de estilo, el kit
-NISAR `comun/nisar.py` y las funciones ópticas `comun/optico.py`).
+[`comun/`](./comun) guarda lo compartido: `rutas.py` (la única fuente de las raíces),
+`estilo.py` y las paletas (`paleta_gibs.py`, `paleta_reflectancia.py`, `paleta_c07_ir.py`,
+`paleta_c16_ir.py`, `paleta_ir_vapor.py`, `paleta_ir_ventana.py`), las lecturas y sondas de
+cada satélite (`goes_lectura.py`, `gibs.py`, `goes_reciente.py`, `geocolor_reciente.py`,
+`himawari_reciente.py`, `dia_reciente.py`, `goes_lst.py`, `meteosat.py`, `cbers.py`), el kit
+NISAR (`nisar.py`, `optico.py`, `hls.py`, `sentinel2.py`, `catastro.py`, `validacion.py`),
+`follaje.py`, `series.py`, `reuso_cuadros.py`, `rgb_goes.py`, `paraguay.py` y `globo3d.py`.
 
-**Sólo `descargar/` y la fusión óptica necesitan conexión** (`prototipos/nisar_fusion.py`
-consulta Sentinel-2 en Planetary Computer). Todo lo demás trabaja sobre lo ya bajado, así
-que podés renderizar y animar sin internet.
+**La red está sólo en `descargar/` y en los scripts que piden GIBS o Sentinel-2**
+(`prototipos/poster_goes_lst.py`, `poster_mur_realista.py`, `poster_pace_gibs.py` y
+`nisar_fusion.py`). Todo lo demás trabaja sobre lo ya bajado, así que podés renderizar y
+animar sin internet.
 
 Si es tu primera vez, andá a [`GUIA.md`](./GUIA.md): ahí está el flujo completo explicado paso
 a paso.
 
 ## Dónde viven los datos
 
-Los `.nc` pesan varios GB y las salidas también, así que **no van al repo**. La raíz de datos
-la define un solo archivo, [`comun/rutas.py`](./comun/rutas.py), y por defecto apunta a
-`D:\Users\guill\dataset era5`.
+Los `.nc` pesan varios GB y las salidas también, así que **no van al repo**. Las raíces las
+define un solo archivo, [`comun/rutas.py`](./comun/rutas.py): una instalación nueva usa
+`~/climate3d/datos` (en el contenedor, `/data`). La ruta histórica
+`D:\Users\guill\dataset era5` se sigue leyendo **sólo si ya existe** en la máquina, para no
+mudarle la carpeta a quien la tenía así.
 
 Si tus datos están en otro lado, no toques código:
 
 ```powershell
 $env:CLIMATE3D_DATOS = "D:\mi\carpeta\datos"
 ```
+
+| Variable | Qué mueve | Default |
+| --- | --- | --- |
+| `CLIMATE3D_DATOS` | datos crudos y `salidas/` | `~/climate3d/datos` |
+| `CLIMATE3D_MEDIA` | artefactos de los jobs, historial y cachés | `<DATOS>/.media` |
+| `CLIMATE3D_NISAR` | los `.h5` de NISAR | `<DATOS>/nisar` |
+| `CLIMATE3D_CATASTRO` | shapefile o carpeta del catastro del SNC | `<DATOS>/catastro` |
+| `CLIMATE3D_CONFIG` | el `config.json` que escribe el asistente | `%LOCALAPPDATA%\climate3d\config.json` |
+| `CLIMATE3D_EXTRA_DIRS` | carpetas extra para buscar el `.nc` de ERA5 (`os.pathsep`) | — |
+
+La precedencia es la misma para todas: variable de entorno → `config.json` → default. El
+asistente de `despliegue\ARRANCAR.ps1` escribe ese `config.json` con lo que elijas, así que
+en el día a día no hay que exportar nada.
+
+Las credenciales también son variables de entorno; hay tres:
+
+| Variable | Para qué | Dónde se pone |
+| --- | --- | --- |
+| `FIRMS_MAP_KEY` | focos de calor (NASA FIRMS) | `datos/firms_map_key.txt` (ignorado por git) o el entorno |
+| `EARTHDATA_USER` / `EARTHDATA_PASSWORD` | NISAR (ASF) y follaje de PACE (OB.DAAC) | `.env` de la raíz, `~/.netrc` o el entorno |
+| `CDSAPI_KEY` | bajar el `.nc` de ERA5 | `~/.cdsapirc` en nativo; `despliegue\.env` en Docker (el entrypoint lo escribe) |
 
 Los `.h5` de NISAR viven adentro de la misma carpeta de datos (`<DATOS>/nisar`): cada GCOV
 pesa ~1.9 GB. Si querés tenerlos en otro disco, hay dos formas:
@@ -93,23 +133,29 @@ La validación reproducible está en [`validacion/`](./validacion).
 Dentro de un contenedor la ruta es siempre `/data` y no hace falta exportar nada: lo
 configura el volumen. Ver [Correr en Docker](#correr-en-docker).
 
-## Correr en Docker
+## La consola (app/)
 
-La consola y el pipeline enteros en un contenedor, para que otra persona los use sin
-instalar Python ni Node:
+La consola es la forma interactiva de lo mismo: elegís un producto y sus parámetros —fecha,
+banda, paleta, resolución, si querés animación— y la consola arma y corre los comandos
+reales de `descargar/`, `cuadros/` y `animar/` con el `.venv` del repo, con el progreso en
+vivo. No reemplaza nada: el pipeline sigue siendo los mismos scripts.
 
-```powershell
-.\despliegue\setup.ps1      # Windows
-```
+- **Arranque nativo**: doble clic en `despliegue\ARRANCAR.bat` (o `.\despliegue\ARRANCAR.ps1`),
+  que pregunta la carpeta de datos y levanta todo en **http://127.0.0.1:8000**.
+- **Docker**: `.\despliegue\setup.ps1` levanta la misma app en **http://127.0.0.1:8080**.
+- La API es **FastAPI** y la UI **React + TypeScript + Vite**; un solo puerto sirve las dos.
+- **Dos vistas**: la consola de recetas y el **visor NISAR**.
+- El rail tiene **21 productos** (GOES, GeoColor, VIIRS, PACE, Himawari, Meteosat, CBERS,
+  MUR, ECMWF y follaje), y cada uno declara sólo los controles que su script acepta: un
+  botón que no hace nada es peor que un botón ausente.
 
-```bash
-./despliegue/setup.sh       # Linux / macOS
-```
+Instalación, modo desarrollo, flags reales por producto y catastro están en
+[`app/README.md`](./app/README.md).
 
-El asistente pregunta dónde viven los datos, valida la carpeta, pide las credenciales
-opcionales, escribe `.env` y levanta la app en **http://127.0.0.1:8080**. El detalle
-completo —qué hay adentro, credenciales, problemas comunes, cómo publicar la imagen— está
-en [`docs/DOCKER.md`](./docs/DOCKER.md).
+## Visor NISAR
+
+El visor es la otra vista de la consola: mapa, fechas del track/frame, render de cambio y
+catastro. Acá queda el detalle de lo que agrega por encima del render.
 
 ### Capas ambientales del visor NISAR
 
@@ -154,10 +200,29 @@ El dataset **no trae nombre de propietario**: se muestran los identificadores re
 del SNC. Detalle, configuración (`CLIMATE3D_CATASTRO`) y límites en
 [`app/README.md`](./app/README.md#catastro-parcelas-fincas-y-matrículas).
 
+## Correr en Docker
+
+La consola y el pipeline enteros en un contenedor, para que otra persona los use sin
+instalar Python ni Node:
+
+```powershell
+.\despliegue\setup.ps1      # Windows
+```
+
+```bash
+./despliegue/setup.sh       # Linux / macOS
+```
+
+El asistente pregunta dónde viven los datos, valida la carpeta, pide las credenciales
+opcionales, escribe `despliegue\.env` y levanta la app en **http://127.0.0.1:8080**.
+Publica sólo en `127.0.0.1`, nunca en la red; adentro el volumen es siempre `/data`, así que
+no hay que exportar ninguna raíz. Para apagarla: `APAGAR.bat` o `docker compose down`. El
+detalle completo —qué hay adentro, credenciales, problemas comunes, cómo publicar la
+imagen— está en [`docs/DOCKER.md`](./docs/DOCKER.md).
 
 ## Qué se puede lograr
 
-Quince salidas del mismo pipeline, todas con datos reales. En
+Salidas del mismo pipeline, todas con datos reales. En
 [`docs/galeria/`](./docs/galeria) están las demás.
 
 ### GeoColor (GOES-East): color real de día, IR y luces de ciudad de noche
@@ -200,6 +265,11 @@ es la **física de la rampa** (`-92.1` a `56.9 °C`), no percentiles, así que u
 cuadros no cambia de color entre cuadro y cuadro. Lo dibuja
 [`prototipos/poster_goes_realista.py`](./prototipos/poster_goes_realista.py), que también
 acepta `--frames` para armar la animación.
+
+Aparte, el **LST del ABI L2** (temperatura de superficie, 2 km, un gránulo por hora) sale con
+[`descargar/descargar_goes_lst.py`](./descargar/descargar_goes_lst.py) y
+[`prototipos/poster_goes_lst.py`](./prototipos/poster_goes_lst.py): sólo pinta tierra con
+recuperación limpia (`DQF != 3`), así que océano y nubes quedan transparentes.
 
 ### Anomalía de SST (MUR): el Pacífico ecuatorial, semana a semana
 
@@ -281,6 +351,18 @@ en [`comun/rgb_goes.py`](./comun/rgb_goes.py).
 
 > **Ojo con Fire Temperature**: usa las bandas visibles/near-IR, así que de noche las
 > nubes vienen negras. Es un producto diurno para incendios, no un IR de 24 h.
+
+### Snapshot de Paraguay: una sola captura, sin animación
+
+![Snapshot de Paraguay del 31 de octubre de 2026](docs/galeria/snapshot_paraguay_2026-10-31T0000.png)
+
+No es una serie: es **una imagen** recortada a los bordes del país. El encuadre no se escribe
+a mano —sale del GeoJSON de Paraguay más un margen— y la capa se pide a **NASA GIBS** (por
+defecto True Color de VIIRS NOAA-20; `--capa` acepta las demás). Sin globo, sin rótulos ni
+barra de color: la captura es la imagen, con el contorno del país dibujado encima. Con
+`--firms` se superponen los focos de calor. Los scripts son
+[`descargar/snapshot_paraguay.py`](./descargar/snapshot_paraguay.py) y
+[`cuadros/snapshot_paraguay.py`](./cuadros/snapshot_paraguay.py).
 
 ### "Solo Paraguay" y "Últimos datos": dos controles transversales
 
@@ -371,6 +453,12 @@ Los rótulos van en **hora de Paraguay (UTC-4)**. Los scripts son
 [`descargar/descargar_himawari.py`](./descargar/descargar_himawari.py) y
 [`cuadros/cuadros_himawari_ir.py`](./cuadros/cuadros_himawari_ir.py).
 
+En la misma familia están **Meteosat-12 (MTG-I1)**, cuyo disco FCI EUMETView ya publica
+pintado ([`descargar/meteosat.py`](./descargar/meteosat.py),
+[`cuadros/cuadros_meteosat.py`](./cuadros/cuadros_meteosat.py)), y el recorte de
+**CBERS-4A** desde el STAC abierto del INPE ([`descargar/cbers.py`](./descargar/cbers.py),
+[`cuadros/cuadros_cbers.py`](./cuadros/cuadros_cbers.py)).
+
 ---
 
 ### Precipitación total acumulada (ECMWF): 144 h de lluvia sobre Sudamérica
@@ -444,6 +532,11 @@ dentro del disco. El viento máximo global llega a ~**182 kt** y la presión va 
 [`descargar/viento_250_mslp.py`](./descargar/viento_250_mslp.py) y
 [`cuadros/cuadros_viento_250.py`](./cuadros/cuadros_viento_250.py).
 
+El descargador también acepta **`--modelo gfs`**: baja el **GFS 0.25° de NOAA** (AWS Open
+Data, `.idx` de texto) con el mismo recorte por bytes y deja la misma serie, sólo que en
+`crudos_viento250_gfs_...`. El render toma el mismo flag y no cambia: lo único que cambia es
+la fuente que se lee y la que se cita al pie.
+
 ---
 
 ### Follaje de otoño (PACE/OCI): cazar hojas rojas desde el espacio
@@ -460,7 +553,7 @@ la segunda, y aparecen en Australia, el sur de África y el cinturón agrícola 
 El dato **no sale de GIBS**: son los gránulos **L3M LANDVI** de OB.DAAC, diarios, que traen
 diez índices de vegetación por archivo y **ya vienen enmascarados para nubes**. La consola
 los baja en **0p1deg** (~37 MB por día); el descargador también acepta **4 km** (~170 MB).
-**Exige Earthdata Login**, así que es la única rama del repo que necesita cuenta. Basta con
+**Exige Earthdata Login**, igual que la descarga de NISAR desde ASF. Basta con
 `EARTHDATA_USER` y `EARTHDATA_PASSWORD` en el `.env` (o en `~/.netrc`): el descargador
 repite el Basic auth en el redirect de OB.DAAC a URS y baja el `.nc` sin navegador ni
 cookies. Si preferís no poner la clave, sigue estando **Conectar Earthdata**: abrís
@@ -497,6 +590,8 @@ script del compuesto es [`prototipos/poster_pace_gibs.py`](./prototipos/poster_p
 - Python 3.12 o superior y el entorno `.venv` de la raíz.
 - Las dependencias están en [`pyproject.toml`](./pyproject.toml) y fijadas, versión por
   versión, en [`uv.lock`](./uv.lock): se instalan con [uv](https://docs.astral.sh/uv/).
+- **Node 20.19 o superior** y `npm`, sólo para compilar la UI web de la consola:
+  `cd app\web; npm install; npm run build`. El pipeline de Python no lo necesita.
 
 ```powershell
 uv sync                                                 # crea/actualiza .venv
@@ -505,6 +600,10 @@ uv sync                                                 # crea/actualiza .venv
 
 `eccodes` hace falta para los GRIB2 de ECMWF y `h5py` para leer el NetCDF/HDF5 de ERA5
 sin `xarray`.
+
+`prototipos/` ya no es 100 % offline: `poster_goes_lst.py` y `poster_mur_realista.py` piden
+el fondo o la leyenda a GIBS, `poster_pace_gibs.py` baja el compuesto de GIBS y
+`nisar_fusion.py` consulta Sentinel-2.
 
 ## Primeros pasos
 
@@ -520,7 +619,7 @@ sin `xarray`.
     --px 720 --globo --centro -73 -18 --paleta clean_ir
 
 # 4) Armar el MP4
-.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_G19_2026-10-02T0000_432f_720px" --fps 12.5
+.venv\Scripts\python.exe animar\armar.py --frames "<DATOS>\salidas\frames_G19_2026-10-02T0000_432f_720px" --fps 12.5
 ```
 
 Cada etapa imprime al terminar **el comando de la siguiente**, así que en la práctica alcanza
@@ -541,7 +640,7 @@ El flujo completo del globo de **precipitación total acumulada** (49 cuadros de
 .venv\Scripts\python.exe cuadros\cuadros_precipitacion.py --fecha 2026-10-20 --ciclo 06 --hasta-hora 144 --paso 3 --solo-poster
 
 # 3) Armar el MP4
-.venv\Scripts\python.exe animar\armar.py --frames "D:\Users\guill\dataset era5\salidas\frames_precipitacion_globo_2026-10-20T0600_49f_2712px" --fps 12.5
+.venv\Scripts\python.exe animar\armar.py --frames "<DATOS>\salidas\frames_precipitacion_globo_2026-10-20T0600_49f_2712px" --fps 12.5
 ```
 
 El póster queda en `SALIDAS/poster_precip_ecmwf_2026-10-20_06z_fh144.png` y los cuadros en la
@@ -564,10 +663,31 @@ una vista regional se leen igual:
 - El **contorno de Paraguay** se dibuja negro y fino (0.8 pt), sutil sobre el mapa. Se activa
   con `--geojson` y se apaga con `--sin-borde`.
 - **Paletas**: `clean_ir` (la de GIBS, escala fija), `termico`, `anomalia`, `gris`, `magma`,
-  `inferno`, `turbo`.
+  `inferno`, `turbo`, y las que van atadas a una banda en `poster_goes_banda.py`:
+  `reflectancia` (C01-C06), `c07_ir`, `c08_ir`/`c09_ir`/`c10_ir` (vapor de agua), `c11_ir`
+  a `c15_ir` (ventana IR) y `c16_ir`.
 
 En las animaciones los rótulos escalan **sub-linealmente** con la resolución: si escalaran
 linealmente, a 2048 px el título se comería el cuadro.
+
+## Pruebas y validación
+
+Las pruebas de la consola corren desde la raíz del repo:
+
+```powershell
+python -m unittest discover -s app\tests
+```
+
+Con el entorno del repo es el mismo comando con su intérprete:
+`.venv\Scripts\python.exe -m unittest discover -s app\tests`. Son **40 archivos** de prueba
+y **669 métodos** (`test_*`); cubren la API, el catálogo y los flags reales de cada script,
+las rutas y la portabilidad, NISAR, FIRMS, GIBS, el catastro, el reuso de cuadros y las
+recetas ECMWF.
+
+`validacion/` es otra cosa: scripts reproducibles que miden los productos NISAR contra una
+referencia independiente —**Sentinel-2 L2A**, NDVI pre/post enmascarado con SCL— y dejan
+`informe.md`, `metricas.json` y las figuras. El detalle y los resultados están en
+[`validacion/README.md`](./validacion/README.md).
 
 ## Notas
 
