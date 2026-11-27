@@ -60,7 +60,9 @@ BANDAS_INDICES = ("B03", "B04", "B08", "B11", "B12", "SCL")
 BANDAS_COLOR = ("B02", "B03", "B04", "SCL")
 
 #: Subir esto invalida toda la cache en disco (cambia el prefijo de la clave).
-CACHE_VERSION = 1
+#: v2: el color real se guarda en reflectancia 0..1 (antes eran DN de L2A) para
+#: que una fecha Sentinel-2 y otra HLS compartan la misma escala.
+CACHE_VERSION = 2
 
 
 def _ventana(src, bbox):
@@ -212,10 +214,18 @@ def buscar_items(
     nubes_max: float,
     max_items: int = 8,
     cliente=None,
+    orden: str = "nubes",
 ):
-    """Items L2A con menos nubes que `nubes_max` en +-`dias` de `centro`."""
+    """Items L2A con menos nubes que `nubes_max` en +-`dias` de `centro`.
+
+    ``orden="nubes"`` (default) prioriza la escena mas limpia del periodo.
+    ``orden="cercania"`` prioriza la fecha mas proxima a `centro` y usa las
+    nubes solo para desempatar: es lo que necesita el color real antes/despues.
+    """
     if not DISPONIBLE:
         raise RuntimeError(f"no puedo leer Sentinel-2: {MOTIVO}")
+    if orden not in ("nubes", "cercania"):
+        raise ValueError(f"orden desconocido: {orden}")
     desde = centro - timedelta(days=max(1, int(dias)))
     hasta = centro + timedelta(days=max(1, int(dias)))
     print(f"buscando Sentinel-2 del {desde} al {hasta} (nubes < {nubes_max:g}%)")
@@ -226,10 +236,15 @@ def buscar_items(
         datetime=f"{desde}/{hasta}",
         query={"eo:cloud_cover": {"lt": float(nubes_max)}},
     )
-    items = sorted(
-        list(busqueda.items()),
-        key=lambda item: float(item.properties.get("eo:cloud_cover", 100.0)),
-    )[: max(1, int(max_items))]
+    items = list(busqueda.items())
+    if orden == "cercania":
+        items = optico.ordenar_por_cercania(items, centro)
+    else:
+        items = sorted(
+            items,
+            key=lambda item: float(item.properties.get("eo:cloud_cover", 100.0)),
+        )
+    items = items[: max(1, int(max_items))]
     print(f"Sentinel-2: {len(items)} item(s)")
     return items
 
@@ -349,12 +364,15 @@ def _calcular_color(datos):
 
     La mediana entre items va sobre reflectancia cruda: el estirado a 8 bits
     se hace despues para que dos fechas comparables salgan con la misma escala.
+    L2A publica enteros escalados x10000; aca se pasan a 0..1 para que una fecha
+    Sentinel-2 y otra HLS (que ya viene en 0..1) se puedan escalar juntas.
     """
     valida = optico.mascara_scl(datos["SCL"])
+    escala = 1.0 / 10000.0
     return {
-        "R": np.where(valida, datos["B04"], np.nan).astype(np.float32),
-        "G": np.where(valida, datos["B03"], np.nan).astype(np.float32),
-        "B": np.where(valida, datos["B02"], np.nan).astype(np.float32),
+        "R": np.where(valida, datos["B04"], np.nan).astype(np.float32) * escala,
+        "G": np.where(valida, datos["B03"], np.nan).astype(np.float32) * escala,
+        "B": np.where(valida, datos["B02"], np.nan).astype(np.float32) * escala,
     }
 
 
@@ -413,6 +431,32 @@ def componer_indices(
     )
 
 
+def componer_color_reflectancia(
+    items,
+    bbox: tuple[float, float, float, float],
+    destino_forma: tuple[int, int],
+    destino_transform,
+    destino_crs,
+    px: int,
+) -> tuple[dict[str, np.ndarray] | None, list[dict]]:
+    """R/G/B medianos en reflectancia cruda, alineados a la grilla destino.
+
+    No estira: devuelve los canales en reflectancia para que el llamador pueda
+    calcular una escala comun entre dos fechas y recien despues pasar a 8 bits.
+    """
+    return _componer(
+        items,
+        bbox,
+        destino_forma,
+        destino_transform,
+        destino_crs,
+        px,
+        BANDAS_COLOR,
+        _calcular_color,
+        "color",
+    )
+
+
 def componer_color(
     items,
     bbox: tuple[float, float, float, float],
@@ -424,32 +468,15 @@ def componer_color(
     """Color real (mediana de reflectancia R/G/B) alineado a la grilla destino.
 
     El estirado 2-98% va DESPUES de la mediana y sobre los tres canales juntos
-    (no por canal), para que el balance de color no se tiña y dos fechas
-    comparables salgan con la misma escala. Devuelve RGB uint8 o ``(None,
-    usados)`` si ningun item dejo pixeles.
+    (no por canal), para que el balance de color no se tiña. Devuelve RGB uint8
+    o ``(None, usados)`` si ningun item dejo pixeles.
     """
-    salida, usados = _componer(
-        items,
-        bbox,
-        destino_forma,
-        destino_transform,
-        destino_crs,
-        px,
-        BANDAS_COLOR,
-        _calcular_color,
-        "color",
+    capas, usados = componer_color_reflectancia(
+        items, bbox, destino_forma, destino_transform, destino_crs, px
     )
-    if salida is None:
+    if capas is None:
         return None, usados
-    apilado = np.stack([salida["R"], salida["G"], salida["B"]])  # (3, H, W)
-    con_dato = np.isfinite(apilado).all(axis=0)
-    muestra = apilado[np.isfinite(apilado)]
-    if muestra.size == 0:
+    escala = optico.escala_comun([capas])
+    if escala is None:
         return None, usados
-    lo, hi = np.percentile(muestra, [2, 98])
-    if hi <= lo:
-        hi = lo + 1.0
-    norm = np.clip((apilado - lo) / (hi - lo), 0.0, 1.0)
-    rgb = (np.moveaxis(np.nan_to_num(norm, nan=0.0), 0, -1) * 255.0).astype(np.uint8)
-    rgb[~con_dato] = (8, 9, 10)
-    return rgb, usados
+    return optico.estirar_rgb(capas, *escala), usados

@@ -3099,6 +3099,25 @@ input[type="range"]:disabled {
   grid-column: 1 / -1;
 }
 
+/* Check de color real: mismo bloque que un filtro, pero en una linea legible. */
+.nisar__filtros label.nisar__check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--mist);
+  cursor: pointer;
+}
+
+.nisar__filtros label.nisar__check input {
+  margin: 0;
+  flex: none;
+}
+
 .nisar__filtros .btn {
   min-height: 32px;
 }

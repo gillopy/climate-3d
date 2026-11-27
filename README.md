@@ -157,6 +157,11 @@ Instalación, modo desarrollo, flags reales por producto y catastro están en
 El visor es la otra vista de la consola: mapa, fechas del track/frame, render de cambio y
 catastro. Acá queda el detalle de lo que agrega por encima del render.
 
+El render de cambio puede sumar, con el check **Color real (antes/después)**, dos PNG
+—uno por fecha— con la escena de Sentinel-2 o HLS más cercana a esa fecha, alineada al
+mismo recorte y con una escala común para compararlas. No reemplaza la confirmación NDVI
+ni agrega un delta: son dos archivos aparte.
+
 ### Capas ambientales del visor NISAR
 
 El mapa del visor NISAR puede superponer seis capas de conservación, en cualquier parte del

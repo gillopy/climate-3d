@@ -815,6 +815,15 @@ El job `nisar_render` despacha por `producto`:
   la referencia NDVI del Este, el radar solo queda en F1 denso ≈ 0.27: es un mapa
   de cambio/screening, no un detector operativo de deforestación (ver
   `validacion/README.md`).
+  Con **Color real (antes/después)** —un check aparte, apagado por defecto— la
+  corrida suma dos PNG sueltos, `<base>_previo.png` y `<base>_posterior.png`, con
+  la escena óptica **más cercana** a cada fecha (la cercanía manda; las nubes
+  solo desempatan) entre Sentinel-2, HLS L30 y HLS S30 según **Fuente óptica**.
+  Las dos fechas comparten un único estirado 2-98 %, así que se pueden comparar
+  de verdad; no hay delta ni máscara. No depende de «Confirmar con óptico»: con
+  el check activo y la confirmación apagada, el render sigue siendo solo radar
+  más las dos imágenes de color. Si un lado no consigue escena, el log dice el
+  motivo y sale el otro lado, sin cortar la corrida.
 - **Serie temporal** (`nisar_serie.py`): usa todas las fechas locales del mismo
   track/frame/colección (mínimo 2), arma la serie de HV/HH/RVI, el compuesto
   mediano y el mapa CUSUM con la fecha de cambio y hectáreas por fecha.

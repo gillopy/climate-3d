@@ -2836,6 +2836,10 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
             if detector == "ndvi":
                 verificar = True
                 mmu_ha = min(mmu_ha, 0.1)
+            # Color real opcional: el visor lo activa con un check y suma dos
+            # PNG (previo y posterior) con la escena optica mas cercana a cada
+            # fecha. No depende de la confirmacion NDVI ni la reemplaza.
+            color_real = bool(params.get("color_real"))
             render = Step(
                 kind="render",
                 label=f"comparando fechas a {px} px",
@@ -2864,6 +2868,9 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                     # el usuario ya paga Sentinel-2, que se vea NDVI/NDBI/NDWI.
                     *(["--indices", str(work / "nisar_cambio_indices.png")]
                       if verificar else []),
+                    # Color real antes/despues: dos PNG sueltos, sin delta.
+                    *(["--color-out", str(work / f"nisar_color_{px}")]
+                      if color_real else []),
                     "--out", str(work / f"nisar_cambio_{modo_cambio}_{px}.png"),
                     "--geojson", geojson,
                     # El poligono de la perdida es lo que el panel de trabajos

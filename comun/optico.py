@@ -8,6 +8,7 @@ el script `nisar_fusion.py` se encarga de bajar y reproyectar las imágenes.
 from __future__ import annotations
 
 import warnings
+from datetime import date, datetime, timezone
 
 import numpy as np
 
@@ -89,6 +90,97 @@ def compuesto_mediana(ndvis: list[np.ndarray]) -> np.ndarray:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         return np.nanmedian(pila, axis=0).astype(np.float32)
+
+
+# ---------------------------------------------------------------------------
+# Color real: orden por cercania y estirado compartido
+# ---------------------------------------------------------------------------
+
+
+def _momento(valor) -> datetime | None:
+    """Normaliza `datetime`/`date` a `datetime` para poder restarlos."""
+    if isinstance(valor, datetime):
+        return valor
+    if isinstance(valor, date):
+        return datetime(valor.year, valor.month, valor.day)
+    return None
+
+
+def _segundos(valor) -> float | None:
+    """Timestamp UTC comparable aunque un lado tenga zona y el otro no.
+
+    Los items de STAC vienen en UTC con `tzinfo`; la fecha que pide el render es
+    un `date` naive. Restarlos directo revienta con "offset-naive and
+    offset-aware"; esto normaliza los dos al mismo reloj.
+    """
+    momento = _momento(valor)
+    if momento is None:
+        return None
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=timezone.utc)
+    return momento.timestamp()
+
+
+def ordenar_por_cercania(items, centro) -> list:
+    """Items STAC ordenados por cercania temporal a `centro`.
+
+    La cercania manda; la cobertura de nubes solo desempata dos items del mismo
+    dia. Un item sin fecha va al final. Es la seleccion que pide el color real:
+    la escena mas proxima a la fecha del granulo, no la menos nubosa del mes.
+    """
+    objetivo = _segundos(centro)
+
+    def clave(item):
+        momento = _segundos(getattr(item, "datetime", None))
+        if momento is None or objetivo is None:
+            distancia = float("inf")
+        else:
+            distancia = abs(momento - objetivo)
+        propiedades = getattr(item, "properties", None) or {}
+        nubes = float(propiedades.get("eo:cloud_cover", 100.0))
+        return (distancia, nubes)
+
+    return sorted(list(items), key=clave)
+
+
+def escala_comun(conjuntos, percentiles=(2, 98)) -> tuple[float, float] | None:
+    """Percentiles (lo, hi) sobre R/G/B finitos de uno o varios compuestos.
+
+    Con dos fechas se calcula UNA sola escala para las dos, que es lo que hace
+    comparables dos PNG de color real: si cada imagen se estira por su cuenta,
+    la fecha mas clara parece soleada y la mas oscura parece nocturna.
+    """
+    valores = []
+    for capas in conjuntos:
+        if not capas:
+            continue
+        apilado = np.stack(
+            [np.asarray(capas[canal], dtype=np.float32) for canal in ("R", "G", "B")]
+        )
+        finitos = apilado[np.isfinite(apilado)]
+        if finitos.size:
+            valores.append(finitos)
+    if not valores:
+        return None
+    muestra = np.concatenate(valores)
+    lo, hi = np.percentile(muestra, percentiles)
+    if hi <= lo:
+        hi = lo + 1.0
+    return float(lo), float(hi)
+
+
+def estirar_rgb(capas, lo: float, hi: float) -> np.ndarray:
+    """Convierte reflectancia R/G/B en un uint8 usando la escala (lo, hi) dada."""
+    apilado = np.stack(
+        [np.asarray(capas[canal], dtype=np.float32) for canal in ("R", "G", "B")]
+    )
+    con_dato = np.isfinite(apilado).all(axis=0)
+    if hi <= lo:
+        hi = lo + 1.0
+    norm = np.clip((apilado - lo) / (hi - lo), 0.0, 1.0)
+    rgb = (np.moveaxis(np.nan_to_num(norm, nan=0.0), 0, -1) * 255.0).astype(np.uint8)
+    rgb[~con_dato] = (8, 9, 10)
+    return rgb
 
 
 def clasificar(

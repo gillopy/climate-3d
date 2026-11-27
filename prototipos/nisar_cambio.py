@@ -74,6 +74,7 @@ sys.path.insert(0, str(RAIZ / "comun"))
 
 import nisar  # noqa: E402
 import hls  # noqa: E402
+import optico  # noqa: E402
 import sentinel2  # noqa: E402
 
 ROJO = np.array([205, 35, 35], dtype=np.uint8)
@@ -540,6 +541,11 @@ def main() -> int:
     )
     ap.add_argument("--rango", type=float, default=6.0, help="rango de la paleta de delta en dB")
     ap.add_argument("--out", required=True)
+    ap.add_argument(
+        "--color-out",
+        default=None,
+        help="base del color real antes/despues (<base>_previo.png / <base>_posterior.png)",
+    )
     ap.add_argument("--geojson", default=None)
     args = ap.parse_args(nisar.argv_bbox(sys.argv[1:]))
     if args.detector == "ndvi":
@@ -1008,6 +1014,143 @@ def main() -> int:
         confirmado = args.verificar_s2 and optico_meta["disponible"]
         persistente = bool(temporal_meta["disponible"])
 
+        # Color real del par: dos PNG separados, uno por fecha, con la escena
+        # optica MAS CERCANA a cada fecha (no la menos nubosa del mes) y una
+        # escala comun para que se puedan comparar. Es opcional: lo pide un
+        # check del visor y viaja como --color-out.
+        color_meta = None
+        if args.color_out:
+            def _dias_de(item, fecha):
+                momento = getattr(item, "datetime", None)
+                if momento is None:
+                    return float("inf")
+                return abs((momento.date() - fecha).days)
+
+            def _color_de(fecha_texto: str):
+                """Reflectancia R/G/B de la escena mas cercana a `fecha_texto`."""
+                fecha = datetime.strptime(fecha_texto[:10], "%Y-%m-%d").date()
+                candidatos = []
+                motivos = []
+                for nombre, modulo, sensor in _proveedores_opticos():
+                    if not modulo.DISPONIBLE:
+                        motivos.append(f"{nombre}: faltan dependencias")
+                        continue
+                    kwargs = {"sensor": sensor} if sensor else {}
+                    try:
+                        items = modulo.buscar_items(
+                            (oeste, sur, este, norte),
+                            fecha,
+                            int(args.dias),
+                            float(args.nubes),
+                            3,
+                            orden="cercania",
+                            **kwargs,
+                        )
+                    except Exception as exc:  # noqa: BLE001 - proveedor opcional
+                        motivos.append(f"{nombre}: {type(exc).__name__}: {exc}")
+                        continue
+                    if not items:
+                        motivos.append(f"{nombre}: sin escena cerca de {fecha_texto[:10]}")
+                        continue
+                    cercano = optico.ordenar_por_cercania(items, fecha)[0]
+                    candidatos.append((nombre, modulo, sensor, cercano, kwargs))
+                if not candidatos:
+                    return None, {"fuente": None, "item": None, "nubes": None,
+                                  "motivo": "; ".join(motivos) or "sin proveedor optico"}
+                # El mas proximo entre TODOS los proveedores permitidos: puede
+                # ser Sentinel-2 a 1 dia aunque HLS tenga una a 12.
+                candidatos.sort(
+                    key=lambda c: (
+                        _dias_de(c[3], fecha),
+                        float(c[3].properties.get("eo:cloud_cover", 100.0)),
+                    )
+                )
+                motivos = motivos[-2:]
+                for nombre, modulo, sensor, item, kwargs in candidatos[:3]:
+                    try:
+                        capas, _ = modulo.componer_color_reflectancia(
+                            [item],
+                            (oeste, sur, este, norte),
+                            db_antes.shape,
+                            transform,
+                            crs,
+                            px,
+                            **kwargs,
+                        )
+                    except Exception as exc:  # noqa: BLE001 - proveedor opcional
+                        motivos.append(f"{nombre}: {type(exc).__name__}: {exc}")
+                        continue
+                    if capas and all(np.isfinite(capas[c]).any() for c in ("R", "G", "B")):
+                        momento = getattr(item, "datetime", fecha)
+                        return capas, {
+                            "fuente": nombre,
+                            "item": getattr(item, "id", None),
+                            "fecha": str(momento)[:10],
+                            "nubes": round(
+                                float(item.properties.get("eo:cloud_cover", 100.0)), 2
+                            ),
+                            "motivo": "",
+                        }
+                    motivos.append(f"{nombre}: compuesto de color vacio")
+                return None, {"fuente": None, "item": None, "nubes": None,
+                              "motivo": "; ".join(motivos) or "sin color real"}
+
+            lados = {}
+            for etiqueta, escena in (("previo", antes), ("posterior", despues)):
+                texto = escena.fecha or escena.ruta.stem
+                capas, info = _color_de(texto)
+                lados[etiqueta] = {"capas": capas, "fecha_granulo": texto, **info}
+            escala = optico.escala_comun(
+                [lado["capas"] for lado in lados.values() if lado["capas"]]
+            )
+            color_meta = {
+                "disponible": False,
+                "escala": None,
+                "previo": {k: v for k, v in lados["previo"].items() if k != "capas"},
+                "posterior": {k: v for k, v in lados["posterior"].items() if k != "capas"},
+            }
+            if escala is None:
+                print("aviso: sin color real: ningun lado dejo pixeles validos")
+                for etiqueta, lado in lados.items():
+                    print(f"  {etiqueta}: {lado['motivo'] or 'sin datos'}")
+            else:
+                lo, hi = escala
+                color_meta["escala"] = {"lo": round(lo, 5), "hi": round(hi, 5)}
+                base_color = Path(args.color_out)
+                for etiqueta, lado in lados.items():
+                    if not lado["capas"]:
+                        print(
+                            f"aviso: color real {etiqueta} sin escena "
+                            f"({lado['motivo'] or 'sin datos'})"
+                        )
+                        continue
+                    rgb_color = optico.estirar_rgb(lado["capas"], lo, hi)
+                    archivo = base_color.with_name(f"{base_color.stem}_{etiqueta}.png")
+                    lineas_color = [
+                        f"NISAR GCOV · color real {lado['fuente']} · "
+                        f"{str(lado['fecha'] or lado['fecha_granulo'])[:10]}",
+                        f"escena mas cercana a la fecha · {mpp:.0f} m/px",
+                    ]
+                    nisar.guardar(
+                        rgb_color,
+                        archivo,
+                        lineas_color,
+                        mpp,
+                        px,
+                        epsg=rec_antes.epsg,
+                        x0=rec_antes.x0,
+                        x1=rec_antes.x1,
+                        y0=rec_antes.y0,
+                        y1=rec_antes.y1,
+                    )
+                    lado["archivo"] = archivo.name
+                    color_meta["disponible"] = True
+                    color_meta[etiqueta]["archivo"] = archivo.name
+                    print(
+                        f"color real {etiqueta}: {lado['fuente']} "
+                        f"{str(lado['fecha'])[:10]} -> {archivo.name}"
+                    )
+
         # Detector ndvi: la caida optica ES la deteccion y el radar corrobora.
         # Es el ajuste para el regimen sub-hectarea en dosel denso (Mbaracayu):
         # el HV satura y diluye parches <1 ha, pero el NDVI los ve limpio; el
@@ -1427,6 +1570,7 @@ def main() -> int:
                 **optico_meta,
                 "verificado": bool(confirmado),
             },
+            **({"color_real": color_meta} if color_meta else {}),
             "evidencia": {
                 "nivel": nivel,
                 "explicacion": nivel_explicacion,

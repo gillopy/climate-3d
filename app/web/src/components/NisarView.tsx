@@ -48,6 +48,7 @@ interface NisarEstadoGuardado {
   pol?: string;
   modo?: string;
   px?: string;
+  colorReal?: boolean;
 }
 
 function leerNisarGuardado(): NisarEstadoGuardado {
@@ -233,6 +234,9 @@ export function NisarView() {
   const [coordTexto, setCoordTexto] = useState("");
   const [verificarS2, setVerificarS2] = useState(true);
   const [optico, setOptico] = useState("sentinel2");
+  // Color real del par: dos PNG (previo/posterior) con la escena óptica más
+  // cercana a cada fecha. Apagado por defecto: nadie paga la descarga sin pedirlo.
+  const [colorReal, setColorReal] = useState(inicial.colorReal ?? false);
   const [persistencia, setPersistencia] = useState("0");
   const [baseline, setBaseline] = useState("0");
   const [covMax, setCovMax] = useState("0.4");
@@ -598,12 +602,13 @@ export function NisarView() {
         pol,
         modo,
         px,
+        colorReal,
       };
       window.localStorage.setItem(STORAGE_NISAR, JSON.stringify(estado));
     } catch {
       // Ignorado si localStorage no está disponible.
     }
-  }, [capaBase, etiquetasMapa, bordes, nivel, desde, hasta, caja, producto, pol, modo, px]);
+  }, [capaBase, etiquetasMapa, bordes, nivel, desde, hasta, caja, producto, pol, modo, px, colorReal]);
 
   // Sincroniza el campo de texto cuando la caja cambia desde el mapa, buscador o presets.
   useEffect(() => {
@@ -1004,6 +1009,9 @@ export function NisarView() {
         params.modo_cambio = modoCambio;
         params.verificar_s2 = verificarS2;
         params.optico = optico;
+        // Check independiente del NDVI: pide dos PNG de color real
+        // (escena más cercana a cada fecha), sin delta.
+        if (colorReal) params.color_real = true;
         params.confirmar_temporal = Number(persistencia);
         params.baseline = Number(baseline);
         if (Number(baseline) >= 2) params.cov_max = Number(covMax);
@@ -2019,12 +2027,23 @@ export function NisarView() {
                               <select
                                 value={optico}
                                 onChange={(evento) => setOptico(evento.target.value)}
-                                disabled={!verificarS2}
+                                disabled={!verificarS2 && !colorReal}
                               >
                                 <option value="sentinel2">Sentinel-2 L2A</option>
                                 <option value="hls">HLS L30/S30 (Landsat 8/9 + Sentinel-2)</option>
                                 <option value="auto">Auto: HLS y fallback Sentinel-2</option>
                               </select>
+                            </label>
+                            <label className="nisar__ancho nisar__check">
+                              <input
+                                type="checkbox"
+                                checked={colorReal}
+                                onChange={(evento) => setColorReal(evento.target.checked)}
+                              />
+                              <span>
+                                Color real (antes/después) · escena más cercana a
+                                cada fecha, dos imágenes y ninguna delta
+                              </span>
                             </label>
                             <label className="nisar__ancho">
                               Persistencia temporal
