@@ -139,9 +139,19 @@ colonia y superficies) se indexa una vez en SQLite con R-tree y se activa desde
 dibujado, **Analizar cuadro ROI** lista los inmuebles que caen adentro con el área afectada
 y el porcentaje de cada predio. Al alejarte quedan las parcelas grandes (el umbral de
 superficie sube solo) y los lotes urbanos aparecen al acercarte. El cuadro es el mismo del
-render NISAR, así que la imagen de cambio queda alineada con los lotes. El dataset **no trae
-nombre de propietario**: se muestran los identificadores registrales del SNC. Detalle,
-configuración (`CLIMATE3D_CATASTRO`) y límites en
+render NISAR, así que la imagen de cambio queda alineada con los lotes.
+
+Con **Catastro activo**, el producto de cambio también dibuja las parcelas **dentro del
+render**: el panel *después* (y el barrido antes/después) sale con el contorno de cada
+predio y, sobre cada mancha roja, su número (`finca 12336 · 2,3 ha`, `padrón 823 · 924 ha`)
+y la pérdida medida adentro. Los predios sin pérdida quedan con un contorno tenue; los
+afectados van de amarillo a rojo según la fracción del predio que se perdió. Además, cada
+corrida deja la máscara de pérdida como GeoJSON (`<corrida>_perdida.geojson`), y el panel
+de **Trabajos** la cruza contra el catastro para listar los inmuebles y verlos en un mapa
+con las parcelas resaltadas.
+
+El dataset **no trae nombre de propietario**: se muestran los identificadores registrales
+del SNC. Detalle, configuración (`CLIMATE3D_CATASTRO`) y límites en
 [`app/README.md`](./app/README.md#catastro-parcelas-fincas-y-matrículas).
 
 

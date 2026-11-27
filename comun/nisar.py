@@ -687,6 +687,119 @@ def _dibujar_borde(
                 dibujo.line(puntos, fill=(255, 255, 255), width=grosor, joint="curve")
 
 
+def dibujar_parcelas(
+    img: Image.Image,
+    parcelas: list[dict],
+    *,
+    epsg: int,
+    x0: float,
+    x1: float,
+    y0: float,
+    y1: float,
+    izquierda: int = 0,
+    ancho_panel: int | None = None,
+) -> None:
+    """Contornos y etiquetas de parcelas del catastro sobre la imagen final.
+
+    `parcelas` viene en grados (EPSG:4326) para que el dibujo no dependa del
+    recorte: cada item trae `anillos` (listas de ``(lon, lat)``), `color`,
+    `grosor`, `etiqueta` para el texto y `centro` ``(lon, lat)`` del texto.
+
+    `izquierda`/`ancho_panel` permiten pintar sobre el panel derecho de la
+    composicion ``comparar``: la grilla del recorte vale para los dos paneles,
+    pero el ancho util es el de uno solo. Se dibuja en una capa aparte para que
+    una parcela que se sale del panel no invada el otro.
+    """
+    ancho_img, alto_img = img.size
+    if x1 <= x0 or y1 <= y0 or ancho_img <= 2 or alto_img <= 2:
+        return
+    util = ancho_img - izquierda
+    if ancho_panel is not None:
+        util = min(ancho_panel, util)
+    if util <= 2:
+        return
+    transformador = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True)
+    capa = Image.new("RGBA", (util, alto_img), (0, 0, 0, 0))
+    dibujo = ImageDraw.Draw(capa)
+    fuente = _fuente(max(11, int(ancho_img * 0.0074)))
+    ocupados: list[tuple[int, int, int, int]] = []
+
+    def a_pixel(lons: np.ndarray, lats: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        xs, ys = transformador.transform(lons, lats)
+        px = (xs - x0) / (x1 - x0) * (util - 1)
+        py = (y1 - ys) / (y1 - y0) * (alto_img - 1)
+        return px, py
+
+    for parcela in sorted(
+        parcelas, key=lambda item: 1 if item.get("etiqueta") else 0
+    ):
+        color = tuple(parcela.get("color") or (255, 255, 255))
+        grosor = max(1, int(parcela.get("grosor") or 1))
+        for anillo in parcela.get("anillos") or []:
+            if len(anillo) < 3:
+                continue
+            lons = np.array([punto[0] for punto in anillo], dtype=np.float64)
+            lats = np.array([punto[1] for punto in anillo], dtype=np.float64)
+            px, py = a_pixel(lons, lats)
+            puntos = [
+                (float(a), float(b))
+                for a, b in zip(px, py)
+                if np.isfinite(a) and np.isfinite(b)
+            ]
+            if len(puntos) < 2:
+                continue
+            # Halo oscuro: el contorno tiene que leerse sobre bosque y sobre suelo.
+            dibujo.line(puntos, fill=(8, 9, 10, 255), width=grosor + 2, joint="curve")
+            dibujo.line(puntos, fill=(*color, 255), width=grosor, joint="curve")
+
+    # La franja de arriba lleva el rótulo del panel: no se tapa con etiquetas.
+    tope = int(alto_img * 0.038)
+    for parcela in parcelas:
+        etiqueta = str(parcela.get("etiqueta") or "").strip()
+        centro = parcela.get("centro")
+        if not etiqueta or not centro:
+            continue
+        px, py = a_pixel(
+            np.array([float(centro[0])]), np.array([float(centro[1])])
+        )
+        if not (np.isfinite(px[0]) and np.isfinite(py[0])):
+            continue
+        caja_texto = dibujo.textbbox((0, 0), etiqueta, font=fuente)
+        ancho_texto = caja_texto[2] - caja_texto[0]
+        alto_texto = caja_texto[3] - caja_texto[1]
+        x = int(px[0] - ancho_texto / 2)
+        y = int(py[0] - alto_texto / 2)
+        if x < 2 or x + ancho_texto > util - 2:
+            continue
+        if y < tope or y + alto_texto > alto_img - 2:
+            continue
+        caja = (x - 3, y - 2, x + ancho_texto + 3, y + alto_texto + 2)
+        # Etiquetas sin encimarse: la primera (mayor perdida) gana el lugar.
+        if any(_se_enciman(caja, otra) for otra in ocupados):
+            continue
+        ocupados.append(caja)
+        dibujo.rectangle(caja, fill=(8, 9, 10, 255))
+        dibujo.text(
+            (x, y),
+            etiqueta,
+            font=fuente,
+            fill=(*tuple(parcela.get("tinta") or (247, 248, 248)), 255),
+        )
+
+    img.paste(capa, (izquierda, 0), capa)
+
+
+def _se_enciman(
+    caja: tuple[int, int, int, int], otra: tuple[int, int, int, int], margen: int = 3
+) -> bool:
+    return not (
+        caja[2] + margen < otra[0]
+        or otra[2] + margen < caja[0]
+        or caja[3] + margen < otra[1]
+        or otra[3] + margen < caja[1]
+    )
+
+
 def _pie(img: Image.Image, lineas: list[str]) -> Image.Image:
     ancho, alto = img.size
     alto_pie = max(56, int(ancho * 0.068)) if len(lineas) >= 3 else max(44, int(ancho * 0.05))
@@ -756,8 +869,15 @@ def guardar(
     y0: float | None = None,
     y1: float | None = None,
     focos: list[tuple[float, float, tuple[int, int, int]]] | None = None,
+    parcelas: list[dict] | None = None,
+    panel: tuple[int, int] | None = None,
 ) -> tuple[int, int]:
-    """Guarda un RGB (h,w,3) con escala, borde opcional y pie. Devuelve (W,H)."""
+    """Guarda un RGB (h,w,3) con escala, borde opcional y pie. Devuelve (W,H).
+
+    `parcelas` pinta el catastro encima (ver `dibujar_parcelas`). `panel` es
+    ``(ancho_panel_nativo, separacion_nativa)`` para el compuesto ``comparar``:
+    las parcelas van solo sobre el panel derecho.
+    """
     salida = Path(salida)
     salida.parent.mkdir(parents=True, exist_ok=True)
     alto, ancho = rgb.shape[:2]
@@ -774,6 +894,25 @@ def guardar(
     if focos and epsg is not None and None not in (x0, x1, y0, y1):
         _dibujar_focos(
             img, focos, epsg, float(x0), float(x1), float(y0), float(y1)
+        )
+    if parcelas and epsg is not None and None not in (x0, x1, y0, y1):
+        izquierda = 0
+        ancho_panel = None
+        if panel is not None:
+            ancho_panel_nativo, separacion = panel
+            escala = ancho_salida / max(1, ancho)
+            izquierda = round((ancho_panel_nativo + separacion) * escala)
+            ancho_panel = round(ancho_panel_nativo * escala)
+        dibujar_parcelas(
+            img,
+            parcelas,
+            epsg=int(epsg),
+            x0=float(x0),
+            x1=float(x1),
+            y0=float(y0),
+            y1=float(y1),
+            izquierda=izquierda,
+            ancho_panel=ancho_panel,
         )
     img = _pie(img, lineas)
     img.save(salida, "PNG", optimize=True)

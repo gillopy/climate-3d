@@ -9,7 +9,11 @@ una mayoria 3x3 para no contar pixeles aislados y escribe:
 - un PNG (delta, mascara sobre HV o composicion RGB),
 - en el modo ``comparar``, las dos capas sueltas (``*_antes.png`` y
   ``*_despues.png``) que alimentan el comparador de barrido del visor,
-- un JSON con hectareas de perdida/ganancia y los umbrales usados.
+- un JSON con hectareas de perdida/ganancia y los umbrales usados,
+- con ``--mascara-out``, la mascara de perdida como GeoJSON en EPSG:4326, que es
+  el poligono que el visor cruza con el catastro del SNC,
+- con ``--catastro``, los limites de las parcelas del SNC dibujados sobre el
+  resultado (panel despues y compuesto) con el numero del inmueble y su perdida.
 
 Dos cosas que el producto anterior no hacia y que dominan el resultado:
 
@@ -89,7 +93,18 @@ def nivel_evidencia(optico_confirmado: bool, persistente: bool) -> tuple[str, st
     return "radar_candidate", "single radar pair; no persistence or optical support"
 
 
-def _guardar_panel(ruta: Path, rgb: np.ndarray, px: int) -> Path:
+def _guardar_panel(
+    ruta: Path,
+    rgb: np.ndarray,
+    px: int,
+    parcelas: list[dict] | None = None,
+    *,
+    epsg: int | None = None,
+    x0: float | None = None,
+    x1: float | None = None,
+    y0: float | None = None,
+    y1: float | None = None,
+) -> Path:
     """Guarda una capa suelta del comparador: sin pie ni barra de escala.
 
     El compuesto lleva las dos capas juntas y un pie con la leyenda; el visor
@@ -103,9 +118,284 @@ def _guardar_panel(ruta: Path, rgb: np.ndarray, px: int) -> Path:
     imagen = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB")
     if (ancho_salida, alto_salida) != (ancho, alto):
         imagen = imagen.resize((ancho_salida, alto_salida), Image.LANCZOS)
+    if parcelas and epsg is not None and None not in (x0, x1, y0, y1):
+        nisar.dibujar_parcelas(
+            imagen,
+            parcelas,
+            epsg=int(epsg),
+            x0=float(x0),
+            x1=float(x1),
+            y0=float(y0),
+            y1=float(y1),
+        )
     ruta.parent.mkdir(parents=True, exist_ok=True)
     imagen.save(ruta, "PNG", optimize=True)
     return ruta
+
+
+def _ha_texto(hectareas: float) -> str:
+    """Hectareas con el formato del pie: 929 ha, 2,3 ha."""
+    if hectareas >= 100:
+        return f"{hectareas:,.0f}".replace(",", ".") + " ha"
+    if hectareas >= 10:
+        return f"{hectareas:.0f} ha"
+    return f"{hectareas:.1f}".replace(".", ",") + " ha"
+
+
+def _clave_parcela(props: dict) -> tuple[str, str]:
+    """(etiqueta, valor) del inmueble: finca, padrón o código catastral."""
+    finca = str(props.get("finca") or "").strip()
+    padron = str(props.get("padron") or "").strip()
+    codigo = str(props.get("ccatastral") or "").strip()
+    if finca and finca != "0":
+        return "finca", finca
+    if padron and padron != "0":
+        return "padrón", padron
+    return "parcela", codigo
+
+
+def _parcelas_dibujo(
+    indice: Path,
+    *,
+    epsg: int,
+    xs: np.ndarray,
+    ys: np.ndarray,
+    perdida: np.ndarray,
+) -> list[dict]:
+    """Parcelas del SNC dentro del recorte, con la pérdida que cae adentro.
+
+    El cruce es por pixel: se cuentan los centros de pixel de la mascara que caen
+    dentro de cada parcela (shapely, vectorizado). La etiqueta va sobre el centro
+    de la perdida de esa parcela, no sobre el centro del predio: el numero tiene
+    que quedar pegado a la mancha roja que explica.
+    """
+    import catastro as catastro_snc
+    from pyproj import Transformer
+    from shapely import contains_xy, transform as transformar_geom
+
+    filas, columnas = perdida.shape
+    mpp_x = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
+    mpp_y = abs(float(ys[-1] - ys[0])) / max(1, len(ys) - 1)
+    x_izq, x_der = float(xs[0]), float(xs[-1])
+    y_arr, y_aba = float(ys[0]), float(ys[-1])
+
+    a_utm = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True)
+    a_grados = Transformer.from_crs(f"EPSG:{epsg}", "EPSG:4326", always_xy=True)
+
+    def _a_utm(coordenadas: np.ndarray) -> np.ndarray:
+        x, y = a_utm.transform(coordenadas[:, 0], coordenadas[:, 1])
+        return np.column_stack([x, y])
+
+    caja = Transformer.from_crs(f"EPSG:{epsg}", "EPSG:4326", always_xy=True)
+    margen = 2.0 * max(mpp_x, mpp_y)
+    oeste, sur, este, norte = caja.transform_bounds(
+        x_izq - margen, y_aba - margen, x_der + margen, y_arr + margen, densify_pts=21
+    )
+
+    try:
+        candidatas = catastro_snc.parcelas(indice, (oeste, sur, este, norte))
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"aviso: sin catastro para dibujar ({exc})")
+        return []
+
+    dibujo: list[dict] = []
+    con_perdida = 0
+    for parcela in candidatas:
+        poligono = transformar_geom(parcela.geometry, _a_utm)
+        if poligono.is_empty:
+            continue
+        minx, miny, maxx, maxy = poligono.bounds
+        if maxx < x_izq or minx > x_der or maxy < y_aba or miny > y_arr:
+            continue
+        c0 = max(0, int(np.floor((minx - x_izq) / mpp_x)))
+        c1 = min(columnas, int(np.ceil((maxx - x_izq) / mpp_x)) + 1)
+        r0 = max(0, int(np.floor((y_arr - maxy) / mpp_y)))
+        r1 = min(filas, int(np.ceil((y_arr - miny) / mpp_y)) + 1)
+        pixeles = 0
+        centro_perdida = None
+        if c1 > c0 and r1 > r0:
+            ventana = perdida[r0:r1, c0:c1]
+            if ventana.any():
+                malla_x, malla_y = np.meshgrid(xs[c0:c1], ys[r0:r1])
+                dentro = contains_xy(poligono, malla_x, malla_y) & ventana
+                pixeles = int(dentro.sum())
+                if pixeles:
+                    centro_perdida = _centro_perdida(malla_x, malla_y, dentro)
+        perdida_ha = pixeles * mpp_x * mpp_y / 10_000.0
+        area_ha = parcela.area_m2 / 10_000.0
+        fraccion = perdida_ha / area_ha if area_ha > 0 else 0.0
+        anillos = _anillos_grados(parcela.geometry)
+        if not anillos:
+            continue
+        if pixeles:
+            con_perdida += 1
+            color = (
+                (239, 68, 68)
+                if fraccion >= 0.25
+                else (251, 146, 60)
+                if fraccion >= 0.05
+                else (250, 204, 21)
+            )
+            etiqueta, valor = _clave_parcela(parcela.props)
+            centro = None
+            if centro_perdida is not None:
+                lon, lat = a_grados.transform(centro_perdida[0], centro_perdida[1])
+                centro = (float(lon), float(lat))
+            dibujo.append(
+                {
+                    "anillos": anillos,
+                    "color": color,
+                    "grosor": 3,
+                    "etiqueta": f"{etiqueta} {valor} · {_ha_texto(perdida_ha)}"
+                    if valor
+                    else _ha_texto(perdida_ha),
+                    "centro": centro,
+                    "perdida_ha": perdida_ha,
+                }
+            )
+        else:
+            dibujo.append(
+                {
+                    "anillos": anillos,
+                    "color": (196, 202, 210),
+                    "grosor": 1,
+                    "perdida_ha": 0.0,
+                }
+            )
+
+    # Las etiquetas se reparten en orden de pérdida: la mancha más grande elige
+    # primero el lugar y las chicas se conforman con el que queda.
+    dibujo.sort(key=lambda item: -float(item.get("perdida_ha") or 0.0))
+    print(
+        f"catastro: {len(dibujo)} parcelas en la caja, "
+        f"{con_perdida} con perdida adentro"
+    )
+    return dibujo
+
+
+def _centro_perdida(
+    malla_x: np.ndarray, malla_y: np.ndarray, dentro: np.ndarray
+) -> tuple[float, float] | None:
+    """Pixel de perdida donde va la etiqueta de la parcela.
+
+    Se toma la media de la perdida del predio y despues el pixel de perdida mas
+    cercano: asi el texto cae sobre la mancha aunque la perdida venga en dos
+    parches separados.
+    """
+    if not dentro.any():
+        return None
+    xs_dentro = malla_x[dentro]
+    ys_dentro = malla_y[dentro]
+    x_medio = float(xs_dentro.mean())
+    y_medio = float(ys_dentro.mean())
+    distancia = (xs_dentro - x_medio) ** 2 + (ys_dentro - y_medio) ** 2
+    indice = int(np.argmin(distancia))
+    return (float(xs_dentro[indice]), float(ys_dentro[indice]))
+
+
+def _anillos_grados(geometria) -> list[list[tuple[float, float]]]:
+    """Anillos exteriores (lon, lat) de una parcela en 4326."""
+    geoms = list(geometria.geoms) if hasattr(geometria, "geoms") else [geometria]
+    anillos: list[list[tuple[float, float]]] = []
+    for geom in geoms:
+        if geom.geom_type != "Polygon" or geom.is_empty:
+            continue
+        anillos.append([(float(x), float(y)) for x, y in geom.exterior.coords])
+    return anillos
+
+
+def _guardar_mascara(
+    ruta: Path,
+    mascara: np.ndarray,
+    xs: np.ndarray,
+    ys: np.ndarray,
+    epsg: int,
+    *,
+    umbral_db: float,
+) -> dict:
+    """Deja la mascara de perdida como GeoJSON en EPSG:4326.
+
+    Es el puente con el catastro: el visor manda este poligono a
+    `/api/catastro/afectadas` y recibe las parcelas con su superficie de perdida
+    adentro. Se vectoriza la grilla tal como se dibujo (un pixel es un cuadrado)
+    y se simplifica a medio pixel: los bordes en escalera no aportan y
+    multiplican los vertices. La conectividad es 4: dos pixeles que solo se
+    tocan en la esquina son dos manchas, no una.
+    """
+    import json
+
+    import rasterio.features
+    from pyproj import Transformer
+    from rasterio.transform import from_origin
+    from shapely import transform as transformar
+    from shapely.geometry import MultiPolygon, Polygon, mapping, shape
+
+    filas, columnas = mascara.shape
+    mpp_x = abs(float(xs[-1] - xs[0])) / max(1, len(xs) - 1)
+    mpp_y = abs(float(ys[-1] - ys[0])) / max(1, len(ys) - 1)
+    # `xs`/`ys` son centros de pixel y `ys` viene norte->sur: la grilla arranca
+    # en la esquina superior izquierda del primer pixel (PixelIsArea).
+    grilla = from_origin(
+        float(xs[0]) - mpp_x / 2.0, float(ys[0]) + mpp_y / 2.0, mpp_x, mpp_y
+    )
+    tolerancia = max(mpp_x, mpp_y) * 0.5
+    partes: list[Polygon] = []
+    for geometria, valor in rasterio.features.shapes(
+        mascara.astype(np.uint8), mask=mascara, transform=grilla
+    ):
+        if int(valor) != 1:
+            continue
+        poly = shape(geometria)
+        simple = poly.simplify(tolerancia, preserve_topology=True)
+        if simple.is_empty:
+            simple = poly
+        if simple.geom_type == "Polygon":
+            partes.append(simple)
+    if not partes:
+        return {"archivo": None, "motivo": "la mascara quedo vacia al vectorizar"}
+    a_grados = Transformer.from_crs(
+        f"EPSG:{epsg}", "EPSG:4326", always_xy=True
+    ).transform
+
+    def _grados(coordenadas: np.ndarray) -> np.ndarray:
+        x, y = a_grados(coordenadas[:, 0], coordenadas[:, 1])
+        return np.column_stack([x, y])
+
+    multipoly = transformar(MultiPolygon(partes), _grados)
+
+    coleccion = {
+        "type": "FeatureCollection",
+        "producto": "cambio",
+        "clase": "perdida",
+        "epsg_origen": int(epsg),
+        "mpp": [round(mpp_x, 3), round(mpp_y, 3)],
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {
+                    "clase": "perdida",
+                    "hectareas": round(
+                        sum(parte.area for parte in partes) / 10_000.0, 1
+                    ),
+                    "umbral_db": umbral_db,
+                    "poligonos": len(partes),
+                },
+                "geometry": mapping(multipoly),
+            }
+        ],
+    }
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(
+        json.dumps(coleccion, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    return {
+        "archivo": ruta.name,
+        "poligonos": len(partes),
+        "vertices": sum(len(parte.exterior.coords) for parte in partes),
+        "hectareas": round(sum(parte.area for parte in partes) / 10_000.0, 1),
+        "bytes": ruta.stat().st_size,
+    }
 
 
 def main() -> int:
@@ -161,6 +451,21 @@ def main() -> int:
         "--indices",
         default=None,
         help="ademas del cambio, escribir un panel NDVI/NDBI/NDWI/NBR (antes, despues, delta)",
+    )
+    ap.add_argument(
+        "--mascara-out",
+        default=None,
+        help="GeoJSON EPSG:4326 con la mascara de perdida (el visor lo cruza con el catastro)",
+    )
+    ap.add_argument(
+        "--catastro",
+        action="store_true",
+        help="dibujar los limites y el numero de parcela del SNC sobre el resultado",
+    )
+    ap.add_argument(
+        "--catastro-indice",
+        default=None,
+        help="indice SQLite del catastro (por defecto, el de la raiz de medios)",
     )
     ap.add_argument(
         "--confirmar-temporal",
@@ -842,7 +1147,59 @@ def main() -> int:
         perdida_bosque_pct = 100.0 * perdida_px / max(1, bosque_px)
         delta_medio = float(np.nanmean(delta[perdida])) if perdida_px else 0.0
 
+        # Puente con el catastro: el poligono de la perdida es lo que el visor
+        # manda a /api/catastro/afectadas. Va en todos los modos, incluido
+        # `comparar`, que es el que usa el visor para el barrido.
+        mascara_meta: dict = {"archivo": None, "motivo": "sin perdida"}
+        if args.mascara_out and perdida_px:
+            try:
+                mascara_meta = _guardar_mascara(
+                    Path(args.mascara_out),
+                    perdida,
+                    xs,
+                    ys,
+                    rec_antes.epsg,
+                    umbral_db=umbral,
+                )
+                if mascara_meta["archivo"]:
+                    print(
+                        f"mascara de perdida: {mascara_meta['archivo']} "
+                        f"({mascara_meta['poligonos']} poligonos, "
+                        f"{mascara_meta['hectareas']:.0f} ha)"
+                    )
+            except Exception as exc:  # noqa: BLE001 - el PNG es el producto
+                mascara_meta = {
+                    "archivo": None,
+                    "motivo": f"{type(exc).__name__}: {exc}",
+                }
+                print(f"aviso: no pude escribir la mascara de perdida ({exc})")
+
         paneles_meta: dict[str, str] = {}
+        # Con el catastro activo en el visor, el resultado lleva los limites de
+        # las parcelas del SNC y, sobre cada mancha roja, el numero del inmueble.
+        parcelas_dibujo: list[dict] = []
+        if args.catastro:
+            indice = (
+                Path(args.catastro_indice)
+                if args.catastro_indice
+                else None
+            )
+            try:
+                if indice is None:
+                    import catastro as catastro_snc
+
+                    indice = catastro_snc.ruta_indice()
+                parcelas_dibujo = _parcelas_dibujo(
+                    indice,
+                    epsg=rec_antes.epsg,
+                    xs=xs,
+                    ys=ys,
+                    perdida=perdida,
+                )
+            except Exception as exc:  # noqa: BLE001 - el mapa no depende del catastro
+                print(f"aviso: no pude dibujar el catastro ({type(exc).__name__}: {exc})")
+                parcelas_dibujo = []
+        panel_parcelas: tuple[int, int] | None = None
         if args.modo == "delta":
             norm = np.clip((delta + rango) / (2.0 * rango), 0.0, 1.0)
             rgb = nisar.paleta("RdBu", norm)
@@ -904,6 +1261,7 @@ def main() -> int:
                 )
             rgb = np.asarray(lienzo)
             px = min(4096, rgb.shape[1])
+            panel_parcelas = (ancho_panel, separacion)
             # Capas sueltas para el comparador de barrido del visor. El nombre
             # (``_antes``/``_despues``) es el contrato con el frontend: no corta
             # el compuesto, apila las dos capas y las arrastra.
@@ -917,6 +1275,12 @@ def main() -> int:
                     salida.with_name(f"{salida.stem}_despues.png"),
                     gris_despues,
                     max(1, px // 2),
+                    parcelas_dibujo or None,
+                    epsg=rec_antes.epsg,
+                    x0=float(xs[0]),
+                    x1=float(xs[-1]),
+                    y0=float(ys[-1]),
+                    y1=float(ys[0]),
                 ).name,
             }
         else:
@@ -950,18 +1314,21 @@ def main() -> int:
             if baseline_meta["usadas"] > 1
             else ""
         ) + (" · detector NDVI" if detector_ndvi else "")
+        leyenda_modo = {
+            "mascara": leyenda_mascara,
+            "delta": "rojo = caída de HV · azul = aumento",
+            "rgb": "R = antes · G = después · B = ΔHV",
+            "comparar": f"izquierda = antes · derecha = después · {leyenda_mascara}",
+        }[args.modo]
+        if parcelas_dibujo:
+            leyenda_modo += " · contorno = parcela del SNC (padrón/finca y pérdida)"
         lineas = [
             f"NISAR GCOV · cambio HV · {antes.fecha or antes.ruta.stem} -> "
             f"{despues.fecha or despues.ruta.stem}",
             f"perdida {perdida_ha:.0f} ha ({perdida_pct:.1f}%) · "
             f"dHV < -{umbral:g} dB · offset {offset_db:+.1f} dB · "
             f"{mpp:.0f} m/px · ml {ml}{base_txt}",
-            {
-                "mascara": leyenda_mascara,
-                "delta": "rojo = caída de HV · azul = aumento",
-                "rgb": "R = antes · G = después · B = ΔHV",
-                "comparar": f"izquierda = antes · derecha = después · {leyenda_mascara}",
-            }[args.modo],
+            leyenda_modo,
         ]
         ancho, alto = nisar.guardar(
             rgb,
@@ -975,6 +1342,8 @@ def main() -> int:
             x1=rec_antes.x1,
             y0=rec_antes.y0,
             y1=rec_antes.y1,
+            parcelas=parcelas_dibujo or None,
+            panel=panel_parcelas,
         )
         meta = {
             "producto": "cambio",
@@ -1048,6 +1417,7 @@ def main() -> int:
             "perdida_ha": round(perdida_ha, 1),
             "perdida_candidata_ha": round(candidato_ha, 1),
             "perdida_radar_ha": round(perdida_radar_ha, 1),
+            "mascara": mascara_meta,
             "perdida_pct": round(perdida_pct, 2),
             "perdida_bosque_pct": round(perdida_bosque_pct, 2),
             "ganancia_ha": round(ganancia_ha, 1),
@@ -1065,6 +1435,13 @@ def main() -> int:
             "temporal": temporal_meta,
             "mmu_ha": float(args.mmu_ha),
             "mmu_px": minimo_px,
+            "catastro": {
+                "activo": bool(args.catastro),
+                "parcelas": len(parcelas_dibujo),
+                "con_perdida": sum(
+                    1 for parcela in parcelas_dibujo if parcela.get("etiqueta")
+                ),
+            },
             "pixeles_validos": pixeles_validos,
         }
         nisar.guardar_json(salida, meta)

@@ -2857,12 +2857,19 @@ def _nisar_render(params: dict[str, Any], work: Path) -> Plan:
                     *(["--guardia-hh", f"{guardia_hh:g}"] if guardia_hh > 0 else []),
                     *(["--detector", "ndvi", "--ml", "1"] if detector == "ndvi" else []),
                     *(["--mmu-ha", f"{mmu_ha:g}"] if mmu_ha > 0 else []),
+                    # La capa Catastro del visor activa los límites y el número de
+                    # parcela del SNC sobre el mapa de pérdida.
+                    *(["--catastro"] if params.get("catastro") else []),
                     # El panel de indices viaja con la verificacion optica: si
                     # el usuario ya paga Sentinel-2, que se vea NDVI/NDBI/NDWI.
                     *(["--indices", str(work / "nisar_cambio_indices.png")]
                       if verificar else []),
                     "--out", str(work / f"nisar_cambio_{modo_cambio}_{px}.png"),
                     "--geojson", geojson,
+                    # El poligono de la perdida es lo que el panel de trabajos
+                    # cruza con el catastro (inmueble, finca, matricula).
+                    "--mascara-out",
+                    str(work / f"nisar_cambio_{modo_cambio}_{px}_perdida.geojson"),
                 ],
                 expected=8,
             )

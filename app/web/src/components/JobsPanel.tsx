@@ -6,6 +6,7 @@ import type { StatsRow } from "../formato";
 import type { Job, JobSummary } from "../types";
 import { ComparadorBarrido } from "./ComparadorBarrido";
 import type { CapaBarrido } from "./ComparadorBarrido";
+import { PerdidaCatastro } from "./PerdidaCatastro";
 
 const ETIQUETA: Record<Job["status"], string> = {
   queued: "en cola",
@@ -243,6 +244,18 @@ export function JobsPanel({ jobInicial }: Props) {
   const capaAntes = imagenes.find((arte) => /_antes\.png$/i.test(arte.name)) ?? null;
   const capaDespues =
     imagenes.find((arte) => /_despues\.png$/i.test(arte.name)) ?? null;
+  // La máscara de pérdida es el puente con el catastro: el producto la deja
+  // como GeoJSON con el polígono real del cambio, no con el cuadro ROI.
+  const mascaraPerdida =
+    detalle?.artifacts.find(
+      (arte) => arte.kind === "file" && /_perdida\.geojson$/i.test(arte.name),
+    ) ?? null;
+  const perdidaHa =
+    typeof stats?.perdida_ha === "number" ? stats.perdida_ha : undefined;
+  const fechasPar =
+    typeof stats?.fecha_antes === "string" && typeof stats?.fecha_despues === "string"
+      ? `${stats.fecha_antes} → ${stats.fecha_despues}`
+      : undefined;
 
   function abrirComparador() {
     if (!capaAntes || !capaDespues) return;
@@ -471,6 +484,14 @@ export function JobsPanel({ jobInicial }: Props) {
                     ))}
                   </dl>
                 </div>
+              ) : null}
+
+              {mascaraPerdida ? (
+                <PerdidaCatastro
+                  url={mascaraPerdida.url}
+                  perdidaHa={perdidaHa}
+                  fechas={fechasPar}
+                />
               ) : null}
 
               <div className="trabajos__seccion">

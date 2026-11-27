@@ -454,6 +454,47 @@ class Catastro(unittest.TestCase):
         self.assertTrue(cuerpo["excedido"])
         self.assertTrue(cuerpo["avisos"])
 
+    def test_afectadas_mide_solo_la_superficie_de_la_mascara(self):
+        """S4: cuando la consulta es la mascara de perdida, cuenta la interseccion.
+
+        Media parcela tapada por la mascara no puede contar la parcela entera: es
+        el error que tiene el analisis del cuadro ROI, que aca no se usa.
+        """
+        valores = _A_4326.transform(
+            [456000, 456050, 456050, 456000, 456000],
+            [7410000, 7410000, 7410100, 7410100, 7410000],
+        )
+        poligono = [[lon, lat] for lon, lat in zip(*valores)]
+        cuerpo = catastro.afectadas(
+            catastro.PedidoAfectadas(
+                poligono={"type": "Polygon", "coordinates": [poligono]}
+            )
+        )
+
+        self.assertEqual(cuerpo["total"], 1)
+        props = cuerpo["features"][0]["properties"]
+        self.assertEqual(props["lote"], "22")
+        self.assertAlmostEqual(props["afectado_ha"], 0.5, delta=0.03)
+        self.assertAlmostEqual(props["fraccion"], 0.5, delta=0.03)
+        self.assertAlmostEqual(cuerpo["cubierto_ha"], 0.5, delta=0.03)
+        self.assertAlmostEqual(cuerpo["area_ha"], 0.5, delta=0.03)
+
+        # Una mascara que no toca ninguna parcela no inventa inmuebles.
+        vacia = _A_4326.transform(
+            [456700, 456800, 456800, 456700, 456700],
+            [7410000, 7410000, 7410100, 7410100, 7410000],
+        )
+        sin = catastro.afectadas(
+            catastro.PedidoAfectadas(
+                poligono={
+                    "type": "Polygon",
+                    "coordinates": [[[lon, lat] for lon, lat in zip(*vacia)]],
+                }
+            )
+        )
+        self.assertEqual(sin["total"], 0)
+        self.assertEqual(sin["cubierto_ha"], 0.0)
+
     # --- endpoints -------------------------------------------------------
     def test_endpoint_de_parcelas_responde_geojson(self):
         caja = ",".join(str(valor) for valor in self._grados(455900, 7409900, 456700, 7410300))

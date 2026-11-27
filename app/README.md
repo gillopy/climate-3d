@@ -704,6 +704,20 @@ NISAR. Es la pieza que traduce "acá hubo pérdida de bosque" a "este inmueble":
   afectada, se resalta en el mapa por gravedad y al hacer clic vuela a la parcela.
   El cuadro es el mismo del render NISAR, así que la imagen de cambio y los
   predios quedan alineados.
+- **Catastro en el render**: con la capa activa, el producto de cambio dibuja las
+  parcelas dentro de la imagen (`nisar_cambio.py --catastro`). El panel
+  *después* —y el barrido antes/después— salen con el contorno de cada predio y,
+  sobre cada mancha roja, su número y la pérdida medida adentro
+  (`finca 12336 · 2,3 ha`, `padrón 823 · 924 ha`). El cruce es por pixel: se
+  cuentan los centros de pixel de la máscara que caen dentro de la parcela
+  (`comun/catastro.py` lee el índice en sólo lectura). La capa encendida viaja
+  como parámetro del job (`catastro: true`), así que un render con y sin catastro
+  son dos corridas distintas.
+- **Máscara de pérdida y cruce**: toda corrida de cambio deja
+  `<corrida>_perdida.geojson` (EPSG:4326, simplificado a medio pixel). El panel de
+  **Trabajos** lo publica como archivo y ofrece **Cruzar con catastro**, que manda
+  ese polígono —no el cuadro ROI— a `/api/catastro/afectadas` y lista los
+  inmuebles con la pérdida real adentro, con mapa de parcelas y popup del SNC.
 - **Sin nombre de propietario**: el export del SNC no trae dueños. `nombre_obj`
   es manzana/lote y `parc_usrin`/`parc_usrac` son códigos de usuario del sistema,
   no personas. El panel muestra los identificadores registrales, que son los que

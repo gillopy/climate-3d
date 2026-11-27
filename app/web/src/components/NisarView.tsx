@@ -198,6 +198,9 @@ export function NisarView() {
   const [hasta, setHasta] = useState(() => inicial.hasta ?? hoyISO());
   const [caja, setCaja] = useState<Caja | null>(() => inicial.caja ?? null);
   const [dibujando, setDibujando] = useState(false);
+  // Estado de la capa Catastro: el render de cambio lo usa para sumar las
+  // parcelas del SNC a la imagen (NisarView no sabe nada más del catastro).
+  const [catastroActivo, setCatastroActivo] = useState(false);
   const [resultado, setResultado] = useState<NisarSearch | null>(null);
   const [seleccion, setSeleccion] = useState<NisarGranule | null>(null);
   const [hoverGranuloId, setHoverGranuloId] = useState<string | null>(null);
@@ -1007,6 +1010,9 @@ export function NisarView() {
         params.guardia_hh = Number(guardiaHh);
         params.detector = detector;
         params.mmu_ha = detector === "ndvi" ? 0.1 : 0.5;
+        // La capa de catastro del mapa manda sobre el render: si está activa, el
+        // producto suma los límites y el número de cada parcela a la imagen.
+        if (catastroActivo) params.catastro = true;
       } else {
         params.firms = firms;
       }
@@ -1350,7 +1356,11 @@ export function NisarView() {
               </button>
             ) : null}
             <CapasAmbientales mapa={mapaVivo} />
-            <CatastroPanel mapa={mapaVivo} caja={caja} />
+            <CatastroPanel
+              mapa={mapaVivo}
+              caja={caja}
+              alCambiarActivo={setCatastroActivo}
+            />
           </div>
         </div>
 
@@ -1665,7 +1675,7 @@ export function NisarView() {
                 <>
                   <p className="nisar__sub">
                     {producto === "cambio"
-                      ? "Compara HV entre esta fecha y otra del mismo track/frame. Con Sentinel-2 activo, el rojo es solo bosque cuyo NDVI también cayó (parches ≥ 0.5 ha)."
+                      ? "Compara HV entre esta fecha y otra del mismo track/frame. Con Sentinel-2 activo, el rojo es solo bosque cuyo NDVI también cayó (parches ≥ 0.5 ha). Con Catastro activo, el mapa dibuja los límites de las parcelas del SNC y la pérdida de cada una."
                       : producto === "rvi"
                         ? "Índice de vegetación radar (HH/HV) de esta fecha."
                         : producto === "serie"

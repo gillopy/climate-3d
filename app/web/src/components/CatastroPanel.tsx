@@ -80,7 +80,7 @@ function acotar(valor: number, minimo: number, maximo: number): number {
   return Math.min(maximo, Math.max(minimo, valor));
 }
 
-function areaTexto(hectareas: number | null | undefined): string {
+export function areaTexto(hectareas: number | null | undefined): string {
   if (hectareas === null || hectareas === undefined) return "";
   if (hectareas >= 1000) return `${NUMERO.format(Math.round(hectareas))} ha`;
   if (hectareas >= 1) return `${NUMERO.format(Number(hectareas.toFixed(1)))} ha`;
@@ -105,7 +105,7 @@ function estiloParcela(opacidad: number, zoom: number): L.PathOptions {
 }
 
 /** Más rojo cuanto más superficie del predio cae dentro del cuadro. */
-function estiloAfectada(elemento?: Feature): L.PathOptions {
+export function estiloAfectada(elemento?: Feature): L.PathOptions {
   const props = (elemento?.properties ?? {}) as ParcelaProps;
   const fraccion = props.fraccion ?? 0;
   const color = fraccion >= 0.6 ? "#ef4444" : fraccion >= 0.25 ? "#fb923c" : "#facc15";
@@ -119,7 +119,7 @@ function estiloAfectada(elemento?: Feature): L.PathOptions {
 }
 
 /** Popup con `textContent`: los valores vienen del DBF del SNC. */
-function nodoParcela(props: ParcelaProps, conCopia: boolean): HTMLElement {
+export function nodoParcela(props: ParcelaProps, conCopia: boolean): HTMLElement {
   const nodo = document.createElement("div");
   nodo.className = "capas-pop catastro-pop";
 
@@ -194,9 +194,12 @@ function nodoParcela(props: ParcelaProps, conCopia: boolean): HTMLElement {
 export function CatastroPanel({
   mapa,
   caja,
+  alCambiarActivo,
 }: {
   mapa: L.Map | null;
   caja: Caja | null;
+  /** Avisa al visor si la capa está encendida: el render la usa como parámetro. */
+  alCambiarActivo?: (activo: boolean) => void;
 }) {
   const raizRef = useRef<HTMLDivElement | null>(null);
   const grupoRef = useRef<L.GeoJSON | null>(null);
@@ -247,6 +250,12 @@ export function CatastroPanel({
       // localStorage puede estar bloqueado: la capa sigue funcionando.
     }
   }, [activo, opacidad]);
+
+  // El visor necesita saber si el catastro está encendido antes de lanzar un
+  // render: con la capa activa, el producto de cambio dibuja las parcelas.
+  useEffect(() => {
+    alCambiarActivo?.(activo);
+  }, [activo, alCambiarActivo]);
 
   const refrescarEstado = useCallback(async () => {
     if (pidiendoRef.current) return;

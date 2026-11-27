@@ -113,3 +113,26 @@ export function analizarAfectadas(
     signal,
   }).then((r) => leer<CatastroAfectadas>(r));
 }
+
+/** Pide el GeoJSON de una máscara de pérdida NISAR (`<job>_perdida.geojson`). */
+export function getMascaraPerdida(
+  url: string,
+  signal?: AbortSignal,
+): Promise<FeatureCollection<Geometry, Record<string, unknown>>> {
+  return fetch(url, { signal }).then((r) =>
+    leer<FeatureCollection<Geometry, Record<string, unknown>>>(r),
+  );
+}
+
+/** Cruza la máscara de pérdida (polígono real, no el cuadro) con las parcelas. */
+export function analizarPerdida(
+  poligono: Geometry,
+  signal?: AbortSignal,
+): Promise<CatastroAfectadas> {
+  return fetch("/api/catastro/afectadas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ poligono }),
+    signal,
+  }).then((r) => leer<CatastroAfectadas>(r));
+}

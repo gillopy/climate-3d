@@ -250,6 +250,28 @@ class PublicarArtefactos(Base):
 
         self.assertEqual([a.name for a in trabajo.artifacts], ["poster.png"])
 
+    def test_publica_la_mascara_de_perdida_como_archivo(self):
+        """La mascara `.geojson` es el insumo del cruce con el catastro en la UI."""
+        trabajo = _nuevo_job(self.media, product_id="nisar_render")
+        trabajo.work.mkdir(parents=True)
+        trabajo.started_at = jobs._ahora()
+        (trabajo.work / "nisar_cambio_comparar_2400.png").write_bytes(b"png")
+        (trabajo.work / "nisar_cambio_comparar_2400.json").write_text(
+            "{}", encoding="utf-8"
+        )
+        (trabajo.work / "nisar_cambio_comparar_2400_perdida.geojson").write_text(
+            "{}", encoding="utf-8"
+        )
+
+        self.gestor._publicar(trabajo)
+
+        tipos = {a.name: a.kind for a in trabajo.artifacts}
+        self.assertEqual(
+            tipos["nisar_cambio_comparar_2400_perdida.geojson"], "file"
+        )
+        self.assertEqual(tipos["nisar_cambio_comparar_2400.json"], "file")
+        self.assertEqual(tipos["nisar_cambio_comparar_2400.png"], "image")
+
 
 class Historial(Base):
     def test_sobrevive_al_reinicio(self):

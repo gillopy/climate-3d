@@ -276,6 +276,229 @@ class RenderNisar(unittest.TestCase):
             with Image.open(cambio) as imagen:
                 self.assertEqual(imagen.mode, "RGB")
 
+    def test_el_cambio_deja_la_mascara_de_perdida_para_el_catastro(self):
+        """S1: el poligono de la perdida es lo que el visor cruza con el catastro.
+
+        Se vectoriza la misma grilla que se dibujo, en EPSG:4326 y simplificada a
+        medio pixel: el area del GeoJSON tiene que dar la perdida del JSON, y sin
+        perdida no se escribe el archivo.
+        """
+        from pyproj import Geod
+        from shapely.geometry import shape
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            tmp = Path(carpeta)
+            fixture = tmp / "fixture.py"
+            fixture.write_text(FIXTURE, encoding="utf-8")
+            antes = tmp / (
+                "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+                "20261017T214920_20261017T214955_P05023_N_F_J_001.h5"
+            )
+            despues = tmp / (
+                "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_"
+                "20261029T214921_20261029T214955_P05036_N_F_J_001.h5"
+            )
+            for ruta, modo in ((antes, "base"), (despues, "perdida")):
+                creado = subprocess.run(
+                    [str(python_repo()), str(fixture), str(ruta), modo],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(creado.returncode, 0, creado.stderr)
+                bbox = creado.stdout.strip().splitlines()[-1]
+
+            salida = tmp / "cambio.png"
+            mascara = tmp / "cambio_perdida.geojson"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_cambio.py",
+                    "--antes", str(antes),
+                    "--despues", str(despues),
+                    "--bbox", bbox,
+                    "--px", "900",
+                    "--modo", "comparar",
+                    "--umbral", "3",
+                    "--hv-min", "-30",
+                    "--bosque", "hv",
+                    "--mmu-ha", "0.5",
+                    "--out", str(salida),
+                    "--geojson", "datos/paraguay_gadm.json",
+                    "--mascara-out", str(mascara),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            meta = json.loads(salida.with_suffix(".json").read_text(encoding="utf-8"))
+            self.assertGreater(meta["perdida_ha"], 0.0)
+            self.assertEqual(meta["mascara"]["archivo"], mascara.name)
+            self.assertGreater(meta["mascara"]["poligonos"], 0)
+
+            datos = json.loads(mascara.read_text(encoding="utf-8"))
+            self.assertEqual(datos["type"], "FeatureCollection")
+            self.assertEqual(datos["epsg_origen"], meta["epsg"])
+            self.assertEqual(len(datos["features"]), 1)
+            feature = datos["features"][0]
+            self.assertEqual(feature["properties"]["clase"], "perdida")
+            geometria = shape(feature["geometry"])
+            self.assertEqual(geometria.geom_type, "MultiPolygon")
+            area_m2, _ = Geod(ellps="WGS84").geometry_area_perimeter(geometria)
+            self.assertAlmostEqual(
+                area_m2 / 10_000.0,
+                meta["perdida_ha"],
+                delta=max(2.0, meta["perdida_ha"] * 0.02),
+            )
+            # En grados, no en UTM: el visor y el catastro hablan 4326.
+            lon, lat = geometria.bounds[0], geometria.bounds[1]
+            self.assertTrue(-63 < lon < -54, f"longitud fuera de Paraguay: {lon}")
+            self.assertTrue(-28 < lat < -19, f"latitud fuera de Paraguay: {lat}")
+
+            # Sin perdida no hay archivo ni mascara que cruzar.
+            sin = tmp / "sin_perdida.geojson"
+            sin_salida = tmp / "sin.png"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_cambio.py",
+                    "--antes", str(antes),
+                    "--despues", str(despues),
+                    "--bbox", bbox,
+                    "--px", "900",
+                    "--modo", "mascara",
+                    "--umbral", "20",
+                    "--hv-min", "-40",
+                    "--bosque", "hv",
+                    "--mmu-ha", "0.5",
+                    "--out", str(sin_salida),
+                    "--mascara-out", str(sin),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            self.assertFalse(sin.is_file())
+            meta_sin = json.loads(sin_salida.with_suffix(".json").read_text(encoding="utf-8"))
+            self.assertEqual(meta_sin["perdida_ha"], 0.0)
+            self.assertIsNone(meta_sin["mascara"]["archivo"])
+
+    def test_el_cambio_dibuja_las_parcelas_del_catastro(self):
+        """S2: con --catastro, el mapa lleva el contorno y el numero de la parcela.
+
+        Se arma un indice real (mismo esquema que el del SNC) con una sola parcela
+        que cubre la caja del fixture y se corre el producto: el PNG tiene que
+        salir con el color de parcela afectada y el JSON con el conteo.
+        """
+        import numpy as np
+
+        from pyproj import Transformer
+
+        from app.api import catastro
+        from app.tests.test_catastro import _cuadrado, _escribir_dbf, _escribir_shp, _fila
+
+        with tempfile.TemporaryDirectory() as carpeta:
+            tmp = Path(carpeta)
+            fixture = tmp / "fixture.py"
+            fixture.write_text(FIXTURE, encoding="utf-8")
+            antes = tmp / (
+                "NISAR_L2_PR_GCOV_033_082_D_101_2005_DHDH_A_"
+                "20261017T214920_20261017T214955_P05023_N_F_J_001.h5"
+            )
+            despues = tmp / (
+                "NISAR_L2_PR_GCOV_034_082_D_101_2005_DHDH_A_"
+                "20261029T214921_20261029T214955_P05036_N_F_J_001.h5"
+            )
+            for ruta, modo in ((antes, "base"), (despues, "perdida")):
+                creado = subprocess.run(
+                    [str(python_repo()), str(fixture), str(ruta), modo],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(RAIZ),
+                )
+                self.assertEqual(creado.returncode, 0, creado.stderr)
+                bbox = creado.stdout.strip().splitlines()[-1]
+
+            # Indice con una parcela que cubre los 4 x 3 km del fixture.
+            proyeccion = Transformer.from_crs("EPSG:4326", "EPSG:32721", always_xy=True)
+            cx, cy = proyeccion.transform(-58.4, -23.4)
+            registros = [
+                (
+                    _cuadrado(cx - 2000, cy - 1500, 4000),
+                    _fila("B01171346022", padron=823, finca="9033"),
+                )
+            ]
+            base = tmp / "snc"
+            _escribir_shp(base, registros)
+            _escribir_dbf(base, [fila for _, fila in registros])
+            indice = tmp / "catastro.sqlite3"
+            catastro.construir_indice(base.with_suffix(".shp"), indice)
+
+            salida = tmp / "cambio.png"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_cambio.py",
+                    "--antes", str(antes),
+                    "--despues", str(despues),
+                    "--bbox", bbox,
+                    "--px", "900",
+                    "--modo", "mascara",
+                    "--umbral", "3",
+                    "--hv-min", "-30",
+                    "--bosque", "hv",
+                    "--mmu-ha", "0.5",
+                    "--out", str(salida),
+                    "--catastro",
+                    "--catastro-indice", str(indice),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            self.assertIn("catastro: 1 parcelas en la caja, 1 con perdida adentro", corrida.stdout)
+            meta = json.loads(salida.with_suffix(".json").read_text(encoding="utf-8"))
+            self.assertTrue(meta["catastro"]["activo"])
+            self.assertEqual(meta["catastro"]["parcelas"], 1)
+            self.assertEqual(meta["catastro"]["con_perdida"], 1)
+
+            with Image.open(salida) as imagen:
+                pixeles = np.asarray(imagen.convert("RGB"))
+            # 200 ha de perdida sobre 1.600 ha de predio: 12,5 % -> naranja.
+            naranja = ((pixeles == (251, 146, 60)).all(axis=2)).sum()
+            self.assertGreater(naranja, 0, "no se dibujo el contorno de la parcela")
+
+            # Sin la bandera el mapa queda como antes: sin parcelas.
+            limpio = tmp / "limpio.png"
+            corrida = subprocess.run(
+                [
+                    str(python_repo()),
+                    "prototipos/nisar_cambio.py",
+                    "--antes", str(antes),
+                    "--despues", str(despues),
+                    "--bbox", bbox,
+                    "--px", "900",
+                    "--modo", "mascara",
+                    "--umbral", "3",
+                    "--hv-min", "-30",
+                    "--bosque", "hv",
+                    "--mmu-ha", "0.5",
+                    "--out", str(limpio),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(RAIZ),
+            )
+            self.assertEqual(corrida.returncode, 0, corrida.stdout + corrida.stderr)
+            self.assertNotIn("catastro:", corrida.stdout)
+            meta_limpio = json.loads(
+                limpio.with_suffix(".json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(meta_limpio["catastro"]["parcelas"], 0)
+
     def test_cambio_normaliza_el_corrimiento_del_par(self):
         """Una segunda escena 3 dB mas oscura, sin deforestacion, no es perdida.
 

@@ -5566,3 +5566,49 @@ form,
   font-variant-numeric: tabular-nums;
   color: var(--fog);
 }
+
+/* Perdida NISAR x catastro: seccion en el panel de trabajos y mapa del cruce. */
+.perdida-catastro__intro,
+.perdida-catastro__nota {
+  margin: 0;
+  color: var(--ash);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.perdida-catastro__resumen {
+  margin: 2px 0 0;
+  color: var(--mist);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.perdida-catastro__resumen strong {
+  color: var(--paper);
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+/* El dialogo del mapa: mas ancho que el barrido y con alto propio, porque
+   Leaflet necesita un contenedor con medidas para calcular los tiles. */
+.perdida-mapa {
+  width: min(1240px, calc(100vw - 28px));
+}
+
+.perdida-mapa__marco {
+  width: 100%;
+}
+
+.perdida-mapa__lienzo {
+  width: 100%;
+  height: min(70vh, 640px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--void);
+}
+
+@media (max-width: 720px) {
+  .perdida-mapa__lienzo {
+    height: min(60vh, 460px);
+  }
+}
